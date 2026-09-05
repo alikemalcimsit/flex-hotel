@@ -1,0 +1,3 @@
+# utils
+
+Ortak yardımcı fonksiyonlar.

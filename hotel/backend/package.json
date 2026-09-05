@@ -1,0 +1,33 @@
+{
+  "name": "@hotelos/hotel-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/server.js",
+  "description": "HotelOS backend (Fastify + Prisma)",
+  "scripts": {
+    "dev": "node --watch --env-file-if-exists=../../.env src/server.js",
+    "start": "node --env-file-if-exists=../../.env src/server.js",
+    "db:generate": "prisma generate",
+    "db:migrate": "dotenv -e ../../.env -- prisma migrate dev",
+    "db:seed": "node --env-file-if-exists=../../.env prisma/seed.js",
+    "db:studio": "dotenv -e ../../.env -- prisma studio"
+  },
+  "prisma": {
+    "seed": "node --env-file-if-exists=../../.env prisma/seed.js"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.3.0",
+    "@fastify/jwt": "^10.2.2",
+    "@prisma/client": "^6.19.3",
+    "bcryptjs": "^3.0.3",
+    "fastify": "^5.12.3",
+    "fastify-type-provider-zod": "^7.0.0",
+    "socket.io": "^4.8.3",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "dotenv-cli": "^10.0.0",
+    "prisma": "^6.19.3"
+  }
+}

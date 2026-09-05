@@ -1,0 +1,11 @@
+{
+  "name": "@hotelos/ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "description": "Ortak React bileşenleri (Tailwind)",
+  "peerDependencies": {
+    "react": "^19.0.0"
+  }
+}
