@@ -1,9 +1,9 @@
 import { cache } from '../../lib/cache.js';
 import { prisma } from '../../db.js';
 import { recordAudit } from '../../lib/audit.js';
-import { dispatchStaged, stageEvent } from '../../lib/events.js';
 import { InUseError, NotFoundError, rethrowPrismaError, StaleWriteError, ValidationError } from '../../lib/errors.js';
 import { buildPage, toSkipTake } from '../../lib/pagination.js';
+import { writeWithEvents } from '../../lib/write.js';
 import { assertNoOverlap, findSeasonForDate, isValidTimeZone } from './rules.js';
 
 /**
@@ -137,29 +137,6 @@ async function updateWithVersionCheck(tx, model, identity, expectedUpdatedAt, da
  */
 function nonZero(counts) {
   return Object.fromEntries(Object.entries(counts).filter(([, value]) => value > 0));
-}
-
-/**
- * Yazma işlemini sarar: transaction'ı çalıştırır, commit sonrası bekleyen
- * event'leri dağıtır. Dağıtım hatası çağıranı etkilemez — değişiklik zaten
- * kalıcı, event satırı da `publishedAt` boş şekilde duruyor.
- *
- * @template T
- * @param {(tx: import('@prisma/client').Prisma.TransactionClient, stage: (name: string, payload: object) => Promise<void>) => Promise<T>} work
- * @returns {Promise<T>}
- */
-async function writeWithEvents(work) {
-  const staged = [];
-
-  const result = await prisma.$transaction(async (tx) => {
-    const stage = async (name, payload) => {
-      staged.push(await stageEvent(tx, name, payload));
-    };
-    return work(tx, stage);
-  });
-
-  await dispatchStaged(staged);
-  return result;
 }
 
 /* ══════════════════ Otel bilgileri & genel parametreler ══════════════════ */

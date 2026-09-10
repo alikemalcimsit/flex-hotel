@@ -7,7 +7,9 @@ import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod
 import { enterContext } from '@hotelos/core';
 import { checkDb, disconnectDb } from './db.js';
 import { cache } from './lib/cache.js';
+import { registerActors, setActorLogger } from './lib/actors.js';
 import { registerCoreSubscribers, setEventLogger } from './lib/events.js';
+import { roomsRoutes } from './modules/rooms/routes.js';
 import { settingsRoutes } from './modules/settings/routes.js';
 
 const JWT_SECRET = process.env.JWT_SECRET ?? 'dev-secret-degistir';
@@ -52,7 +54,9 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   });
 
   setEventLogger(app.log);
+  setActorLogger(app.log);
   registerCoreSubscribers();
+  registerActors();
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
@@ -137,6 +141,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   });
 
   await app.register(settingsRoutes, { prefix: '/settings' });
+  await app.register(roomsRoutes, { prefix: '/rooms' });
 
   app.addHook('onClose', async () => {
     await disconnectDb();

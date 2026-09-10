@@ -172,6 +172,7 @@ model Hotel {
   notifications      Notification[]
   roomTypes          RoomType[]
   rooms              Room[]
+  roomBlocks         RoomBlock[]
   guests             Guest[]
   reservations       Reservation[]
   reservationGuests  ReservationGuest[]
@@ -452,6 +453,7 @@ model Room {
   hotel              Hotel               @relation(fields: [hotelId], references: [id])
   roomType           RoomType            @relation(fields: [roomTypeId], references: [id])
   reservations       Reservation[]
+  blocks             RoomBlock[]
   housekeepingTasks  HousekeepingTask[]
   maintenanceTickets MaintenanceTicket[]
   lostItems          LostItem[]
@@ -459,6 +461,32 @@ model Room {
   // Oda numarası benzersizliği de kısmi index ile (bkz. RoomType açıklaması):
   // silinen 101 numaralı oda sonradan tekrar açılabilmeli.
   @@index([hotelId, number])
+  @@index([hotelId, deletedAt])
+}
+
+/// Odanın belirli tarihlerde satılamaz olması (tadilat, arıza, VIP için ayırma).
+///
+/// `Room.status` "şu an" durumudur (dolu / kirli / temizlikte); müsaitlik hesabı
+/// gelecekle ilgilendiği için ona bakamaz. Bu tablo tarih bilir: "101 numara
+/// 15-20 Ekim'de kapalı" denebilir, o aralık dışında oda satılabilir kalır.
+///
+/// `endDate` boşsa blok süresizdir (tsrange üst sınırı açık kalır).
+model RoomBlock {
+  id        String    @id @default(uuid())
+  hotelId   String
+  roomId    String
+  startDate DateTime
+  endDate   DateTime?
+  reason    String
+  createdBy String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+  room  Room  @relation(fields: [roomId], references: [id])
+
+  @@index([hotelId, roomId, startDate, endDate])
   @@index([hotelId, deletedAt])
 }
 
@@ -521,6 +549,11 @@ model Reservation {
   reservationGuests ReservationGuest[]
   folios            Folio[]
 
+  // Müsaitlik sorgusunun sıcak yolu: "şu otelde, şu oda tipinde, şu tarihlerde
+  // envanteri tüketen rezervasyonlar". Dolu bir otelde saniyede onlarca kez çalışır.
+  @@index([hotelId, roomTypeId, status, checkIn, checkOut])
+  // Belirli bir odanın takvimi (oda planı ekranı, atama kontrolü).
+  @@index([hotelId, roomId, checkIn, checkOut])
   @@index([checkIn, checkOut])
   @@index([status])
 }

@@ -18,6 +18,13 @@
 export const PERMISSIONS = Object.freeze({
   SETTINGS_VIEW: 'settings.view',
   SETTINGS_MANAGE: 'settings.manage',
+
+  /** Oda listesi, müsaitlik takvimi — görüntüleme. */
+  ROOMS_VIEW: 'rooms.view',
+  /** Envanter tanımı: oda ekleme/silme, bloklama. Yönetim işi. */
+  ROOMS_MANAGE: 'rooms.manage',
+  /** Günlük operasyon: oda atama, durum değiştirme. Ön büro ve kat hizmetleri. */
+  ROOMS_OPERATE: 'rooms.operate',
 });
 
 let warned = false;

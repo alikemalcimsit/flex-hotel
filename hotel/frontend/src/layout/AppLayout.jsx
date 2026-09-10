@@ -8,6 +8,8 @@ import { useAuthStore } from '../store/auth.js';
  */
 const MENU = [
   { label: 'Panel', to: '/' },
+  // Odalar ön büro işi: resepsiyon ve kat hizmetleri de görmeli, yalnızca admin değil.
+  { label: 'Odalar', to: '/odalar' },
   { label: 'Ayarlar', to: '/ayarlar', roles: ['ADMIN'] },
 ];
 

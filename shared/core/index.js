@@ -1,6 +1,22 @@
 export { InMemoryEventBus } from './bus/event-bus.js';
-export { EVENT_CATALOG, SETTINGS_CHANGED_EVENTS, isKnownEvent, validatePayload } from './events/catalog.js';
+export {
+  EVENT_CATALOG,
+  INVENTORY_CHANGED_EVENTS,
+  SETTINGS_CHANGED_EVENTS,
+  isKnownEvent,
+  validatePayload,
+} from './events/catalog.js';
 export { currentActor, currentCorrelationId, enterContext, getContext, runWithContext } from './correlation.js';
+export {
+  DAY_MS,
+  addDays,
+  eachNight,
+  nightCount,
+  rangesOverlapClosed,
+  rangesOverlapHalfOpen,
+  toIsoDay,
+  toUtcDayStart,
+} from './dates.js';
 export {
   Decimal,
   MONEY_SCALE,

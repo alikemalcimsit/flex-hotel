@@ -20,6 +20,15 @@ const settingsEntity = hotelScoped.extend({
   label: z.string().min(1),
 });
 
+/**
+ * Event gövdeleri JSON olarak saklandığı için tarihler ISO metne indirgenir.
+ * Date da kabul edilir; yayıncı her seferinde elle çevirmek zorunda kalmasın.
+ */
+const isoDate = z
+  .union([z.string(), z.date()])
+  .transform((value) => (value instanceof Date ? value.toISOString() : value))
+  .refine((value) => !Number.isNaN(new Date(value).getTime()), { message: 'geçersiz tarih' });
+
 export const EVENT_CATALOG = Object.freeze({
   'settings.hotel.updated': hotelScoped.extend({
     /** Değişen alan adları — dinleyen taraf neyin değiştiğine göre karar verebilsin. */
@@ -37,6 +46,71 @@ export const EVENT_CATALOG = Object.freeze({
   'settings.season.created': settingsEntity,
   'settings.season.updated': settingsEntity.extend({ changedFields: z.array(z.string()).default([]) }),
   'settings.season.deleted': settingsEntity,
+
+  /* ── Oda envanteri (modül 3) ── */
+
+  'inventory.room.created': settingsEntity.extend({ roomTypeId: z.string().uuid() }),
+  'inventory.room.updated': settingsEntity.extend({
+    roomTypeId: z.string().uuid(),
+    changedFields: z.array(z.string()).default([]),
+  }),
+  'inventory.room.deleted': settingsEntity.extend({ roomTypeId: z.string().uuid() }),
+
+  'room.assigned': hotelScoped.extend({
+    reservationId: z.string().uuid(),
+    roomId: z.string().uuid(),
+    roomNumber: z.string(),
+    /** Aktör mü yoksa personel mi attı — Activity Feed'de ayırt edilsin. */
+    assignedBy: z.enum(['manual', 'auto']).default('manual'),
+  }),
+  'room.unassigned': hotelScoped.extend({
+    reservationId: z.string().uuid(),
+    roomId: z.string().uuid(),
+    roomNumber: z.string(),
+  }),
+  'room.status.changed': hotelScoped.extend({
+    roomId: z.string().uuid(),
+    roomNumber: z.string(),
+    from: z.string(),
+    to: z.string(),
+  }),
+  'room.blocked': hotelScoped.extend({
+    roomId: z.string().uuid(),
+    roomNumber: z.string(),
+    blockId: z.string().uuid(),
+    startDate: isoDate,
+    endDate: isoDate.nullable(),
+    reason: z.string(),
+  }),
+  'room.unblocked': hotelScoped.extend({
+    roomId: z.string().uuid(),
+    roomNumber: z.string(),
+    blockId: z.string().uuid(),
+  }),
+
+  /* ── Modül 4 ve 6'nın yayınlayacağı event'ler ──
+     Henüz yayıncıları yok (Ali Kemal'de) ama room-worker bunları dinliyor.
+     Sözleşmeyi şimdiden yazmak, iki taraf buluştuğunda uyuşmazlık çıkmasını
+     engelliyor — event kataloğunun asıl varlık sebebi bu. */
+
+  'reservation.created': hotelScoped.extend({
+    reservationId: z.string().uuid(),
+    roomTypeId: z.string().uuid(),
+    checkIn: isoDate,
+    checkOut: isoDate,
+    /** Rezervasyon oluşturulurken oda zaten atandıysa aktör tekrar atamaz. */
+    roomId: z.string().uuid().nullable().default(null),
+  }),
+
+  'guest.checked_in': hotelScoped.extend({
+    reservationId: z.string().uuid(),
+    roomId: z.string().uuid(),
+  }),
+
+  'guest.checked_out': hotelScoped.extend({
+    reservationId: z.string().uuid(),
+    roomId: z.string().uuid(),
+  }),
 });
 
 /** @typedef {keyof typeof EVENT_CATALOG} EventName */
@@ -72,3 +146,20 @@ export function validatePayload(name, payload) {
 export const SETTINGS_CHANGED_EVENTS = Object.freeze(
   Object.keys(EVENT_CATALOG).filter((name) => name.startsWith('settings.')),
 );
+
+/**
+ * Müsaitliği etkileyen her şey. Oda eklenmesi, atanması, bloklanması ve
+ * misafir giriş-çıkışı envanteri değiştirir; müsaitlik cache'i bunları dinler.
+ */
+export const INVENTORY_CHANGED_EVENTS = Object.freeze([
+  'inventory.room.created',
+  'inventory.room.updated',
+  'inventory.room.deleted',
+  'room.assigned',
+  'room.unassigned',
+  'room.blocked',
+  'room.unblocked',
+  'reservation.created',
+  'guest.checked_in',
+  'guest.checked_out',
+]);

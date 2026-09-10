@@ -4,6 +4,10 @@ import { AppLayout } from './layout/AppLayout.jsx';
 import { ToastHost } from './components/ToastHost.jsx';
 import { LoginPage } from './pages/LoginPage.jsx';
 import { HomePage } from './pages/HomePage.jsx';
+import { RoomsPage } from './pages/rooms/RoomsPage.jsx';
+import { RoomListTab } from './pages/rooms/RoomListTab.jsx';
+import { AvailabilityTab } from './pages/rooms/AvailabilityTab.jsx';
+import { AssignmentTab } from './pages/rooms/AssignmentTab.jsx';
 import { SettingsPage } from './pages/settings/SettingsPage.jsx';
 import { HotelInfoTab } from './pages/settings/HotelInfoTab.jsx';
 import { RoomTypesTab } from './pages/settings/RoomTypesTab.jsx';
@@ -43,6 +47,12 @@ export default function App() {
           }
         >
           <Route index element={<HomePage />} />
+          <Route path="odalar" element={<RoomsPage />}>
+            <Route index element={<Navigate to="/odalar/liste" replace />} />
+            <Route path="liste" element={<RoomListTab />} />
+            <Route path="musaitlik" element={<AvailabilityTab />} />
+            <Route path="atama" element={<AssignmentTab />} />
+          </Route>
           <Route
             path="ayarlar"
             element={

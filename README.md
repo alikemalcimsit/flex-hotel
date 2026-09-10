@@ -75,6 +75,19 @@ Test politikası: yaygın test yazmıyoruz, ama **yanlış hesaplayınca sessizc
 yanlış para tahsil eden** kod (fiyat, müsaitlik, bakiye, çakışma kuralları)
 test edilir.
 
+## ⚠️ `prisma db push` KULLANMAYIN
+
+Şema dosyasında ifade edilemeyen üç tür kısıt doğrudan migration SQL'inde tanımlı:
+kısmi unique index'ler (`RoomType.code`, `Room.number` — yalnızca silinmemiş satırlar),
+CHECK kısıtları (iptal politikası tutarlılığı, sezon tarih sırası) ve sezon
+çakışmasını engelleyen EXCLUDE kısıtı.
+
+`prisma db push` şemayı temel alıp veritabanını ona benzetmeye çalışır; şemada
+görünmeyen bu kısıtları **uyarı vermeden siler**. Sonuç: çakışan sezonlar,
+tekrar kullanılamayan kodlar ve sessizce yanlış fiyat hesapları.
+
+Şema değişikliği için her zaman `npm run db:migrate` kullanın.
+
 ## Modüller arası sözleşmeler
 
 - **Para ve oranlar string taşınır.** `Number()` ile çarpmayın;

@@ -107,5 +107,8 @@ export const apiPost = (path, body) => api(path, { method: 'POST', body: JSON.st
 /** @param {string} path @param {unknown} body */
 export const apiPut = (path, body) => api(path, { method: 'PUT', body: JSON.stringify(body) });
 
+/** @param {string} path @param {unknown} body */
+export const apiPatch = (path, body) => api(path, { method: 'PATCH', body: JSON.stringify(body) });
+
 /** @param {string} path */
 export const apiDelete = (path) => api(path, { method: 'DELETE' });

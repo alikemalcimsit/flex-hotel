@@ -1,16 +1,31 @@
+import { eachNight, rangesOverlapClosed, toUtcDayStart as coreToUtcDayStart } from '@hotelos/core';
+import { ValidationError } from '../../lib/errors.js';
+
 /**
  * Ayarlar modülünün saf iş kuralları — veritabanı, HTTP veya Prisma bilmez.
  *
  * Buradaki kurallar, girdinin *şeklini* değil *bağlamını* denetleyenlerdir:
  * bir sezonun diğerleriyle çakışıp çakışmadığı ancak mevcut sezonlar bilinerek
- * söylenebilir. Alan bazlı kurallar (zorunluluk, biçim, aralık) ise
- * `@hotelos/hotel-contracts` içindeki zod şemalarında — orası hem sunucunun
- * hem tarayıcının okuduğu tek kaynak.
+ * söylenebilir. Alan bazlı kurallar (zorunluluk, biçim, aralık)
+ * `@hotelos/hotel-contracts` içindeki zod şemalarında.
  *
- * `rules.test.js` bunları veritabanı olmadan doğrular.
+ * Tarih aritmetiği `@hotelos/core/dates.js`'te. Sezonlar **iki uçtan kapalı**
+ * `[]` aralıktır (1-10 ile 10-20 çakışır); konaklamalar ise yarı açık `[)`.
+ * İkisi bilerek farklı ve orada yan yana duruyor.
  */
 
-import { ValidationError } from '../../lib/errors.js';
+/**
+ * Gün başına indirger; geçersiz tarihi 422 olarak yüzeye çıkarır.
+ * @param {Date | string} value
+ * @returns {number}
+ */
+export function toUtcDayStart(value) {
+  try {
+    return coreToUtcDayStart(value);
+  } catch {
+    throw new ValidationError('Geçersiz tarih');
+  }
+}
 
 /**
  * IANA saat dilimi geçerli mi? (Intl'e soruyoruz, elle liste tutmuyoruz.)
@@ -28,39 +43,19 @@ export function isValidTimeZone(value) {
 }
 
 /**
- * Gün bazlı karşılaştırma için tarihi UTC gün başına indirger.
- * Sezonlar "gün" kavramıdır; saat farkı yüzünden bir günlük kayma olmasın diye
- * karşılaştırma öncesi normalize edilir.
- * @param {Date | string} value
- * @returns {number} epoch ms (UTC gün başı)
- */
-export function toUtcDayStart(value) {
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    throw new ValidationError('Geçersiz tarih');
-  }
-  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
-}
-
-/**
- * İki tarih aralığı kesişiyor mu? Aralıklar iki uçtan da kapalıdır:
- * 01-10 Haziran ile 10-20 Haziran çakışır (10 Haziran ikisinde de var), çünkü
- * o gün için hangi çarpanın geçerli olduğu belirsiz kalır.
+ * İki sezon aralığı kesişiyor mu? İki uçtan kapalı: 1-10 Haziran ile 10-20
+ * Haziran çakışır, çünkü 10 Haziran'a hangi çarpanın düştüğü belirsiz kalır.
  *
- * Bu kural veritabanında da var (Season üzerindeki EXCLUDE kısıtı, `[]` kapalı
- * aralık). Buradaki kopya kullanıcıya anlaşılır hata mesajı vermek için;
- * garantiyi veritabanı sağlıyor.
+ * Bu kural veritabanında da var (`Season_no_overlap` EXCLUDE kısıtı).
+ * Buradaki kopya kullanıcıya anlaşılır hata mesajı vermek için; garantiyi
+ * veritabanı sağlıyor.
  *
  * @param {{ startDate: Date | string, endDate: Date | string }} a
  * @param {{ startDate: Date | string, endDate: Date | string }} b
  * @returns {boolean}
  */
 export function rangesOverlap(a, b) {
-  const aStart = toUtcDayStart(a.startDate);
-  const aEnd = toUtcDayStart(a.endDate);
-  const bStart = toUtcDayStart(b.startDate);
-  const bEnd = toUtcDayStart(b.endDate);
-  return aStart <= bEnd && bStart <= aEnd;
+  return rangesOverlapClosed(a, b);
 }
 
 /**
@@ -113,15 +108,8 @@ export function resolveMultiplierForDate(seasons, date) {
  * @returns {Array<{ date: Date, multiplier: string }>}
  */
 export function multipliersForStay(seasons, checkIn, checkOut) {
-  const start = toUtcDayStart(checkIn);
-  const end = toUtcDayStart(checkOut);
-  if (end <= start) return [];
-
-  const nights = [];
-  const dayMs = 24 * 60 * 60 * 1000;
-  for (let day = start; day < end; day += dayMs) {
-    const date = new Date(day);
-    nights.push({ date, multiplier: resolveMultiplierForDate(seasons, date) });
-  }
-  return nights;
+  return eachNight(checkIn, checkOut).map((date) => ({
+    date,
+    multiplier: resolveMultiplierForDate(seasons, date),
+  }));
 }

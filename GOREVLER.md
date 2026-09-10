@@ -92,14 +92,39 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 3. Oda tipi müsaitlik & oda atama — arkadaşın
 **Gün sonu:** "15-18 Ekim'de kaç Standart boş?" sorusuna sistem cevap veriyor; rezervasyona uygun oda otomatik veya elle atanıyor.
-- [ ] Backend: `checkAvailability(checkIn, checkOut, roomTypeId)` servisi (rezervasyonlar + bloke odalar düşülür)
-- [ ] Backend: `assignRoom`, `unassignRoom`, `blockRoom`, `setRoomStatus` servisleri + API
-- [ ] Backend: Room CRUD API'leri
-- [ ] Ekran: Oda listesi (numara, kat, tip, durum rengi) + oda ekle/düzenle formu
-- [ ] Ekran: Müsaitlik tablosu (satır oda tipi, sütun gün, hücrede boş sayısı)
-- [ ] Ekran: Rezervasyon detayında "oda ata" (uygun boş odalar listesi, seç)
-- [ ] Aktör: room-worker paketi (manifest, `reservation.created` → oda seç → `room.assigned`; `guest.checked_out` → oda DIRTY)
-- [ ] Aktör kapalıysa: "oda atanacak" manuel görevi düşer
+- [x] Backend: `checkAvailability(checkIn, checkOut, roomTypeId)` servisi (rezervasyonlar + bloke odalar düşülür)
+- [x] Backend: `assignRoom`, `unassignRoom`, `blockRoom`, `setRoomStatus` servisleri + API
+- [x] Backend: Room CRUD API'leri
+- [x] Ekran: Oda listesi (numara, kat, tip, durum rengi) + oda ekle/düzenle formu
+- [x] Ekran: Müsaitlik tablosu (satır oda tipi, sütun gün, hücrede boş sayısı)
+- [x] Ekran: "Oda atama" — **rezervasyon detayı yerine bağımsız ekran** (modül 4 henüz yok).
+      Aynı API, Ali'nin rezervasyon detayına da takılabilir.
+- [x] Aktör: room-worker paketi (manifest, `reservation.created` → oda seç → `room.assigned`; `guest.checked_out` → oda DIRTY)
+- [x] Aktör kapalıysa: "oda atanacak" manuel görevi düşer
+
+> **Diğer modüller için — müsaitlik nasıl sorulur:**
+> `modules/rooms/service.js` → `checkAvailability(hotelId, { checkIn, checkOut, roomTypeId })`
+> tek sayı döner ("kaç tane satılabilir"). Takvim için `getAvailabilityCalendar`,
+> atanabilir odalar için `getAssignableRooms`. **Doğrudan Prisma'dan sayı saymayın** —
+> atanmış/atanmamış rezervasyon ve blok etkileşimi göründüğünden karmaşık
+> (bkz. `rules.js` başındaki açıklama).
+>
+> **⚠️ Tarih aralığı semantiği:** konaklama ve bloklar **yarı açık** `[)` —
+> 15-18 rezervasyonu 15, 16, 17 gecelerini tutar, 18'de oda boşalır ve aynı gün
+> tekrar satılabilir. Sezonlar ise **iki uçtan kapalı** `[]`. İkisi bilerek farklı;
+> `@hotelos/core/dates.js` içinde ayrı fonksiyonlar olarak duruyor
+> (`rangesOverlapHalfOpen` / `rangesOverlapClosed`). Karıştırmak bir günlük
+> kaymalara ve çifte satışa yol açar.
+>
+> **Veritabanı seviyesindeki yeni garantiler:**
+> - `Reservation_no_double_booking` (EXCLUDE): bir fiziksel odaya çakışan iki
+>   aktif rezervasyon yapılamaz — uygulama kodu ne yaparsa yapsın.
+> - `RoomBlock_no_overlap` (EXCLUDE): bir odanın çakışan iki bloğu olamaz.
+> - `Reservation_date_order` (CHECK): çıkış girişten sonra olmalı.
+>
+> **Yeni tablo:** `RoomBlock` — odanın belirli tarihlerde satılamaz olması
+> (tadilat, arıza, VIP ayırma). `endDate` boşsa süresiz. `Room.status` ise
+> "şu anki" operasyonel durumdur; müsaitlik hesabı ona bakmaz.
 
 ### 4. Rezervasyon yönetimi — Ali Kemal
 **Gün sonu:** Resepsiyon elle rezervasyon açıyor, düzenliyor, iptal ediyor; sistem müsaitlik ve fiyatı kendi hesaplıyor; grup rezervasyon ve bekleyen liste çalışıyor.
@@ -230,8 +255,23 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 >
 > Ayarlar modülü bunu gerçek bir tüketiciyle kullanıyor: cache geçersiz kılma
 > artık doğrudan çağrıyla değil, `settings.*` event'lerini dinleyerek yapılıyor.
-> `shared/actor-kit` (BaseActor/BaseWorker, manifest, registry, approval) hâlâ
-> boş — o senin kapsamında.
+>
+> **Ek (10 Eylül 2026 — modül 3):** `shared/actor-kit` de artık boş değil.
+> `BaseWorker` + `defineActor` + `ActorRegistry` kuruldu ve ilk gerçek aktör
+> (`hotel/workers/room-worker`) bunun üstünde çalışıyor. Taban sınıf dört şeyi
+> garanti ediyor:
+>
+> - **İdempotency:** aynı event iki kez gelirse iş tekrarlanmaz (`ProcessedEvent`).
+> - **Kapalıyken iş kaybolmaz:** `ActorSetting.enabled = false` ise iş `ManualTask`
+>   olarak personelin önüne düşer — okunur bir başlıkla ("Rezervasyona oda atanacak").
+> - **Yeniden deneme:** geçici hatada manifest'teki politikaya göre denenir;
+>   `error.retryable = false` işaretli iş kuralı hataları hemen manuel göreve düşer.
+> - **İz:** her işlem süresiyle `ActivityLog`'a yazılır.
+>
+> `actorRegistry.list()` yönetim paneline hazır: her aktörün adı, açıklaması,
+> dinlediği ve yayınladığı event'ler manifest'te beyan edilmiş durumda.
+> Sende kalan: `GET /actors` + enable/disable API'si, `ManualTask` listeleme
+> ekranı, LLM bütçe kartı ve onay akışı (Approval/PendingAction — modül 11).
 
 ### 13. Günlük durum ekranı — arkadaşın
 **Gün sonu:** Müdür sabah tek ekrana bakıp günü anlıyor: doluluk, gelecek/gidecek, gelir, bekleyen işler.

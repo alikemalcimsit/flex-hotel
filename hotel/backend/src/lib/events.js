@@ -1,6 +1,6 @@
-import { InMemoryEventBus, SETTINGS_CHANGED_EVENTS } from '@hotelos/core';
+import { InMemoryEventBus, INVENTORY_CHANGED_EVENTS, SETTINGS_CHANGED_EVENTS } from '@hotelos/core';
 import { prismaUnfiltered } from '../db.js';
-import { invalidateHotelSettings } from './cache.js';
+import { cache, invalidateHotelSettings } from './cache.js';
 
 /**
  * Uygulamanın event bus'ı ve kalıcılığı.
@@ -125,8 +125,30 @@ export async function dispatchStaged(envelopes) {
  * kuruluma geçildiğinde aynı event kuyruğa taşınıp diğer örneklerin cache'ini
  * de temizleyecek — servis kodunda tek satır değişmeden.
  */
+/** @type {Array<() => void>} */
+let coreUnsubscribers = [];
+
+/**
+ * Çekirdek dinleyicileri kurar.
+ *
+ * İdempotent olması şart: `buildApp()` birden fazla kez çağrılabiliyor
+ * (testler, gelecekte çok kiracılı kurulum). Eski abonelikler kaldırılmazsa
+ * aynı event iki dinleyiciye gider — cache iki kez temizlenir (zararsız) ama
+ * aynı desendeki aktörler işi iki kez yapar (zararlı).
+ */
 export function registerCoreSubscribers() {
-  eventBus.subscribeMany(SETTINGS_CHANGED_EVENTS, 'settings-cache', (payload) => {
-    invalidateHotelSettings(payload.hotelId);
-  });
+  for (const unsubscribe of coreUnsubscribers) unsubscribe();
+
+  coreUnsubscribers = [
+    eventBus.subscribeMany(SETTINGS_CHANGED_EVENTS, 'settings-cache', (payload) => {
+      invalidateHotelSettings(payload.hotelId);
+    }),
+
+    // Envanter değişince oda listesi cache'i tazelenir. Müsaitlik hesabının
+    // kendisi cache'lenmiyor (her tarih penceresi ayrı sonuç, çok değişken) —
+    // yalnızca sabit girdisi olan oda listesi tutuluyor.
+    eventBus.subscribeMany(INVENTORY_CHANGED_EVENTS, 'inventory-cache', (payload) => {
+      cache.invalidatePrefix(`inventory:${payload.hotelId}:`);
+    }),
+  ];
 }
