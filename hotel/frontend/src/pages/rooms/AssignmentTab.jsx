@@ -216,6 +216,11 @@ function AssignRoomModal({ reservation, onClose, onAssigned }) {
                   {room.floor}. kat · {room.roomTypeCode}
                 </span>
                 <RoomStatusBadge status={room.status} />
+                {room.recommended && (
+                  <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">
+                    Önerilen
+                  </span>
+                )}
                 {room.isUpgrade && (
                   <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs text-purple-800">Upgrade</span>
                 )}

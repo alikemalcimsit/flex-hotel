@@ -40,6 +40,9 @@ const HOT_READ_TTL_MS = 5 * 60_000;
 /** Oda atanabilecek rezervasyon durumları. */
 const ASSIGNABLE_STATUSES = ['PENDING', 'CONFIRMED'];
 
+/** Hata mesajında örnek olarak gösterilecek en fazla kayıt sayısı. */
+const CONFLICT_SAMPLE_LIMIT = 5;
+
 /* ══════════════════ Dönüştürücüler ══════════════════ */
 
 function toRoomDto(row) {
@@ -491,24 +494,34 @@ export async function blockRoom(hotelId, roomId, input) {
       const room = await tx.room.findFirst({ where: { id: roomId, hotelId }, select: { id: true, number: true } });
       if (!room) throw new NotFoundError('Oda bulunamadı');
 
-      const conflicting = await tx.reservation.findMany({
-        where: {
-          hotelId,
-          roomId,
-          status: { in: INVENTORY_CONSUMING_STATUSES },
-          checkIn: input.endDate ? { lt: input.endDate } : undefined,
-          checkOut: { gt: input.startDate },
-        },
-        select: { confirmationCode: true, checkIn: true, checkOut: true },
-        take: 5,
-      });
+      const conflictFilter = {
+        hotelId,
+        roomId,
+        status: { in: INVENTORY_CONSUMING_STATUSES },
+        checkIn: input.endDate ? { lt: input.endDate } : undefined,
+        checkOut: { gt: input.startDate },
+      };
 
-      if (conflicting.length > 0) {
+      // Sayı ve örnekler ayrı sorgular: listeyi kısaltmak (take) sayıyı da
+      // kısaltırsa kullanıcıya "5 rezervasyon var" denir ama aslında 12 vardır.
+      const [conflictCount, samples] = await Promise.all([
+        tx.reservation.count({ where: conflictFilter }),
+        tx.reservation.findMany({
+          where: conflictFilter,
+          select: { confirmationCode: true, checkIn: true, checkOut: true },
+          orderBy: [{ checkIn: 'asc' }],
+          take: CONFLICT_SAMPLE_LIMIT,
+        }),
+      ]);
+
+      if (conflictCount > 0) {
         throw new ConflictError(
-          `Bu tarihlerde odanın ${conflicting.length} rezervasyonu var; bloklanamaz. Önce misafirleri başka odaya taşıyın.`,
+          `Bu tarihlerde odanın ${conflictCount} rezervasyonu var; bloklanamaz. Önce misafirleri başka odaya taşıyın.`,
           'HAS_RESERVATIONS',
           {
-            reservations: conflicting.map((reservation) => ({
+            total: conflictCount,
+            shown: samples.length,
+            reservations: samples.map((reservation) => ({
               confirmationCode: reservation.confirmationCode,
               checkIn: toIsoDay(reservation.checkIn),
               checkOut: toIsoDay(reservation.checkOut),
@@ -745,6 +758,12 @@ export async function getAssignableRooms(hotelId, reservationId, { includeOtherT
   });
   const typeById = new Map(roomTypes.map((type) => [type.id, type]));
 
+  // Otomatik atamanın seçeceği oda işaretleniyor: personel elle seçerken de
+  // "sistem bunu seçerdi" bilgisini görsün. Upgrade odalar öneriye girmez —
+  // misafiri sebepsiz üst sınıfa taşımak otelin kararı olmalı.
+  const sameTypeRooms = free.filter((room) => room.roomTypeId === reservation.roomTypeId);
+  const recommendedId = pickBestRoom(sameTypeRooms)?.id ?? null;
+
   return free.map((room) => ({
     id: room.id,
     number: room.number,
@@ -754,7 +773,7 @@ export async function getAssignableRooms(hotelId, reservationId, { includeOtherT
     roomTypeCode: typeById.get(room.roomTypeId)?.code ?? null,
     roomTypeName: typeById.get(room.roomTypeId)?.name ?? null,
     isUpgrade: room.roomTypeId !== reservation.roomTypeId,
-    recommended: false,
+    recommended: room.id === recommendedId,
   }));
 }
 

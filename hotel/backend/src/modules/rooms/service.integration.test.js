@@ -245,6 +245,37 @@ describe('oda envanteri servisi (entegrasyon)', { skip }, () => {
       );
     });
 
+    it('çakışan kayıt sayısı örnek listesiyle kısaltılmaz', async () => {
+      // Aynı odada arka arkaya 6 birer gecelik konaklama (çakışmadıkları için
+      // hepsi geçerli). 15-21 aralığını bloklamak altısıyla da çakışır.
+      for (let day = 15; day < 21; day += 1) {
+        await seedReservation({
+          roomId: rooms['101'].id,
+          checkIn: `2026-10-${day}`,
+          checkOut: `2026-10-${day + 1}`,
+        });
+      }
+
+      await assert.rejects(
+        () =>
+          asUser(() =>
+            service.blockRoom(hotelId, rooms['101'].id, {
+              startDate: new Date('2026-10-15T00:00:00.000Z'),
+              endDate: new Date('2026-10-21T00:00:00.000Z'),
+              reason: 'Tadilat',
+            }),
+          ),
+        (error) => {
+          // Mesajdaki sayı gerçek toplam olmalı; örnek listesi 5'le sınırlı.
+          assert.match(error.message, /6 rezervasyonu var/);
+          assert.equal(error.details.total, 6);
+          assert.equal(error.details.shown, 5);
+          assert.equal(error.details.reservations.length, 5);
+          return true;
+        },
+      );
+    });
+
     it('süresiz blok sonraki tüm tarihleri kapatır', async () => {
       await asUser(() =>
         service.blockRoom(hotelId, rooms['101'].id, {
@@ -303,6 +334,34 @@ describe('oda envanteri servisi (entegrasyon)', { skip }, () => {
       const candidates = await service.getAssignableRooms(hotelId, reservation.id);
 
       assert.deepEqual(candidates.map((room) => room.number), ['103']);
+    });
+
+    it('aday listesinde otomatik atamanın seçeceği oda işaretlenir', async () => {
+      await prismaUnfiltered.room.update({ where: { id: rooms['101'].id }, data: { status: 'DIRTY' } });
+      const reservation = await seedReservation();
+
+      const candidates = await service.getAssignableRooms(hotelId, reservation.id);
+      const recommended = candidates.filter((room) => room.recommended);
+
+      assert.equal(recommended.length, 1, 'tam bir tane öneri olmalı');
+      assert.equal(recommended[0].number, '102', 'kirli 101 yerine temiz 102 önerilmeli');
+    });
+
+    it('upgrade odalar öneri olarak işaretlenmez', async () => {
+      // Standart odaların hepsi dolu; yalnızca Deluxe kalıyor.
+      for (const number of ['101', '102', '103']) {
+        await seedReservation({ roomId: rooms[number].id, checkIn: '2026-10-15', checkOut: '2026-10-18' });
+      }
+      const reservation = await seedReservation();
+
+      const candidates = await service.getAssignableRooms(hotelId, reservation.id, { includeOtherTypes: true });
+
+      assert.ok(candidates.some((room) => room.isUpgrade), 'Deluxe oda listelenmeli');
+      assert.equal(
+        candidates.filter((room) => room.recommended).length,
+        0,
+        'misafiri kendiliğinden üst sınıfa taşımayı önermemeli',
+      );
     });
 
     it('otomatik atama en uygun odayı seçer', async () => {
