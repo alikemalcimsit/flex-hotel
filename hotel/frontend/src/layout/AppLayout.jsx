@@ -1,11 +1,14 @@
-import { Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { Button } from '@hotelos/ui';
 import { useAuthStore } from '../store/auth.js';
 
-/** Sol menü boş; modüller eklendikçe buraya link gelir. */
+/**
+ * Sol menü. `roles` dolu olan girdiler yalnızca o rollere gösterilir.
+ * Not: bu görsel bir kısıt; gerçek yetki kontrolü modül 2 ile sunucuya gelecek.
+ */
 const MENU = [
   { label: 'Panel', to: '/' },
-  // TODO: modül menüleri
+  { label: 'Ayarlar', to: '/ayarlar', roles: ['ADMIN'] },
 ];
 
 export function AppLayout() {
@@ -17,15 +20,26 @@ export function AppLayout() {
     navigate('/login');
   }
 
+  const visibleMenu = MENU.filter((item) => !item.roles || item.roles.includes(user?.role));
+
   return (
     <div className="flex min-h-screen">
       <aside className="w-56 border-r border-gray-200 bg-white p-4">
         <div className="mb-6 text-xl font-bold text-blue-700">HotelOS</div>
         <nav className="flex flex-col gap-1">
-          {MENU.map((item) => (
-            <a key={item.to} href={item.to} className="rounded px-3 py-2 text-sm hover:bg-gray-100">
+          {visibleMenu.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.to === '/'}
+              className={({ isActive }) =>
+                `rounded px-3 py-2 text-sm transition-colors ${
+                  isActive ? 'bg-blue-50 font-medium text-blue-700' : 'text-gray-700 hover:bg-gray-100'
+                }`
+              }
+            >
               {item.label}
-            </a>
+            </NavLink>
           ))}
         </nav>
       </aside>

@@ -45,7 +45,13 @@ async function main() {
       address: 'Demo Cad. No:1, Antalya',
       phone: '+902420000000',
       email: 'info@demootel.local',
-      settings: { checkInTime: '14:00', checkOutTime: '12:00' },
+      // Modül 1'den itibaren bu parametreler tipli kolonlarda tutuluyor;
+      // `settings` JSON'u yalnızca henüz modellenmemiş serbest ayarlar için.
+      checkInTime: '14:00',
+      checkOutTime: '12:00',
+      defaultBoardType: 'BB',
+      cancellationPolicyDays: 3,
+      cancellationPolicyPenaltyPct: 50,
     },
   });
   const hotelId = hotel.id;
@@ -62,24 +68,23 @@ async function main() {
     });
   }
 
+  // RoomType ve Room'da benzersizlik kısmi (partial) unique index ile tanımlı —
+  // silinen bir kodun tekrar kullanılabilmesi için. Prisma kısmi index'i bileşik
+  // anahtar olarak göremediğinden `upsert` yerine findFirst + create kullanılıyor.
   const roomTypeByCode = {};
   for (const rt of ROOM_TYPES) {
-    const created = await prisma.roomType.upsert({
-      where: { hotelId_code: { hotelId, code: rt.code } },
-      update: {},
-      create: { hotelId, ...rt },
-    });
-    roomTypeByCode[rt.code] = created;
+    const existing = await prisma.roomType.findFirst({ where: { hotelId, code: rt.code, deletedAt: null } });
+    roomTypeByCode[rt.code] = existing ?? (await prisma.roomType.create({ data: { hotelId, ...rt } }));
   }
 
   const roomByNumber = {};
   for (const r of ROOMS) {
-    const created = await prisma.room.upsert({
-      where: { hotelId_number: { hotelId, number: r.number } },
-      update: {},
-      create: { hotelId, number: r.number, floor: r.floor, roomTypeId: roomTypeByCode[r.type].id },
-    });
-    roomByNumber[r.number] = created;
+    const existing = await prisma.room.findFirst({ where: { hotelId, number: r.number, deletedAt: null } });
+    roomByNumber[r.number] =
+      existing ??
+      (await prisma.room.create({
+        data: { hotelId, number: r.number, floor: r.floor, roomTypeId: roomTypeByCode[r.type].id },
+      }));
   }
 
   const seasonCount = await prisma.season.count({ where: { hotelId } });

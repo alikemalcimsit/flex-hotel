@@ -1,0 +1,720 @@
+import { cache } from '../../lib/cache.js';
+import { prisma } from '../../db.js';
+import { recordAudit } from '../../lib/audit.js';
+import { dispatchStaged, stageEvent } from '../../lib/events.js';
+import { InUseError, NotFoundError, rethrowPrismaError, StaleWriteError, ValidationError } from '../../lib/errors.js';
+import { buildPage, toSkipTake } from '../../lib/pagination.js';
+import { assertNoOverlap, findSeasonForDate, isValidTimeZone } from './rules.js';
+
+/**
+ * Ayarlar servisi.
+ *
+ * İki tür okuma var ve bilinçli olarak farklı davranıyorlar:
+ *
+ * 1. **Yönetim listeleri** (`listRoomTypes` vb.) — admin ekranından gelir, düşük
+ *    hacimlidir, filtre/sayfa kombinasyonu sonsuzdur. Cache'lenmez.
+ * 2. **Sıcak okumalar** (`getActiveRoomTypes`, `getActiveSeasons`, ...) — fiyat
+ *    hesabı ve müsaitlik sorgusu bunları her rezervasyonda çağıracak. Cache'lenir;
+ *    geçersiz kılma doğrudan çağrıyla değil, yayınlanan event'i dinleyerek olur
+ *    (bkz. `lib/events.js` → `registerCoreSubscribers`).
+ *
+ * Her yazma işlemi üç şeyi **tek transaction'da** yapar: veriyi değiştirir,
+ * denetim izi bırakır, event'i outbox'a yazar. Üçü ya birlikte olur ya hiç.
+ *
+ * Modül 3 (müsaitlik) ve modül 4 (rezervasyon) bu dosyanın "sıcak okuma"
+ * bölümündeki fonksiyonları kullanmalı; doğrudan Prisma'ya gitmemeli.
+ */
+
+const HOT_READ_TTL_MS = 5 * 60_000;
+
+/* ══════════════════ Dönüştürücüler ══════════════════ */
+
+/** @param {{ toString(): string }} value */
+const decimalToString = (value) => value.toString();
+
+/** @param {Date} value */
+const toIsoDay = (value) => value.toISOString().slice(0, 10);
+
+function toHotelDto(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    code: row.code,
+    address: row.address,
+    phone: row.phone,
+    email: row.email,
+    logoUrl: row.logoUrl,
+    currency: row.currency,
+    timezone: row.timezone,
+    checkInTime: row.checkInTime,
+    checkOutTime: row.checkOutTime,
+    defaultBoardType: row.defaultBoardType,
+    cancellationPolicyDays: row.cancellationPolicyDays,
+    cancellationPolicyPenaltyPct: decimalToString(row.cancellationPolicyPenaltyPct),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+function toRoomTypeDto(row) {
+  return {
+    id: row.id,
+    code: row.code,
+    name: row.name,
+    capacityAdults: row.capacityAdults,
+    capacityChildren: row.capacityChildren,
+    basePrice: decimalToString(row.basePrice),
+    description: row.description,
+    roomCount: row._count?.rooms ?? null,
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+function toTaxDto(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    rate: decimalToString(row.rate),
+    isIncluded: row.isIncluded,
+    appliesTo: row.appliesTo,
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+function toSeasonDto(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    startDate: toIsoDay(row.startDate),
+    endDate: toIsoDay(row.endDate),
+    multiplier: decimalToString(row.multiplier),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+/**
+ * Denetim izine yazılacak anlık görüntü: türetilmiş alanlar (ör. oda sayısı)
+ * ayıklanır — onlar kaydın kendi değeri değil, çevresinin durumu.
+ * @param {Record<string, unknown>} dto
+ */
+function toSnapshot({ roomCount, ...rest }) {
+  return rest;
+}
+
+/* ══════════════════ Ortak yardımcılar ══════════════════ */
+
+/**
+ * Optimistic lock'lu güncelleme. Kayıt yoksa 404, sürüm eskiyse 409 döner —
+ * ikisini ayırt etmek önemli: kullanıcıya "silinmiş" ile "başkası değiştirdi"
+ * farklı şeyler söyler.
+ *
+ * `identity` kaydı bulan filtredir. Otel için `{ id }`, otele bağlı kayıtlar
+ * için `{ id, hotelId }` verilir — `Hotel` tablosunda `hotelId` kolonu yok.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} model Prisma model erişim adı (ör. 'roomType')
+ * @param {Record<string, unknown>} identity
+ * @param {Date} expectedUpdatedAt
+ * @param {Record<string, unknown>} data
+ * @param {string} notFoundMessage
+ */
+async function updateWithVersionCheck(tx, model, identity, expectedUpdatedAt, data, notFoundMessage) {
+  const result = await tx[model].updateMany({
+    where: { ...identity, updatedAt: expectedUpdatedAt },
+    data,
+  });
+
+  if (result.count === 0) {
+    const exists = await tx[model].findFirst({ where: identity, select: { id: true } });
+    if (!exists) throw new NotFoundError(notFoundMessage);
+    throw new StaleWriteError();
+  }
+}
+
+/**
+ * Silinmek istenen kaydın başka kayıtlarca kullanılıp kullanılmadığını bildirir.
+ * @param {Record<string, number>} counts
+ * @returns {Record<string, number>} yalnızca sıfırdan büyük olanlar
+ */
+function nonZero(counts) {
+  return Object.fromEntries(Object.entries(counts).filter(([, value]) => value > 0));
+}
+
+/**
+ * Yazma işlemini sarar: transaction'ı çalıştırır, commit sonrası bekleyen
+ * event'leri dağıtır. Dağıtım hatası çağıranı etkilemez — değişiklik zaten
+ * kalıcı, event satırı da `publishedAt` boş şekilde duruyor.
+ *
+ * @template T
+ * @param {(tx: import('@prisma/client').Prisma.TransactionClient, stage: (name: string, payload: object) => Promise<void>) => Promise<T>} work
+ * @returns {Promise<T>}
+ */
+async function writeWithEvents(work) {
+  const staged = [];
+
+  const result = await prisma.$transaction(async (tx) => {
+    const stage = async (name, payload) => {
+      staged.push(await stageEvent(tx, name, payload));
+    };
+    return work(tx, stage);
+  });
+
+  await dispatchStaged(staged);
+  return result;
+}
+
+/* ══════════════════ Otel bilgileri & genel parametreler ══════════════════ */
+
+/**
+ * Yönetim ekranı için otel kaydı. Kasıtlı olarak cache'siz: form, kaydederken
+ * geri göndereceği `updatedAt` sürüm damgasını buradan alıyor. Cache'lenmiş
+ * (bayat) bir damga her kaydetmeyi "başkası değiştirdi" hatasına düşürürdü.
+ * Diğer modüllerin okuması gereken sürüm `getHotelSettings`.
+ *
+ * @param {string} hotelId
+ */
+export async function getHotel(hotelId) {
+  const hotel = await prisma.hotel.findFirst({ where: { id: hotelId } });
+  if (!hotel) throw new NotFoundError('Otel kaydı bulunamadı');
+  return toHotelDto(hotel);
+}
+
+/**
+ * @param {string} hotelId
+ * @param {object} input
+ */
+export async function updateHotel(hotelId, input) {
+  if (!isValidTimeZone(input.timezone)) {
+    throw new ValidationError(`Geçersiz saat dilimi: "${input.timezone}". Örnek: Europe/Istanbul`);
+  }
+
+  const { expectedUpdatedAt, ...data } = input;
+
+  try {
+    return await writeWithEvents(async (tx, stage) => {
+      const before = await tx.hotel.findFirst({ where: { id: hotelId } });
+      if (!before) throw new NotFoundError('Otel kaydı bulunamadı');
+
+      await updateWithVersionCheck(
+        tx,
+        'hotel',
+        { id: hotelId },
+        expectedUpdatedAt,
+        {
+          name: data.name,
+          address: data.address || null,
+          phone: data.phone || null,
+          email: data.email || null,
+          logoUrl: data.logoUrl || null,
+          currency: data.currency,
+          timezone: data.timezone,
+          checkInTime: data.checkInTime,
+          checkOutTime: data.checkOutTime,
+        },
+        'Otel kaydı bulunamadı',
+      );
+
+      const after = await tx.hotel.findFirst({ where: { id: hotelId } });
+      const dto = toHotelDto(after);
+      const changedFields = await recordAudit(tx, {
+        hotelId,
+        entity: 'Hotel',
+        entityId: hotelId,
+        action: 'UPDATE',
+        before: toHotelDto(before),
+        after: dto,
+      });
+
+      await stage('settings.hotel.updated', { hotelId, changedFields });
+      return dto;
+    });
+  } catch (error) {
+    rethrowPrismaError(error);
+  }
+}
+
+/**
+ * @param {string} hotelId
+ * @param {object} input
+ */
+export async function updateGeneralSettings(hotelId, input) {
+  const { expectedUpdatedAt, ...data } = input;
+
+  try {
+    return await writeWithEvents(async (tx, stage) => {
+      const before = await tx.hotel.findFirst({ where: { id: hotelId } });
+      if (!before) throw new NotFoundError('Otel kaydı bulunamadı');
+
+      await updateWithVersionCheck(
+        tx,
+        'hotel',
+        { id: hotelId },
+        expectedUpdatedAt,
+        {
+          defaultBoardType: data.defaultBoardType,
+          cancellationPolicyDays: data.cancellationPolicyDays,
+          cancellationPolicyPenaltyPct: data.cancellationPolicyPenaltyPct,
+        },
+        'Otel kaydı bulunamadı',
+      );
+
+      const after = await tx.hotel.findFirst({ where: { id: hotelId } });
+      const dto = toHotelDto(after);
+      const changedFields = await recordAudit(tx, {
+        hotelId,
+        entity: 'Hotel',
+        entityId: hotelId,
+        action: 'UPDATE',
+        before: toHotelDto(before),
+        after: dto,
+      });
+
+      await stage('settings.hotel.updated', { hotelId, changedFields });
+      return dto;
+    });
+  } catch (error) {
+    rethrowPrismaError(error);
+  }
+}
+
+/* ══════════════════ Oda tipleri ══════════════════ */
+
+/**
+ * @param {string} hotelId
+ * @param {{ page: number, pageSize: number, search?: string }} query
+ */
+export async function listRoomTypes(hotelId, query) {
+  const where = {
+    hotelId,
+    ...(query.search
+      ? {
+          OR: [
+            { code: { contains: query.search, mode: 'insensitive' } },
+            { name: { contains: query.search, mode: 'insensitive' } },
+          ],
+        }
+      : {}),
+  };
+
+  // Sayım ve sayfa aynı transaction'da: iki ayrı sorgu arasında kayıt eklenirse
+  // "toplam 30 ama 31. kayıt görünüyor" tutarsızlığı oluşmasın.
+  const [items, total] = await prisma.$transaction([
+    prisma.roomType.findMany({
+      where,
+      orderBy: [{ code: 'asc' }],
+      // Oda sayısı ilişkili tablodan tek sorguda geliyor (N+1 yok).
+      include: { _count: { select: { rooms: true } } },
+      ...toSkipTake(query),
+    }),
+    prisma.roomType.count({ where }),
+  ]);
+
+  return buildPage(items.map(toRoomTypeDto), total, query);
+}
+
+/**
+ * @param {string} hotelId
+ * @param {object} input
+ */
+export async function createRoomType(hotelId, input) {
+  try {
+    return await writeWithEvents(async (tx, stage) => {
+      const created = await tx.roomType.create({
+        data: { hotelId, ...input, description: input.description || null },
+        include: { _count: { select: { rooms: true } } },
+      });
+      const dto = toRoomTypeDto(created);
+
+      await recordAudit(tx, {
+        hotelId,
+        entity: 'RoomType',
+        entityId: created.id,
+        action: 'CREATE',
+        after: toSnapshot(dto),
+      });
+      await stage('settings.roomType.created', { hotelId, id: created.id, label: `${dto.code} — ${dto.name}` });
+
+      return dto;
+    });
+  } catch (error) {
+    // Aynı kodla eşzamanlı iki ekleme: kısmi unique index yakalar.
+    rethrowPrismaError(error, { uniqueMessage: `"${input.code}" kodlu bir oda tipi zaten var` });
+  }
+}
+
+/**
+ * @param {string} hotelId
+ * @param {string} id
+ * @param {object} input
+ */
+export async function updateRoomType(hotelId, id, input) {
+  const { expectedUpdatedAt, ...data } = input;
+
+  try {
+    return await writeWithEvents(async (tx, stage) => {
+      const before = await tx.roomType.findFirst({ where: { id, hotelId } });
+      if (!before) throw new NotFoundError('Oda tipi bulunamadı');
+
+      await updateWithVersionCheck(
+        tx,
+        'roomType',
+        { id, hotelId },
+        expectedUpdatedAt,
+        { ...data, description: data.description || null },
+        'Oda tipi bulunamadı',
+      );
+
+      const after = await tx.roomType.findFirst({
+        where: { id },
+        include: { _count: { select: { rooms: true } } },
+      });
+      const dto = toRoomTypeDto(after);
+
+      const changedFields = await recordAudit(tx, {
+        hotelId,
+        entity: 'RoomType',
+        entityId: id,
+        action: 'UPDATE',
+        before: toSnapshot(toRoomTypeDto(before)),
+        after: toSnapshot(dto),
+      });
+      await stage('settings.roomType.updated', {
+        hotelId,
+        id,
+        label: `${dto.code} — ${dto.name}`,
+        changedFields,
+      });
+
+      return dto;
+    });
+  } catch (error) {
+    rethrowPrismaError(error, { uniqueMessage: `"${data.code}" kodlu bir oda tipi zaten var` });
+  }
+}
+
+/**
+ * Oda tipini soft-delete eder. Bağlı oda / rezervasyon / fiyat planı varsa
+ * silmez — sessizce veri tutarsızlığı üretmektense kullanıcıya ne engellediğini
+ * sayısıyla söyler.
+ *
+ * @param {string} hotelId
+ * @param {string} id
+ */
+export async function deleteRoomType(hotelId, id) {
+  await writeWithEvents(async (tx, stage) => {
+    const existing = await tx.roomType.findFirst({ where: { id, hotelId } });
+    if (!existing) throw new NotFoundError('Oda tipi bulunamadı');
+
+    const [rooms, reservations, ratePlans] = await Promise.all([
+      tx.room.count({ where: { roomTypeId: id, hotelId } }),
+      tx.reservation.count({
+        where: { roomTypeId: id, hotelId, status: { in: ['PENDING', 'CONFIRMED', 'CHECKED_IN'] } },
+      }),
+      tx.ratePlan.count({ where: { roomTypeId: id, hotelId } }),
+    ]);
+
+    const usage = nonZero({ oda: rooms, aktifRezervasyon: reservations, fiyatPlani: ratePlans });
+    if (Object.keys(usage).length > 0) {
+      throw new InUseError(
+        `"${existing.name}" oda tipi kullanımda olduğu için silinemez. Önce bağlı kayıtları kaldırın.`,
+        usage,
+      );
+    }
+
+    await tx.roomType.update({ where: { id }, data: { deletedAt: new Date() } });
+    await recordAudit(tx, {
+      hotelId,
+      entity: 'RoomType',
+      entityId: id,
+      action: 'DELETE',
+      before: toSnapshot(toRoomTypeDto(existing)),
+    });
+    await stage('settings.roomType.deleted', { hotelId, id, label: `${existing.code} — ${existing.name}` });
+  });
+}
+
+/* ══════════════════ Vergiler ══════════════════ */
+
+/**
+ * @param {string} hotelId
+ * @param {{ page: number, pageSize: number, search?: string }} query
+ */
+export async function listTaxes(hotelId, query) {
+  const where = {
+    hotelId,
+    ...(query.search ? { name: { contains: query.search, mode: 'insensitive' } } : {}),
+  };
+
+  const [items, total] = await prisma.$transaction([
+    prisma.tax.findMany({ where, orderBy: [{ name: 'asc' }], ...toSkipTake(query) }),
+    prisma.tax.count({ where }),
+  ]);
+
+  return buildPage(items.map(toTaxDto), total, query);
+}
+
+/**
+ * @param {string} hotelId
+ * @param {object} input
+ */
+export async function createTax(hotelId, input) {
+  return writeWithEvents(async (tx, stage) => {
+    const created = await tx.tax.create({ data: { hotelId, ...input } });
+    const dto = toTaxDto(created);
+
+    await recordAudit(tx, { hotelId, entity: 'Tax', entityId: created.id, action: 'CREATE', after: dto });
+    await stage('settings.tax.created', { hotelId, id: created.id, label: dto.name });
+
+    return dto;
+  });
+}
+
+/**
+ * @param {string} hotelId
+ * @param {string} id
+ * @param {object} input
+ */
+export async function updateTax(hotelId, id, input) {
+  const { expectedUpdatedAt, ...data } = input;
+
+  return writeWithEvents(async (tx, stage) => {
+    const before = await tx.tax.findFirst({ where: { id, hotelId } });
+    if (!before) throw new NotFoundError('Vergi bulunamadı');
+
+    await updateWithVersionCheck(tx, 'tax', { id, hotelId }, expectedUpdatedAt, data, 'Vergi bulunamadı');
+
+    const after = await tx.tax.findFirst({ where: { id } });
+    const dto = toTaxDto(after);
+
+    const changedFields = await recordAudit(tx, {
+      hotelId,
+      entity: 'Tax',
+      entityId: id,
+      action: 'UPDATE',
+      before: toTaxDto(before),
+      after: dto,
+    });
+    await stage('settings.tax.updated', { hotelId, id, label: dto.name, changedFields });
+
+    return dto;
+  });
+}
+
+/**
+ * @param {string} hotelId
+ * @param {string} id
+ */
+export async function deleteTax(hotelId, id) {
+  await writeWithEvents(async (tx, stage) => {
+    const existing = await tx.tax.findFirst({ where: { id, hotelId } });
+    if (!existing) throw new NotFoundError('Vergi bulunamadı');
+
+    // Kesilmiş folyo kalemlerine bağlı vergi silinirse geçmiş hesap bozulur.
+    const folioItems = await tx.folioItem.count({ where: { taxId: id, hotelId } });
+    const usage = nonZero({ folyoKalemi: folioItems });
+    if (Object.keys(usage).length > 0) {
+      throw new InUseError(
+        `"${existing.name}" vergisi geçmiş folyo kalemlerinde kullanıldığı için silinemez.`,
+        usage,
+      );
+    }
+
+    await tx.tax.update({ where: { id }, data: { deletedAt: new Date() } });
+    await recordAudit(tx, {
+      hotelId,
+      entity: 'Tax',
+      entityId: id,
+      action: 'DELETE',
+      before: toTaxDto(existing),
+    });
+    await stage('settings.tax.deleted', { hotelId, id, label: existing.name });
+  });
+}
+
+/* ══════════════════ Sezonlar ══════════════════ */
+
+/**
+ * @param {string} hotelId
+ * @param {{ page: number, pageSize: number, search?: string }} query
+ */
+export async function listSeasons(hotelId, query) {
+  const where = {
+    hotelId,
+    ...(query.search ? { name: { contains: query.search, mode: 'insensitive' } } : {}),
+  };
+
+  const [items, total] = await prisma.$transaction([
+    prisma.season.findMany({ where, orderBy: [{ startDate: 'asc' }], ...toSkipTake(query) }),
+    prisma.season.count({ where }),
+  ]);
+
+  return buildPage(items.map(toSeasonDto), total, query);
+}
+
+/**
+ * Sezon ekler.
+ *
+ * Çakışma kontrolü iki katmanlı: burada mevcut sezonlar okunup kullanıcıya
+ * *hangi* sezonla çakıştığı söyleniyor; garantiyi ise veritabanındaki
+ * `Season_no_overlap` EXCLUDE kısıtı veriyor. Bu yüzden eşzamanlılık için ayrı
+ * bir kilide gerek yok — iki istek aynı anda gelse biri kısıta takılır ve
+ * `rethrowPrismaError` onu anlaşılır mesaja çevirir.
+ *
+ * @param {string} hotelId
+ * @param {object} input
+ */
+export async function createSeason(hotelId, input) {
+  try {
+    return await writeWithEvents(async (tx, stage) => {
+      const existing = await tx.season.findMany({
+        where: { hotelId },
+        select: { id: true, name: true, startDate: true, endDate: true },
+      });
+      assertNoOverlap(existing, input);
+
+      const created = await tx.season.create({ data: { hotelId, ...input } });
+      const dto = toSeasonDto(created);
+
+      await recordAudit(tx, { hotelId, entity: 'Season', entityId: created.id, action: 'CREATE', after: dto });
+      await stage('settings.season.created', { hotelId, id: created.id, label: dto.name });
+
+      return dto;
+    });
+  } catch (error) {
+    rethrowPrismaError(error);
+  }
+}
+
+/**
+ * @param {string} hotelId
+ * @param {string} id
+ * @param {object} input
+ */
+export async function updateSeason(hotelId, id, input) {
+  const { expectedUpdatedAt, ...data } = input;
+
+  try {
+    return await writeWithEvents(async (tx, stage) => {
+      const before = await tx.season.findFirst({ where: { id, hotelId } });
+      if (!before) throw new NotFoundError('Sezon bulunamadı');
+
+      const existing = await tx.season.findMany({
+        where: { hotelId },
+        select: { id: true, name: true, startDate: true, endDate: true },
+      });
+      assertNoOverlap(existing, { ...data, id });
+
+      await updateWithVersionCheck(tx, 'season', { id, hotelId }, expectedUpdatedAt, data, 'Sezon bulunamadı');
+
+      const after = await tx.season.findFirst({ where: { id } });
+      const dto = toSeasonDto(after);
+
+      const changedFields = await recordAudit(tx, {
+        hotelId,
+        entity: 'Season',
+        entityId: id,
+        action: 'UPDATE',
+        before: toSeasonDto(before),
+        after: dto,
+      });
+      await stage('settings.season.updated', { hotelId, id, label: dto.name, changedFields });
+
+      return dto;
+    });
+  } catch (error) {
+    rethrowPrismaError(error);
+  }
+}
+
+/**
+ * @param {string} hotelId
+ * @param {string} id
+ */
+export async function deleteSeason(hotelId, id) {
+  await writeWithEvents(async (tx, stage) => {
+    const existing = await tx.season.findFirst({ where: { id, hotelId } });
+    if (!existing) throw new NotFoundError('Sezon bulunamadı');
+
+    await tx.season.update({ where: { id }, data: { deletedAt: new Date() } });
+    await recordAudit(tx, {
+      hotelId,
+      entity: 'Season',
+      entityId: id,
+      action: 'DELETE',
+      before: toSeasonDto(existing),
+    });
+    await stage('settings.season.deleted', { hotelId, id, label: existing.name });
+  });
+}
+
+/* ══════════════════ Sıcak okumalar (diğer modüller buradan tüketir) ══════════════════ */
+
+/**
+ * Otelin operasyonel parametreleri. Modül 4 iptal politikasını, modül 6
+ * check-in/out saatlerini buradan okur.
+ * @param {string} hotelId
+ */
+export async function getHotelSettings(hotelId) {
+  return cache.getOrSet(
+    `settings:${hotelId}:hotel`,
+    async () => {
+      const hotel = await prisma.hotel.findFirst({ where: { id: hotelId } });
+      if (!hotel) throw new NotFoundError('Otel kaydı bulunamadı');
+      return toHotelDto(hotel);
+    },
+    HOT_READ_TTL_MS,
+  );
+}
+
+/**
+ * Satılabilir oda tipleri (müsaitlik ve fiyat hesabının girdisi).
+ * @param {string} hotelId
+ */
+export async function getActiveRoomTypes(hotelId) {
+  return cache.getOrSet(
+    `settings:${hotelId}:roomTypes`,
+    async () => {
+      const rows = await prisma.roomType.findMany({ where: { hotelId }, orderBy: [{ code: 'asc' }] });
+      return rows.map(toRoomTypeDto);
+    },
+    HOT_READ_TTL_MS,
+  );
+}
+
+/**
+ * @param {string} hotelId
+ */
+export async function getActiveTaxes(hotelId) {
+  return cache.getOrSet(
+    `settings:${hotelId}:taxes`,
+    async () => {
+      const rows = await prisma.tax.findMany({ where: { hotelId }, orderBy: [{ name: 'asc' }] });
+      return rows.map(toTaxDto);
+    },
+    HOT_READ_TTL_MS,
+  );
+}
+
+/**
+ * @param {string} hotelId
+ */
+export async function getActiveSeasons(hotelId) {
+  return cache.getOrSet(
+    `settings:${hotelId}:seasons`,
+    async () => {
+      const rows = await prisma.season.findMany({ where: { hotelId }, orderBy: [{ startDate: 'asc' }] });
+      return rows.map(toSeasonDto);
+    },
+    HOT_READ_TTL_MS,
+  );
+}
+
+/**
+ * Belirli bir güne düşen sezon. Fiyat hesabının (modül 4) giriş kapısı:
+ * çakışma veritabanı kısıtıyla engellendiği için sonuç tekildir.
+ * @param {string} hotelId
+ * @param {Date | string} date
+ */
+export async function getSeasonForDate(hotelId, date) {
+  const seasons = await getActiveSeasons(hotelId);
+  return findSeasonForDate(seasons, date);
+}

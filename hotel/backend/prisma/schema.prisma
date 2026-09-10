@@ -139,18 +139,24 @@ enum LogLevel {
 // ───────────── SİSTEM ─────────────
 
 model Hotel {
-  id        String    @id @default(uuid())
-  name      String
-  code      String    @unique
-  timezone  String    @default("Europe/Istanbul")
-  currency  String    @default("TRY")
-  address   String?
-  phone     String?
-  email     String?
-  settings  Json      @default("{}")
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  id                             String    @id @default(uuid())
+  name                           String
+  code                           String    @unique
+  timezone                       String    @default("Europe/Istanbul")
+  currency                       String    @default("TRY")
+  address                        String?
+  phone                          String?
+  email                          String?
+  logoUrl                        String?
+  checkInTime                    String    @default("14:00")
+  checkOutTime                   String    @default("12:00")
+  defaultBoardType               BoardType @default(BB)
+  cancellationPolicyDays         Int       @default(0)
+  cancellationPolicyPenaltyPct   Decimal   @default(0) @db.Decimal(5, 2)
+  settings                       Json      @default("{}")
+  createdAt                      DateTime  @default(now())
+  updatedAt                      DateTime  @updatedAt
+  deletedAt                      DateTime?
 
   users              User[]
   refreshTokens      RefreshToken[]
@@ -158,6 +164,7 @@ model Hotel {
   processedEvents    ProcessedEvent[]
   actorSettings      ActorSetting[]
   activityLogs       ActivityLog[]
+  auditLogs          AuditLog[]
   approvals          Approval[]
   pendingActions     PendingAction[]
   manualTasks        ManualTask[]
@@ -263,6 +270,31 @@ model ActorSetting {
   hotel Hotel @relation(fields: [hotelId], references: [id])
 
   @@unique([hotelId, actorName])
+}
+
+/// Kullanıcı denetim izi: hangi kaydı kim, ne zaman, neyi neye çevirerek değiştirdi.
+/// ActivityLog aktör/event odaklıdır; bu tablo insan odaklıdır (modül 10'un
+/// "kullanıcı audit listesi" ekranı bunu okuyacak).
+model AuditLog {
+  id            String    @id @default(uuid())
+  hotelId       String
+  entity        String
+  entityId      String
+  action        String
+  actor         String
+  before        Json?
+  after         Json?
+  changedFields String[]  @default([])
+  correlationId String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+
+  @@index([hotelId, entity, entityId])
+  @@index([hotelId, createdAt])
+  @@index([correlationId])
 }
 
 model ActivityLog {
@@ -397,7 +429,12 @@ model RoomType {
   reservations Reservation[]
   ratePlans    RatePlan[]
 
-  @@unique([hotelId, code])
+  // Benzersizlik kısmi (partial) unique index ile veritabanında tanımlı:
+  // `RoomType_hotelId_code_active_key ... WHERE "deletedAt" IS NULL`.
+  // Prisma kısmi index'i ifade edemediği için burada `@@unique` yok —
+  // olsaydı silinmiş bir oda tipinin kodu asla tekrar kullanılamazdı.
+  @@index([hotelId, code])
+  @@index([hotelId, deletedAt])
 }
 
 model Room {
@@ -419,7 +456,10 @@ model Room {
   maintenanceTickets MaintenanceTicket[]
   lostItems          LostItem[]
 
-  @@unique([hotelId, number])
+  // Oda numarası benzersizliği de kısmi index ile (bkz. RoomType açıklaması):
+  // silinen 101 numaralı oda sonradan tekrar açılabilmeli.
+  @@index([hotelId, number])
+  @@index([hotelId, deletedAt])
 }
 
 model Guest {
@@ -533,6 +573,10 @@ model Season {
   deletedAt  DateTime?
 
   hotel Hotel @relation(fields: [hotelId], references: [id])
+
+  // Fiyat hesabı her rezervasyonda "şu tarihe düşen sezon" sorgusu atar; sıcak yol budur.
+  @@index([hotelId, startDate, endDate])
+  @@index([hotelId, deletedAt])
 }
 
 model Tax {
@@ -548,6 +592,8 @@ model Tax {
 
   hotel      Hotel       @relation(fields: [hotelId], references: [id])
   folioItems FolioItem[]
+
+  @@index([hotelId, deletedAt])
 }
 
 model Conversation {

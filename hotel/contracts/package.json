@@ -1,0 +1,14 @@
+{
+  "name": "@hotelos/hotel-contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "description": "Backend ile frontend arasındaki ortak doğrulama şemaları (zod)",
+  "scripts": {
+    "test": "node --test \"*.test.js\""
+  },
+  "dependencies": {
+    "zod": "^4.5.4"
+  }
+}

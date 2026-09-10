@@ -1,48 +1,14 @@
-import Fastify from 'fastify';
-import cors from '@fastify/cors';
-import jwt from '@fastify/jwt';
 import { Server as SocketServer } from 'socket.io';
-import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
-import { checkDb } from './db.js';
-
-const PORT = Number(process.env.PORT ?? 3000);
-const JWT_SECRET = process.env.JWT_SECRET ?? 'dev-secret-degistir';
+import { buildApp } from './app.js';
 
 /**
- * Fastify uygulamasını kurar. Modüller sırası gelince buraya register edilir.
- * @returns {import('fastify').FastifyInstance}
+ * Sunucu önyüklemesi. Uygulamanın kendisi `app.js`'te — testler oradan
+ * `buildApp()` çağırıp port açmadan istek atabilsin diye ayrı duruyor.
  */
-export function buildApp() {
-  const app = Fastify({ logger: true });
 
-  app.setValidatorCompiler(validatorCompiler);
-  app.setSerializerCompiler(serializerCompiler);
+const PORT = Number(process.env.PORT ?? 3000);
 
-  app.register(cors, { origin: true });
-  app.register(jwt, { secret: JWT_SECRET });
-
-  // Tüm hatalar aynı zarfla döner
-  app.setErrorHandler((error, _request, reply) => {
-    app.log.error(error);
-    const status = error.statusCode ?? 500;
-    reply.status(status).send({ success: false, error: error.message ?? 'Sunucu hatası' });
-  });
-
-  app.setNotFoundHandler((_request, reply) => {
-    reply.status(404).send({ success: false, error: 'Bulunamadı' });
-  });
-
-  app.get('/health', async () => {
-    const db = await checkDb();
-    return { success: true, data: { status: 'ok', db } };
-  });
-
-  // TODO: modüller buraya: app.register(reservationRoutes, { prefix: '/reservations' })
-
-  return app;
-}
-
-const app = buildApp();
+const app = await buildApp();
 
 // socket.io aynı HTTP sunucusuna bağlanır; şimdilik sadece "hello" gönderir
 const io = new SocketServer(app.server, { cors: { origin: true } });
@@ -50,6 +16,15 @@ io.on('connection', (socket) => {
   socket.emit('hello', { message: 'HotelOS socket bağlı' });
 });
 app.decorate('io', io);
+
+// Kapanışta açık bağlantılar ve veritabanı havuzu düzgün bırakılır.
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.once(signal, async () => {
+    app.log.info(`${signal} alındı, kapanılıyor...`);
+    await app.close();
+    process.exit(0);
+  });
+}
 
 try {
   await app.listen({ port: PORT, host: '0.0.0.0' });

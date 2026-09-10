@@ -1,0 +1,47 @@
+/**
+ * ⚠️ GEÇİCİ (STOPGAP) — GERÇEK YETKİ KONTROLÜ HENÜZ YOK.
+ *
+ * Modül 2 (Kullanıcı, rol, yetki — Ali Kemal) `shared/auth` içinde gerçek
+ * JWT + RBAC'ı kurana kadar bu dosya izin kontrolünün *şeklini* sağlar ama
+ * hiçbir şeyi engellemez. Kasıtlı olarak sahte bir kontrol yazılmadı: var
+ * olmayan güvenliği varmış gibi göstermek, hiç olmamasından tehlikelidir.
+ *
+ * RBAC hazır olduğunda yapılacak tek şey: aşağıdaki `requirePermission`
+ * gövdesini `shared/auth`'un gerçek hook'una devretmek. Route'lara dokunmaya
+ * gerek kalmayacak — hepsi zaten izin adıyla işaretli.
+ */
+
+/**
+ * Bu modülün ihtiyaç duyduğu izinler. Modül 2'nin rol→izin matrisi bu
+ * katalogdan beslenecek; izin adları tek yerde tanımlı olsun diye burada.
+ */
+export const PERMISSIONS = Object.freeze({
+  SETTINGS_VIEW: 'settings.view',
+  SETTINGS_MANAGE: 'settings.manage',
+});
+
+let warned = false;
+
+/**
+ * Route'a gereken izni işaretler.
+ * @param {string} permission `PERMISSIONS` içinden bir değer
+ * @returns {(request: import('fastify').FastifyRequest) => Promise<void>} Fastify preHandler
+ */
+export function requirePermission(permission) {
+  return async function permissionPreHandler(request) {
+    // İz bırakır: audit log ve ileride gerçek kontrol bunu okuyacak.
+    request.requiredPermission = permission;
+
+    if (!warned) {
+      warned = true;
+      request.log.warn(
+        { module: 'permissions' },
+        'RBAC henüz aktif değil (modül 2 bekleniyor): tüm korumalı route\'lar şu an herkese açık.',
+      );
+    }
+
+    // TODO(modül 2 / Ali Kemal): burası şuna dönecek —
+    //   const { user } = await request.jwtVerify();
+    //   await assertPermission(user, permission);  // shared/auth
+  };
+}

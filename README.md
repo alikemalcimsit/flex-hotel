@@ -4,8 +4,12 @@ Otonom aktör ağıyla çalışan otel yönetim sistemi. Modül sırası: `MODUL
 
 ## 1. Sunucuda veritabanı kurulumu (bir kere, Ubuntu)
 
+`postgresql-contrib` şart: sezon çakışmasını engelleyen kısıt `btree_gist`
+eklentisini kullanıyor (PostgreSQL 13'ten beri "trusted", veritabanı sahibi
+superuser olmadan kurabiliyor).
+
 ```bash
-sudo apt install postgresql
+sudo apt install postgresql postgresql-contrib
 sudo -u postgres psql
 ```
 ```sql
@@ -40,10 +44,44 @@ npm run dev            # backend + frontend birlikte
 
 Sadece birini açmak için: `npm run dev:backend` veya `npm run dev:frontend`.
 
+## 3. Testler
+
+```bash
+npm test
+```
+
+Veritabanı gerektirmeyen birim testleri (saf iş kuralları, doğrulama şemaları,
+para aritmetiği, HTTP katmanı) çalışır.
+
+Veritabanına inen davranışlar (soft-delete, optimistic lock, sezon çakışması
+kısıtı, audit ve event kayıtları) ayrı çalışır ve **boş bir test veritabanı**
+ister — testler tabloları temizler, geliştirme veritabanınızı vermeyin:
+
+```bash
+DATABASE_URL=$TEST_DATABASE_URL npx prisma migrate deploy -w @hotelos/hotel-backend
+TEST_DATABASE_URL=postgresql://... npm run test:integration -w @hotelos/hotel-backend
+```
+
 ## Klasörler
 
 - `shared/` → sektörden bağımsız çekirdek (core, actor-kit, ui, auth, channels, agents, workers, mcp-server)
-- `hotel/` → otel paketi (frontend, backend, agents, workers)
+- `hotel/` → otel paketi (contracts, frontend, backend, agents, workers)
 - `clinic/` → gelecek sektör paketi (boş)
 
-Kurallar: sadece JavaScript (ESM), TypeScript yok, test yok. Backend modülleri `hotel/backend/src/modules/`, sayfalar `hotel/frontend/src/pages/`.
+Kurallar: sadece JavaScript (ESM), TypeScript yok. Backend modülleri
+`hotel/backend/src/modules/`, sayfalar `hotel/frontend/src/pages/`.
+
+Test politikası: yaygın test yazmıyoruz, ama **yanlış hesaplayınca sessizce
+yanlış para tahsil eden** kod (fiyat, müsaitlik, bakiye, çakışma kuralları)
+test edilir.
+
+## Modüller arası sözleşmeler
+
+- **Para ve oranlar string taşınır.** `Number()` ile çarpmayın;
+  `@hotelos/core`'daki `money.js` fonksiyonlarını kullanın.
+- **Doğrulama tek kaynaktan.** Zod şemaları `@hotelos/hotel-contracts` içinde;
+  sunucu ve React formu aynısını kullanır.
+- **`findUnique` yerine `findFirst`.** Soft-delete filtresi Prisma extension'ı
+  olarak otomatik uygulanıyor ama `findUnique` bundan muaf.
+- **Ayar verisini doğrudan Prisma'dan okumayın.** `modules/settings/service.js`
+  içindeki cache'li "sıcak okuma" fonksiyonlarını kullanın.

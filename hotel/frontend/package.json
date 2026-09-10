@@ -10,7 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@hotelos/hotel-contracts": "*",
     "@hotelos/ui": "*",
+    "zod": "^4.5.4",
     "@tanstack/react-query": "^5.102.8",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",

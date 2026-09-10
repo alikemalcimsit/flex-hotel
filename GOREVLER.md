@@ -11,16 +11,76 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 1. Ayarlar / parametreler — arkadaşın
 **Gün sonu:** Admin, oteli tanımlayabiliyor: oda tipleri, vergiler, sezonlar, otel bilgileri girilmiş; rezervasyon modülü bu tanımları kullanabiliyor.
-- [ ] Backend: RoomType, Tax, Season, Hotel için listele / ekle / düzenle / sil API'leri
-- [ ] Ekran: Otel bilgileri formu (ad, adres, telefon, logo, para birimi, saat dilimi, check-in/out saati)
-- [ ] Ekran: Oda tipleri listesi + form (kod, ad, yetişkin/çocuk kapasitesi, taban fiyat, açıklama)
-- [ ] Ekran: Vergiler listesi + form (ad, oran, fiyata dahil mi)
-- [ ] Ekran: Sezonlar listesi + form (ad, başlangıç, bitiş, çarpan)
-- [ ] Ekran: Genel parametreler (iptal politikası, para birimi, varsayılan pansiyon)
-- [ ] Sidebar'a "Ayarlar" menüsü, sadece ADMIN görür
+- [x] Backend: RoomType, Tax, Season, Hotel için listele / ekle / düzenle / sil API'leri
+- [x] Ekran: Otel bilgileri formu (ad, adres, telefon, logo, para birimi, saat dilimi, check-in/out saati)
+- [x] Ekran: Oda tipleri listesi + form (kod, ad, yetişkin/çocuk kapasitesi, taban fiyat, açıklama)
+- [x] Ekran: Vergiler listesi + form (ad, oran, fiyata dahil mi)
+- [x] Ekran: Sezonlar listesi + form (ad, başlangıç, bitiş, çarpan)
+- [x] Ekran: Genel parametreler (iptal politikası, para birimi, varsayılan pansiyon)
+- [x] Sidebar'a "Ayarlar" menüsü, sadece ADMIN görür
+
+> **Diğer modüller için:** ayar verisini doğrudan Prisma'dan okumayın.
+> `hotel/backend/src/modules/settings/service.js` içindeki "sıcak okuma" fonksiyonları
+> cache'li ve yazmalarda kendini tazeliyor:
+> `getHotelSettings`, `getActiveRoomTypes`, `getActiveTaxes`, `getActiveSeasons`, `getSeasonForDate`.
+> Fiyat çarpanı seçimi `rules.js` içindeki saf fonksiyonlarda (`findSeasonForDate`,
+> `resolveMultiplierForDate`) — modül 4 fiyat hesabını bunların üstüne kurmalı.
+>
+> Ayrıca **paylaşılan altyapı** eklendi (tüm modülleri ilgilendirir):
+>
+> **Veritabanı**
+> - `db.js` artık soft-delete filtresini Prisma extension'ı olarak otomatik uyguluyor.
+>   **`findUnique` kullanmayın, `findFirst` kullanın** — Prisma `findUnique`'in where'ine
+>   `deletedAt` eklemeye izin vermediği için silinmiş kayıt dönebilir.
+>   Silinmiş kayıtları da görmesi gereken yerler `prismaUnfiltered` kullanır.
+> - `RoomType.code` ve `Room.number` benzersizliği artık **kısmi (partial) unique index**:
+>   `WHERE "deletedAt" IS NULL`. Düz unique index, silinen bir kodun tekrar
+>   kullanılmasını engelliyordu (kullanıcı listede görmediği bir kayıt yüzünden
+>   "zaten var" hatası alıyordu). Prisma kısmi index'i ifade edemediği için bu iki
+>   modelde `@@unique` yok — **bu tablolarda `upsert`/`findUnique` bileşik anahtarı
+>   kullanılamaz**, `findFirst` + `create` deseni kullanın.
+> - Sezon çakışması artık veritabanı kısıtı (`Season_no_overlap`, EXCLUDE + btree_gist).
+>   Uygulama kodu da kontrol ediyor ama yalnızca daha iyi hata mesajı için;
+>   garantiyi veritabanı veriyor. Sunucuda `postgresql-contrib` gerekiyor.
+>
+> **Kod**
+> - `@hotelos/core`: event bus (katalog doğrulamalı), `correlationId` bağlamı,
+>   ve **para aritmetiği** (`money.js`). Fiyat/vergi/bakiye hesaplarında
+>   `Number()` ile çarpma yapmayın — `multiply`, `sum`, `percentOf`, `toMoneyString`
+>   kullanın. Para/oran alanları API'de **string** taşınır.
+> - `@hotelos/hotel-contracts`: zod şemaları. Sunucu doğrulaması ve React form
+>   doğrulaması **aynı şemayı** kullanıyor; kuralı iki yerde yazmayın.
+>   Zod'un varsayılan hata mesajları Türkçeye ayarlı (`locale.js`).
+> - `lib/errors.js` (tipli hatalar → HTTP durumu + veritabanı kısıtlarının Türkçe
+>   karşılıkları), `lib/pagination.js`, `lib/cache.js`, `lib/audit.js`, `lib/events.js`.
+> - `app.js` ve `server.js` ayrıldı: testler `buildApp()` ile port açmadan
+>   `app.inject()` kullanabiliyor (bkz. `src/app.test.js`).
+>
+> **Test**
+> - `npm test` → tüm paketlerin birim testleri (veritabanı gerekmez).
+> - `npm run test:integration -w @hotelos/hotel-backend` → gerçek veritabanı ister,
+>   `TEST_DATABASE_URL` yoksa atlanır.
 
 ### 2. Kullanıcı, rol, yetki (RBAC) — Ali Kemal
 **Gün sonu:** Personel kendi hesabıyla giriyor; rolüne göre menüler ve işlemler kısıtlı. Kat görevlisi folyoyu göremiyor, resepsiyon fatura silemiyor.
+
+> **⚠️ Modül 1'den devir notu (9 Eylül 2026 — Ahmet):**
+> Ayarlar modülü yazıldı ama RBAC olmadığı için iki geçici çözüm bırakıldı.
+> Bunlar bilinçli, işaretli ve tek noktada duruyor — bu modülde bağlanmaları gerekiyor:
+>
+> 1. **`hotel/backend/src/lib/permissions.js`** — `requirePermission('...')` hook'u var ve
+>    ayarlar route'larının hepsine takılı, ama **hiçbir şeyi engellemiyor** (kasıtlı: var olmayan
+>    güvenliği varmış gibi göstermek istemedik). Sunucu açılışında bir kez uyarı log'u basıyor.
+>    Yapılacak: fonksiyonun gövdesini `shared/auth`'un gerçek kontrolüne devret — route'lara
+>    dokunmaya gerek yok, hepsi zaten izin adıyla işaretli.
+>    Kullandığı izinler: `settings.view`, `settings.manage` (katalog aynı dosyada `PERMISSIONS`).
+> 2. **`hotel/backend/src/lib/tenant.js`** — aktif otel `HOTEL_CODE` ortam değişkeninden
+>    çözülüyor (varsayılan `DEMO`). Yapılacak: `hotelId`'yi JWT'den al. Servis katmanı zaten
+>    her sorguda `hotelId` ile filtreliyor; değişmesi gereken tek şey kimliğin nereden geldiği.
+>
+> Frontend tarafında `App.jsx` içindeki `RequireRole` ve sidebar'daki "Ayarlar" menüsü
+> sahte oturumdaki `user.role` alanına bakıyor — bunlar güvenlik sınırı değil, gerçek
+> giriş gelince aynı yerden gerçek role bağlanacak.
 - [ ] Backend: gerçek login (e-posta + şifre → JWT + refresh), logout, refresh, `/me`
 - [ ] Backend: User CRUD API'leri (ekle, düzenle, pasife al, şifre sıfırla)
 - [ ] Backend: izin listesi tanımı (örn. `reservation.create`, `folio.view`, `invoice.cancel`) ve rol → izin eşlemesi
@@ -109,12 +169,32 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 ### 10. Aktör Activity Feed + audit log — Ali Kemal
 **Gün sonu:** Admin, sistemde olan biteni canlı izliyor: hangi aktör hangi event'i işledi, ne kadar sürdü, hata var mı; bir rezervasyonun tüm zincirini tek tıkla görüyor.
 - [ ] Backend: ActivityLog ve EventLog listeleme API'si (filtre: aktör, event, seviye, tarih, correlationId)
-- [ ] Backend: AuditLog (kullanıcı hangi kaydı değiştirdi; servis katmanında otomatik yazım)
+- [x] Backend: AuditLog (kullanıcı hangi kaydı değiştirdi; servis katmanında otomatik yazım) — **modül 1'de yapıldı**
 - [ ] Backend: socket.io `activity` kanalı (her log satırı anlık yayınlanır)
 - [ ] Ekran: Canlı akış (liste, otomatik kaydırma, duraklat)
 - [ ] Ekran: Filtre çubuğu (aktör, event adı, seviye, tarih)
 - [ ] Ekran: Zincir görünümü (correlationId seç → adımlar sıralı, süreleriyle)
 - [ ] Ekran: Kullanıcı audit listesi (kim, ne zaman, hangi kayıt, eski/yeni değer)
+
+> **🎁 Modül 1'de senin adına yapılanlar (9 Eylül 2026 — Ahmet):**
+> Ayarlar modülünü yazarken bu modülün altyapısına ihtiyaç oldu, biz de temelini
+> kurduk. Ekran tarafı sana kaldı ama arka taraf hazır:
+>
+> - **`AuditLog` tablosu + otomatik yazım.** Her ayar değişikliği kim/ne zaman/eski
+>   değer/yeni değer/değişen alan listesiyle kaydediliyor
+>   (`hotel/backend/src/lib/audit.js`). Değişiklikle **aynı transaction'da** yazılıyor,
+>   yani "değişti ama izi yok" durumu imkânsız. Senin "kullanıcı audit listesi"
+>   ekranın doğrudan bu tabloyu okuyabilir.
+> - **`correlationId` zinciri.** Her HTTP isteğine bir kimlik veriliyor
+>   (`x-correlation-id` başlığıyla dışarı da veriliyor) ve `AsyncLocalStorage`
+>   üzerinden çağrı ağacında kendiliğinden taşınıyor. Audit ve event kayıtları
+>   aynı kimliği paylaşıyor — "zincir görünümü" ekranının ihtiyacı olan tutkal bu.
+> - **EventLog + transactional outbox.** Event'ler iş verisiyle aynı transaction'da
+>   `EventLog`'a yazılıyor (`publishedAt` boş), commit sonrası dağıtılıp
+>   işaretleniyor. Dağıtılamayan event `publishedAt = null` kalıyor; ileride bir
+>   "outbox tarayıcı" ile yeniden denenebilir.
+>
+> Sende kalan: listeleme API'si, socket.io `activity` kanalı ve ekranlar.
 
 ### 11. Onay kuyruğu — arkadaşın
 **Gün sonu:** Para iadesi, büyük ödeme, toplu fiyat değişimi gibi işler personelin önüne düşüyor; onaylayınca sistem kaldığı yerden devam ediyor.
@@ -135,6 +215,23 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 - [ ] Ekran: Aktör detay paneli (açıklama, dinlediği / yayınladığı event'ler, onay gerektiren aksiyonlar, retry politikası)
 - [ ] Ekran: LLM agent kartı (model, günlük bütçe, bugünkü kullanım çubuğu, tahmini maliyet)
 - [ ] Ekran: Manuel görevler listesi (modül, başlık, orijinal event, "tamamla")
+
+> **🎁 Modül 1'de senin adına yapılanlar (9 Eylül 2026 — Ahmet):**
+> `shared/core` artık boş değil — event bus'ın çekirdeği kuruldu
+> (`shared/core/bus/event-bus.js`, `shared/core/events/catalog.js`):
+>
+> - Event'ler **katalogda tanımlı olmadan yayınlanamıyor**; gövde zod ile
+>   doğrulanıyor. Modüller arası sözleşme böylece yazılı.
+> - Dinleyici hataları izole (biri patlarsa yayıncı ve diğerleri etkilenmiyor),
+>   yavaş dinleyici log'lanıyor, döngüye karşı hop sınırı var.
+> - `subscribe` / `subscribeMany` abonelik iptali döndürüyor.
+> - Bus altyapıdan bağımsız: Prisma bağlantısı `hotel/backend/src/lib/events.js`'te.
+>   Süreç içi çalışıyor; kuyruğa taşınacağı gün arayüz aynı kalacak.
+>
+> Ayarlar modülü bunu gerçek bir tüketiciyle kullanıyor: cache geçersiz kılma
+> artık doğrudan çağrıyla değil, `settings.*` event'lerini dinleyerek yapılıyor.
+> `shared/actor-kit` (BaseActor/BaseWorker, manifest, registry, approval) hâlâ
+> boş — o senin kapsamında.
 
 ### 13. Günlük durum ekranı — arkadaşın
 **Gün sonu:** Müdür sabah tek ekrana bakıp günü anlıyor: doluluk, gelecek/gidecek, gelir, bekleyen işler.
