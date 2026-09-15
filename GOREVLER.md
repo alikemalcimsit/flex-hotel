@@ -61,6 +61,30 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 > - `npm run test:integration -w @hotelos/hotel-backend` → gerçek veritabanı ister,
 >   `TEST_DATABASE_URL` yoksa atlanır.
 
+> **🎨 Tasarım altyapısı (15 Eylül 2026 — Ahmet):** `shared/ui` ve `hotel/frontend`
+> Spark Admin şablonundan uyarlanan FlexAI renkleriyle (koyu #101010 + kırmızı
+> #EF4444) yeniden giydirildi. Bu bir görev maddesi değil, mevcut modüllerin
+> (1 ve 3) ekranlarının görünümünün değişmesi — veri akışı, doğrulama ve API'ler
+> aynı kaldı.
+>
+> - `shared/ui`: `Button` (yeni `dangerSoft` varyantı — tablo satırında silme
+>   düğmesi), `Card`, `Input`/`Select` (yeni `compact`)/`Textarea` (+ `trailing`
+>   slotu, ör. şifre göster), `Checkbox`, `Alert`, `Badge`, `EmptyState`,
+>   `Spinner`, `Icon` (tek kaynaklı SVG seti). Jetonlar `hotel/frontend/src/index.css`
+>   içindeki `@theme` bloğunda (`bg-ink`, `text-sec-strong`, `rounded-card` vb.) —
+>   yeni bir ekran yazarken bunlara bak, ham hex kullanma.
+> - `AppLayout`: koyu yan menü (`layout/navigation.js` tek kaynaklı menü
+>   listesi — yeni sayfa eklerken oraya eklenir, üç yerde ayrı ayrı değil),
+>   daraltılabilir rayda, mobilde çekmece; üst barda konum satırı ve kullanıcı
+>   menüsü. `store/ui.js` (zustand) rayın açık/kapalı tercihini tutuyor.
+> - `PageHeader`, `TabNav`, `Toolbar`, `FormActions`, `QueryFallback`: bölüm
+>   sayfalarının (Odalar, Ayarlar) ortak iskeleti — modül 2, 4, 5 vb. yeni bölüm
+>   sayfası açarken bunları kullanabilir.
+> - Dashboard (madde 13) **yapılmadı** — ana sayfada (`HomePage.jsx`) yalnızca
+>   gerçek sistem durumu (sunucu/veritabanı/socket/önbellek) ve role göre hızlı
+>   erişim kartları var, uydurma KPI/grafik yok.
+> - `npm run build` ve `npm test` (176 test) temiz; yeni bağımlılık eklenmedi.
+
 ### 2. Kullanıcı, rol, yetki (RBAC) — Ali Kemal
 **Gün sonu:** Personel kendi hesabıyla giriyor; rolüne göre menüler ve işlemler kısıtlı. Kat görevlisi folyoyu göremiyor, resepsiyon fatura silemiyor.
 

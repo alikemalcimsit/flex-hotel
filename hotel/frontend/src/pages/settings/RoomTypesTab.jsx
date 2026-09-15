@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { roomTypeInputSchema } from '@hotelos/hotel-contracts';
-import { Button, Card, Input, Textarea } from '@hotelos/ui';
+import { Alert, Button, Input, Textarea } from '@hotelos/ui';
 import { DataTable } from '../../components/DataTable.jsx';
 import { Modal } from '../../components/Modal.jsx';
 import { ConfirmDialog } from '../../components/ConfirmDialog.jsx';
+import { Toolbar } from '../../components/Toolbar.jsx';
 import { formatMoney } from '../../lib/format.js';
 import { validateWith } from '../../lib/validate.js';
 import { useSettingsResource } from './useSettingsResource.js';
@@ -16,33 +17,49 @@ export function RoomTypesTab() {
   const [deleting, setDeleting] = useState(null);
 
   const columns = [
-    { key: 'code', header: 'Kod', className: 'font-mono text-xs uppercase' },
-    { key: 'name', header: 'Ad' },
+    {
+      key: 'code',
+      header: 'Kod',
+      render: (row) => <span className="font-mono text-xs font-bold uppercase">{row.code}</span>,
+    },
+    { key: 'name', header: 'Ad', className: 'font-semibold' },
     {
       key: 'capacity',
       header: 'Kapasite',
       render: (row) => `${row.capacityAdults} yetişkin${row.capacityChildren > 0 ? ` + ${row.capacityChildren} çocuk` : ''}`,
     },
-    { key: 'basePrice', header: 'Taban fiyat', render: (row) => formatMoney(row.basePrice) },
+    {
+      key: 'basePrice',
+      header: 'Taban fiyat',
+      className: 'tabular-nums',
+      render: (row) => formatMoney(row.basePrice),
+    },
     {
       key: 'roomCount',
       header: 'Oda sayısı',
-      render: (row) => (row.roomCount === 0 ? <span className="text-gray-400">henüz oda yok</span> : row.roomCount),
+      render: (row) => (row.roomCount === 0 ? <span className="text-ink-muted">henüz oda yok</span> : row.roomCount),
     },
   ];
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="flex flex-col gap-5">
+      <Toolbar
+        actions={
+          <Button icon="plus" onClick={() => setEditing(EMPTY)}>
+            Yeni oda tipi
+          </Button>
+        }
+      >
         <Input
           name="search"
+          label="Ara"
+          type="search"
           placeholder="Kod veya ada göre ara…"
           value={resource.search}
           onChange={(event) => resource.setSearch(event.target.value)}
-          className="w-72"
+          className="w-full sm:w-80"
         />
-        <Button onClick={() => setEditing(EMPTY)}>Yeni oda tipi</Button>
-      </div>
+      </Toolbar>
 
       <DataTable
         columns={columns}
@@ -61,10 +78,10 @@ export function RoomTypesTab() {
         }
         rowActions={(row) => (
           <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setEditing(row)}>
+            <Button variant="outline" size="sm" icon="pencil" onClick={() => setEditing(row)}>
               Düzenle
             </Button>
-            <Button variant="danger" onClick={() => setDeleting(row)}>
+            <Button variant="dangerSoft" size="sm" icon="trash" onClick={() => setDeleting(row)}>
               Sil
             </Button>
           </div>
@@ -144,16 +161,16 @@ function RoomTypeFormModal({ initial, onSubmit, onClose, isPending }) {
       onClose={onClose}
       footer={
         <>
-          <Button variant="secondary" onClick={onClose} disabled={isPending}>
+          <Button variant="outline" onClick={onClose} disabled={isPending}>
             Vazgeç
           </Button>
-          <Button type="submit" form="room-type-form" disabled={isPending}>
+          <Button type="submit" form="room-type-form" icon="check" disabled={isPending}>
             {isPending ? 'Kaydediliyor…' : 'Kaydet'}
           </Button>
         </>
       }
     >
-      <form id="room-type-form" onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-2">
+      <form id="room-type-form" onSubmit={handleSubmit} className="grid gap-5 sm:grid-cols-2">
         <Input label="Kod" name="code" value={form.code} onChange={setField('code')} error={errors.code} />
         <Input label="Ad" name="name" value={form.name} onChange={setField('name')} error={errors.name} />
         <Input
@@ -193,11 +210,9 @@ function RoomTypeFormModal({ initial, onSubmit, onClose, isPending }) {
           className="sm:col-span-2"
         />
       </form>
-      <Card className="mt-4 border-blue-100 bg-blue-50 p-3 shadow-none">
-        <p className="text-xs text-blue-800">
-          Taban fiyat, sezon çarpanıyla birlikte rezervasyon fiyatını belirler. Nokta ondalık ayracıdır (2500.50).
-        </p>
-      </Card>
+      <Alert tone="info" className="mt-5">
+        Taban fiyat, sezon çarpanıyla birlikte rezervasyon fiyatını belirler. Nokta ondalık ayracıdır (2500.50).
+      </Alert>
     </Modal>
   );
 }

@@ -1,7 +1,8 @@
-import { Button } from '@hotelos/ui';
+import { Alert, Button, EmptyState, Icon, Spinner } from '@hotelos/ui';
 
 /**
- * Liste ekranlarının ortak tablosu.
+ * Liste ekranlarının ortak tablosu — Spark Admin'in tablo kartı: kartın
+ * içinde soluk başlık satırı, ince ayraçlar, altta sayfalama şeridi.
  *
  * Dört durumu da kendisi ele alır — yükleniyor, hata, boş, dolu. Her ekranın
  * bunu ayrı ayrı yazması, er ya da geç birinde "sonsuza kadar dönen spinner"
@@ -35,49 +36,65 @@ export function DataTable({
   rowActions,
 }) {
   const columnCount = columns.length + (rowActions ? 1 : 0);
+  const isRefreshing = isFetching && !isLoading;
+  const hasFooter = meta && meta.total > 0;
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="relative overflow-x-auto rounded-lg border border-gray-200 bg-white">
+    <div className="overflow-hidden rounded-card bg-surface shadow-card">
+      <div className="relative overflow-x-auto">
         {/* Arka planda yenilenirken tabloyu boşaltmıyoruz; sadece soluklaştırıyoruz. */}
-        <table className={`w-full text-sm transition-opacity ${isFetching && !isLoading ? 'opacity-60' : ''}`}>
-          <thead className="border-b border-gray-200 bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+        <table
+          aria-busy={isLoading || isRefreshing}
+          className={`w-full text-sm transition-opacity duration-200 ${isRefreshing ? 'opacity-60' : ''}`}
+        >
+          <thead className="border-b border-line bg-surface-muted text-left text-[0.7rem] uppercase tracking-[0.08em] text-ink-muted">
             <tr>
               {columns.map((column) => (
-                <th key={column.key} className={`px-4 py-3 font-medium ${column.className ?? ''}`}>
+                <th key={column.key} scope="col" className={`whitespace-nowrap px-5 py-3.5 font-bold ${column.className ?? ''}`}>
                   {column.header}
                 </th>
               ))}
-              {rowActions && <th className="px-4 py-3 text-right font-medium">İşlem</th>}
+              {rowActions && (
+                <th scope="col" className="px-5 py-3.5 text-right font-bold">
+                  İşlem
+                </th>
+              )}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-line">
             {isLoading && (
               <tr>
-                <td colSpan={columnCount} className="px-4 py-10 text-center text-gray-500">
-                  Yükleniyor…
+                <td colSpan={columnCount} className="px-5 py-14">
+                  <Spinner className="justify-center" />
                 </td>
               </tr>
             )}
 
             {!isLoading && error && (
               <tr>
-                <td colSpan={columnCount} className="px-4 py-10 text-center">
-                  <p className="mb-3 text-sm text-red-600">{error.message}</p>
-                  {onRetry && (
-                    <Button variant="secondary" onClick={onRetry}>
-                      Tekrar dene
-                    </Button>
-                  )}
+                <td colSpan={columnCount} className="px-5 py-8">
+                  <Alert
+                    tone="danger"
+                    title="Liste yüklenemedi"
+                    className="mx-auto max-w-xl"
+                    action={
+                      onRetry && (
+                        <Button variant="outline" size="sm" icon="refresh" onClick={onRetry}>
+                          Tekrar dene
+                        </Button>
+                      )
+                    }
+                  >
+                    {error.message}
+                  </Alert>
                 </td>
               </tr>
             )}
 
             {!isLoading && !error && rows.length === 0 && (
               <tr>
-                <td colSpan={columnCount} className="px-4 py-10 text-center">
-                  <p className="text-sm font-medium text-gray-700">{emptyTitle}</p>
-                  {emptyHint && <p className="mt-1 text-xs text-gray-500">{emptyHint}</p>}
+                <td colSpan={columnCount}>
+                  <EmptyState title={emptyTitle} description={emptyHint} />
                 </td>
               </tr>
             )}
@@ -85,55 +102,64 @@ export function DataTable({
             {!isLoading &&
               !error &&
               rows.map((row) => (
-                <tr key={row.id} className="hover:bg-gray-50">
+                <tr key={row.id} className="transition-colors duration-150 hover:bg-surface-muted">
                   {columns.map((column) => (
-                    <td key={column.key} className={`px-4 py-3 text-gray-800 ${column.className ?? ''}`}>
+                    <td key={column.key} className={`px-5 py-4 align-middle text-ink ${column.className ?? ''}`}>
                       {column.render ? column.render(row) : row[column.key]}
                     </td>
                   ))}
-                  {rowActions && <td className="px-4 py-3 text-right">{rowActions(row)}</td>}
+                  {rowActions && <td className="px-5 py-4 text-right align-middle">{rowActions(row)}</td>}
                 </tr>
               ))}
           </tbody>
         </table>
       </div>
 
-      {meta && meta.totalPages > 1 && (
-        <Pagination meta={meta} onPageChange={onPageChange} disabled={isLoading || Boolean(error)} />
-      )}
-
-      {meta && meta.total > 0 && (
-        <p className="text-xs text-gray-500">
-          Toplam {meta.total} kayıt{meta.totalPages > 1 ? ` · sayfa ${meta.page}/${meta.totalPages}` : ''}
-        </p>
+      {hasFooter && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-5 py-3.5">
+          <p className="text-xs font-semibold text-ink-muted">
+            Toplam <span className="text-ink">{meta.total}</span> kayıt
+            {isRefreshing && <span className="ml-2 text-ink-muted">· yenileniyor…</span>}
+          </p>
+          {meta.totalPages > 1 && (
+            <Pagination meta={meta} onPageChange={onPageChange} disabled={isLoading || Boolean(error)} />
+          )}
+        </div>
       )}
     </div>
   );
 }
+
+const PAGE_BUTTON =
+  'grid size-9 place-items-center rounded-item border border-line bg-surface text-ink transition-colors duration-200 hover:border-ink disabled:pointer-events-none disabled:opacity-40';
 
 /**
  * @param {{ meta: { page: number, totalPages: number }, onPageChange?: (page: number) => void, disabled?: boolean }} props
  */
 function Pagination({ meta, onPageChange, disabled }) {
   return (
-    <div className="flex items-center justify-end gap-2">
-      <Button
-        variant="secondary"
+    <nav aria-label="Sayfalama" className="flex items-center gap-2">
+      <button
+        type="button"
+        aria-label="Önceki sayfa"
+        className={PAGE_BUTTON}
         disabled={disabled || meta.page <= 1}
         onClick={() => onPageChange?.(meta.page - 1)}
       >
-        Önceki
-      </Button>
-      <span className="text-sm text-gray-600">
+        <Icon name="chevronLeft" className="size-4" />
+      </button>
+      <span className="min-w-[4.5rem] text-center text-sm font-semibold text-ink-soft" aria-live="polite">
         {meta.page} / {meta.totalPages}
       </span>
-      <Button
-        variant="secondary"
+      <button
+        type="button"
+        aria-label="Sonraki sayfa"
+        className={PAGE_BUTTON}
         disabled={disabled || meta.page >= meta.totalPages}
         onClick={() => onPageChange?.(meta.page + 1)}
       >
-        Sonraki
-      </Button>
-    </div>
+        <Icon name="chevronRight" className="size-4" />
+      </button>
+    </nav>
   );
 }

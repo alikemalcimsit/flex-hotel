@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { TAX_APPLIES_TO, taxInputSchema } from '@hotelos/hotel-contracts';
-import { Button, Checkbox, Input } from '@hotelos/ui';
+import { Badge, Button, Checkbox, ERROR_CLASS, Input, LABEL_CLASS } from '@hotelos/ui';
 import { DataTable } from '../../components/DataTable.jsx';
 import { Modal } from '../../components/Modal.jsx';
 import { ConfirmDialog } from '../../components/ConfirmDialog.jsx';
+import { Toolbar } from '../../components/Toolbar.jsx';
 import { formatPercent, TAX_APPLIES_TO_LABELS } from '../../lib/format.js';
 import { validateWith } from '../../lib/validate.js';
 import { useSettingsResource } from './useSettingsResource.js';
@@ -16,42 +17,50 @@ export function TaxesTab() {
   const [deleting, setDeleting] = useState(null);
 
   const columns = [
-    { key: 'name', header: 'Ad' },
-    { key: 'rate', header: 'Oran', render: (row) => formatPercent(row.rate) },
+    { key: 'name', header: 'Ad', className: 'font-semibold' },
+    { key: 'rate', header: 'Oran', className: 'tabular-nums', render: (row) => formatPercent(row.rate) },
     {
       key: 'isIncluded',
       header: 'Fiyata dahil',
-      render: (row) =>
-        row.isIncluded ? (
-          <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-800">Dahil</span>
-        ) : (
-          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700">Hariç</span>
-        ),
+      render: (row) => (row.isIncluded ? <Badge tone="success">Dahil</Badge> : <Badge>Hariç</Badge>),
     },
     {
       key: 'appliesTo',
       header: 'Uygulandığı kalemler',
       render: (row) =>
         row.appliesTo.length === 0 ? (
-          <span className="text-gray-400">—</span>
+          <span className="text-ink-muted">—</span>
         ) : (
-          row.appliesTo.map((key) => TAX_APPLIES_TO_LABELS[key] ?? key).join(', ')
+          <div className="flex flex-wrap gap-1.5">
+            {row.appliesTo.map((key) => (
+              <span key={key} className="rounded-item border border-line px-2 py-0.5 text-xs font-semibold text-ink-soft">
+                {TAX_APPLIES_TO_LABELS[key] ?? key}
+              </span>
+            ))}
+          </div>
         ),
     },
   ];
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="flex flex-col gap-5">
+      <Toolbar
+        actions={
+          <Button icon="plus" onClick={() => setEditing(EMPTY)}>
+            Yeni vergi
+          </Button>
+        }
+      >
         <Input
           name="search"
+          label="Ara"
+          type="search"
           placeholder="Vergi adına göre ara…"
           value={resource.search}
           onChange={(event) => resource.setSearch(event.target.value)}
-          className="w-72"
+          className="w-full sm:w-80"
         />
-        <Button onClick={() => setEditing(EMPTY)}>Yeni vergi</Button>
-      </div>
+      </Toolbar>
 
       <DataTable
         columns={columns}
@@ -66,10 +75,10 @@ export function TaxesTab() {
         emptyHint={resource.search ? undefined : 'KDV gibi vergiler burada tanımlanır ve folyo kalemlerine uygulanır.'}
         rowActions={(row) => (
           <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setEditing(row)}>
+            <Button variant="outline" size="sm" icon="pencil" onClick={() => setEditing(row)}>
               Düzenle
             </Button>
-            <Button variant="danger" onClick={() => setDeleting(row)}>
+            <Button variant="dangerSoft" size="sm" icon="trash" onClick={() => setDeleting(row)}>
               Sil
             </Button>
           </div>
@@ -150,17 +159,17 @@ function TaxFormModal({ initial, onSubmit, onClose, isPending }) {
       onClose={onClose}
       footer={
         <>
-          <Button variant="secondary" onClick={onClose} disabled={isPending}>
+          <Button variant="outline" onClick={onClose} disabled={isPending}>
             Vazgeç
           </Button>
-          <Button type="submit" form="tax-form" disabled={isPending}>
+          <Button type="submit" form="tax-form" icon="check" disabled={isPending}>
             {isPending ? 'Kaydediliyor…' : 'Kaydet'}
           </Button>
         </>
       }
     >
-      <form id="tax-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div className="grid gap-4 sm:grid-cols-2">
+      <form id="tax-form" onSubmit={handleSubmit} className="flex flex-col gap-6">
+        <div className="grid gap-5 sm:grid-cols-2">
           <Input
             label="Vergi adı"
             name="name"
@@ -187,9 +196,9 @@ function TaxFormModal({ initial, onSubmit, onClose, isPending }) {
           onChange={(event) => setField('isIncluded', event.target.checked)}
         />
 
-        <fieldset>
-          <legend className="mb-2 text-sm font-medium text-gray-700">Uygulandığı kalem tipleri</legend>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <fieldset className="rounded-panel border border-line p-4">
+          <legend className={`px-1.5 ${LABEL_CLASS}`}>Uygulandığı kalem tipleri</legend>
+          <div className="mt-1 grid grid-cols-2 gap-3 sm:grid-cols-3">
             {TAX_APPLIES_TO.map((key) => (
               <Checkbox
                 key={key}
@@ -200,7 +209,7 @@ function TaxFormModal({ initial, onSubmit, onClose, isPending }) {
               />
             ))}
           </div>
-          {errors.appliesTo && <p className="mt-1 text-xs text-red-600">{errors.appliesTo}</p>}
+          {errors.appliesTo && <p className={`mt-2 ${ERROR_CLASS}`}>{errors.appliesTo}</p>}
         </fieldset>
       </form>
     </Modal>

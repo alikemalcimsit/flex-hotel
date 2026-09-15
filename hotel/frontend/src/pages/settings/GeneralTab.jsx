@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { generalSettingsSchema } from '@hotelos/hotel-contracts';
-import { Button, Card, Input, Select } from '@hotelos/ui';
+import { Alert, Card, Input, Select } from '@hotelos/ui';
+import { FormActions } from '../../components/FormActions.jsx';
+import { QueryFallback } from '../../components/QueryFallback.jsx';
 import { api, apiPut } from '../../lib/api.js';
 import { BOARD_TYPE_LABELS } from '../../lib/format.js';
 import { validateWith } from '../../lib/validate.js';
@@ -61,31 +63,22 @@ export function GeneralTab() {
     saveMutation.mutate({ ...result.data, expectedUpdatedAt: hotel.updatedAt });
   }
 
-  // `isLoading` değil `isPending`: bkz. HotelInfoTab'daki açıklama.
-  if (hotelQuery.isPending) return <Card>Yükleniyor…</Card>;
-
-  if (hotelQuery.isError) {
-    return (
-      <Card>
-        <p className="mb-3 text-sm text-red-600">{hotelQuery.error.message}</p>
-        <Button variant="secondary" onClick={() => hotelQuery.refetch()}>
-          Tekrar dene
-        </Button>
-      </Card>
-    );
-  }
+  if (!hotel) return <QueryFallback query={hotelQuery} errorTitle="Genel parametreler yüklenemedi" />;
 
   const days = Number(form.cancellationPolicyDays);
   const penalty = Number(form.cancellationPolicyPenaltyPct);
-  const policySummary =
-    days === 0 && penalty === 0
-      ? 'Şu an iptal politikası uygulanmıyor — rezervasyonlar ücretsiz iptal edilebilir.'
-      : `Girişten ${days} gün öncesine kadar ücretsiz iptal; sonrasında %${String(penalty).replace('.', ',')} ceza uygulanır.`;
+  const hasPolicy = !(days === 0 && penalty === 0);
+  const policySummary = hasPolicy
+    ? `Girişten ${days} gün öncesine kadar ücretsiz iptal; sonrasında %${String(penalty).replace('.', ',')} ceza uygulanır.`
+    : 'Şu an iptal politikası uygulanmıyor — rezervasyonlar ücretsiz iptal edilebilir.';
 
   return (
-    <form onSubmit={handleSubmit} className="flex max-w-3xl flex-col gap-6">
-      <Card title="Varsayılanlar">
-        <div className="grid gap-4 sm:grid-cols-2">
+    <form onSubmit={handleSubmit} className="flex max-w-4xl flex-col gap-6">
+      <Card
+        title="Varsayılanlar"
+        description="Yeni rezervasyon formu bu pansiyon tipiyle açılır; kullanıcı isterse değiştirebilir."
+      >
+        <div className="grid gap-5 sm:grid-cols-2">
           <Select
             label="Varsayılan pansiyon"
             name="defaultBoardType"
@@ -102,13 +95,10 @@ export function GeneralTab() {
             title="Para birimi 'Otel bilgileri' sekmesinden değiştirilir"
           />
         </div>
-        <p className="mt-2 text-xs text-gray-500">
-          Yeni rezervasyon formu bu pansiyon tipiyle açılır; kullanıcı isterse değiştirebilir.
-        </p>
       </Card>
 
-      <Card title="İptal politikası">
-        <div className="grid gap-4 sm:grid-cols-2">
+      <Card title="İptal politikası" description="Ücretsiz iptal süresi ve süre geçtikten sonra uygulanacak ceza.">
+        <div className="grid gap-5 sm:grid-cols-2">
           <Input
             label="Ücretsiz iptal süresi (gün)"
             name="cancellationPolicyDays"
@@ -129,19 +119,12 @@ export function GeneralTab() {
             placeholder="50"
           />
         </div>
-        <div className="mt-4 rounded-md border border-gray-200 bg-gray-50 p-3">
-          <p className="text-xs text-gray-700">{policySummary}</p>
-        </div>
+        <Alert tone="info" title="Özet" className="mt-5">
+          {policySummary}
+        </Alert>
       </Card>
 
-      <div className="flex items-center gap-3">
-        <Button type="submit" disabled={saveMutation.isPending}>
-          {saveMutation.isPending ? 'Kaydediliyor…' : 'Kaydet'}
-        </Button>
-        <span className="text-xs text-gray-500">
-          Son güncelleme: {new Date(hotel.updatedAt).toLocaleString('tr-TR')}
-        </span>
-      </div>
+      <FormActions isPending={saveMutation.isPending} updatedAt={hotel.updatedAt} />
     </form>
   );
 }

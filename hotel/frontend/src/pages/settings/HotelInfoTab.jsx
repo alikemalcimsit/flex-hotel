@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { hotelInfoSchema } from '@hotelos/hotel-contracts';
-import { Button, Card, Input } from '@hotelos/ui';
+import { Card, Input } from '@hotelos/ui';
+import { FormActions } from '../../components/FormActions.jsx';
+import { QueryFallback } from '../../components/QueryFallback.jsx';
 import { api, apiPut } from '../../lib/api.js';
 import { validateWith } from '../../lib/validate.js';
 import { toastError, toastSuccess } from '../../store/toast.js';
@@ -74,28 +76,12 @@ export function HotelInfoTab() {
     saveMutation.mutate({ ...result.data, expectedUpdatedAt: hotel.updatedAt });
   }
 
-  // `isPending` kullanılıyor, `isLoading` değil: react-query v5'te `isLoading`
-  // yeniden deneme aralarında kısa süre `false` oluyor. O boşlukta ne veri ne
-  // hata var; `isLoading`'e bakan kod `hotel.code` diye erişip çöküyordu.
-  if (hotelQuery.isPending) {
-    return <Card>Yükleniyor…</Card>;
-  }
-
-  if (hotelQuery.isError) {
-    return (
-      <Card>
-        <p className="mb-3 text-sm text-red-600">{hotelQuery.error.message}</p>
-        <Button variant="secondary" onClick={() => hotelQuery.refetch()}>
-          Tekrar dene
-        </Button>
-      </Card>
-    );
-  }
+  if (!hotel) return <QueryFallback query={hotelQuery} errorTitle="Otel bilgileri yüklenemedi" />;
 
   return (
-    <form onSubmit={handleSubmit} className="flex max-w-3xl flex-col gap-6">
-      <Card title="Otel bilgileri">
-        <div className="grid gap-4 sm:grid-cols-2">
+    <form onSubmit={handleSubmit} className="flex max-w-4xl flex-col gap-6">
+      <Card title="Otel bilgileri" description="Faturada, onay e-postalarında ve misafire giden belgelerde görünür.">
+        <div className="grid gap-5 sm:grid-cols-2">
           <Input label="Otel adı" name="name" value={form.name} onChange={setField('name')} error={errors.name} />
           <Input label="Kod" name="code" value={hotel.code} disabled title="Otel kodu sonradan değiştirilemez" />
           <Input label="Telefon" name="phone" value={form.phone} onChange={setField('phone')} error={errors.phone} />
@@ -126,8 +112,8 @@ export function HotelInfoTab() {
         </div>
       </Card>
 
-      <Card title="Operasyon">
-        <div className="grid gap-4 sm:grid-cols-2">
+      <Card title="Operasyon" description="Para birimi, saat dilimi ve giriş/çıkış saatleri.">
+        <div className="grid gap-5 sm:grid-cols-2">
           <Input
             label="Para birimi"
             name="currency"
@@ -162,14 +148,7 @@ export function HotelInfoTab() {
         </div>
       </Card>
 
-      <div className="flex items-center gap-3">
-        <Button type="submit" disabled={saveMutation.isPending}>
-          {saveMutation.isPending ? 'Kaydediliyor…' : 'Kaydet'}
-        </Button>
-        <span className="text-xs text-gray-500">
-          Son güncelleme: {new Date(hotel.updatedAt).toLocaleString('tr-TR')}
-        </span>
-      </div>
+      <FormActions isPending={saveMutation.isPending} updatedAt={hotel.updatedAt} />
     </form>
   );
 }

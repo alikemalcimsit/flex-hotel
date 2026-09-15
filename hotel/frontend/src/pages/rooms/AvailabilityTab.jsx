@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Button, Card, Input } from '@hotelos/ui';
+import { Alert, Button, Card, EmptyState, Icon, Input, Spinner } from '@hotelos/ui';
+import { Toolbar } from '../../components/Toolbar.jsx';
 import { api, withQuery } from '../../lib/api.js';
 
 /**
@@ -13,6 +14,35 @@ import { api, withQuery } from '../../lib/api.js';
 
 const WINDOW_DAYS = 14;
 
+/** Boş oda oranı bu değerin altına (dahil) inince hücre "son odalar" olur. */
+const LOW_AVAILABILITY_RATIO = 0.25;
+
+/** Hücre tonları ve lejant tek kaynaktan: renk değişirse ikisi ayrışmasın. */
+const CELL_TONES = {
+  comfortable: {
+    cell: 'bg-success-soft text-success-ink',
+    swatch: 'bg-success-soft ring-success/40',
+    label: 'Yer var',
+  },
+  low: {
+    cell: 'bg-warning-soft text-warning-ink ring-1 ring-inset ring-warning-line',
+    swatch: 'bg-warning-soft ring-warning/50',
+    label: `Son odalar (%${LOW_AVAILABILITY_RATIO * 100} ve altı)`,
+  },
+  full: {
+    cell: 'bg-black/[0.04] text-ink-muted',
+    swatch: 'bg-black/[0.04] ring-black/25',
+    label: 'Dolu',
+  },
+  overbooked: {
+    cell: 'bg-danger-soft font-bold text-danger-ink ring-1 ring-inset ring-danger-line',
+    swatch: 'bg-danger-soft ring-danger/40',
+    label: 'Overbooking',
+  },
+};
+
+const LEGEND_ORDER = ['comfortable', 'low', 'full', 'overbooked'];
+
 const toIsoDay = (date) => date.toISOString().slice(0, 10);
 const addDays = (isoDay, days) => {
   const date = new Date(`${isoDay}T00:00:00.000Z`);
@@ -22,10 +52,10 @@ const addDays = (isoDay, days) => {
 
 /** @param {{ free: number, total: number }} cell */
 function cellTone({ free, total }) {
-  if (free < 0) return 'bg-red-100 text-red-800 font-semibold';
-  if (free === 0) return 'bg-gray-100 text-gray-500';
-  if (total > 0 && free / total <= 0.25) return 'bg-orange-100 text-orange-900';
-  return 'bg-green-50 text-green-800';
+  if (free < 0) return CELL_TONES.overbooked.cell;
+  if (free === 0) return CELL_TONES.full.cell;
+  if (total > 0 && free / total <= LOW_AVAILABILITY_RATIO) return CELL_TONES.low.cell;
+  return CELL_TONES.comfortable.cell;
 }
 
 function dayLabel(isoDay) {
@@ -47,114 +77,127 @@ export function AvailabilityTab() {
   });
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end gap-3">
+    <div className="flex flex-col gap-5">
+      <Toolbar>
         <Input
           label="Başlangıç"
           name="from"
           type="date"
           value={from}
           onChange={(event) => event.target.value && setFrom(event.target.value)}
-          className="w-48"
+          className="w-full sm:w-48"
         />
-        <Button variant="secondary" onClick={() => setFrom(addDays(from, -WINDOW_DAYS))}>
-          ← Önceki {WINDOW_DAYS} gün
-        </Button>
-        <Button variant="secondary" onClick={() => setFrom(toIsoDay(new Date()))}>
-          Bugün
-        </Button>
-        <Button variant="secondary" onClick={() => setFrom(addDays(from, WINDOW_DAYS))}>
-          Sonraki {WINDOW_DAYS} gün →
-        </Button>
-      </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" icon="chevronLeft" onClick={() => setFrom(addDays(from, -WINDOW_DAYS))}>
+            Önceki {WINDOW_DAYS} gün
+          </Button>
+          <Button variant="secondary" onClick={() => setFrom(toIsoDay(new Date()))}>
+            Bugün
+          </Button>
+          <Button variant="outline" onClick={() => setFrom(addDays(from, WINDOW_DAYS))}>
+            Sonraki {WINDOW_DAYS} gün
+            <Icon name="chevronRight" className="size-4 shrink-0" />
+          </Button>
+        </div>
+      </Toolbar>
 
-      {query.isPending && <Card>Müsaitlik hesaplanıyor…</Card>}
+      {query.isPending && (
+        <Card>
+          <Spinner label="Müsaitlik hesaplanıyor…" className="py-8" />
+        </Card>
+      )}
 
       {query.isError && (
-        <Card>
-          <p className="mb-3 text-sm text-red-600">{query.error.message}</p>
-          <Button variant="secondary" onClick={() => query.refetch()}>
-            Tekrar dene
-          </Button>
-        </Card>
+        <Alert
+          tone="danger"
+          title="Müsaitlik yüklenemedi"
+          action={
+            <Button variant="outline" size="sm" icon="refresh" onClick={() => query.refetch()}>
+              Tekrar dene
+            </Button>
+          }
+        >
+          {query.error.message}
+        </Alert>
       )}
 
       {query.data && query.data.roomTypes.length === 0 && (
         <Card>
-          <p className="text-sm font-medium text-gray-700">Henüz oda tipi tanımlanmamış</p>
-          <p className="mt-1 text-xs text-gray-500">
-            Müsaitlik hesaplanabilmesi için Ayarlar → Oda tipleri bölümünden tip tanımlayın.
-          </p>
+          <EmptyState
+            icon="layers"
+            title="Henüz oda tipi tanımlanmamış"
+            description="Müsaitlik hesaplanabilmesi için Ayarlar → Oda tipleri bölümünden tip tanımlayın."
+          />
         </Card>
       )}
 
       {query.data && query.data.roomTypes.length > 0 && (
         <>
-          <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-gray-200 bg-gray-50">
-                  <th className="sticky left-0 z-10 bg-gray-50 px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
-                    Oda tipi
-                  </th>
-                  {query.data.days.map((day) => {
-                    const label = dayLabel(day);
-                    return (
-                      <th
-                        key={day}
-                        className={`px-2 py-2 text-center text-xs font-medium ${
-                          label.isWeekend ? 'bg-blue-50 text-blue-800' : 'text-gray-500'
-                        }`}
-                      >
-                        <div>{label.weekday}</div>
-                        <div className="font-normal">{label.day}</div>
-                      </th>
-                    );
-                  })}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {query.data.roomTypes.map((roomType) => (
-                  <tr key={roomType.id}>
-                    <td className="sticky left-0 z-10 bg-white px-4 py-3">
-                      <div className="font-medium text-gray-900">{roomType.code}</div>
-                      <div className="text-xs text-gray-500">
-                        {roomType.name} · {roomType.total} oda
-                      </div>
-                    </td>
+          <div className="overflow-hidden rounded-card bg-surface shadow-card">
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-line bg-surface-muted">
+                    <th
+                      scope="col"
+                      className="sticky left-0 z-10 bg-surface-muted px-5 py-3.5 text-left text-[0.7rem] font-bold uppercase tracking-[0.08em] text-ink-muted"
+                    >
+                      Oda tipi
+                    </th>
                     {query.data.days.map((day) => {
-                      const cell = roomType.days[day] ?? { free: 0, total: roomType.total, occupied: 0, blocked: 0, unassigned: 0 };
+                      const label = dayLabel(day);
                       return (
-                        <td key={day} className="px-1 py-1 text-center">
-                          <div
-                            className={`rounded px-2 py-1.5 text-sm ${cellTone(cell)}`}
-                            title={`Toplam ${cell.total} · Dolu ${cell.occupied} · Bloklu ${cell.blocked} · Oda bekleyen ${cell.unassigned}`}
-                          >
-                            {cell.free}
-                          </div>
-                        </td>
+                        <th
+                          key={day}
+                          scope="col"
+                          className={`px-1.5 py-2.5 text-center text-xs font-bold ${
+                            label.isWeekend ? 'bg-info-soft text-info-ink' : 'text-ink-muted'
+                          }`}
+                        >
+                          <div className="capitalize">{label.weekday}</div>
+                          <div className="font-medium">{label.day}</div>
+                        </th>
                       );
                     })}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {query.data.roomTypes.map((roomType) => (
+                    <tr key={roomType.id}>
+                      <th scope="row" className="sticky left-0 z-10 bg-surface px-5 py-3 text-left font-normal">
+                        <div className="font-bold text-ink">{roomType.code}</div>
+                        <div className="whitespace-nowrap text-xs text-ink-muted">
+                          {roomType.name} · {roomType.total} oda
+                        </div>
+                      </th>
+                      {query.data.days.map((day) => {
+                        const cell = roomType.days[day] ?? { free: 0, total: roomType.total, occupied: 0, blocked: 0, unassigned: 0 };
+                        return (
+                          <td key={day} className="px-1 py-1.5 text-center">
+                            <div
+                              className={`min-w-10 rounded-item px-2 py-2 text-sm font-semibold tabular-nums ${cellTone(cell)}`}
+                              title={`Toplam ${cell.total} · Dolu ${cell.occupied} · Bloklu ${cell.blocked} · Oda bekleyen ${cell.unassigned}`}
+                            >
+                              {cell.free}
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-4 text-xs text-gray-600">
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block h-3 w-3 rounded bg-green-50 ring-1 ring-green-200" /> Yer var
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block h-3 w-3 rounded bg-orange-100 ring-1 ring-orange-300" /> Son odalar (%25 ve altı)
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block h-3 w-3 rounded bg-gray-100 ring-1 ring-gray-300" /> Dolu
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block h-3 w-3 rounded bg-red-100 ring-1 ring-red-300" /> Overbooking
-            </span>
-            <span className="text-gray-400">Hücrenin üzerine gelince kırılım görünür.</span>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-semibold text-ink-soft">
+            {LEGEND_ORDER.map((key) => (
+              <span key={key} className="flex items-center gap-2">
+                <span aria-hidden="true" className={`inline-block size-3.5 rounded-[5px] ring-1 ring-inset ${CELL_TONES[key].swatch}`} />
+                {CELL_TONES[key].label}
+              </span>
+            ))}
+            <span className="font-medium text-ink-muted">Hücrenin üzerine gelince kırılım görünür.</span>
           </div>
         </>
       )}

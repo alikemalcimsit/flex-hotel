@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { RESERVATION_STATUS_LABELS } from '@hotelos/hotel-contracts';
-import { Button, Card, Checkbox, Input } from '@hotelos/ui';
+import { Alert, Badge, Button, Checkbox, Icon, Input, Spinner } from '@hotelos/ui';
 import { DataTable } from '../../components/DataTable.jsx';
 import { Modal } from '../../components/Modal.jsx';
 import { RoomStatusBadge } from '../../components/RoomStatusBadge.jsx';
+import { Toolbar } from '../../components/Toolbar.jsx';
 import { api, apiPost, apiPut, withQuery } from '../../lib/api.js';
 import { useCrudResource } from '../../lib/useCrudResource.js';
 import { formatDate } from '../../lib/format.js';
@@ -42,18 +43,30 @@ export function AssignmentTab() {
   });
 
   const columns = [
-    { key: 'confirmationCode', header: 'Onay kodu', className: 'font-mono text-xs' },
-    { key: 'guestName', header: 'Misafir', render: (row) => row.guestName ?? '—' },
+    {
+      key: 'confirmationCode',
+      header: 'Onay kodu',
+      render: (row) => <span className="font-mono text-xs font-semibold">{row.confirmationCode}</span>,
+    },
+    { key: 'guestName', header: 'Misafir', render: (row) => row.guestName ?? <span className="text-ink-muted">—</span> },
     {
       key: 'roomType',
       header: 'Oda tipi',
-      render: (row) => (row.roomTypeCode ? `${row.roomTypeCode} — ${row.roomTypeName}` : '—'),
+      render: (row) =>
+        row.roomTypeCode ? (
+          <span className="whitespace-nowrap">
+            <span className="font-bold">{row.roomTypeCode}</span>
+            <span className="text-ink-muted"> — {row.roomTypeName}</span>
+          </span>
+        ) : (
+          <span className="text-ink-muted">—</span>
+        ),
     },
     {
       key: 'dates',
       header: 'Tarihler',
       render: (row) => (
-        <span>
+        <span className="whitespace-nowrap">
           {formatDate(row.checkIn)} → {formatDate(row.checkOut)}
         </span>
       ),
@@ -66,25 +79,23 @@ export function AssignmentTab() {
     {
       key: 'status',
       header: 'Durum',
-      render: (row) => (
-        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700">
-          {RESERVATION_STATUS_LABELS[row.status] ?? row.status}
-        </span>
-      ),
+      render: (row) => <Badge>{RESERVATION_STATUS_LABELS[row.status] ?? row.status}</Badge>,
     },
   ];
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="flex flex-col gap-5">
+      <Toolbar>
         <Input
           name="search"
+          label="Ara"
+          type="search"
           placeholder="Onay kodu veya misafir adı…"
           value={resource.search}
           onChange={(event) => resource.setSearch(event.target.value)}
-          className="w-72"
+          className="w-full sm:w-80"
         />
-      </div>
+      </Toolbar>
 
       <DataTable
         columns={columns}
@@ -104,13 +115,17 @@ export function AssignmentTab() {
         rowActions={(row) => (
           <div className="flex justify-end gap-2">
             <Button
-              variant="secondary"
+              variant="outline"
+              size="sm"
+              icon="sparkles"
               onClick={() => autoAssignMutation.mutate(row.id)}
               disabled={autoAssignMutation.isPending}
             >
               Otomatik ata
             </Button>
-            <Button onClick={() => setAssigning(row)}>Oda seç</Button>
+            <Button size="sm" icon="key" onClick={() => setAssigning(row)}>
+              Oda seç
+            </Button>
           </div>
         )}
       />
@@ -157,18 +172,27 @@ function AssignRoomModal({ reservation, onClose, onAssigned }) {
       title={`${reservation.confirmationCode} — oda seç`}
       onClose={onClose}
       footer={
-        <Button variant="secondary" onClick={onClose} disabled={assignMutation.isPending}>
+        <Button variant="outline" onClick={onClose} disabled={assignMutation.isPending}>
           Kapat
         </Button>
       }
     >
-      <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
-        <div>
-          <b>{reservation.guestName ?? 'Misafir'}</b> · {reservation.roomTypeCode} — {reservation.roomTypeName}
-        </div>
-        <div className="text-xs text-gray-500">
-          {formatDate(reservation.checkIn)} → {formatDate(reservation.checkOut)} · {reservation.adults} yetişkin
-          {reservation.children > 0 ? ` + ${reservation.children} çocuk` : ''}
+      <div className="mb-5 flex items-start gap-3 rounded-panel border border-line bg-surface-muted p-4">
+        <span className="grid size-10 shrink-0 place-items-center rounded-item bg-ink text-white">
+          <Icon name="user" className="size-5" />
+        </span>
+        <div className="min-w-0 text-sm">
+          <p className="text-ink">
+            <span className="font-bold">{reservation.guestName ?? 'Misafir'}</span>
+            <span className="text-ink-muted">
+              {' '}
+              · {reservation.roomTypeCode} — {reservation.roomTypeName}
+            </span>
+          </p>
+          <p className="mt-0.5 text-xs text-ink-muted">
+            {formatDate(reservation.checkIn)} → {formatDate(reservation.checkOut)} · {reservation.adults} yetişkin
+            {reservation.children > 0 ? ` + ${reservation.children} çocuk` : ''}
+          </p>
         </div>
       </div>
 
@@ -178,54 +202,59 @@ function AssignRoomModal({ reservation, onClose, onAssigned }) {
         hint="Üst sınıf odaya yerleştirmek (upgrade) için."
         checked={includeOtherTypes}
         onChange={(event) => setIncludeOtherTypes(event.target.checked)}
-        className="mb-4"
+        className="mb-5"
       />
 
-      {candidatesQuery.isPending && <Card>Uygun odalar aranıyor…</Card>}
+      {candidatesQuery.isPending && <Spinner label="Uygun odalar aranıyor…" className="py-8" />}
 
       {candidatesQuery.isError && (
-        <Card>
-          <p className="mb-3 text-sm text-red-600">{candidatesQuery.error.message}</p>
-          <Button variant="secondary" onClick={() => candidatesQuery.refetch()}>
-            Tekrar dene
-          </Button>
-        </Card>
+        <Alert
+          tone="danger"
+          action={
+            <Button variant="outline" size="sm" icon="refresh" onClick={() => candidatesQuery.refetch()}>
+              Tekrar dene
+            </Button>
+          }
+        >
+          {candidatesQuery.error.message}
+        </Alert>
       )}
 
       {candidatesQuery.data && candidates.length === 0 && (
-        <Card className="border-amber-200 bg-amber-50">
-          <p className="text-sm font-medium text-amber-900">Bu tarihlerde uygun boş oda yok</p>
-          <p className="mt-1 text-xs text-amber-800">
-            {includeOtherTypes
-              ? 'Tarihleri değiştirmeyi veya bir bloğu kaldırmayı deneyin.'
-              : 'Diğer oda tiplerini göstererek üst sınıf bir odaya yerleştirebilirsiniz.'}
-          </p>
-        </Card>
+        <Alert tone="warning" title="Bu tarihlerde uygun boş oda yok">
+          {includeOtherTypes
+            ? 'Tarihleri değiştirmeyi veya bir bloğu kaldırmayı deneyin.'
+            : 'Diğer oda tiplerini göstererek üst sınıf bir odaya yerleştirebilirsiniz.'}
+        </Alert>
       )}
 
       {candidates.length > 0 && (
-        <ul className="flex max-h-96 flex-col gap-2 overflow-y-auto">
+        <ul className="-mx-1 flex max-h-96 flex-col gap-2 overflow-y-auto px-1 py-1">
           {candidates.map((room) => (
             <li
               key={room.id}
-              className="flex items-center justify-between gap-3 rounded-md border border-gray-200 px-3 py-2"
+              className={`flex flex-wrap items-center justify-between gap-3 rounded-panel border px-4 py-3 transition-colors duration-200 ${
+                room.recommended ? 'border-ink/25 bg-surface-muted' : 'border-line hover:border-line-strong'
+              }`}
             >
-              <div className="flex items-center gap-3">
-                <span className="text-base font-semibold text-gray-900">{room.number}</span>
-                <span className="text-xs text-gray-500">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                <span className="text-lg font-bold tabular-nums text-ink">{room.number}</span>
+                <span className="text-xs font-semibold text-ink-muted">
                   {room.floor}. kat · {room.roomTypeCode}
                 </span>
                 <RoomStatusBadge status={room.status} />
                 {room.recommended && (
-                  <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">
+                  <Badge tone="info" dot={false}>
                     Önerilen
-                  </span>
+                  </Badge>
                 )}
                 {room.isUpgrade && (
-                  <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs text-purple-800">Upgrade</span>
+                  <Badge tone="violet" dot={false}>
+                    Upgrade
+                  </Badge>
                 )}
               </div>
-              <Button onClick={() => assignMutation.mutate(room.id)} disabled={assignMutation.isPending}>
+              <Button size="sm" icon="check" onClick={() => assignMutation.mutate(room.id)} disabled={assignMutation.isPending}>
                 {assignMutation.isPending ? 'Atanıyor…' : 'Ata'}
               </Button>
             </li>

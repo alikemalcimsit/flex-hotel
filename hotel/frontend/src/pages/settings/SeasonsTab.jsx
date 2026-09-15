@@ -1,14 +1,23 @@
 import { useState } from 'react';
 import { seasonInputSchema } from '@hotelos/hotel-contracts';
-import { Button, Card, Input } from '@hotelos/ui';
+import { Alert, Badge, Button, Input } from '@hotelos/ui';
 import { DataTable } from '../../components/DataTable.jsx';
 import { Modal } from '../../components/Modal.jsx';
 import { ConfirmDialog } from '../../components/ConfirmDialog.jsx';
+import { Toolbar } from '../../components/Toolbar.jsx';
 import { formatDate, formatMultiplier } from '../../lib/format.js';
 import { validateWith } from '../../lib/validate.js';
 import { useSettingsResource } from './useSettingsResource.js';
 
 const EMPTY = { name: '', startDate: '', endDate: '', multiplier: '1' };
+
+/** Çarpan rozeti: pahalı sezon turuncu, indirimli sezon mavi, taban fiyat nötr. */
+function multiplierTone(multiplier) {
+  const value = Number(multiplier);
+  if (value > 1) return 'warning';
+  if (value < 1) return 'info';
+  return 'neutral';
+}
 
 export function SeasonsTab() {
   const resource = useSettingsResource({ resource: 'seasons', labels: { singular: 'Sezon' } });
@@ -16,32 +25,39 @@ export function SeasonsTab() {
   const [deleting, setDeleting] = useState(null);
 
   const columns = [
-    { key: 'name', header: 'Ad' },
+    { key: 'name', header: 'Ad', className: 'font-semibold' },
     { key: 'startDate', header: 'Başlangıç', render: (row) => formatDate(row.startDate) },
     { key: 'endDate', header: 'Bitiş', render: (row) => formatDate(row.endDate) },
     {
       key: 'multiplier',
       header: 'Çarpan',
-      render: (row) => {
-        const value = Number(row.multiplier);
-        const tone = value > 1 ? 'bg-orange-100 text-orange-800' : value < 1 ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-700';
-        return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${tone}`}>{formatMultiplier(row.multiplier)}</span>;
-      },
+      render: (row) => (
+        <Badge tone={multiplierTone(row.multiplier)} dot={false} className="tabular-nums">
+          {formatMultiplier(row.multiplier)}
+        </Badge>
+      ),
     },
   ];
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="flex flex-col gap-5">
+      <Toolbar
+        actions={
+          <Button icon="plus" onClick={() => setEditing(EMPTY)}>
+            Yeni sezon
+          </Button>
+        }
+      >
         <Input
           name="search"
+          label="Ara"
+          type="search"
           placeholder="Sezon adına göre ara…"
           value={resource.search}
           onChange={(event) => resource.setSearch(event.target.value)}
-          className="w-72"
+          className="w-full sm:w-80"
         />
-        <Button onClick={() => setEditing(EMPTY)}>Yeni sezon</Button>
-      </div>
+      </Toolbar>
 
       <DataTable
         columns={columns}
@@ -58,10 +74,10 @@ export function SeasonsTab() {
         }
         rowActions={(row) => (
           <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setEditing(row)}>
+            <Button variant="outline" size="sm" icon="pencil" onClick={() => setEditing(row)}>
               Düzenle
             </Button>
-            <Button variant="danger" onClick={() => setDeleting(row)}>
+            <Button variant="dangerSoft" size="sm" icon="trash" onClick={() => setDeleting(row)}>
               Sil
             </Button>
           </div>
@@ -133,16 +149,16 @@ function SeasonFormModal({ initial, onSubmit, onClose, isPending }) {
       onClose={onClose}
       footer={
         <>
-          <Button variant="secondary" onClick={onClose} disabled={isPending}>
+          <Button variant="outline" onClick={onClose} disabled={isPending}>
             Vazgeç
           </Button>
-          <Button type="submit" form="season-form" disabled={isPending}>
+          <Button type="submit" form="season-form" icon="check" disabled={isPending}>
             {isPending ? 'Kaydediliyor…' : 'Kaydet'}
           </Button>
         </>
       }
     >
-      <form id="season-form" onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-2">
+      <form id="season-form" onSubmit={handleSubmit} className="grid gap-5 sm:grid-cols-2">
         <Input
           label="Sezon adı"
           name="name"
@@ -178,12 +194,10 @@ function SeasonFormModal({ initial, onSubmit, onClose, isPending }) {
           className="sm:col-span-2"
         />
       </form>
-      <Card className="mt-4 border-amber-100 bg-amber-50 p-3 shadow-none">
-        <p className="text-xs text-amber-900">
-          Sezonlar birbiriyle çakışamaz — aynı güne iki çarpan düşerse hangi fiyatın geçerli olduğu belirsiz kalır.
-          Çakışan tarih girerseniz kayıt reddedilir. Başlangıç ve bitiş günleri sezona dahildir.
-        </p>
-      </Card>
+      <Alert tone="warning" className="mt-5">
+        Sezonlar birbiriyle çakışamaz — aynı güne iki çarpan düşerse hangi fiyatın geçerli olduğu belirsiz kalır.
+        Çakışan tarih girerseniz kayıt reddedilir. Başlangıç ve bitiş günleri sezona dahildir.
+      </Alert>
     </Modal>
   );
 }

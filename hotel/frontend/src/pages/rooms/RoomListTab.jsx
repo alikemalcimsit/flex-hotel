@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { MANUAL_ROOM_STATUSES, ROOM_STATUS_LABELS, blockRoomSchema, roomInputSchema } from '@hotelos/hotel-contracts';
-import { Button, Card, Input, Select, Textarea } from '@hotelos/ui';
+import { Alert, Button, Input, Select, Textarea } from '@hotelos/ui';
 import { DataTable } from '../../components/DataTable.jsx';
 import { Modal } from '../../components/Modal.jsx';
 import { ConfirmDialog } from '../../components/ConfirmDialog.jsx';
 import { RoomStatusBadge } from '../../components/RoomStatusBadge.jsx';
+import { Toolbar } from '../../components/Toolbar.jsx';
 import { apiPatch, apiPost } from '../../lib/api.js';
 import { useCrudResource } from '../../lib/useCrudResource.js';
 import { validateWith } from '../../lib/validate.js';
@@ -70,13 +71,23 @@ export function RoomListTab() {
     onError: (error) => toastError(error.message),
   });
 
+  const hasFilter = Boolean(resource.search || filters.roomTypeId || filters.status);
+
   const columns = [
-    { key: 'number', header: 'Oda', className: 'font-medium' },
+    { key: 'number', header: 'Oda', className: 'font-bold' },
     { key: 'floor', header: 'Kat' },
     {
       key: 'roomType',
       header: 'Tip',
-      render: (row) => (row.roomTypeCode ? `${row.roomTypeCode} — ${row.roomTypeName}` : '—'),
+      render: (row) =>
+        row.roomTypeCode ? (
+          <span className="whitespace-nowrap">
+            <span className="font-bold">{row.roomTypeCode}</span>
+            <span className="text-ink-muted"> — {row.roomTypeName}</span>
+          </span>
+        ) : (
+          <span className="text-ink-muted">—</span>
+        ),
     },
     {
       key: 'status',
@@ -101,6 +112,7 @@ export function RoomListTab() {
           }}
           options={[{ value: '', label: 'Seç…' }, ...MANUAL_STATUS_OPTIONS]}
           disabled={statusMutation.isPending}
+          compact
           className="w-36"
         />
       ),
@@ -108,52 +120,51 @@ export function RoomListTab() {
   ];
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex flex-wrap items-end gap-3">
-          <Input
-            name="search"
-            label="Ara"
-            placeholder="Oda numarası…"
-            value={resource.search}
-            onChange={(event) => resource.setSearch(event.target.value)}
-            className="w-48"
-          />
-          <Select
-            name="roomTypeFilter"
-            label="Oda tipi"
-            value={filters.roomTypeId}
-            onChange={(event) => {
-              setFilters((current) => ({ ...current, roomTypeId: event.target.value }));
-              resource.setPage(1);
-            }}
-            options={[{ value: '', label: 'Tüm tipler' }, ...roomTypeOptions]}
-            className="w-56"
-          />
-          <Select
-            name="statusFilter"
-            label="Durum"
-            value={filters.status}
-            onChange={(event) => {
-              setFilters((current) => ({ ...current, status: event.target.value }));
-              resource.setPage(1);
-            }}
-            options={STATUS_FILTER_OPTIONS}
-            className="w-44"
-          />
-        </div>
-        <Button onClick={() => setEditing(EMPTY_ROOM)} disabled={roomTypes.length === 0}>
-          Yeni oda
-        </Button>
-      </div>
+    <div className="flex flex-col gap-5">
+      <Toolbar
+        actions={
+          <Button icon="plus" onClick={() => setEditing(EMPTY_ROOM)} disabled={roomTypes.length === 0}>
+            Yeni oda
+          </Button>
+        }
+      >
+        <Input
+          name="search"
+          label="Ara"
+          type="search"
+          placeholder="Oda numarası…"
+          value={resource.search}
+          onChange={(event) => resource.setSearch(event.target.value)}
+          className="w-full sm:w-48"
+        />
+        <Select
+          name="roomTypeFilter"
+          label="Oda tipi"
+          value={filters.roomTypeId}
+          onChange={(event) => {
+            setFilters((current) => ({ ...current, roomTypeId: event.target.value }));
+            resource.setPage(1);
+          }}
+          options={[{ value: '', label: 'Tüm tipler' }, ...roomTypeOptions]}
+          className="w-full sm:w-56"
+        />
+        <Select
+          name="statusFilter"
+          label="Durum"
+          value={filters.status}
+          onChange={(event) => {
+            setFilters((current) => ({ ...current, status: event.target.value }));
+            resource.setPage(1);
+          }}
+          options={STATUS_FILTER_OPTIONS}
+          className="w-full sm:w-44"
+        />
+      </Toolbar>
 
       {roomTypes.length === 0 && (
-        <Card className="border-amber-200 bg-amber-50">
-          <p className="text-sm text-amber-900">
-            Henüz oda tipi tanımlanmamış. Oda ekleyebilmek için önce Ayarlar → Oda tipleri bölümünden en az bir tip
-            tanımlayın.
-          </p>
-        </Card>
+        <Alert tone="warning" title="Henüz oda tipi tanımlanmamış">
+          Oda ekleyebilmek için önce Ayarlar → Oda tipleri bölümünden en az bir tip tanımlayın.
+        </Alert>
       )}
 
       <DataTable
@@ -165,21 +176,17 @@ export function RoomListTab() {
         error={resource.error}
         onRetry={resource.refetch}
         onPageChange={resource.setPage}
-        emptyTitle={resource.search || filters.roomTypeId || filters.status ? 'Eşleşen oda yok' : 'Henüz oda yok'}
-        emptyHint={
-          resource.search || filters.roomTypeId || filters.status
-            ? 'Filtreleri değiştirip tekrar deneyin.'
-            : 'Rezervasyon alabilmek için odaları tanımlayın.'
-        }
+        emptyTitle={hasFilter ? 'Eşleşen oda yok' : 'Henüz oda yok'}
+        emptyHint={hasFilter ? 'Filtreleri değiştirip tekrar deneyin.' : 'Rezervasyon alabilmek için odaları tanımlayın.'}
         rowActions={(row) => (
           <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setBlocking(row)}>
+            <Button variant="outline" size="sm" icon="lock" onClick={() => setBlocking(row)}>
               Blokla
             </Button>
-            <Button variant="secondary" onClick={() => setEditing(row)}>
+            <Button variant="outline" size="sm" icon="pencil" onClick={() => setEditing(row)}>
               Düzenle
             </Button>
-            <Button variant="danger" onClick={() => setDeleting(row)}>
+            <Button variant="dangerSoft" size="sm" icon="trash" onClick={() => setDeleting(row)}>
               Sil
             </Button>
           </div>
@@ -278,16 +285,16 @@ function RoomFormModal({ initial, roomTypeOptions, onSubmit, onClose, isPending 
       onClose={onClose}
       footer={
         <>
-          <Button variant="secondary" onClick={onClose} disabled={isPending}>
+          <Button variant="outline" onClick={onClose} disabled={isPending}>
             Vazgeç
           </Button>
-          <Button type="submit" form="room-form" disabled={isPending}>
+          <Button type="submit" form="room-form" icon="check" disabled={isPending}>
             {isPending ? 'Kaydediliyor…' : 'Kaydet'}
           </Button>
         </>
       }
     >
-      <form id="room-form" onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-2">
+      <form id="room-form" onSubmit={handleSubmit} className="grid gap-5 sm:grid-cols-2">
         <Input label="Oda numarası" name="number" value={form.number} onChange={setField('number')} error={errors.number} />
         <Input label="Kat" name="floor" type="number" value={form.floor} onChange={setField('floor')} error={errors.floor} />
         <Select
@@ -347,16 +354,16 @@ function BlockRoomModal({ room, onSubmit, onClose, isPending, error }) {
       onClose={onClose}
       footer={
         <>
-          <Button variant="secondary" onClick={onClose} disabled={isPending}>
+          <Button variant="outline" onClick={onClose} disabled={isPending}>
             Vazgeç
           </Button>
-          <Button type="submit" form="block-form" disabled={isPending}>
+          <Button type="submit" form="block-form" icon="lock" disabled={isPending}>
             {isPending ? 'Bloklanıyor…' : 'Blokla'}
           </Button>
         </>
       }
     >
-      <form id="block-form" onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-2">
+      <form id="block-form" onSubmit={handleSubmit} className="grid gap-5 sm:grid-cols-2">
         <Input
           label="Başlangıç"
           name="startDate"
@@ -385,10 +392,10 @@ function BlockRoomModal({ room, onSubmit, onClose, isPending, error }) {
       </form>
 
       {error && (
-        <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-3">
-          <p className="text-sm text-red-700">{error.message}</p>
+        <Alert tone="danger" className="mt-5">
+          <p>{error.message}</p>
           {conflicts && (
-            <ul className="mt-2 list-inside list-disc text-xs text-red-600">
+            <ul className="mt-2 list-inside list-disc text-xs">
               {conflicts.map((item) => (
                 <li key={item.confirmationCode}>
                   {item.confirmationCode}: {item.checkIn} → {item.checkOut}
@@ -396,10 +403,10 @@ function BlockRoomModal({ room, onSubmit, onClose, isPending, error }) {
               ))}
             </ul>
           )}
-        </div>
+        </Alert>
       )}
 
-      <p className="mt-4 text-xs text-gray-500">
+      <p className="mt-5 text-xs leading-relaxed text-ink-muted">
         Bloklu oda, blok tarihleri boyunca müsaitlik hesabından düşer. Bitiş boş bırakılırsa blok elle kaldırılana
         kadar sürer.
       </p>

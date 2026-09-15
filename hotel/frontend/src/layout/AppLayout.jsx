@@ -1,62 +1,137 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { Button } from '@hotelos/ui';
+import { useEffect, useRef } from 'react';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '../lib/api.js';
 import { useAuthStore } from '../store/auth.js';
+import { useUiStore } from '../store/ui.js';
+import { ROLE_LABELS } from './navigation.js';
+import { Sidebar } from './Sidebar.jsx';
+import { Topbar } from './Topbar.jsx';
+import { useMediaQuery } from './useMediaQuery.js';
+
+/** Tailwind'in `xl` kırılımı: bunun üstünde yan menü sabit, altında çekmece. */
+const DESKTOP_QUERY = '(min-width: 80rem)';
 
 /**
- * Sol menü. `roles` dolu olan girdiler yalnızca o rollere gösterilir.
- * Not: bu görsel bir kısıt; gerçek yetki kontrolü modül 2 ile sunucuya gelecek.
+ * Otel adı kabukta her sayfada görünür ama nadiren değişir; her gezinmede
+ * yeniden istenmesin. Ayarlar'dan kaydedilince aynı önbellek anahtarı
+ * güncellendiği için menüdeki ad da hemen değişir.
  */
-const MENU = [
-  { label: 'Panel', to: '/' },
-  // Odalar ön büro işi: resepsiyon ve kat hizmetleri de görmeli, yalnızca admin değil.
-  { label: 'Odalar', to: '/odalar' },
-  { label: 'Ayarlar', to: '/ayarlar', roles: ['ADMIN'] },
-];
+const HOTEL_STALE_MS = 5 * 60 * 1000;
 
+/**
+ * Panelin kabuğu — Spark Admin düzeni: koyu yan menü, yapışkan üst bar, açık
+ * zeminde içerik.
+ *
+ * Dar ekranda yan menü çekmeceye döner. Kapalı çekmece `inert`: klavyeyle
+ * görünmeyen bağlantılara düşülmez. Açıkken arkadaki sayfa `inert` olur, odak
+ * menüye taşınır; Esc ya da gezinme çekmeceyi kapatıp odağı menü düğmesine
+ * geri verir.
+ */
 export function AppLayout() {
-  const { user, logout } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const isDesktop = useMediaQuery(DESKTOP_QUERY);
+  const { isSidebarCollapsed, isMobileNavOpen, toggleSidebar, openMobileNav, closeMobileNav } = useUiStore();
+
+  const menuButtonRef = useRef(null);
+  const drawerFirstLinkRef = useRef(null);
+
+  const hotelQuery = useQuery({
+    queryKey: ['settings', 'hotel'],
+    queryFn: () => api('/settings/hotel'),
+    staleTime: HOTEL_STALE_MS,
+  });
+
+  const isCollapsed = isDesktop && isSidebarCollapsed;
+  const isDrawerOpen = !isDesktop && isMobileNavOpen;
+
+  // Sayfa değişince ya da ekran genişleyince çekmece açık kalmasın.
+  useEffect(() => {
+    closeMobileNav();
+  }, [pathname, isDesktop, closeMobileNav]);
+
+  useEffect(() => {
+    if (!isDrawerOpen) return undefined;
+
+    drawerFirstLinkRef.current?.focus();
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (event) => {
+      if (event.key !== 'Escape') return;
+      closeMobileNav();
+      menuButtonRef.current?.focus();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isDrawerOpen, closeMobileNav]);
 
   function handleLogout() {
     logout();
     navigate('/login');
   }
 
-  const visibleMenu = MENU.filter((item) => !item.roles || item.roles.includes(user?.role));
-
   return (
-    <div className="flex min-h-screen">
-      <aside className="w-56 border-r border-gray-200 bg-white p-4">
-        <div className="mb-6 text-xl font-bold text-blue-700">HotelOS</div>
-        <nav className="flex flex-col gap-1">
-          {visibleMenu.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === '/'}
-              className={({ isActive }) =>
-                `rounded px-3 py-2 text-sm transition-colors ${
-                  isActive ? 'bg-blue-50 font-medium text-blue-700' : 'text-gray-700 hover:bg-gray-100'
-                }`
-              }
-            >
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
+    <div className="min-h-screen bg-canvas">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[70] focus:rounded-control focus:bg-ink focus:px-4 focus:py-2.5 focus:text-sm focus:font-bold focus:text-white"
+      >
+        İçeriğe geç
+      </a>
+
+      {isDrawerOpen && (
+        <div aria-hidden="true" onClick={closeMobileNav} className="fixed inset-0 z-40 animate-fade-in bg-ink/50 backdrop-blur-[2px]" />
+      )}
+
+      <aside
+        id="app-sidebar"
+        aria-label="Yan menü"
+        inert={!isDesktop && !isMobileNavOpen}
+        className={`fixed inset-y-0 left-0 z-50 w-[17.5rem] transition-[transform,width] duration-300 ease-out xl:z-30 xl:translate-x-0 ${
+          isCollapsed ? 'xl:w-[5.5rem]' : 'xl:w-[17.5rem]'
+        } ${isDrawerOpen ? 'translate-x-0 shadow-float' : '-translate-x-full'}`}
+      >
+        <Sidebar
+          ref={drawerFirstLinkRef}
+          role={user?.role}
+          hotel={hotelQuery.data}
+          isCollapsed={isCollapsed}
+          showClose={!isDesktop}
+          onClose={() => {
+            closeMobileNav();
+            menuButtonRef.current?.focus();
+          }}
+        />
       </aside>
-      <div className="flex flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-3">
-          <span className="text-sm text-gray-600">Demo Otel</span>
-          <div className="flex items-center gap-3">
-            <span className="text-sm">{user?.email}</span>
-            <Button variant="secondary" onClick={handleLogout}>
-              Çıkış
-            </Button>
+
+      <div
+        inert={isDrawerOpen}
+        className={`flex min-h-screen flex-col transition-[padding] duration-300 ease-out ${
+          isCollapsed ? 'xl:pl-[5.5rem]' : 'xl:pl-[17.5rem]'
+        }`}
+      >
+        <Topbar
+          ref={menuButtonRef}
+          user={user}
+          roleLabel={ROLE_LABELS[user?.role]}
+          isSidebarCollapsed={isSidebarCollapsed}
+          isMobileNavOpen={isDrawerOpen}
+          onToggleSidebar={toggleSidebar}
+          onOpenMobileNav={openMobileNav}
+          onLogout={handleLogout}
+        />
+        <main id="main-content" tabIndex={-1} className="flex-1 px-5 py-7 outline-none sm:px-8 sm:py-8 xl:px-10">
+          <div className="mx-auto w-full max-w-[100rem]">
+            <Outlet />
           </div>
-        </header>
-        <main className="flex-1 p-6">
-          <Outlet />
         </main>
       </div>
     </div>
