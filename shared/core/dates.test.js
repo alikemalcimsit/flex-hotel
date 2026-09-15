@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   addDays,
+  calendarDateInTimeZone,
   eachNight,
   nightCount,
   rangesOverlapClosed,
@@ -131,5 +132,28 @@ describe('addDays', () => {
 
   it('negatif gün geri gider', () => {
     assert.equal(toIsoDay(addDays('2026-10-15', -1)), '2026-10-14');
+  });
+});
+
+describe('calendarDateInTimeZone — otelin "bugün"ü', () => {
+  it('İstanbul gece yarısını geçince yeni güne geçer (UTC hâlâ dünde)', () => {
+    // 16 Eylül 22:30 UTC = 17 Eylül 01:30 İstanbul — gece kapanışı saati.
+    assert.equal(toIsoDay(calendarDateInTimeZone('Europe/Istanbul', '2026-09-16T22:30:00Z')), '2026-09-17');
+  });
+
+  it('İstanbul gece yarısından hemen önce hâlâ aynı gündür', () => {
+    assert.equal(toIsoDay(calendarDateInTimeZone('Europe/Istanbul', '2026-09-16T20:59:00Z')), '2026-09-16');
+  });
+
+  it('UTC gerisindeki bölgede geri kalır', () => {
+    assert.equal(toIsoDay(calendarDateInTimeZone('America/New_York', '2026-09-17T02:00:00Z')), '2026-09-16');
+  });
+
+  it('dönen değer UTC gün başıdır (konaklama tarihleriyle karşılaştırılabilir)', () => {
+    assert.equal(calendarDateInTimeZone('Europe/Istanbul', '2026-09-16T22:30:00Z').toISOString(), '2026-09-17T00:00:00.000Z');
+  });
+
+  it('geçersiz saat dilimini reddeder', () => {
+    assert.throws(() => calendarDateInTimeZone('Mars/Olympus', new Date()), RangeError);
   });
 });

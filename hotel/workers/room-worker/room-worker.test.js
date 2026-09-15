@@ -12,7 +12,7 @@ const RESERVATION = '33333333-3333-4333-8333-333333333333';
 const ROOM = '55555555-5555-4555-8555-555555555555';
 
 function makeHarness({ service = {}, isEnabled = async () => true } = {}) {
-  const calls = { manualTasks: [], activity: [], assigned: [], statuses: [] };
+  const calls = { manualTasks: [], activity: [], assigned: [], states: [] };
 
   const worker = createRoomWorker(
     {
@@ -20,8 +20,8 @@ function makeHarness({ service = {}, isEnabled = async () => true } = {}) {
         calls.assigned.push({ hotelId, reservationId });
         return { assigned: true, room: { id: ROOM, number: '101' } };
       },
-      applySystemRoomStatus: async (hotelId, roomId, status, reason) => {
-        calls.statuses.push({ hotelId, roomId, status, reason });
+      applySystemRoomState: async (hotelId, roomId, state, reason) => {
+        calls.states.push({ hotelId, roomId, state, reason });
       },
       ...service,
     },
@@ -110,6 +110,45 @@ describe('yeni rezervasyon', () => {
     assert.match(calls.manualTasks[0].description, /Uygun boş oda bulunamadı/);
   });
 
+  it('iş kuralı hatası (4xx) tekrar denenmeden manuel göreve düşer', async () => {
+    let attempts = 0;
+    const { worker, calls } = makeHarness({
+      service: {
+        autoAssignRoom: async () => {
+          attempts += 1;
+          const error = new Error('Durumu "İptal" olan rezervasyona oda atanamaz.');
+          error.statusCode = 409;
+          throw error;
+        },
+      },
+    });
+    const { payload, envelope } = reservationCreated();
+
+    await worker.handle(payload, envelope);
+
+    assert.equal(attempts, 1, 'iptal edilmiş rezervasyon beklemekle atanabilir hâle gelmez');
+    assert.equal(calls.manualTasks.length, 1);
+  });
+
+  it('geçici altyapı hatası tekrar denenir', async () => {
+    let attempts = 0;
+    const { worker, calls } = makeHarness({
+      service: {
+        autoAssignRoom: async () => {
+          attempts += 1;
+          if (attempts < 3) throw new Error('bağlantı koptu');
+          return { assigned: true, room: { id: ROOM, number: '101' } };
+        },
+      },
+    });
+    const { payload, envelope } = reservationCreated();
+
+    await worker.handle(payload, envelope);
+
+    assert.equal(attempts, 3);
+    assert.equal(calls.manualTasks.length, 0);
+  });
+
   it('aktör kapalıyken görev okunur başlıkla düşer', async () => {
     const { worker, calls } = makeHarness({ isEnabled: async () => false });
     const { payload, envelope } = reservationCreated();
@@ -123,7 +162,7 @@ describe('yeni rezervasyon', () => {
 });
 
 describe('misafir giriş-çıkışı', () => {
-  it('giriş yapınca oda dolu olur', async () => {
+  it('giriş yapınca oda dolu olur, kat hizmeti durumuna dokunulmaz', async () => {
     const { worker, calls } = makeHarness();
 
     await worker.handle(
@@ -131,13 +170,13 @@ describe('misafir giriş-çıkışı', () => {
       { id: 'evt-2', name: 'guest.checked_in', correlationId: 'z', hop: 1 },
     );
 
-    assert.deepEqual(calls.statuses, [
-      { hotelId: HOTEL, roomId: ROOM, status: 'OCCUPIED', reason: 'Misafir giriş yaptı' },
+    assert.deepEqual(calls.states, [
+      { hotelId: HOTEL, roomId: ROOM, state: { occupancy: 'OCCUPIED' }, reason: 'Misafir giriş yaptı' },
     ]);
   });
 
-  it('çıkış yapınca oda kirli olur (boş değil)', async () => {
-    // Doğrudan "boş" yapmak, temizlenmemiş odayı satışa açardı.
+  it('çıkış yapınca oda boş VE kirli olur', async () => {
+    // Yalnızca "boş" yapmak, temizlenmemiş odayı sonraki misafire hazır gösterirdi.
     const { worker, calls } = makeHarness();
 
     await worker.handle(
@@ -145,13 +184,13 @@ describe('misafir giriş-çıkışı', () => {
       { id: 'evt-3', name: 'guest.checked_out', correlationId: 'z', hop: 1 },
     );
 
-    assert.equal(calls.statuses[0].status, 'DIRTY');
+    assert.deepEqual(calls.states[0].state, { occupancy: 'VACANT', housekeepingStatus: 'DIRTY' });
   });
 
   it('durum güncellemesi başarısız olursa görev düşer', async () => {
     const { worker, calls } = makeHarness({
       service: {
-        applySystemRoomStatus: async () => {
+        applySystemRoomState: async () => {
           throw new Error('oda bulunamadı');
         },
       },
@@ -162,7 +201,7 @@ describe('misafir giriş-çıkışı', () => {
       { id: 'evt-4', name: 'guest.checked_out', correlationId: 'z', hop: 1 },
     );
 
-    assert.equal(calls.manualTasks[0].title, 'Oda "kirli" olarak işaretlenecek');
+    assert.equal(calls.manualTasks[0].title, 'Oda "boş · kirli" olarak işaretlenecek');
     assert.equal(calls.activity[0].level, 'ERROR');
   });
 });

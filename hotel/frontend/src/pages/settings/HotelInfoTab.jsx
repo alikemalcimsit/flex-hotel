@@ -55,6 +55,8 @@ export function HotelInfoTab() {
       toastError(error.message);
       // Sunucu alan bazlı hata döndüyse ilgili input'un altında göster.
       if (error.fields) setErrors(error.fields);
+      // İş kuralı tek bir alana bağlıysa (ör. kayıt varken para birimi) o alanın altında da görünsün.
+      if (error.details?.field) setErrors((current) => ({ ...current, [error.details.field]: error.message }));
       if (error.code === 'STALE_WRITE') queryClient.invalidateQueries({ queryKey: ['settings', 'hotel'] });
     },
   });

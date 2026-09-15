@@ -1,7 +1,16 @@
+import { calendarDateInTimeZone } from '@hotelos/core';
 import { cache } from '../../lib/cache.js';
 import { prisma } from '../../db.js';
 import { recordAudit } from '../../lib/audit.js';
-import { InUseError, NotFoundError, rethrowPrismaError, StaleWriteError, ValidationError } from '../../lib/errors.js';
+import {
+  ConflictError,
+  InUseError,
+  NotFoundError,
+  rethrowPrismaError,
+  StaleWriteError,
+  ValidationError,
+} from '../../lib/errors.js';
+import { lockRoomTypes } from '../../lib/locks.js';
 import { buildPage, toSkipTake } from '../../lib/pagination.js';
 import { writeWithEvents } from '../../lib/write.js';
 import { assertNoOverlap, findSeasonForDate, isValidTimeZone } from './rules.js';
@@ -26,6 +35,12 @@ import { assertNoOverlap, findSeasonForDate, isValidTimeZone } from './rules.js'
  */
 
 const HOT_READ_TTL_MS = 5 * 60_000;
+
+/** Envanteri tüketen rezervasyon durumları (bkz. rooms/rules.js). */
+const ACTIVE_RESERVATION_STATUSES = Object.freeze(['PENDING', 'CONFIRMED', 'CHECKED_IN']);
+
+/** Hata mesajında örnek olarak gösterilecek en fazla kayıt sayısı. */
+const CONFLICT_SAMPLE_LIMIT = 5;
 
 /* ══════════════════ Dönüştürücüler ══════════════════ */
 
@@ -156,6 +171,13 @@ export async function getHotel(hotelId) {
 }
 
 /**
+ * Otel bilgilerini günceller.
+ *
+ * Para birimi, otelde rezervasyon ya da folyo oluştuktan sonra
+ * değiştirilemez: kayıtlı tutarlar eski para biriminde durur, çevrilmeden
+ * "TRY" yazısının "EUR" olması 2500 TL'lik odayı 2500 EUR gösterir. Böyle bir
+ * geçiş ancak kur çevrimli bir veri taşıma işiyle yapılabilir.
+ *
  * @param {string} hotelId
  * @param {object} input
  */
@@ -170,6 +192,22 @@ export async function updateHotel(hotelId, input) {
     return await writeWithEvents(async (tx, stage) => {
       const before = await tx.hotel.findFirst({ where: { id: hotelId } });
       if (!before) throw new NotFoundError('Otel kaydı bulunamadı');
+
+      if (data.currency !== before.currency) {
+        const [reservations, folios] = await Promise.all([
+          tx.reservation.count({ where: { hotelId } }),
+          tx.folio.count({ where: { hotelId } }),
+        ]);
+        const usage = nonZero({ rezervasyon: reservations, folyo: folios });
+        if (Object.keys(usage).length > 0) {
+          throw new ConflictError(
+            `Otelde parası ${before.currency} olarak kaydedilmiş kayıtlar var; para birimi ${data.currency} yapılamaz. ` +
+              'Tutarlar çevrilmeden birim değişirse tüm fiyatlar yanlış görünür.',
+            'CURRENCY_LOCKED',
+            { usage, field: 'currency' },
+          );
+        }
+      }
 
       await updateWithVersionCheck(
         tx,
@@ -319,6 +357,13 @@ export async function createRoomType(hotelId, input) {
 }
 
 /**
+ * Oda tipini günceller.
+ *
+ * Kapasite, gelecekteki rezervasyonların kişi sayısının altına düşürülemez:
+ * 3 yetişkinlik rezervasyonu olan tipi "2 yetişkin" yapmak, o misafirleri
+ * sığmadıkları odalara bırakmak demektir. Bu tipin odalarına başka tipten
+ * yerleştirilmiş misafirler de sayılır.
+ *
  * @param {string} hotelId
  * @param {string} id
  * @param {object} input
@@ -328,8 +373,41 @@ export async function updateRoomType(hotelId, id, input) {
 
   try {
     return await writeWithEvents(async (tx, stage) => {
+      if (!(await lockRoomTypes(tx, hotelId, [id])).has(id)) throw new NotFoundError('Oda tipi bulunamadı');
       const before = await tx.roomType.findFirst({ where: { id, hotelId } });
       if (!before) throw new NotFoundError('Oda tipi bulunamadı');
+
+      const capacityShrinks =
+        data.capacityAdults < before.capacityAdults || data.capacityChildren < before.capacityChildren;
+      if (capacityShrinks) {
+        const today = calendarDateInTimeZone((await tx.hotel.findFirst({ where: { id: hotelId } })).timezone);
+        const overCapacity = {
+          hotelId,
+          status: { in: ACTIVE_RESERVATION_STATUSES },
+          checkOut: { gt: today },
+          AND: [
+            { OR: [{ roomTypeId: id }, { room: { roomTypeId: id } }] },
+            { OR: [{ adults: { gt: data.capacityAdults } }, { children: { gt: data.capacityChildren } }] },
+          ],
+        };
+        const [count, samples] = await Promise.all([
+          tx.reservation.count({ where: overCapacity }),
+          tx.reservation.findMany({
+            where: overCapacity,
+            select: { confirmationCode: true, adults: true, children: true },
+            orderBy: [{ checkIn: 'asc' }],
+            take: CONFLICT_SAMPLE_LIMIT,
+          }),
+        ]);
+        if (count > 0) {
+          throw new ConflictError(
+            `Bu tipte yeni kapasiteyi (${data.capacityAdults} yetişkin, ${data.capacityChildren} çocuk) aşan ` +
+              `${count} gelecek rezervasyon var; kapasite düşürülemez. Önce o misafirleri başka tipe taşıyın.`,
+            'CAPACITY_IN_USE',
+            { total: count, shown: samples.length, reservations: samples },
+          );
+        }
+      }
 
       await updateWithVersionCheck(
         tx,
@@ -378,13 +456,16 @@ export async function updateRoomType(hotelId, id, input) {
  */
 export async function deleteRoomType(hotelId, id) {
   await writeWithEvents(async (tx, stage) => {
+    // Kilit: aynı anda bu tipe oda eklenirse (createRoom da kilitliyor) sayım
+    // "0 oda" okuyup silmesin, oda silinmiş bir tipe bağlı kalmasın.
+    if (!(await lockRoomTypes(tx, hotelId, [id])).has(id)) throw new NotFoundError('Oda tipi bulunamadı');
     const existing = await tx.roomType.findFirst({ where: { id, hotelId } });
     if (!existing) throw new NotFoundError('Oda tipi bulunamadı');
 
     const [rooms, reservations, ratePlans] = await Promise.all([
       tx.room.count({ where: { roomTypeId: id, hotelId } }),
       tx.reservation.count({
-        where: { roomTypeId: id, hotelId, status: { in: ['PENDING', 'CONFIRMED', 'CHECKED_IN'] } },
+        where: { roomTypeId: id, hotelId, status: { in: ACTIVE_RESERVATION_STATUSES } },
       }),
       tx.ratePlan.count({ where: { roomTypeId: id, hotelId } }),
     ]);
@@ -528,9 +609,36 @@ export async function listSeasons(hotelId, query) {
 }
 
 /**
+ * Aday aralıkla çakışan sezonlar — yalnızca onlar okunur.
+ *
+ * Eskiden otelin *bütün* sezonları belleğe çekilip orada karşılaştırılıyordu;
+ * yıllar içinde yüzlerce satır. Aralık kesişimi veritabanında
+ * `[hotelId, startDate, endDate]` index'iyle yapılır, kural (`assertNoOverlap`)
+ * aynı kalır.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {{ id?: string, startDate: Date, endDate: Date }} candidate
+ */
+function findOverlappingSeasons(tx, hotelId, candidate) {
+  return tx.season.findMany({
+    where: {
+      hotelId,
+      ...(candidate.id ? { id: { not: candidate.id } } : {}),
+      // İki uçtan kapalı `[]` kesişim.
+      startDate: { lte: candidate.endDate },
+      endDate: { gte: candidate.startDate },
+    },
+    select: { id: true, name: true, startDate: true, endDate: true },
+    orderBy: [{ startDate: 'asc' }],
+    take: 1,
+  });
+}
+
+/**
  * Sezon ekler.
  *
- * Çakışma kontrolü iki katmanlı: burada mevcut sezonlar okunup kullanıcıya
+ * Çakışma kontrolü iki katmanlı: burada çakışan sezon okunup kullanıcıya
  * *hangi* sezonla çakıştığı söyleniyor; garantiyi ise veritabanındaki
  * `Season_no_overlap` EXCLUDE kısıtı veriyor. Bu yüzden eşzamanlılık için ayrı
  * bir kilide gerek yok — iki istek aynı anda gelse biri kısıta takılır ve
@@ -542,11 +650,7 @@ export async function listSeasons(hotelId, query) {
 export async function createSeason(hotelId, input) {
   try {
     return await writeWithEvents(async (tx, stage) => {
-      const existing = await tx.season.findMany({
-        where: { hotelId },
-        select: { id: true, name: true, startDate: true, endDate: true },
-      });
-      assertNoOverlap(existing, input);
+      assertNoOverlap(await findOverlappingSeasons(tx, hotelId, input), input);
 
       const created = await tx.season.create({ data: { hotelId, ...input } });
       const dto = toSeasonDto(created);
@@ -574,11 +678,8 @@ export async function updateSeason(hotelId, id, input) {
       const before = await tx.season.findFirst({ where: { id, hotelId } });
       if (!before) throw new NotFoundError('Sezon bulunamadı');
 
-      const existing = await tx.season.findMany({
-        where: { hotelId },
-        select: { id: true, name: true, startDate: true, endDate: true },
-      });
-      assertNoOverlap(existing, { ...data, id });
+      const candidate = { ...data, id };
+      assertNoOverlap(await findOverlappingSeasons(tx, hotelId, candidate), candidate);
 
       await updateWithVersionCheck(tx, 'season', { id, hotelId }, expectedUpdatedAt, data, 'Sezon bulunamadı');
 

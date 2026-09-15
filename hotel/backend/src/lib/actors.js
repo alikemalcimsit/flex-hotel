@@ -1,7 +1,7 @@
 import { actorRegistry } from '@hotelos/actor-kit';
 import { createRoomWorker } from '@hotelos/room-worker';
 import { prismaUnfiltered } from '../db.js';
-import { applySystemRoomStatus, autoAssignRoom } from '../modules/rooms/service.js';
+import { applySystemRoomState, autoAssignRoom } from '../modules/rooms/service.js';
 import { eventBus } from './events.js';
 
 /**
@@ -85,7 +85,7 @@ const deps = {
  */
 export function registerActors() {
   if (!actorRegistry.get('room-worker')) {
-    actorRegistry.register(createRoomWorker({ autoAssignRoom, applySystemRoomStatus }, deps));
+    actorRegistry.register(createRoomWorker({ autoAssignRoom, applySystemRoomState }, deps));
   }
   actorRegistry.bindAll(eventBus);
   return actorRegistry;

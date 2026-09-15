@@ -51,6 +51,10 @@ describe('ayarlar servisi (entegrasyon)', { skip }, () => {
     await prismaUnfiltered.auditLog.deleteMany({});
     await prismaUnfiltered.eventLog.deleteMany({});
     await prismaUnfiltered.folioItem.deleteMany({});
+    await prismaUnfiltered.folio.deleteMany({});
+    await prismaUnfiltered.reservation.deleteMany({});
+    await prismaUnfiltered.guest.deleteMany({});
+    await prismaUnfiltered.roomBlock.deleteMany({});
     await prismaUnfiltered.season.deleteMany({});
     await prismaUnfiltered.tax.deleteMany({});
     await prismaUnfiltered.room.deleteMany({});
@@ -246,6 +250,92 @@ describe('ayarlar servisi (entegrasyon)', { skip }, () => {
   });
 
   describe('bağımlılık kontrolü', () => {
+    /** Doğrudan veritabanına gelecekteki bir rezervasyon yazar. */
+    async function seedFutureReservation(roomTypeId, { adults = 2, children = 0 } = {}) {
+      const guest = await prismaUnfiltered.guest.create({ data: { hotelId, firstName: 'Test', lastName: 'Misafir' } });
+      const checkIn = new Date(Date.now() + 30 * 86_400_000);
+      const checkOut = new Date(Date.now() + 33 * 86_400_000);
+      return prismaUnfiltered.reservation.create({
+        data: {
+          hotelId,
+          guestId: guest.id,
+          roomTypeId,
+          checkIn,
+          checkOut,
+          adults,
+          children,
+          status: 'CONFIRMED',
+          totalPrice: '3000',
+          confirmationCode: `R-${randomUUID().slice(0, 8)}`,
+        },
+      });
+    }
+
+    it('kapasite gelecekteki rezervasyonların kişi sayısının altına düşürülemez', async () => {
+      const roomType = await asUser(() => service.createRoomType(hotelId, roomTypeInput({ capacityAdults: 3 })));
+      await seedFutureReservation(roomType.id, { adults: 3 });
+
+      await assert.rejects(
+        () =>
+          asUser(() =>
+            service.updateRoomType(hotelId, roomType.id, {
+              ...roomTypeInput({ capacityAdults: 2 }),
+              expectedUpdatedAt: new Date(roomType.updatedAt),
+            }),
+          ),
+        (error) => error.code === 'CAPACITY_IN_USE' && error.details.total === 1,
+      );
+    });
+
+    it('kapasite, sığan rezervasyonlar varken düşürülebilir', async () => {
+      const roomType = await asUser(() => service.createRoomType(hotelId, roomTypeInput({ capacityAdults: 4 })));
+      await seedFutureReservation(roomType.id, { adults: 2 });
+
+      const updated = await asUser(() =>
+        service.updateRoomType(hotelId, roomType.id, {
+          ...roomTypeInput({ capacityAdults: 2 }),
+          expectedUpdatedAt: new Date(roomType.updatedAt),
+        }),
+      );
+      assert.equal(updated.capacityAdults, 2);
+    });
+
+    it('rezervasyonu olan otelin para birimi değiştirilemez', async () => {
+      const roomType = await asUser(() => service.createRoomType(hotelId, roomTypeInput()));
+      await seedFutureReservation(roomType.id);
+      const hotel = await service.getHotel(hotelId);
+
+      await assert.rejects(
+        () =>
+          asUser(() =>
+            service.updateHotel(hotelId, {
+              name: hotel.name,
+              currency: 'EUR',
+              timezone: hotel.timezone,
+              checkInTime: hotel.checkInTime,
+              checkOutTime: hotel.checkOutTime,
+              expectedUpdatedAt: new Date(hotel.updatedAt),
+            }),
+          ),
+        (error) => error.code === 'CURRENCY_LOCKED' && error.details.usage.rezervasyon === 1,
+      );
+    });
+
+    it('henüz kaydı olmayan otelin para birimi değiştirilebilir', async () => {
+      const hotel = await service.getHotel(hotelId);
+      const updated = await asUser(() =>
+        service.updateHotel(hotelId, {
+          name: hotel.name,
+          currency: 'EUR',
+          timezone: hotel.timezone,
+          checkInTime: hotel.checkInTime,
+          checkOutTime: hotel.checkOutTime,
+          expectedUpdatedAt: new Date(hotel.updatedAt),
+        }),
+      );
+      assert.equal(updated.currency, 'EUR');
+    });
+
     it('odası olan oda tipi silinemez ve sayıyı bildirir', async () => {
       const roomType = await asUser(() => service.createRoomType(hotelId, roomTypeInput()));
       await prismaUnfiltered.room.create({ data: { hotelId, number: '101', roomTypeId: roomType.id } });

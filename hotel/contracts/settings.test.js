@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import { toFieldErrors, listQuerySchema } from './fields.js';
 import {
   generalSettingsSchema,
+  hotelInfoSchema,
   roomTypeInputSchema,
   seasonInputSchema,
   taxInputSchema,
@@ -121,6 +122,11 @@ describe('taxInputSchema', () => {
     assert.equal(result.success, false);
   });
 
+  it('"false" metnini fiyata dahil değil olarak okur', () => {
+    const result = taxInputSchema.parse({ name: 'KDV', rate: '10', isIncluded: 'false', appliesTo: ['ROOM'] });
+    assert.equal(result.isIncluded, false);
+  });
+
   it('%100 üstü oranı reddeder', () => {
     const result = taxInputSchema.safeParse({ name: 'KDV', rate: '120', isIncluded: true, appliesTo: ['ROOM'] });
     assert.equal(result.success, false);
@@ -202,6 +208,27 @@ describe('updateHotelSchema', () => {
     const result = updateHotelSchema.safeParse({ ...validHotel, checkInTime: '9:00' });
     assert.equal(result.success, false);
     assert.match(toFieldErrors(result.error).checkInTime, /SS:DD/);
+  });
+
+  it('çıkış saati girişten sonra olamaz (aynı gün oda devri bozulur)', () => {
+    const result = updateHotelSchema.safeParse({ ...validHotel, checkInTime: '14:00', checkOutTime: '15:00' });
+    assert.equal(result.success, false);
+    assert.match(toFieldErrors(result.error).checkOutTime, /giriş saatinden önce/);
+  });
+
+  it('çıkış ve giriş aynı saatte olamaz', () => {
+    assert.equal(updateHotelSchema.safeParse({ ...validHotel, checkInTime: '12:00', checkOutTime: '12:00' }).success, false);
+  });
+
+  it('form şeması da aynı kuralı uygular', () => {
+    const { expectedUpdatedAt, ...form } = validHotel;
+    assert.equal(hotelInfoSchema.safeParse({ ...form, checkOutTime: '16:00' }).success, false);
+  });
+
+  it('logo adresi yalnızca http(s) olabilir', () => {
+    assert.equal(updateHotelSchema.safeParse({ ...validHotel, logoUrl: 'javascript:alert(1)' }).success, false);
+    assert.equal(updateHotelSchema.safeParse({ ...validHotel, logoUrl: 'https://cdn.otel.com/logo.png' }).success, true);
+    assert.equal(updateHotelSchema.safeParse({ ...validHotel, logoUrl: '' }).success, true);
   });
 });
 

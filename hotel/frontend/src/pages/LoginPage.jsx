@@ -12,7 +12,7 @@ const FAKE_USERS = {
 
 /** Tanıtım panelinde sayılan başlıklar — yalnızca bugün panelde gerçekten olan bölümler. */
 const HIGHLIGHTS = [
-  { icon: 'bed', title: 'Oda envanteri', text: 'Odalar, durumlar ve bloklar tek listede.' },
+  { icon: 'bed', title: 'Oda envanteri', text: 'Doluluk, kat hizmeti ve arıza kayıtları tek listede.' },
   { icon: 'calendar', title: 'Müsaitlik takvimi', text: 'Oda tipi bazında gün gün boş oda görünümü.' },
   { icon: 'key', title: 'Oda atama', text: 'Bekleyen rezervasyonlara önerili veya otomatik atama.' },
 ];

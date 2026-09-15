@@ -17,6 +17,7 @@ export const NAV_SECTIONS = Object.freeze([
     title: 'Ön büro',
     // Odalar ön büro işi: resepsiyon ve kat hizmetleri de görmeli, yalnızca admin değil.
     items: [
+      { label: 'Oda planı', to: '/oda-plani', icon: 'calendar' },
       {
         label: 'Odalar',
         to: '/odalar',

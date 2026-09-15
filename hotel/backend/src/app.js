@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
@@ -9,10 +8,18 @@ import { checkDb, disconnectDb } from './db.js';
 import { cache } from './lib/cache.js';
 import { registerActors, setActorLogger } from './lib/actors.js';
 import { registerCoreSubscribers, setEventLogger } from './lib/events.js';
+import {
+  actorFrom,
+  allowedOrigins,
+  CORS_ALLOWED_HEADERS,
+  CORS_METHODS,
+  correlationIdFrom,
+  originChecker,
+  resolveJwtSecret,
+} from './lib/http-security.js';
+import { planRoutes } from './modules/plan/routes.js';
 import { roomsRoutes } from './modules/rooms/routes.js';
 import { settingsRoutes } from './modules/settings/routes.js';
-
-const JWT_SECRET = process.env.JWT_SECRET ?? 'dev-secret-degistir';
 
 /** Bir istemcinin dakikada atabileceği istek sayısı. */
 const DEFAULT_RATE_LIMIT_MAX = 300;
@@ -50,7 +57,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
 
   const app = Fastify({
     logger,
-    genReqId: (request) => request.headers['x-correlation-id'] ?? randomUUID(),
+    genReqId: (request) => correlationIdFrom(request.headers['x-correlation-id']),
   });
 
   setEventLogger(app.log);
@@ -61,8 +68,17 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
 
-  await app.register(cors, { origin: true, exposedHeaders: ['x-correlation-id'] });
-  await app.register(jwt, { secret: JWT_SECRET });
+  const origins = allowedOrigins();
+  // socket.io aynı listeyi kullansın diye (bkz. server.js).
+  app.decorate('allowedOrigins', origins);
+
+  await app.register(cors, {
+    origin: originChecker(origins),
+    methods: [...CORS_METHODS],
+    allowedHeaders: [...CORS_ALLOWED_HEADERS],
+    exposedHeaders: ['x-correlation-id'],
+  });
+  await app.register(jwt, { secret: resolveJwtSecret(app.log) });
 
   // Tek bir istemcinin sunucuyu boğmasını engeller. Ayarlar ekranı düşük
   // hacimli; sınır cömert ama sınırsız değil.
@@ -91,11 +107,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
    */
   app.addHook('onRequest', async (request, reply) => {
     const correlationId = String(request.id);
-    const claimedActor = request.headers['x-actor'];
-    enterContext({
-      correlationId,
-      actor: typeof claimedActor === 'string' && claimedActor ? claimedActor : 'anonim',
-    });
+    enterContext({ correlationId, actor: actorFrom(request.headers['x-actor']) });
     reply.header('x-correlation-id', correlationId);
   });
 
@@ -142,6 +154,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
 
   await app.register(settingsRoutes, { prefix: '/settings' });
   await app.register(roomsRoutes, { prefix: '/rooms' });
+  await app.register(planRoutes, { prefix: '/plan' });
 
   app.addHook('onClose', async () => {
     await disconnectDb();

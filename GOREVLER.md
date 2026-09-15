@@ -85,6 +85,29 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 >   erişim kartları var, uydurma KPI/grafik yok.
 > - `npm run build` ve `npm test` (176 test) temiz; yeni bağımlılık eklenmedi.
 
+> **🔍 Genel kontrol (16 Eylül 2026 — Ahmet) — modül 1 ve paylaşılan altyapı:**
+>
+> - **Ayarlar iş kuralları:** oda tipinin kapasitesi, gelecekte o tipte (ya da o
+>   tipin odalarında) kalacak fazla kişili rezervasyon varken düşürülemez
+>   (409 `CAPACITY_IN_USE`); rezervasyon/folyo varken otelin para birimi
+>   değiştirilemez (409 `CURRENCY_LOCKED`); check-out saati check-in saatinden
+>   önce olmalı; logo adresi http(s) olmalı. Sezon çakışma kontrolü artık tüm
+>   sezonları belleğe çekmiyor, veritabanında soruluyor.
+> - **Sorgu parametresi tuzağı:** `z.coerce.boolean()` `"false"` metnini `true`
+>   yapıyor. Sorgu dizesindeki mantıksal değerler için contracts'taki
+>   `queryBoolean`, boş bırakılabilen sayılar için `optionalQueryInt` kullanın.
+> - **"Bugün":** `@hotelos/core` → `calendarDateInTimeZone(timeZone)`; backend'de
+>   `getBusinessDate(hotelId)`. `new Date()` ile UTC gün almayın.
+> - **HTTP güvenliği (`lib/http-security.js`):** CORS artık yalnızca `CORS_ORIGINS`
+>   listesine açık (eskiden her siteye açıktı) ve PUT/PATCH/DELETE ön kontrolüne
+>   izin veriyor (eskiden panelden bu istekler geliştirme ortamında engelleniyordu);
+>   `NODE_ENV=production` iken `JWT_SECRET` yoksa/kısaysa/örnek değerse sunucu açılmaz;
+>   backend varsayılan olarak `127.0.0.1` dinler; `x-correlation-id` ve `x-actor`
+>   başlıkları temizlenmeden log'a yazılmıyor. Yeni değişkenler `.env.example`'da.
+> - **Panel:** `lib/useHotel.js` (`useHotelSettings`, `useHotelToday`) ve geçici
+>   `lib/permissions.js` (`useCan`) — modül 2 gelince rol → izin eşlemesi oradan
+>   gerçek oturuma bağlanır, düğmeler zaten izin adıyla gizleniyor.
+
 ### 2. Kullanıcı, rol, yetki (RBAC) — Ali Kemal
 **Gün sonu:** Personel kendi hesabıyla giriyor; rolüne göre menüler ve işlemler kısıtlı. Kat görevlisi folyoyu göremiyor, resepsiyon fatura silemiyor.
 
@@ -117,13 +140,15 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 ### 3. Oda tipi müsaitlik & oda atama — arkadaşın
 **Gün sonu:** "15-18 Ekim'de kaç Standart boş?" sorusuna sistem cevap veriyor; rezervasyona uygun oda otomatik veya elle atanıyor.
 - [x] Backend: `checkAvailability(checkIn, checkOut, roomTypeId)` servisi (rezervasyonlar + bloke odalar düşülür)
-- [x] Backend: `assignRoom`, `unassignRoom`, `blockRoom`, `setRoomStatus` servisleri + API
+- [x] Backend: `assignRoom`, `unassignRoom`, `blockRoom`, `setHousekeepingStatus` servisleri + API
+      (16 Eylül'de `setRoomStatus` üç parçalı durum modeline bölündü — aşağıdaki nota bak)
 - [x] Backend: Room CRUD API'leri
-- [x] Ekran: Oda listesi (numara, kat, tip, durum rengi) + oda ekle/düzenle formu
+- [x] Ekran: Oda listesi (numara, kat, tip, doluluk, kat hizmeti, arıza) + oda ekle/düzenle formu
+- [x] Ekran: Arıza kayıtları (odaya "Arızalı / Hizmet dışı" kaydı aç, geçmişi gör, iptal et / bitir)
 - [x] Ekran: Müsaitlik tablosu (satır oda tipi, sütun gün, hücrede boş sayısı)
 - [x] Ekran: "Oda atama" — **rezervasyon detayı yerine bağımsız ekran** (modül 4 henüz yok).
       Aynı API, Ali'nin rezervasyon detayına da takılabilir.
-- [x] Aktör: room-worker paketi (manifest, `reservation.created` → oda seç → `room.assigned`; `guest.checked_out` → oda DIRTY)
+- [x] Aktör: room-worker paketi (manifest, `reservation.created` → oda seç → `room.assigned`; `guest.checked_out` → oda boş + kirli)
 - [x] Aktör kapalıysa: "oda atanacak" manuel görevi düşer
 
 > **Diğer modüller için — müsaitlik nasıl sorulur:**
@@ -146,9 +171,67 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 > - `RoomBlock_no_overlap` (EXCLUDE): bir odanın çakışan iki bloğu olamaz.
 > - `Reservation_date_order` (CHECK): çıkış girişten sonra olmalı.
 >
-> **Yeni tablo:** `RoomBlock` — odanın belirli tarihlerde satılamaz olması
-> (tadilat, arıza, VIP ayırma). `endDate` boşsa süresiz. `Room.status` ise
-> "şu anki" operasyonel durumdur; müsaitlik hesabı ona bakmaz.
+> **Yeni tablo:** `RoomBlock` — odanın belirli tarihlerde kullanılamaz olması
+> (arıza, tadilat). `endDate` boşsa süresiz.
+
+> **🔧 Oda durum modeli yeniden kuruldu (16 Eylül 2026 — Ahmet) — 4, 5, 6, 13, 14, 18, 20'yi ilgilendirir:**
+>
+> Eski `Room.status` tek sütunda birbirinden bağımsız üç şeyi karıştırıyordu
+> (AVAILABLE / OCCUPIED / DIRTY / CLEANING / MAINTENANCE / BLOCKED). Sonuçları
+> canlıda doğrulandı: dolu oda elle "boş" yapılabiliyordu; "kirli" bir oda aynı
+> anda "arızalı" olamıyordu; MAINTENANCE'a hiçbir akış ulaşmıyordu; arıza kaydı
+> bir tarihe bağlı değildi. Otelcilikte (Opera, Protel vb.) bunlar ayrı tutulur;
+> artık bizde de öyle:
+>
+> | Parça | Nerede | Değerler | Kim değiştirir |
+> |---|---|---|---|
+> | **Doluluk** | `Room.occupancy` | `VACANT` Boş · `OCCUPIED` Dolu | **Yalnızca sistem** (check-in/out). Ekrandan değiştirilemez. |
+> | **Kat hizmeti** | `Room.housekeepingStatus` | `DIRTY` Kirli · `CLEANING` Temizleniyor · `CLEAN` Temiz · `INSPECTED` Kontrol edildi | Personel (`PATCH /rooms/:id/housekeeping`) ve sistem |
+> | **Arıza** | `RoomBlock.type` (tarihli kayıt) | `OUT_OF_ORDER` Arızalı · `OUT_OF_SERVICE` Hizmet dışı | Yönetim (`POST /rooms/:id/blocks`, `DELETE /rooms/blocks/:id`) |
+>
+> "Oda bugün arızalı mı?" bir sütun değil, **iş gününü kapsayan bloktan türetilir**
+> (API'de `condition` + `currentBlock` alanları). Böylece "20-25 Ekim tadilat"
+> önceden girilebilir ve o gün kendiliğinden devreye girer.
+>
+> - **Arızalı (OOO)** envanterden düşer: satılabilir oda sayısı azalır.
+>   **Hizmet dışı (OOS)** envanterden düşmez: oda satılabilir sayılır ama o
+>   odaya misafir yerleştirilmez (ör. perde değişimi). İkisi de atamayı engeller.
+> - Blok kaldırma: başlamamış kayıt **iptal** edilir (silinir, iz kalır);
+>   sürmekte olan kayıt **bitirilir** (`endDate` = bugün; OOO bitince oda kirli
+>   işaretlenir, teknisyen sonrası temizlik gerekir). Geçmiş kayıt 409 `BLOCK_ENDED`.
+> - Kat hizmetinde tek geçiş kuralı: `INSPECTED` yalnızca `CLEAN`'den gelir
+>   (`housekeepingTransitionError` — contracts'ta, ekran da aynı kuralı kullanıyor).
+> - `room.status.changed` event'i artık `field: 'occupancy' | 'housekeeping'`
+>   taşıyor (`from`/`to` o alanın değerleri). `room.blocked` → `type`,
+>   `room.unblocked` → `mode: 'CANCELLED' | 'ENDED'`.
+> - Sistem kaynaklı değişiklik için tek giriş: `applySystemRoomState(hotelId, roomId,
+>   { occupancy?, housekeepingStatus? }, gerekçe)` — satırı kilitler, audit + event yazar.
+>
+> **"Bugün" artık otelin saat diliminden:** `lib/business-date.js` →
+> `getBusinessDate(hotelId)`. UTC kullanılınca İstanbul'da 00:00–03:00 arası
+> dünün tarihi dönüyordu. Tarih karşılaştıran her yeni kod bunu kullanmalı;
+> night audit (modül 18) geldiğinde tek değişecek yer burası.
+>
+> **Eşzamanlılık ve envanter garantileri:**
+> - `lib/locks.js` → `lockRoomTypes(tx, hotelId, ids)`, `lockRooms(...)`:
+>   `SELECT ... FOR UPDATE`. Sıra hep **önce oda tipleri, sonra odalar, id'ye göre**
+>   — farklı sırayla kilitleyen iki işlem birbirini kilitler (deadlock).
+> - Blok açma, oda silme, oda tipini değiştirme ve oda atama **yeni overbooking
+>   yaratamaz** (`WOULD_OVERBOOK`, 409): işlemden önceki ve sonraki envanter
+>   karşılaştırılır; zaten eksi olan bir günü daha da kötüleştirmek reddedilir.
+> - Veritabanı tetikleyicisi `hotelos_guard_room_block_overlap`: arızalı odaya
+>   rezervasyon yazılamaz (`Reservation_room_blocked`), rezervasyonu olan odaya
+>   blok açılamaz (`RoomBlock_has_reservations`) — uygulama kodu atlasa bile.
+> - `Reservation_no_double_booking` ve `Reservation_date_order` artık gün
+>   başına yuvarlanmış tarihlerle çalışıyor: geç çıkış saati (ör. 14:00) aynı
+>   gün 12:00'de girecek misafirle çakışma sanılmıyor.
+> - Oda ataması aday listesi sayfalı; başka tipe atama `kind` ile işaretli
+>   (`SAME` / `UPGRADE` / `LATERAL` / `DOWNGRADE`), kapasite aşımı `CAPACITY_EXCEEDED`.
+>
+> **Migration:** `20260916090000_room_status_split` — mevcut veriyi taşır
+> (CHECKED_IN rezervasyonu olan oda dolu; eski BLOCKED/MAINTENANCE kirli sayılır,
+> çünkü tarihsiz eski durumdan blok üretmek uydurma veri olurdu). Sunucuda
+> `npm run db:migrate` değil **`prisma migrate deploy`** ile uygulanır.
 
 ### 4. Rezervasyon yönetimi — Ali Kemal
 **Gün sonu:** Resepsiyon elle rezervasyon açıyor, düzenliyor, iptal ediyor; sistem müsaitlik ve fiyatı kendi hesaplıyor; grup rezervasyon ve bekleyen liste çalışıyor.
@@ -164,15 +247,90 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 - [ ] Ekran: Bekleyen liste (yer yoksa "listeye al", yer açılınca uyarı)
 - [ ] Aktör: reservation-worker paketi (`reservation.requested` → servis → `reservation.created` / `reservation.rejected`)
 
+> **⚠️ Modül 3'ten devir notu (16 Eylül 2026 — Ahmet):** oda envanteri tarafı
+> rezervasyonun güvenli açılabilmesi için hazır; senin tarafında dikkat edilecekler:
+>
+> 1. **Müsaitlik kontrolü ve kayıt aynı transaction'da, kilitle.** Yoksa son odaya
+>    aynı saniyede gelen iki rezervasyon ikisi de "1 yer var" okur ve oda iki kez satılır:
+>    ```js
+>    await writeWithEvents(async (tx, stage) => {
+>      await lockRoomTypes(tx, hotelId, [roomTypeId]);          // lib/locks.js
+>      const free = await checkAvailability(hotelId, stay, { client: tx });
+>      if (free < 1) throw new ConflictError('...', 'NO_AVAILABILITY');
+>      await tx.reservation.create(...);
+>    });
+>    ```
+>    `client: tx` şart: verilmezse grup rezervasyonunda ikinci oda ilkini görmez.
+>    Birden fazla tip kilitlenecekse tek çağrıda ver (`lockRoomTypes` id'ye göre sıralar).
+>    `lib/write.js` → `writeWithEvents` transaction'ı ve event outbox'ını hazır veriyor
+>    (`prisma.$transaction` yerine onu kullan); denetim izi aynı `tx` ile `lib/audit.js`.
+> 2. **Tarih düzenleme ve iptal geri alma** da envanter tüketir — aynı kilit + kontrol.
+> 3. **Veritabanı son savunma hattı:** odası atanmış rezervasyon arızalı odaya
+>    (`Reservation_room_blocked`) ya da dolu odaya (`Reservation_no_double_booking`)
+>    yazılırsa kayıt reddedilir; `rethrowPrismaError` bunu 409 `ROOM_NOT_FREE`'ye
+>    çevirir. Bu bir **garanti**, kullanıcı mesajı değil — önce servis kontrol etmeli.
+> 4. **Overbooking kuralı** için hazır parça: `rooms/rules.js` → `findNewOverbooking`
+>    (önceki/sonraki envanteri karşılaştırır). "Onaya gönder" dalı modül 11 ile bağlanır.
+> 5. **"Bugün" / geçmiş tarih** kontrolünde `new Date()` değil `getBusinessDate(hotelId)`.
+> 6. Oda seçimi elle yapılacaksa `GET /rooms/assignments/:reservationId/candidates`
+>    ve `PUT /rooms/assignments/:reservationId` hazır; kapasite, arıza, tip farkı
+>    (`kind`) ve overbooking kontrolleri içinde. Rezervasyon detay ekranın
+>    "oda değiştir" düğmesini modül 5'in `PUT /plan/reservations/:id/room` ucuna
+>    bağlayabilir — içerideki misafiri de doğru şekilde taşır.
+> 7. **Ekranın olduğu yer:** rezervasyon listesi/detayı henüz yok ama oda planı
+>    (`/oda-plani`) bir konaklamayı görmenin ve oda vermenin çalışan yolu. Modül 4
+>    gelince plan ekranındaki "boş hücreye tıkla → yeni rezervasyon" adımı da açılır.
+
 ### 5. Oda planı / takvim — arkadaşın
 **Gün sonu:** Resepsiyon, tüm odaları ve rezervasyonları tek takvimde görüyor; tıklayınca detay açılıyor.
-- [ ] Backend: takvim verisi API'si (tarih aralığı → odalar + o aralıktaki rezervasyonlar)
-- [ ] Ekran: Takvim ızgarası (satır oda, sütun gün; rezervasyon renkli blok; durum rengi)
-- [ ] Ekran: Haftalık / aylık görünüm, bugüne git, tarih seçici
-- [ ] Ekran: Bloğa tıkla → rezervasyon detay paneli
-- [ ] Ekran: Boş hücreye tıkla → o oda ve tarihle yeni rezervasyon formu
-- [ ] Frontend: `room.status.changed` ve `reservation.*` socket event'leriyle canlı güncelleme
-- [ ] (ikinci aşama) Sürükle-bırak ile oda / tarih değiştirme
+- [x] Backend: takvim verisi API'si (tarih aralığı → odalar + o aralıktaki rezervasyonlar)
+- [x] Ekran: Takvim ızgarası (satır oda, sütun gece; rezervasyon renkli bar; arıza kayıtları tarih aralığında; satır başında doluluk + kat hizmeti)
+- [x] Ekran: 7 / 14 / 30 günlük pencere, bugüne git, tarih seçici, kat–tip–durum filtreleri
+- [x] Ekran: Bara tıkla → rezervasyon detay çekmecesi (misafir, konaklama, folyo bakiyesi, işlemler)
+- [x] Ekran: Oda bekleyen rezervasyonlar şeridi (ızgarada görünmeyen talep) + otomatik ata
+- [x] Frontend: socket ile canlı güncelleme; bağlantı kopunca "canlı değil" rozeti ve periyodik tazeleme
+- [x] Sürükle-bırak ile **oda** değiştirme (içerideki misafir dahil, onaylı)
+- [ ] Ekran: Boş hücreye tıkla → o oda ve tarihle yeni rezervasyon formu — **modül 4 bekleniyor**
+- [ ] Sürükle-bırak ile **tarih** değiştirme — modül 4'ün `updateReservation`'ı gelince
+
+> **📌 Modül 5 tamamlandı (16 Eylül 2026 — Ahmet). Diğer modüller için:**
+>
+> **Okuma modeli:** `modules/plan` kendi tablosu olmayan bir okuma katmanı;
+> oda envanteri ile rezervasyonların kesişimini ekranın istediği şekle sokar.
+> - `GET /plan?from&days&page&pageSize&...filtreler` → `window`, `summary`,
+>   `items` (oda satırları + barlar), `meta`.
+> - `GET /plan/unassigned?from&days` → pencereye düşen, odası olmayan kayıtlar.
+> - `GET /plan/reservations/:id` → detay + `actions` (hangi işlem açık, değilse neden).
+> - `PUT /plan/reservations/:id/room` → oda ver / değiştir. `DELETE` aynı yol → atamayı kaldır.
+>
+> **Izgara semantiği:** bir sütun bir **gecedir**; 15-18 rezervasyonu 15, 16, 17
+> sütunlarını doldurur, çıkış günü boyanmaz. Pencereden taşan barlar kırpılır ve
+> `continuesBefore/After` ile işaretlenir. Yerleşim hesabı saf:
+> `modules/plan/rules.js` (`placeInWindow`, `buildRoomSegments`, `summarizeDays`).
+>
+> **Günlük özet sayfalanmaz:** ızgara 40 odalık sayfalar hâlinde gelir ama
+> başlıktaki giriş/çıkış/doluluk **otelin tamamından** hesaplanır. Doluluk
+> paydası satılabilir oda (toplam − arızalı); oda bekleyen rezervasyon paya dahil.
+>
+> **Oda değişikliği tek kapıdan:** `rooms/service.js` → `changeRoom(hotelId,
+> reservationId, roomId)`. Dönen `mode`:
+> - `ASSIGNED` (odası yoktu) / `MOVED` (misafir gelmemiş) → `assignRoom` yolu.
+> - `IN_HOUSE_MOVED` (misafir içeride) → rezervasyonun odası değişir **ve aynı
+>   transaction'da** eski oda boş + kirli, yeni oda dolu olur. Modül 6 ve 14
+>   bunun üstüne kurulmalı; oda durumunu ayrıca yazmayın.
+> - `UNCHANGED` → zaten o odada, yazma yapılmaz.
+> ⚠️ Rezervasyonun tek bir `roomId`'si olduğu için oda değişikliğinde hedef oda
+> **konaklamanın tamamında** boş olmalı (çifte rezervasyon kısıtı da böyle bakar).
+> Gece gece oda geçmişi (bir konaklamanın iki odada geçmesi) ayrı bir tablo ister —
+> night audit (modül 18) ve faturalama (modül 16) ile birlikte tasarlanmalı.
+>
+> **Canlı yayın altyapısı (modül 10 ve 12'yi de ilgilendirir):** `lib/realtime.js`
+> event bus'ı socket.io'ya köprülüyor; `hotel:<hotelId>` odasına `inventory.changed`
+> kanalından **yalnızca "şu değişti" haberi** düşüyor (veri değil — socket'te henüz
+> kimlik doğrulama yok). Panel tarafında `lib/useLiveInventory.js` bu haberi alıp
+> ilgili react-query anahtarlarını tazeliyor; olaylar 400 ms geciktirilerek
+> toplanıyor (tek işlem birden çok event yayınlar). Activity Feed aynı köprüye
+> ikinci bir kanal ekleyerek bağlanabilir.
 
 ### 6. Check-in / Check-out — Ali Kemal
 **Gün sonu:** Misafir gelince tek tıkla giriş, giderken tek tıkla çıkış yapılıyor; oda durumu ve folyo otomatik değişiyor.
@@ -182,7 +340,23 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 - [ ] Ekran: Bugün gelecekler listesi (rezervasyon, oda, durum) + "Check-in" butonu → kısa form (kimlik no, uyruk, plaka, kart/depozito)
 - [ ] Ekran: Bugün gidecekler listesi + "Check-out" butonu → bakiye gösterimi, bakiye varsa ödeme ekranına yönlendir
 - [ ] Ekran: Konaklayanlar listesi (şu an içeride kim var)
-- [ ] Aktör: room-worker'a `guest.checked_in` → OCCUPIED, `guest.checked_out` → DIRTY kuralları
+- [x] Aktör: room-worker'a `guest.checked_in` → dolu, `guest.checked_out` → boş + kirli kuralları — **modül 3'te yapıldı**
+
+> **Modül 3'ten not (16 Eylül 2026 — Ahmet):** oda tarafı hazır, sen yalnızca
+> event'i yayınla. `guest.checked_in` / `guest.checked_out` gövdesinde `hotelId`
+> ve `roomId` olmalı; room-worker `applySystemRoomState` ile doluluğu (ve çıkışta
+> kat hizmetini) değiştirir. **Oda durumunu servisinden doğrudan yazma** — doluluğun
+> tek yazıcısı bu akış; ekranda "boş/dolu" değiştiren bir düğme kasıtlı olarak yok.
+> Aktör kapalıysa iş "Oda dolu olarak işaretlenecek" manuel görevine düşer.
+> Check-in'de ek kontrol önerisi: oda **arızalı** (`condition !== 'IN_SERVICE'`)
+> ya da **kirli** ise uyar (kirli odaya giriş otelin tercihi; engellemek yerine onay iste).
+>
+> **Ek (16 Eylül 2026 — modül 5):** "misafir odada, odasını değiştirelim" işi
+> hazır: `changeRoom(hotelId, reservationId, roomId)` rezervasyonun odasını
+> değiştirir ve aynı transaction'da eski odayı boş + kirli, yenisini dolu yapar
+> (oda planı ekranında sürükle-bırak ile kullanılıyor). Check-in/out akışında
+> oda durumunu elle yazmayın; giriş-çıkış için room-worker, oda değişikliği için
+> bu fonksiyon tek yazıcıdır.
 
 ### 7. Misafir mesajları / istek takibi — arkadaşın
 **Gün sonu:** Personel, misafirlerle yapılan tüm chat/WhatsApp konuşmalarını görüyor, gerekirse elle cevaplıyor; misafir istekleri görev olarak takip ediliyor.
@@ -299,7 +473,8 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 13. Günlük durum ekranı — arkadaşın
 **Gün sonu:** Müdür sabah tek ekrana bakıp günü anlıyor: doluluk, gelecek/gidecek, gelir, bekleyen işler.
-- [ ] Backend: `GET /dashboard/today` (doluluk %, gelecek/gidecek sayısı, dolu/boş/kirli oda, bugünkü gelir, ADR)
+- [ ] Backend: `GET /dashboard/today` (doluluk %, gelecek/gidecek sayısı, dolu/boş oda, kirli oda, arızalı oda, bugünkü gelir, ADR)
+      — doluluk % paydası **satılabilir oda** (toplam − arızalı); hizmet dışı paydadan düşmez
 - [ ] Backend: `GET /dashboard/week` (7 günlük doluluk serisi)
 - [ ] Ekran: KPI kartları (6 kart)
 - [ ] Ekran: Haftalık doluluk çizgi grafiği
@@ -317,9 +492,26 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 - [ ] Ekran: Günlük temizlik listesi (oda, tip, öncelik, atanan, durum)
 - [ ] Ekran: Toplu atama (kat görevlisi seç, odaları işaretle)
 - [ ] Ekran: Mobil görünüm (büyük butonlar: Başladım / Bitti / Sorun var)
-- [ ] Ekran: Kat şefi kontrol ekranı (temizlenen odayı onayla → AVAILABLE)
+- [ ] Ekran: Kat şefi kontrol ekranı (temizlenen odayı onayla → CLEAN → INSPECTED)
 - [ ] Ekran: Oda durum haritası (kat kat, renkli kutular)
-- [ ] Aktör: housekeeping-worker paketi (`guest.checked_out` → CHECKOUT_CLEAN görevi; `housekeeping.task.completed` → `room.status.changed` CLEANING→AVAILABLE)
+- [ ] Aktör: housekeeping-worker paketi (`guest.checked_out` → CHECKOUT_CLEAN görevi; `housekeeping.task.completed` → kat hizmeti CLEANING→CLEAN)
+
+> **Modül 3'ten not (16 Eylül 2026 — Ahmet):** "AVAILABLE" diye bir durum artık yok —
+> oda durumu üç bağımsız parça (bkz. modül 3 notu). Senin alanın yalnızca **kat hizmeti**:
+>
+> - Değerler: `DIRTY` → `CLEANING` → `CLEAN` → `INSPECTED`. Tek kural: `INSPECTED`
+>   yalnızca `CLEAN`'den gelir (`housekeepingTransitionError`, contracts).
+>   Görevli "Başladım" → CLEANING, "Bitti" → CLEAN, kat şefi onayı → INSPECTED.
+> - Personel işlemi: `PATCH /rooms/:id/housekeeping` (`status`, `expectedUpdatedAt`) —
+>   sürüm çakışmasında 409 `STALE_WRITE`. Aktör/zamanlayıcı işlemi:
+>   `applySystemRoomState(hotelId, roomId, { housekeepingStatus }, gerekçe)`.
+> - Her değişiklik `room.status.changed` yayınlar (`field: 'housekeeping'`); kat
+>   haritası buna abone olup canlı güncellenebilir.
+> - Checkout sonrası oda **zaten kirli** geliyor (room-worker); görevi o event'ten üret,
+>   durumu ikinci kez yazma. Arızalı oda (OOO) bitince de oda kirliye düşer → görev üret.
+> - Oda ataması, **bugün girecek** misafir için temiz/kontrol edilmiş odayı öne alıyor;
+>   yani kat hizmetinin zamanında işaretlenmesi doğrudan atama kalitesini etkiler.
+> - Sorun var → teknik servis (modül 20): arıza kaydını `blockRoom` açar, bu modül açmaz.
 
 ### 15. Folyo yönetimi — arkadaşın
 **Gün sonu:** Her konaklamanın hesabı tek ekranda: oda ücreti, restoran, minibar kalemleri; bölme, birleştirme, transfer yapılabiliyor.
@@ -362,7 +554,18 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 - [ ] Ekran: Kapanış geçmişi
 - [ ] Aktör: billing-worker'a `night.audit.started` kuralı
 
-### 19. Çamaşırhane & minibar — arkadaşın
+> **Modül 3'ten not (16 Eylül 2026 — Ahmet):**
+>
+> - **İş günü:** şu an `lib/business-date.js` → `getBusinessDate(hotelId)` otelin
+>   saat dilimindeki takvim gününü döndürüyor. Night audit gelince "gün, audit
+>   kapanana kadar değişmez" kuralı **yalnızca bu fonksiyonun içine** yazılır
+>   (ör. son kapanan günün ertesi). Oda listesi, arıza kayıtları, atama, geçmiş
+>   tarih doğrulaması hepsi zaten bu fonksiyonu kullanıyor — başka yere dokunma.
+> - **Konaklayan odalar:** gün kapanışında dolu (`occupancy = OCCUPIED`) odaların
+>   kat hizmeti `DIRTY` yapılır (stayover temizliği; modül 14'ün STAYOVER görevleri
+>   de buradan beslenir) → `applySystemRoomState(..., { housekeepingStatus: 'DIRTY' }, 'Gün sonu')`.
+> - **Oda ücreti basarken** paydayı arızalı odalardan ayır: arızalı oda satılabilir
+>   envanterde yok, hizmet dışı oda var (DailyStats doluluk hesabı için).
 **Gün sonu:** Kat görevlisi odadan tüketilen minibar ürünlerini giriyor, çamaşır siparişi alınıyor; ikisi de folyoya otomatik yansıyor.
 - [ ] Backend: MinibarItem, MinibarConsumption, LaundryOrder tabloları + API
 - [ ] Backend: tüketim kaydı → `minibar.consumed` event → folyo kalemi
@@ -374,11 +577,28 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 ### 20. Teknik servis / arıza-bakım — Ali Kemal
 **Gün sonu:** "204 klima bozuk" kaydı açılıyor, teknisyene gidiyor, oda gerekirse bakıma alınıyor, çözülünce kapanıyor.
 - [ ] Backend: MaintenanceTicket, MaintenancePlan tabloları + API
-- [ ] Backend: arıza "oda kullanılamaz" işaretliyse `room.status.changed` → MAINTENANCE
+- [ ] Backend: arıza "oda kullanılamaz" işaretliyse odaya arıza kaydı (`RoomBlock`) aç — `blockRoom`, bitince `removeBlock`
 - [ ] Ekran: Arıza listesi (oda, başlık, öncelik, durum, atanan, süre)
 - [ ] Ekran: Yeni arıza formu (oda/alan, açıklama, fotoğraf, öncelik, odayı kapat mı)
 - [ ] Ekran: Teknisyen görünümü (bana atananlar, başla / bitti)
 - [ ] Ekran: Periyodik bakım planı (aylık kontrol listeleri, otomatik görev üretimi)
+
+> **Modül 3'ten not (16 Eylül 2026 — Ahmet):** "MAINTENANCE" durumu kaldırıldı;
+> arıza artık **tarihli kayıt** (`RoomBlock`). Odalar ekranında "Arıza kayıtları"
+> penceresi (aç / listele / iptal et / bitir) çalışıyor — senin ekranın bileti
+> yönetir, odayı kapatma işini aynı servise devreder:
+>
+> - "Odayı kapat" işaretli bilet → `blockRoom(hotelId, roomId, { type, startDate, endDate, reason })`.
+>   `type`: **`OUT_OF_ORDER` (Arızalı)** oda satılamaz, envanterden düşer (klima,
+>   su basması); **`OUT_OF_SERVICE` (Hizmet dışı)** kısa/kozmetik iş, envanterde
+>   kalır ama misafir yerleştirilmez. Bilete `roomBlockId` sakla.
+> - Bilet çözülünce → `removeBlock(hotelId, roomBlockId)`: süren kayıt bugün biter
+>   ve arızalı oda **kirliye** düşer (modül 14 temizlik görevi üretir); başlamamış
+>   kayıt iptal olur. Yanıttaki `mode` hangisi olduğunu söyler.
+> - Odada o tarihlerde rezervasyon varsa 409 `HAS_RESERVATIONS` (örnek rezervasyonlarla);
+>   arızalı kayıt overbooking yaratacaksa 409 `WOULD_OVERBOOK`. Acil arızada ekranın
+>   "misafiri başka odaya taşı" adımını göstermesi gerekir (atama API'si hazır).
+> - Geçmiş tarihli kayıt açılamaz (iş günü: `getBusinessDate`); çakışan iki kayıt 409 `BLOCK_OVERLAP`.
 
 ### 21. Kayıp eşya — arkadaşın
 **Gün sonu:** Bulunan eşyalar fotoğraflı kayıt altında; misafirle eşleştirilip teslim edildiği izleniyor.

@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { api } from '../lib/api.js';
+import { useHotelSettings } from '../lib/useHotel.js';
 import { useAuthStore } from '../store/auth.js';
 import { useUiStore } from '../store/ui.js';
 import { ROLE_LABELS } from './navigation.js';
@@ -11,13 +10,6 @@ import { useMediaQuery } from './useMediaQuery.js';
 
 /** Tailwind'in `xl` kırılımı: bunun üstünde yan menü sabit, altında çekmece. */
 const DESKTOP_QUERY = '(min-width: 80rem)';
-
-/**
- * Otel adı kabukta her sayfada görünür ama nadiren değişir; her gezinmede
- * yeniden istenmesin. Ayarlar'dan kaydedilince aynı önbellek anahtarı
- * güncellendiği için menüdeki ad da hemen değişir.
- */
-const HOTEL_STALE_MS = 5 * 60 * 1000;
 
 /**
  * Panelin kabuğu — Spark Admin düzeni: koyu yan menü, yapışkan üst bar, açık
@@ -39,11 +31,7 @@ export function AppLayout() {
   const menuButtonRef = useRef(null);
   const drawerFirstLinkRef = useRef(null);
 
-  const hotelQuery = useQuery({
-    queryKey: ['settings', 'hotel'],
-    queryFn: () => api('/settings/hotel'),
-    staleTime: HOTEL_STALE_MS,
-  });
+  const hotelQuery = useHotelSettings();
 
   const isCollapsed = isDesktop && isSidebarCollapsed;
   const isDrawerOpen = !isDesktop && isMobileNavOpen;

@@ -68,24 +68,42 @@ export const EVENT_CATALOG = Object.freeze({
     roomId: z.string().uuid(),
     roomNumber: z.string(),
   }),
+  /**
+   * Odanın iki bağımsız durumundan biri değişti.
+   *
+   * `field` hangisi olduğunu söyler: `occupancy` (Boş/Dolu — yalnızca giriş ve
+   * çıkış değiştirir) ya da `housekeeping` (Kirli/Temizleniyor/Temiz/Kontrol
+   * edildi). Çıkışta ikisi birden değiştiği için iki ayrı event yayınlanır.
+   */
   'room.status.changed': hotelScoped.extend({
     roomId: z.string().uuid(),
     roomNumber: z.string(),
+    field: z.enum(['occupancy', 'housekeeping']),
     from: z.string(),
     to: z.string(),
   }),
+  /**
+   * Oda tarih aralığıyla arızalı ya da hizmet dışı işaretlendi.
+   * `OUT_OF_ORDER` envanterden düşer; `OUT_OF_SERVICE` satışta kalır ama atanmaz.
+   */
   'room.blocked': hotelScoped.extend({
     roomId: z.string().uuid(),
     roomNumber: z.string(),
     blockId: z.string().uuid(),
+    type: z.enum(['OUT_OF_ORDER', 'OUT_OF_SERVICE']),
     startDate: isoDate,
     endDate: isoDate.nullable(),
     reason: z.string(),
   }),
+  /**
+   * Blok kaldırıldı. `CANCELLED`: henüz başlamamıştı, kayıt silindi.
+   * `ENDED`: sürüyordu, bitişi bugüne çekildi (geçmiş günler değişmez).
+   */
   'room.unblocked': hotelScoped.extend({
     roomId: z.string().uuid(),
     roomNumber: z.string(),
     blockId: z.string().uuid(),
+    mode: z.enum(['CANCELLED', 'ENDED']),
   }),
 
   /* ── Modül 4 ve 6'nın yayınlayacağı event'ler ──
@@ -148,8 +166,10 @@ export const SETTINGS_CHANGED_EVENTS = Object.freeze(
 );
 
 /**
- * Müsaitliği etkileyen her şey. Oda eklenmesi, atanması, bloklanması ve
- * misafir giriş-çıkışı envanteri değiştirir; müsaitlik cache'i bunları dinler.
+ * Müsaitliği etkileyen her şey: oda eklenmesi, atanması, arıza kaydı ve
+ * misafir giriş-çıkışı. Canlı güncellenen ekranlar (modül 5 oda planı, socket
+ * yayını) bu listeyi dinleyerek yeniden hesaplar. Müsaitliğin kendisi
+ * cache'lenmez — bkz. `hotel/backend/src/modules/rooms/service.js`.
  */
 export const INVENTORY_CHANGED_EVENTS = Object.freeze([
   'inventory.room.created',

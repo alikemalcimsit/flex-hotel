@@ -1,58 +1,80 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { MANUAL_ROOM_STATUSES, ROOM_STATUS_LABELS, blockRoomSchema, roomInputSchema } from '@hotelos/hotel-contracts';
+import {
+  HOUSEKEEPING_STATUSES,
+  HOUSEKEEPING_STATUS_LABELS,
+  housekeepingTransitionError,
+  ROOM_CONDITIONS,
+  ROOM_CONDITION_LABELS,
+  ROOM_OCCUPANCIES,
+  ROOM_OCCUPANCY_LABELS,
+  roomInputSchema,
+} from '@hotelos/hotel-contracts';
 import { Alert, Button, Input, Select, Textarea } from '@hotelos/ui';
+import { ConfirmDialog } from '../../components/ConfirmDialog.jsx';
 import { DataTable } from '../../components/DataTable.jsx';
 import { Modal } from '../../components/Modal.jsx';
-import { ConfirmDialog } from '../../components/ConfirmDialog.jsx';
-import { RoomStatusBadge } from '../../components/RoomStatusBadge.jsx';
+import { BlockTypeBadge, HousekeepingBadge, OccupancyBadge } from '../../components/RoomStateBadges.jsx';
 import { Toolbar } from '../../components/Toolbar.jsx';
-import { apiPatch, apiPost } from '../../lib/api.js';
+import { apiPatch } from '../../lib/api.js';
+import { formatDate } from '../../lib/format.js';
+import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 import { useCrudResource } from '../../lib/useCrudResource.js';
 import { validateWith } from '../../lib/validate.js';
 import { toastError, toastSuccess } from '../../store/toast.js';
+import { RoomBlocksModal } from './RoomBlocksModal.jsx';
 import { useRoomTypes } from './useRoomTypes.js';
 
 const EMPTY_ROOM = { number: '', floor: '1', roomTypeId: '', notes: '' };
 
-const STATUS_FILTER_OPTIONS = [
-  { value: '', label: 'Tüm durumlar' },
-  ...Object.entries(ROOM_STATUS_LABELS).map(([value, label]) => ({ value, label })),
+/** @param {string} allLabel @param {readonly string[]} values @param {Record<string, string>} labels */
+const filterOptions = (allLabel, values, labels) => [
+  { value: '', label: allLabel },
+  ...values.map((value) => ({ value, label: labels[value] })),
 ];
 
-const MANUAL_STATUS_OPTIONS = MANUAL_ROOM_STATUSES.map((value) => ({
-  value,
-  label: ROOM_STATUS_LABELS[value],
-}));
+const OCCUPANCY_FILTER_OPTIONS = filterOptions('Tüm odalar', ROOM_OCCUPANCIES, ROOM_OCCUPANCY_LABELS);
+const HOUSEKEEPING_FILTER_OPTIONS = filterOptions('Tüm durumlar', HOUSEKEEPING_STATUSES, HOUSEKEEPING_STATUS_LABELS);
+const CONDITION_FILTER_OPTIONS = filterOptions('Tümü', ROOM_CONDITIONS, ROOM_CONDITION_LABELS);
 
+const EMPTY_FILTERS = Object.freeze({ roomTypeId: '', occupancy: '', housekeepingStatus: '', condition: '' });
+
+/**
+ * Oda listesi.
+ *
+ * Oda durumu üç ayrı sütun: doluluk (yalnızca giriş-çıkış değiştirir, burada
+ * salt okunur), kat hizmeti (satırdan değiştirilir) ve bugünkü arıza kaydı.
+ * Eskiden bunlar tek bir "durum" listesiydi; misafir içerideyken oda elle
+ * "Boş" yapılabiliyordu.
+ */
 export function RoomListTab() {
   const queryClient = useQueryClient();
+  const can = useCan();
+  const canManage = can(PERMISSIONS.ROOMS_MANAGE);
+  const canOperate = can(PERMISSIONS.ROOMS_OPERATE);
   const { options: roomTypeOptions, roomTypes } = useRoomTypes();
 
-  const [filters, setFilters] = useState({ roomTypeId: '', status: '' });
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
-  const [blocking, setBlocking] = useState(null);
+  const [blocksRoom, setBlocksRoom] = useState(null);
 
   const resource = useCrudResource({
     basePath: '/rooms',
     queryKey: ['rooms', 'list'],
     labels: { singular: 'Oda' },
-    extraParams: {
-      ...(filters.roomTypeId ? { roomTypeId: filters.roomTypeId } : {}),
-      ...(filters.status ? { status: filters.status } : {}),
-    },
+    extraParams: Object.fromEntries(Object.entries(filters).filter(([, value]) => value)),
   });
 
   const refreshRooms = () => {
     queryClient.invalidateQueries({ queryKey: ['rooms'] });
   };
 
-  const statusMutation = useMutation({
-    mutationFn: ({ id, status, expectedUpdatedAt }) =>
-      apiPatch(`/rooms/${id}/status`, { status, expectedUpdatedAt }),
-    onSuccess: () => {
-      toastSuccess('Oda durumu güncellendi');
+  const housekeepingMutation = useMutation({
+    mutationFn: ({ room, status }) =>
+      apiPatch(`/rooms/${room.id}/housekeeping`, { status, expectedUpdatedAt: room.updatedAt }),
+    onSuccess: (updated) => {
+      toastSuccess(`${updated.number} numaralı oda: ${HOUSEKEEPING_STATUS_LABELS[updated.housekeepingStatus]}`);
       refreshRooms();
     },
     onError: (error) => {
@@ -61,17 +83,13 @@ export function RoomListTab() {
     },
   });
 
-  const blockMutation = useMutation({
-    mutationFn: ({ roomId, values }) => apiPost(`/rooms/${roomId}/blocks`, values),
-    onSuccess: () => {
-      toastSuccess('Oda bloklandı');
-      setBlocking(null);
-      refreshRooms();
-    },
-    onError: (error) => toastError(error.message),
-  });
+  const setFilter = (key) => (event) => {
+    const { value } = event.target;
+    setFilters((current) => ({ ...current, [key]: value }));
+    resource.setPage(1);
+  };
 
-  const hasFilter = Boolean(resource.search || filters.roomTypeId || filters.status);
+  const hasFilter = Boolean(resource.search || Object.values(filters).some(Boolean));
 
   const columns = [
     { key: 'number', header: 'Oda', className: 'font-bold' },
@@ -90,32 +108,28 @@ export function RoomListTab() {
         ),
     },
     {
-      key: 'status',
-      header: 'Durum',
-      render: (row) => <RoomStatusBadge status={row.status} />,
+      key: 'occupancy',
+      header: 'Doluluk',
+      render: (row) => <OccupancyBadge occupancy={row.occupancy} />,
     },
     {
-      key: 'quickStatus',
-      header: 'Durum değiştir',
-      render: (row) => (
-        <Select
-          name={`status-${row.id}`}
-          value=""
-          aria-label={`${row.number} numaralı odanın durumunu değiştir`}
-          onChange={(event) => {
-            if (!event.target.value) return;
-            statusMutation.mutate({
-              id: row.id,
-              status: event.target.value,
-              expectedUpdatedAt: row.updatedAt,
-            });
-          }}
-          options={[{ value: '', label: 'Seç…' }, ...MANUAL_STATUS_OPTIONS]}
-          disabled={statusMutation.isPending}
-          compact
-          className="w-36"
-        />
-      ),
+      key: 'housekeeping',
+      header: 'Kat hizmeti',
+      render: (row) =>
+        canOperate ? (
+          <HousekeepingSelect
+            room={row}
+            disabled={housekeepingMutation.isPending}
+            onChange={(status) => housekeepingMutation.mutate({ room: row, status })}
+          />
+        ) : (
+          <HousekeepingBadge status={row.housekeepingStatus} />
+        ),
+    },
+    {
+      key: 'condition',
+      header: 'Arıza',
+      render: (row) => <ConditionCell room={row} />,
     },
   ];
 
@@ -123,9 +137,11 @@ export function RoomListTab() {
     <div className="flex flex-col gap-5">
       <Toolbar
         actions={
-          <Button icon="plus" onClick={() => setEditing(EMPTY_ROOM)} disabled={roomTypes.length === 0}>
-            Yeni oda
-          </Button>
+          canManage && (
+            <Button icon="plus" onClick={() => setEditing(EMPTY_ROOM)} disabled={roomTypes.length === 0}>
+              Yeni oda
+            </Button>
+          )
         }
       >
         <Input
@@ -135,33 +151,43 @@ export function RoomListTab() {
           placeholder="Oda numarası…"
           value={resource.search}
           onChange={(event) => resource.setSearch(event.target.value)}
-          className="w-full sm:w-48"
+          className="w-full sm:w-40"
         />
         <Select
           name="roomTypeFilter"
           label="Oda tipi"
           value={filters.roomTypeId}
-          onChange={(event) => {
-            setFilters((current) => ({ ...current, roomTypeId: event.target.value }));
-            resource.setPage(1);
-          }}
+          onChange={setFilter('roomTypeId')}
           options={[{ value: '', label: 'Tüm tipler' }, ...roomTypeOptions]}
-          className="w-full sm:w-56"
+          className="w-full sm:w-48"
         />
         <Select
-          name="statusFilter"
-          label="Durum"
-          value={filters.status}
-          onChange={(event) => {
-            setFilters((current) => ({ ...current, status: event.target.value }));
-            resource.setPage(1);
-          }}
-          options={STATUS_FILTER_OPTIONS}
+          name="occupancyFilter"
+          label="Doluluk"
+          value={filters.occupancy}
+          onChange={setFilter('occupancy')}
+          options={OCCUPANCY_FILTER_OPTIONS}
+          className="w-full sm:w-36"
+        />
+        <Select
+          name="housekeepingFilter"
+          label="Kat hizmeti"
+          value={filters.housekeepingStatus}
+          onChange={setFilter('housekeepingStatus')}
+          options={HOUSEKEEPING_FILTER_OPTIONS}
           className="w-full sm:w-44"
+        />
+        <Select
+          name="conditionFilter"
+          label="Arıza"
+          value={filters.condition}
+          onChange={setFilter('condition')}
+          options={CONDITION_FILTER_OPTIONS}
+          className="w-full sm:w-36"
         />
       </Toolbar>
 
-      {roomTypes.length === 0 && (
+      {roomTypes.length === 0 && canManage && (
         <Alert tone="warning" title="Henüz oda tipi tanımlanmamış">
           Oda ekleyebilmek için önce Ayarlar → Oda tipleri bölümünden en az bir tip tanımlayın.
         </Alert>
@@ -180,15 +206,19 @@ export function RoomListTab() {
         emptyHint={hasFilter ? 'Filtreleri değiştirip tekrar deneyin.' : 'Rezervasyon alabilmek için odaları tanımlayın.'}
         rowActions={(row) => (
           <div className="flex justify-end gap-2">
-            <Button variant="outline" size="sm" icon="lock" onClick={() => setBlocking(row)}>
-              Blokla
+            <Button variant="outline" size="sm" icon="alertTriangle" onClick={() => setBlocksRoom(row)}>
+              Arıza kayıtları{row.openBlockCount > 0 ? ` (${row.openBlockCount})` : ''}
             </Button>
-            <Button variant="outline" size="sm" icon="pencil" onClick={() => setEditing(row)}>
-              Düzenle
-            </Button>
-            <Button variant="dangerSoft" size="sm" icon="trash" onClick={() => setDeleting(row)}>
-              Sil
-            </Button>
+            {canManage && (
+              <>
+                <Button variant="outline" size="sm" icon="pencil" onClick={() => setEditing(row)}>
+                  Düzenle
+                </Button>
+                <Button variant="dangerSoft" size="sm" icon="trash" onClick={() => setDeleting(row)}>
+                  Sil
+                </Button>
+              </>
+            )}
           </div>
         )}
       />
@@ -215,24 +245,14 @@ export function RoomListTab() {
         />
       )}
 
-      {blocking && (
-        <BlockRoomModal
-          key={blocking.id}
-          room={blocking}
-          isPending={blockMutation.isPending}
-          error={blockMutation.error}
-          onClose={() => {
-            setBlocking(null);
-            blockMutation.reset();
-          }}
-          onSubmit={(values) => blockMutation.mutate({ roomId: blocking.id, values })}
-        />
+      {blocksRoom && (
+        <RoomBlocksModal key={blocksRoom.id} room={blocksRoom} canManage={canManage} onClose={() => setBlocksRoom(null)} />
       )}
 
       <ConfirmDialog
         open={Boolean(deleting)}
         title="Odayı sil"
-        message={`"${deleting?.number}" numaralı oda silinecek. Aktif rezervasyonu veya bloğu varsa işlem reddedilir.`}
+        message={`"${deleting?.number}" numaralı oda silinecek. Aktif rezervasyonu varsa ya da silinmesi gelecek rezervasyonları karşılayamayacak hâle getirecekse işlem reddedilir. Açık arıza kayıtları odayla birlikte kapanır.`}
         isPending={resource.deleteMutation.isPending}
         error={resource.deleteMutation.error}
         onClose={() => {
@@ -250,6 +270,57 @@ export function RoomListTab() {
       />
     </div>
   );
+}
+
+/**
+ * Satır içi kat hizmeti seçici. Geçilemeyen durum (ör. kirli odaya "Kontrol
+ * edildi") listede görünür ama seçilemez — kural sunucuyla aynı fonksiyondan.
+ *
+ * @param {{ room: { number: string, housekeepingStatus: string }, disabled: boolean, onChange: (status: string) => void }} props
+ */
+function HousekeepingSelect({ room, disabled, onChange }) {
+  const options = HOUSEKEEPING_STATUSES.map((status) => {
+    const blocked = housekeepingTransitionError(room.housekeepingStatus, status) !== null;
+    return {
+      value: status,
+      label: blocked ? `${HOUSEKEEPING_STATUS_LABELS[status]} (önce temizlenmeli)` : HOUSEKEEPING_STATUS_LABELS[status],
+      disabled: blocked,
+    };
+  });
+
+  return (
+    <Select
+      name={`housekeeping-${room.number}`}
+      value={room.housekeepingStatus}
+      aria-label={`${room.number} numaralı odanın kat hizmeti durumu`}
+      onChange={(event) => onChange(event.target.value)}
+      options={options}
+      disabled={disabled}
+      compact
+      className="w-44"
+    />
+  );
+}
+
+/**
+ * Bugünkü arıza kaydı; yoksa yaklaşan kayıt varsa onu hatırlatır.
+ * @param {{ room: { currentBlock: { type: string, endDate: string | null } | null, openBlockCount: number } }} props
+ */
+function ConditionCell({ room }) {
+  if (room.currentBlock) {
+    return (
+      <span className="flex flex-col items-start gap-1">
+        <BlockTypeBadge type={room.currentBlock.type} />
+        <span className="whitespace-nowrap text-xs text-ink-muted">
+          {room.currentBlock.endDate ? `${formatDate(room.currentBlock.endDate)} tarihinde biter` : 'Süresiz'}
+        </span>
+      </span>
+    );
+  }
+  if (room.openBlockCount > 0) {
+    return <span className="whitespace-nowrap text-xs font-semibold text-ink-muted">Yaklaşan kayıt var</span>;
+  }
+  return <span className="text-ink-muted">—</span>;
 }
 
 function RoomFormModal({ initial, roomTypeOptions, onSubmit, onClose, isPending }) {
@@ -315,101 +386,12 @@ function RoomFormModal({ initial, roomTypeOptions, onSubmit, onClose, isPending 
           className="sm:col-span-2"
         />
       </form>
-    </Modal>
-  );
-}
-
-function BlockRoomModal({ room, onSubmit, onClose, isPending, error }) {
-  const today = new Date().toISOString().slice(0, 10);
-  const [form, setForm] = useState({ startDate: today, endDate: '', reason: '' });
-  const [errors, setErrors] = useState({});
-
-  const setField = (key) => (event) => {
-    const { value } = event.target;
-    setForm((current) => ({ ...current, [key]: value }));
-    setErrors((current) => ({ ...current, [key]: undefined }));
-  };
-
-  function handleSubmit(event) {
-    event.preventDefault();
-    const result = validateWith(blockRoomSchema, {
-      startDate: form.startDate,
-      endDate: form.endDate || null,
-      reason: form.reason,
-    });
-    if (!result.ok) {
-      setErrors(result.errors);
-      return;
-    }
-    setErrors({});
-    onSubmit(result.data);
-  }
-
-  const conflicts = error?.details?.reservations;
-
-  return (
-    <Modal
-      open
-      title={`${room.number} numaralı odayı blokla`}
-      onClose={onClose}
-      footer={
-        <>
-          <Button variant="outline" onClick={onClose} disabled={isPending}>
-            Vazgeç
-          </Button>
-          <Button type="submit" form="block-form" icon="lock" disabled={isPending}>
-            {isPending ? 'Bloklanıyor…' : 'Blokla'}
-          </Button>
-        </>
-      }
-    >
-      <form id="block-form" onSubmit={handleSubmit} className="grid gap-5 sm:grid-cols-2">
-        <Input
-          label="Başlangıç"
-          name="startDate"
-          type="date"
-          value={form.startDate}
-          onChange={setField('startDate')}
-          error={errors.startDate}
-        />
-        <Input
-          label="Bitiş (boş = süresiz)"
-          name="endDate"
-          type="date"
-          value={form.endDate}
-          onChange={setField('endDate')}
-          error={errors.endDate}
-        />
-        <Input
-          label="Sebep"
-          name="reason"
-          value={form.reason}
-          onChange={setField('reason')}
-          error={errors.reason}
-          placeholder="Tadilat, arıza, VIP için ayrıldı…"
-          className="sm:col-span-2"
-        />
-      </form>
-
-      {error && (
-        <Alert tone="danger" className="mt-5">
-          <p>{error.message}</p>
-          {conflicts && (
-            <ul className="mt-2 list-inside list-disc text-xs">
-              {conflicts.map((item) => (
-                <li key={item.confirmationCode}>
-                  {item.confirmationCode}: {item.checkIn} → {item.checkOut}
-                </li>
-              ))}
-            </ul>
-          )}
+      {initial.id && (
+        <Alert tone="info" className="mt-5">
+          Oda tipini değiştirmek eski tipin envanterini bir azaltır; gelecekteki rezervasyonlar karşılanamayacaksa sistem
+          değişikliği reddeder.
         </Alert>
       )}
-
-      <p className="mt-5 text-xs leading-relaxed text-ink-muted">
-        Bloklu oda, blok tarihleri boyunca müsaitlik hesabından düşer. Bitiş boş bırakılırsa blok elle kaldırılana
-        kadar sürer.
-      </p>
     </Modal>
   );
 }

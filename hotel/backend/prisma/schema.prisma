@@ -18,13 +18,25 @@ enum UserRole {
   FNB
 }
 
-enum RoomStatus {
-  AVAILABLE
+/// Doluluk — yalnızca giriş/çıkış akışı değiştirir, elle atanmaz.
+enum RoomOccupancy {
+  VACANT
   OCCUPIED
+}
+
+/// Kat hizmeti durumu — dolulukten bağımsız (dolu oda da kirli olabilir).
+enum HousekeepingStatus {
   DIRTY
   CLEANING
-  BLOCKED
-  MAINTENANCE
+  CLEAN
+  INSPECTED
+}
+
+/// Tarihli arıza kaydının etkisi.
+/// OUT_OF_ORDER: envanterden düşer (satılamaz). OUT_OF_SERVICE: satışta kalır ama atanmaz.
+enum RoomBlockType {
+  OUT_OF_ORDER
+  OUT_OF_SERVICE
 }
 
 enum ReservationStatus {
@@ -438,17 +450,22 @@ model RoomType {
   @@index([hotelId, deletedAt])
 }
 
+/// Oda durumu üç bağımsız bilgidir: `occupancy` (boş/dolu), `housekeepingStatus`
+/// (kirli/temiz...) ve tarihli arıza kaydı (`RoomBlock`). "Arızalı" bir kolon
+/// değildir; o günü kapsayan bloktan okunur — böylece ileri tarihli arıza kaydı
+/// günü gelince zamanlayıcı gerekmeden etkin olur ve bitince kendiliğinden kalkar.
 model Room {
-  id         String     @id @default(uuid())
-  hotelId    String
-  number     String
-  floor      Int        @default(1)
-  roomTypeId String
-  status     RoomStatus @default(AVAILABLE)
-  notes      String?
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
-  deletedAt  DateTime?
+  id                 String             @id @default(uuid())
+  hotelId            String
+  number             String
+  floor              Int                @default(1)
+  roomTypeId         String
+  occupancy          RoomOccupancy      @default(VACANT)
+  housekeepingStatus HousekeepingStatus @default(CLEAN)
+  notes              String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  deletedAt          DateTime?
 
   hotel              Hotel               @relation(fields: [hotelId], references: [id])
   roomType           RoomType            @relation(fields: [roomTypeId], references: [id])
@@ -462,25 +479,30 @@ model Room {
   // silinen 101 numaralı oda sonradan tekrar açılabilmeli.
   @@index([hotelId, number])
   @@index([hotelId, deletedAt])
+  // Oda listesi ve kat hizmetleri ekranının filtreleri ("3. kattaki kirli odalar").
+  @@index([hotelId, housekeepingStatus])
+  @@index([hotelId, occupancy])
 }
 
-/// Odanın belirli tarihlerde satılamaz olması (tadilat, arıza, VIP için ayırma).
+/// Tarihli arıza kaydı: odanın belirli günlerde arızalı ya da hizmet dışı olması.
 ///
-/// `Room.status` "şu an" durumudur (dolu / kirli / temizlikte); müsaitlik hesabı
-/// gelecekle ilgilendiği için ona bakamaz. Bu tablo tarih bilir: "101 numara
-/// 15-20 Ekim'de kapalı" denebilir, o aralık dışında oda satılabilir kalır.
+/// Tarihler UTC gün başıdır (veritabanı kısıtıyla zorunlu). `endDate` boşsa blok
+/// süresizdir. Geçmiş kayıt değiştirilmez: süren blok "bitirilir" (bitişi bugüne
+/// çekilir), başlamamış blok iptal edilir (soft-delete).
 ///
-/// `endDate` boşsa blok süresizdir (tsrange üst sınırı açık kalır).
+/// Rezervasyonla çakışması veritabanı tetikleyicisiyle engellenir
+/// (`Reservation_room_blocked`, `RoomBlock_has_reservations`).
 model RoomBlock {
-  id        String    @id @default(uuid())
+  id        String        @id @default(uuid())
   hotelId   String
   roomId    String
+  type      RoomBlockType @default(OUT_OF_ORDER)
   startDate DateTime
   endDate   DateTime?
   reason    String
   createdBy String
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
   deletedAt DateTime?
 
   hotel Hotel @relation(fields: [hotelId], references: [id])

@@ -51,7 +51,7 @@ const softDeleteExtension = Prisma.defineExtension({
  * (audit, geri yükleme, veri taşıma) bunu kullanır.
  */
 export const prismaUnfiltered = new PrismaClient({
-  log: process.env.NODE_ENV === 'production' ? ['warn', 'error'] : ['warn', 'error'],
+  log: ['warn', 'error'],
 });
 
 /** Tüm servislerin kullandığı istemci: soft-delete edilmiş kayıtlar görünmez. */

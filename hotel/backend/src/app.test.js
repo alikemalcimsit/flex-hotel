@@ -61,6 +61,51 @@ describe('correlation kimliği', () => {
     const response = await app.inject({ method: 'GET', url: '/health' });
     assert.match(response.headers['x-correlation-id'], /^[0-9a-f-]{36}$/);
   });
+
+  it('güvensiz biçimdeki kimliği log/denetim izine taşımaz, yenisini üretir', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/health',
+      headers: { 'x-correlation-id': `sahte kimlik; ${'x'.repeat(300)}` },
+    });
+    assert.match(response.headers['x-correlation-id'], /^[0-9a-f-]{36}$/);
+  });
+});
+
+describe('CORS', () => {
+  it('izinli kaynağa (panel) izin verir', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/health',
+      headers: { origin: 'http://localhost:5173' },
+    });
+    assert.equal(response.headers['access-control-allow-origin'], 'http://localhost:5173');
+  });
+
+  it('panelin PATCH/PUT/DELETE ön kontrolüne izin verir (eskiden yalnız GET/POST geçiyordu)', async () => {
+    const response = await app.inject({
+      method: 'OPTIONS',
+      url: '/rooms/00000000-0000-4000-8000-000000000000/housekeeping',
+      headers: {
+        origin: 'http://localhost:5173',
+        'access-control-request-method': 'PATCH',
+        'access-control-request-headers': 'content-type,x-actor',
+      },
+    });
+    assert.equal(response.statusCode, 204);
+    const methods = response.headers['access-control-allow-methods'];
+    for (const method of ['PATCH', 'PUT', 'DELETE']) assert.match(methods, new RegExp(method));
+    assert.match(response.headers['access-control-allow-headers'], /x-actor/);
+  });
+
+  it('başka bir sitenin tarayıcıdan API cevabını okumasına izin vermez', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/health',
+      headers: { origin: 'https://kotu-niyetli.example' },
+    });
+    assert.equal(response.headers['access-control-allow-origin'], undefined);
+  });
 });
 
 describe('girdi doğrulama', () => {

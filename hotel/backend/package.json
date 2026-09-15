@@ -9,7 +9,7 @@
     "dev": "node --watch --env-file-if-exists=../../.env src/server.js",
     "start": "node --env-file-if-exists=../../.env src/server.js",
     "test": "node --test \"src/**/*.test.js\"",
-    "test:integration": "node --test \"src/**/*.integration.test.js\"",
+    "test:integration": "node --test --test-concurrency=1 \"src/**/*.integration.test.js\"",
     "db:generate": "prisma generate",
     "db:migrate": "dotenv -e ../../.env -- prisma migrate dev",
     "db:seed": "node --env-file-if-exists=../../.env prisma/seed.js",

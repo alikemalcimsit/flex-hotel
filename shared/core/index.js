@@ -10,6 +10,7 @@ export { currentActor, currentCorrelationId, enterContext, getContext, runWithCo
 export {
   DAY_MS,
   addDays,
+  calendarDateInTimeZone,
   eachNight,
   nightCount,
   rangesOverlapClosed,

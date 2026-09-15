@@ -106,17 +106,98 @@ async function main() {
     guests.push(existing ?? (await prisma.guest.create({ data: { hotelId, ...g } })));
   }
 
+  /**
+   * Demo konaklamalar.
+   *
+   * Oda planı (modül 5) ekranının anlamlı görünmesi için otelin her katından,
+   * her durumdan ve pencerenin her yerinden kayıt var: içeride kalanlar,
+   * bugün girecekler, bugün çıkacaklar, oda bekleyenler, ileri tarihli grup.
+   */
   const reservationPlans = [
     { code: 'DEMO-0001', guest: 0, type: 'STD', room: null, status: 'PENDING', inDay: 7, nights: 3 },
     { code: 'DEMO-0002', guest: 1, type: 'DLX', room: '201', status: 'CONFIRMED', inDay: 3, nights: 2 },
     { code: 'DEMO-0003', guest: 2, type: 'SUIT', room: '301', status: 'CHECKED_IN', inDay: -1, nights: 4 },
     { code: 'DEMO-0004', guest: 3, type: 'STD', room: '105', status: 'CHECKED_OUT', inDay: -6, nights: 3 },
     { code: 'DEMO-0005', guest: 4, type: 'DLX', room: null, status: 'CANCELLED', inDay: 10, nights: 5 },
+
+    // İçeride kalanlar (bugünün ızgarasını dolduran barlar)
+    { code: 'DEMO-0006', guest: 0, type: 'STD', room: '101', status: 'CHECKED_IN', inDay: -2, nights: 5, adults: 2 },
+    { code: 'DEMO-0007', guest: 1, type: 'STD', room: '103', status: 'CHECKED_IN', inDay: -1, nights: 3, adults: 1 },
+    { code: 'DEMO-0008', guest: 2, type: 'DLX', room: '202', status: 'CHECKED_IN', inDay: -3, nights: 6, adults: 2, children: 1 },
+    // Bugün çıkacak: çıkış günü ızgarada boyanmaz, sütun serbest görünür.
+    { code: 'DEMO-0009', guest: 3, type: 'DLX', room: '203', status: 'CHECKED_IN', inDay: -2, nights: 2, adults: 2 },
+
+    // Bugün ve yarın girecekler
+    { code: 'DEMO-0010', guest: 4, type: 'STD', room: '106', status: 'CONFIRMED', inDay: 0, nights: 2, adults: 2 },
+    { code: 'DEMO-0011', guest: 0, type: 'STD', room: '107', status: 'CONFIRMED', inDay: 1, nights: 4, adults: 2, children: 1 },
+    { code: 'DEMO-0012', guest: 1, type: 'SUIT', room: '302', status: 'CONFIRMED', inDay: 1, nights: 3, adults: 3 },
+
+    // Oda bekleyenler (ızgaranın üstündeki şerit)
+    { code: 'DEMO-0013', guest: 2, type: 'STD', room: null, status: 'CONFIRMED', inDay: 0, nights: 1, adults: 1 },
+    { code: 'DEMO-0014', guest: 3, type: 'DLX', room: null, status: 'CONFIRMED', inDay: 2, nights: 3, adults: 2 },
+    { code: 'DEMO-0015', guest: 4, type: 'STD', room: null, status: 'PENDING', inDay: 4, nights: 2, adults: 2 },
+
+    // İleri tarihli hareket
+    { code: 'DEMO-0016', guest: 0, type: 'STD', room: '108', status: 'CONFIRMED', inDay: 5, nights: 3, adults: 2 },
+    { code: 'DEMO-0017', guest: 1, type: 'STD', room: '109', status: 'CONFIRMED', inDay: 6, nights: 4, adults: 2 },
+    { code: 'DEMO-0018', guest: 2, type: 'DLX', room: '204', status: 'CONFIRMED', inDay: 8, nights: 2, adults: 2 },
+    { code: 'DEMO-0019', guest: 3, type: 'STD', room: '110', status: 'CONFIRMED', inDay: 9, nights: 5, adults: 2 },
+    { code: 'DEMO-0020', guest: 4, type: 'SUIT', room: '303', status: 'CONFIRMED', inDay: 11, nights: 3, adults: 4, children: 2 },
   ];
+
+  /**
+   * Oda gerçekten boş mu?
+   *
+   * Seed tekrar tekrar çalıştırılabilir olmalı ve üzerinde çalışılan bir
+   * veritabanında oda elle arızaya alınmış ya da başka bir konaklamaya
+   * verilmiş olabilir. Böyle bir durumda kayıt **oda bekleyen** olarak
+   * açılır: veritabanı kısıtına çarpıp seed'i yarıda kesmek yerine gerçekçi
+   * bir duruma düşer.
+   */
+  async function resolveRoomId(number, checkIn, checkOut) {
+    if (!number) return null;
+    const room = roomByNumber[number];
+    if (!room) return null;
+
+    const [conflictingReservation, conflictingBlock] = await Promise.all([
+      prisma.reservation.findFirst({
+        where: {
+          roomId: room.id,
+          status: { in: ['PENDING', 'CONFIRMED', 'CHECKED_IN'] },
+          checkIn: { lt: checkOut },
+          checkOut: { gt: checkIn },
+        },
+        select: { id: true },
+      }),
+      prisma.roomBlock.findFirst({
+        where: {
+          roomId: room.id,
+          startDate: { lt: checkOut },
+          OR: [{ endDate: null }, { endDate: { gt: checkIn } }],
+        },
+        select: { id: true },
+      }),
+    ]);
+
+    if (conflictingReservation || conflictingBlock) {
+      console.log(`  ${number} numaralı oda bu tarihlerde dolu/arızalı; kayıt oda bekleyen olarak açıldı.`);
+      return null;
+    }
+    return room.id;
+  }
 
   for (const p of reservationPlans) {
     const roomType = roomTypeByCode[p.type];
-    const totalPrice = Number(roomType.basePrice) * p.nights;
+    const nights = p.nights;
+    const totalPrice = Number(roomType.basePrice) * nights;
+    const checkIn = daysFromNow(p.inDay);
+    const checkOut = daysFromNow(p.inDay + nights);
+    const existing = await prisma.reservation.findFirst({
+      where: { confirmationCode: p.code },
+      select: { id: true },
+    });
+    const roomId = existing ? undefined : await resolveRoomId(p.room, checkIn, checkOut);
+
     const reservation = await prisma.reservation.upsert({
       where: { confirmationCode: p.code },
       update: {},
@@ -124,11 +205,11 @@ async function main() {
         hotelId,
         guestId: guests[p.guest].id,
         roomTypeId: roomType.id,
-        roomId: p.room ? roomByNumber[p.room].id : null,
-        checkIn: daysFromNow(p.inDay),
-        checkOut: daysFromNow(p.inDay + p.nights),
-        adults: 2,
-        children: 0,
+        roomId,
+        checkIn,
+        checkOut,
+        adults: p.adults ?? 2,
+        children: p.children ?? 0,
         status: p.status,
         source: 'UI',
         totalPrice,
@@ -159,16 +240,24 @@ async function main() {
           },
         });
       }
-      if (p.room) {
+      // Oda durumu rezervasyonun **gerçek** odasına yazılır: çakışma yüzünden
+      // oda verilememişse ortada dolu bir oda da yok.
+      if (reservation.roomId) {
         await prisma.room.update({
-          where: { id: roomByNumber[p.room].id },
-          data: { status: p.status === 'CHECKED_IN' ? 'OCCUPIED' : 'AVAILABLE' },
+          where: { id: reservation.roomId },
+          data:
+            p.status === 'CHECKED_IN'
+              ? { occupancy: 'OCCUPIED' }
+              : { occupancy: 'VACANT', housekeepingStatus: 'CLEAN' },
         });
       }
     }
   }
 
-  console.log('Seed tamam: 1 otel, 2 kullanıcı, 3 oda tipi, 20 oda, 5 misafir, 5 rezervasyon, 2 folyo.');
+  console.log(
+    `Seed tamam: 1 otel, ${users.length} kullanıcı, ${ROOM_TYPES.length} oda tipi, ${ROOMS.length} oda, ` +
+      `${GUESTS.length} misafir, ${reservationPlans.length} rezervasyon.`,
+  );
 }
 
 main()

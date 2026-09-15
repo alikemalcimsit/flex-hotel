@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Alert, Button, Card, EmptyState, Icon, Input, Spinner } from '@hotelos/ui';
 import { Toolbar } from '../../components/Toolbar.jsx';
 import { api, withQuery } from '../../lib/api.js';
+import { useHotelToday } from '../../lib/useHotel.js';
 
 /**
  * Müsaitlik ızgarası: satır oda tipi, sütun gece, hücrede boş oda sayısı.
@@ -10,6 +11,10 @@ import { api, withQuery } from '../../lib/api.js';
  * Renk kodu bilinçli: resepsiyonist ekrana bakınca sayı okumadan önce doluluk
  * durumunu görmeli. Kırmızı = overbooking (negatif), turuncu = son odalar,
  * yeşil = rahat.
+ *
+ * "Arızalı" odalar sayıdan düşer; "hizmet dışı" odalar satılabilir sayılır ama
+ * misafire verilemez — hücrede nokta ile işaretlenir, çünkü o gecenin son boş
+ * odası hizmet dışıysa satılan misafire oda bulunamaz.
  */
 
 const WINDOW_DAYS = 14;
@@ -43,11 +48,14 @@ const CELL_TONES = {
 
 const LEGEND_ORDER = ['comfortable', 'low', 'full', 'overbooked'];
 
-const toIsoDay = (date) => date.toISOString().slice(0, 10);
+/** Pencerede bir gün eksik geldiyse (olmamalı) hücre güvenli tarafta "dolu" görünsün. */
+const EMPTY_CELL = Object.freeze({ free: 0, occupied: 0, outOfOrder: 0, outOfService: 0, unassigned: 0 });
+
+/** `YYYY-MM-DD` üzerinde gün aritmetiği (UTC; takvim günü saat dilimi taşımaz). */
 const addDays = (isoDay, days) => {
   const date = new Date(`${isoDay}T00:00:00.000Z`);
   date.setUTCDate(date.getUTCDate() + days);
-  return toIsoDay(date);
+  return date.toISOString().slice(0, 10);
 };
 
 /** @param {{ free: number, total: number }} cell */
@@ -68,7 +76,11 @@ function dayLabel(isoDay) {
 }
 
 export function AvailabilityTab() {
-  const [from, setFrom] = useState(toIsoDay(new Date()));
+  const { today } = useHotelToday();
+  // Kullanıcı başka bir güne gitmediyse pencere otelin bugününü takip eder
+  // (panel gece açık kalsa da ertesi gün "bugün"den başlar).
+  const [pinnedFrom, setPinnedFrom] = useState(null);
+  const from = pinnedFrom ?? today;
 
   const to = addDays(from, WINDOW_DAYS);
   const query = useQuery({
@@ -84,17 +96,17 @@ export function AvailabilityTab() {
           name="from"
           type="date"
           value={from}
-          onChange={(event) => event.target.value && setFrom(event.target.value)}
+          onChange={(event) => event.target.value && setPinnedFrom(event.target.value)}
           className="w-full sm:w-48"
         />
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" icon="chevronLeft" onClick={() => setFrom(addDays(from, -WINDOW_DAYS))}>
+          <Button variant="outline" icon="chevronLeft" onClick={() => setPinnedFrom(addDays(from, -WINDOW_DAYS))}>
             Önceki {WINDOW_DAYS} gün
           </Button>
-          <Button variant="secondary" onClick={() => setFrom(toIsoDay(new Date()))}>
+          <Button variant="secondary" onClick={() => setPinnedFrom(null)}>
             Bugün
           </Button>
-          <Button variant="outline" onClick={() => setFrom(addDays(from, WINDOW_DAYS))}>
+          <Button variant="outline" onClick={() => setPinnedFrom(addDays(from, WINDOW_DAYS))}>
             Sonraki {WINDOW_DAYS} gün
             <Icon name="chevronRight" className="size-4 shrink-0" />
           </Button>
@@ -146,15 +158,17 @@ export function AvailabilityTab() {
                     </th>
                     {query.data.days.map((day) => {
                       const label = dayLabel(day);
+                      const isToday = day === today;
                       return (
                         <th
                           key={day}
                           scope="col"
+                          aria-current={isToday ? 'date' : undefined}
                           className={`px-1.5 py-2.5 text-center text-xs font-bold ${
                             label.isWeekend ? 'bg-info-soft text-info-ink' : 'text-ink-muted'
-                          }`}
+                          } ${isToday ? 'shadow-[inset_0_-3px_0_var(--color-ink)]' : ''}`}
                         >
-                          <div className="capitalize">{label.weekday}</div>
+                          <div className="capitalize">{isToday ? 'Bugün' : label.weekday}</div>
                           <div className="font-medium">{label.day}</div>
                         </th>
                       );
@@ -171,14 +185,24 @@ export function AvailabilityTab() {
                         </div>
                       </th>
                       {query.data.days.map((day) => {
-                        const cell = roomType.days[day] ?? { free: 0, total: roomType.total, occupied: 0, blocked: 0, unassigned: 0 };
+                        const cell = roomType.days[day] ?? { ...EMPTY_CELL, total: roomType.total };
+                        const breakdown =
+                          `Toplam ${cell.total} · Dolu ${cell.occupied} · Arızalı ${cell.outOfOrder} · ` +
+                          `Hizmet dışı ${cell.outOfService} · Oda bekleyen ${cell.unassigned}`;
                         return (
                           <td key={day} className="px-1 py-1.5 text-center">
                             <div
-                              className={`min-w-10 rounded-item px-2 py-2 text-sm font-semibold tabular-nums ${cellTone(cell)}`}
-                              title={`Toplam ${cell.total} · Dolu ${cell.occupied} · Bloklu ${cell.blocked} · Oda bekleyen ${cell.unassigned}`}
+                              className={`relative min-w-10 rounded-item px-2 py-2 text-sm font-semibold tabular-nums ${cellTone(cell)}`}
+                              title={breakdown}
                             >
                               {cell.free}
+                              {cell.outOfService > 0 && (
+                                <span
+                                  aria-hidden="true"
+                                  className="absolute right-1 top-1 size-1.5 rounded-full bg-ink-soft"
+                                />
+                              )}
+                              <span className="sr-only">, {breakdown}</span>
                             </div>
                           </td>
                         );
@@ -197,6 +221,10 @@ export function AvailabilityTab() {
                 {CELL_TONES[key].label}
               </span>
             ))}
+            <span className="flex items-center gap-2">
+              <span aria-hidden="true" className="inline-block size-1.5 rounded-full bg-ink-soft" />
+              Hizmet dışı oda var (satılabilir ama verilemez)
+            </span>
             <span className="font-medium text-ink-muted">Hücrenin üzerine gelince kırılım görünür.</span>
           </div>
         </>

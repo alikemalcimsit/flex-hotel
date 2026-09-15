@@ -8,7 +8,10 @@ import { CONTROL_CLASS, CONTROL_CLASS_COMPACT, ERROR_CLASS, LABEL_CLASS, control
  * `compact` tablo satırı içindeki seçiciler için küçük ölçü. (Ad `size`
  * değil: `size` yerel `<select>` özniteliği, görünen satır sayısı.)
  *
- * @param {{ label?: string, error?: string, compact?: boolean, className?: string, options: Array<{ value: string, label: string }> } & React.SelectHTMLAttributes<HTMLSelectElement>} props
+ * Seçenek `disabled` taşıyabilir: o anki durumdan geçilemeyen değer listede
+ * görünür ama seçilemez (neden seçilemediği etiketinde yazmalı).
+ *
+ * @param {{ label?: string, error?: string, compact?: boolean, className?: string, options: Array<{ value: string, label: string, disabled?: boolean }> } & React.SelectHTMLAttributes<HTMLSelectElement>} props
  */
 export function Select({ label, error, compact = false, className = '', id, options, ...rest }) {
   const selectId = id ?? rest.name;
@@ -30,7 +33,7 @@ export function Select({ label, error, compact = false, className = '', id, opti
           {...rest}
         >
           {options.map((option) => (
-            <option key={option.value} value={option.value}>
+            <option key={option.value} value={option.value} disabled={option.disabled}>
               {option.label}
             </option>
           ))}

@@ -1,15 +1,19 @@
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { RESERVATION_STATUS_LABELS } from '@hotelos/hotel-contracts';
 import { Alert, Badge, Button, Checkbox, Icon, Input, Spinner } from '@hotelos/ui';
 import { DataTable } from '../../components/DataTable.jsx';
 import { Modal } from '../../components/Modal.jsx';
-import { RoomStatusBadge } from '../../components/RoomStatusBadge.jsx';
+import { AssignmentKindBadge, HousekeepingBadge, OccupancyBadge } from '../../components/RoomStateBadges.jsx';
 import { Toolbar } from '../../components/Toolbar.jsx';
 import { api, apiPost, apiPut, withQuery } from '../../lib/api.js';
+import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 import { useCrudResource } from '../../lib/useCrudResource.js';
 import { formatDate } from '../../lib/format.js';
 import { toastError, toastSuccess } from '../../store/toast.js';
+
+/** Oda seçme penceresinde bir sayfadaki aday oda. */
+const CANDIDATE_PAGE_SIZE = 8;
 
 /**
  * Oda atanmayı bekleyen rezervasyonlar.
@@ -19,6 +23,7 @@ import { toastError, toastSuccess } from '../../store/toast.js';
  */
 export function AssignmentTab() {
   const queryClient = useQueryClient();
+  const canOperate = useCan()(PERMISSIONS.ROOMS_OPERATE);
   const [assigning, setAssigning] = useState(null);
 
   const resource = useCrudResource({
@@ -112,7 +117,7 @@ export function AssignmentTab() {
             ? 'Farklı bir kod veya isim deneyin.'
             : 'Oda atanmamış bekleyen/onaylı rezervasyon bulunmuyor.'
         }
-        rowActions={(row) => (
+        rowActions={canOperate ? (row) => (
           <div className="flex justify-end gap-2">
             <Button
               variant="outline"
@@ -127,7 +132,7 @@ export function AssignmentTab() {
               Oda seç
             </Button>
           </div>
-        )}
+        ) : undefined}
       />
 
       {assigning && (
@@ -145,13 +150,26 @@ export function AssignmentTab() {
   );
 }
 
+/**
+ * Oda seçme penceresi. Liste sunucuda sıralı gelir: önce misafirin tipi (en
+ * hazır oda başta), sonra üst sınıf, farklı tip, alt sınıf. Kapasitesi
+ * yetmeyen ya da o tipte overbooking yaratacak odalar hiç listelenmez.
+ */
 function AssignRoomModal({ reservation, onClose, onAssigned }) {
   const [includeOtherTypes, setIncludeOtherTypes] = useState(false);
+  const [page, setPage] = useState(1);
 
   const candidatesQuery = useQuery({
-    queryKey: ['rooms', 'candidates', reservation.id, { includeOtherTypes }],
+    queryKey: ['rooms', 'candidates', reservation.id, { includeOtherTypes, page }],
     queryFn: () =>
-      api(withQuery(`/rooms/assignments/${reservation.id}/candidates`, { includeOtherTypes })),
+      api(
+        withQuery(`/rooms/assignments/${reservation.id}/candidates`, {
+          includeOtherTypes,
+          page,
+          pageSize: CANDIDATE_PAGE_SIZE,
+        }),
+      ),
+    placeholderData: keepPreviousData,
   });
 
   const assignMutation = useMutation({
@@ -163,7 +181,8 @@ function AssignRoomModal({ reservation, onClose, onAssigned }) {
     onError: (error) => toastError(error.message),
   });
 
-  const candidates = candidatesQuery.data ?? [];
+  const candidates = candidatesQuery.data?.items ?? [];
+  const meta = candidatesQuery.data?.meta;
 
   return (
     <Modal
@@ -199,9 +218,12 @@ function AssignRoomModal({ reservation, onClose, onAssigned }) {
       <Checkbox
         label="Diğer oda tiplerini de göster"
         name="includeOtherTypes"
-        hint="Üst sınıf odaya yerleştirmek (upgrade) için."
+        hint="Kapasitesi yeten ve overbooking yaratmayan diğer tipler, sınıfıyla birlikte listelenir."
         checked={includeOtherTypes}
-        onChange={(event) => setIncludeOtherTypes(event.target.checked)}
+        onChange={(event) => {
+          setIncludeOtherTypes(event.target.checked);
+          setPage(1);
+        }}
         className="mb-5"
       />
 
@@ -223,13 +245,13 @@ function AssignRoomModal({ reservation, onClose, onAssigned }) {
       {candidatesQuery.data && candidates.length === 0 && (
         <Alert tone="warning" title="Bu tarihlerde uygun boş oda yok">
           {includeOtherTypes
-            ? 'Tarihleri değiştirmeyi veya bir bloğu kaldırmayı deneyin.'
-            : 'Diğer oda tiplerini göstererek üst sınıf bir odaya yerleştirebilirsiniz.'}
+            ? 'Tarihleri değiştirmeyi ya da odalardaki arıza kayıtlarını kontrol etmeyi deneyin.'
+            : 'Diğer oda tiplerini göstererek misafiri başka bir tipe yerleştirebilirsiniz.'}
         </Alert>
       )}
 
       {candidates.length > 0 && (
-        <ul className="-mx-1 flex max-h-96 flex-col gap-2 overflow-y-auto px-1 py-1">
+        <ul className={`flex flex-col gap-2 transition-opacity duration-200 ${candidatesQuery.isFetching ? 'opacity-60' : ''}`}>
           {candidates.map((room) => (
             <li
               key={room.id}
@@ -242,17 +264,14 @@ function AssignRoomModal({ reservation, onClose, onAssigned }) {
                 <span className="text-xs font-semibold text-ink-muted">
                   {room.floor}. kat · {room.roomTypeCode}
                 </span>
-                <RoomStatusBadge status={room.status} />
+                <OccupancyBadge occupancy={room.occupancy} />
+                <HousekeepingBadge status={room.housekeepingStatus} />
                 {room.recommended && (
                   <Badge tone="info" dot={false}>
                     Önerilen
                   </Badge>
                 )}
-                {room.isUpgrade && (
-                  <Badge tone="violet" dot={false}>
-                    Upgrade
-                  </Badge>
-                )}
+                <AssignmentKindBadge kind={room.kind} />
               </div>
               <Button size="sm" icon="check" onClick={() => assignMutation.mutate(room.id)} disabled={assignMutation.isPending}>
                 {assignMutation.isPending ? 'Atanıyor…' : 'Ata'}
@@ -260,6 +279,24 @@ function AssignRoomModal({ reservation, onClose, onAssigned }) {
             </li>
           ))}
         </ul>
+      )}
+
+      {meta && meta.totalPages > 1 && (
+        <nav aria-label="Aday oda sayfaları" className="mt-4 flex items-center justify-between gap-3">
+          <span className="text-xs font-semibold text-ink-muted">{meta.total} uygun oda</span>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" icon="chevronLeft" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+              Önceki
+            </Button>
+            <span className="text-sm font-semibold text-ink-soft" aria-live="polite">
+              {meta.page} / {meta.totalPages}
+            </span>
+            <Button variant="outline" size="sm" disabled={page >= meta.totalPages} onClick={() => setPage(page + 1)}>
+              Sonraki
+              <Icon name="chevronRight" className="size-3.5" />
+            </Button>
+          </div>
+        </nav>
       )}
     </Modal>
   );

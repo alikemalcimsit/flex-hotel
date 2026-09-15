@@ -115,4 +115,43 @@ export function addDays(value, days) {
   return new Date(toUtcDayStart(value) + days * DAY_MS);
 }
 
+/** Saat dilimi başına tek biçimlendirici — `Intl` nesnesi kurmak pahalı. */
+const dayFormatters = new Map();
+
+/** @param {string} timeZone */
+function dayFormatterFor(timeZone) {
+  let formatter = dayFormatters.get(timeZone);
+  if (!formatter) {
+    // en-CA sabit sıralı parçalar verir; yerel ayara göre gün/ay yer değiştirmez.
+    formatter = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' });
+    dayFormatters.set(timeZone, formatter);
+  }
+  return formatter;
+}
+
+/**
+ * Bir anın, verilen saat dilimindeki takvim günü.
+ *
+ * "Bugün" sunucunun saatine (UTC) göre hesaplanırsa İstanbul'da gece
+ * 00:00–03:00 arası sistem dünü bugün sanır — gece kapanışının yapıldığı saat
+ * tam o aralıktır. Otelin günü otelin saat diliminden okunmalı.
+ *
+ * Dönen değer o yerel günün **UTC gün başıdır**; böylece konaklama ve blok
+ * tarihleriyle (onlar da UTC gün başı) doğrudan karşılaştırılabilir.
+ *
+ * @param {string} timeZone IANA saat dilimi (ör. Europe/Istanbul)
+ * @param {Date | string | number} [instant]
+ * @returns {Date}
+ * @throws {RangeError} geçersiz saat dilimi veya tarih
+ */
+export function calendarDateInTimeZone(timeZone, instant = new Date()) {
+  const date = instant instanceof Date ? instant : new Date(instant);
+  if (Number.isNaN(date.getTime())) {
+    throw new RangeError(`Geçersiz tarih: ${JSON.stringify(instant)}`);
+  }
+  const parts = dayFormatterFor(timeZone).formatToParts(date);
+  const valueOf = (type) => Number(parts.find((part) => part.type === type)?.value);
+  return new Date(Date.UTC(valueOf('year'), valueOf('month') - 1, valueOf('day')));
+}
+
 export { DAY_MS };

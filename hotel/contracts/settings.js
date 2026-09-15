@@ -1,6 +1,6 @@
 import { z } from './locale.js';
 import { BOARD_TYPES, TAX_APPLIES_TO } from './constants.js';
-import { decimalField, dateField, EMAIL_PATTERN, expectedUpdatedAt, TIME_PATTERN } from './fields.js';
+import { decimalField, dateField, EMAIL_PATTERN, expectedUpdatedAt, isHttpUrl, queryBoolean, TIME_PATTERN } from './fields.js';
 
 /**
  * Ayarlar modülünün girdi sözleşmeleri.
@@ -12,7 +12,7 @@ import { decimalField, dateField, EMAIL_PATTERN, expectedUpdatedAt, TIME_PATTERN
 
 /* ─────────────── Otel bilgileri ─────────────── */
 
-export const hotelInfoSchema = z.object({
+const hotelInfoBase = z.object({
   name: z
     .string({ error: 'Otel adı zorunlu' })
     .trim()
@@ -27,7 +27,13 @@ export const hotelInfoSchema = z.object({
     .refine((value) => value === '' || EMAIL_PATTERN.test(value), { message: 'Geçerli bir e-posta girin' })
     .optional()
     .nullable(),
-  logoUrl: z.string().trim().max(1000, 'Logo adresi en fazla 1000 karakter').optional().nullable(),
+  logoUrl: z
+    .string()
+    .trim()
+    .max(1000, 'Logo adresi en fazla 1000 karakter')
+    .refine((value) => value === '' || isHttpUrl(value), { message: 'Logo adresi http:// veya https:// ile başlamalı' })
+    .optional()
+    .nullable(),
   currency: z
     .string({ error: 'Para birimi zorunlu' })
     .trim()
@@ -44,7 +50,31 @@ export const hotelInfoSchema = z.object({
     .regex(TIME_PATTERN, 'Çıkış saati SS:DD biçiminde olmalı'),
 });
 
-export const updateHotelSchema = hotelInfoSchema.extend({ expectedUpdatedAt });
+/**
+ * Çıkış saati girişten önce olmalı.
+ *
+ * Müsaitlik hesabı "18'de çıkan odaya 18'de yeni misafir girer" varsayımıyla
+ * çalışıyor (yarı açık `[)` aralık). Çıkış 15:00, giriş 14:00 olursa yeni
+ * misafir geldiğinde oda hâlâ doludur; sistem satılabilir dediği odayı
+ * veremez. Biçim sabit (SS:DD) olduğu için metin karşılaştırması yeterli.
+ *
+ * @param {{ checkInTime: string, checkOutTime: string }} value
+ * @param {import('zod').RefinementCtx} ctx
+ */
+function refineTurnoverTimes(value, ctx) {
+  if (!TIME_PATTERN.test(value.checkInTime) || !TIME_PATTERN.test(value.checkOutTime)) return;
+  if (value.checkOutTime >= value.checkInTime) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['checkOutTime'],
+      message: 'Çıkış saati giriş saatinden önce olmalı; yoksa aynı gün odayı yeni misafire veremezsiniz',
+    });
+  }
+}
+
+export const hotelInfoSchema = hotelInfoBase.superRefine(refineTurnoverTimes);
+
+export const updateHotelSchema = hotelInfoBase.extend({ expectedUpdatedAt }).superRefine(refineTurnoverTimes);
 
 /* ─────────────── Genel parametreler ─────────────── */
 
@@ -124,7 +154,8 @@ export const taxInputSchema = z.object({
     .min(1, 'Vergi adı zorunlu')
     .max(100, 'Vergi adı en fazla 100 karakter'),
   rate: decimalField({ scale: 3, min: 0, max: 100, label: 'Vergi oranı' }),
-  isIncluded: z.coerce.boolean(),
+  // `z.coerce.boolean()` "false" metnini true yapardı; bkz. `queryBoolean`.
+  isIncluded: queryBoolean,
   appliesTo: z
     .array(z.enum(TAX_APPLIES_TO, { error: 'Geçersiz kalem tipi' }))
     .min(1, 'En az bir kalem tipi seçin')

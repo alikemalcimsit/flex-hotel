@@ -52,6 +52,44 @@ export const idParamSchema = z.object({
   id: z.string().uuid({ message: 'Geçersiz kayıt kimliği' }),
 });
 
+/**
+ * Sorgu dizesinden gelen evet/hayır değeri.
+ *
+ * `z.coerce.boolean()` burada yanlıştır: `Boolean("false") === true` olduğu
+ * için `?includeOtherTypes=false` isteği "evet" diye okunur. Yalnızca açık
+ * değerler kabul edilir.
+ */
+export const queryBoolean = z
+  .union([z.boolean(), z.enum(['true', 'false', '1', '0'])], { error: 'Değer true veya false olmalı' })
+  .transform((value) => value === true || value === 'true' || value === '1');
+
+/**
+ * Sorgu dizesinden gelen isteğe bağlı tam sayı. Boş metin "filtre yok"
+ * demektir; `z.coerce.number()` onu sessizce 0'a çevirirdi.
+ * @param {{ label: string, min: number, max: number }} options
+ */
+export function optionalQueryInt({ label, min, max }) {
+  return z.preprocess(
+    (value) => (value === '' || value === null ? undefined : value),
+    z.coerce
+      .number({ error: `${label} sayı olmalı` })
+      .int(`${label} tam sayı olmalı`)
+      .min(min, `${label} ${min} değerinden küçük olamaz`)
+      .max(max, `${label} ${max} değerinden büyük olamaz`)
+      .optional(),
+  );
+}
+
+/** http(s) adresi mi? (Logo gibi dışarıya bağlanan alanlar için.) */
+export function isHttpUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 export const paginationQuerySchema = z.object({
   page: z.coerce
     .number({ error: 'Sayfa numarası sayı olmalı' })

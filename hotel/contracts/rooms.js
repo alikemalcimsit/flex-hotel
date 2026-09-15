@@ -1,6 +1,21 @@
 import { z } from './locale.js';
-import { MANUAL_ROOM_STATUSES, MAX_AVAILABILITY_DAYS } from './constants.js';
-import { dateField, expectedUpdatedAt, listQuerySchema } from './fields.js';
+import {
+  HOUSEKEEPING_STATUSES,
+  HOUSEKEEPING_STATUS_LABELS,
+  MAX_AVAILABILITY_DAYS,
+  ROOM_BLOCK_SCOPES,
+  ROOM_BLOCK_TYPES,
+  ROOM_CONDITIONS,
+  ROOM_OCCUPANCIES,
+} from './constants.js';
+import {
+  dateField,
+  expectedUpdatedAt,
+  listQuerySchema,
+  optionalQueryInt,
+  paginationQuerySchema,
+  queryBoolean,
+} from './fields.js';
 
 /**
  * Oda envanteri ve müsaitlik sözleşmeleri.
@@ -32,35 +47,76 @@ export const updateRoomSchema = roomInputSchema.extend({ expectedUpdatedAt });
 
 export const roomListQuerySchema = listQuerySchema.extend({
   roomTypeId: z.string().uuid({ message: 'Geçersiz oda tipi' }).optional(),
-  status: z.enum(['AVAILABLE', 'OCCUPIED', 'DIRTY', 'CLEANING', 'BLOCKED', 'MAINTENANCE']).optional(),
-  floor: z.coerce.number().int().optional(),
+  occupancy: z.enum(ROOM_OCCUPANCIES, { error: 'Geçersiz doluluk filtresi' }).optional(),
+  housekeepingStatus: z.enum(HOUSEKEEPING_STATUSES, { error: 'Geçersiz kat hizmeti filtresi' }).optional(),
+  condition: z.enum(ROOM_CONDITIONS, { error: 'Geçersiz arıza filtresi' }).optional(),
+  floor: optionalQueryInt({ label: 'Kat', min: -5, max: 200 }),
 });
 
-/** Personelin elle değiştirebileceği durumlar; bkz. `MANUAL_ROOM_STATUSES`. */
-export const setRoomStatusSchema = z.object({
-  status: z.enum(MANUAL_ROOM_STATUSES, { error: 'Bu durum elle atanamaz' }),
+/* ─────────────── Kat hizmeti ─────────────── */
+
+/**
+ * Kat hizmeti durum geçişi kuralı — sunucu da tarayıcı da bunu kullanır.
+ *
+ * Tek kısıt bilinçli olarak dar tutuldu: **kontrol edilmemiş odaya "kontrol
+ * edildi" denemez.** Kat şefinin onayı ancak temizlenmiş odaya verilir; kirli
+ * odayı doğrudan "kontrol edildi" yapmak, denetimi atlayıp misafire hazır
+ * olmayan oda vermektir. Geri kalan geçişler serbest: gerçek hayatta oda her an
+ * yeniden kirlenebilir (misafir erken döndü, sızıntı oldu).
+ *
+ * @param {string} from
+ * @param {string} to
+ * @returns {string | null} Hata mesajı; geçiş geçerliyse `null`
+ */
+export function housekeepingTransitionError(from, to) {
+  if (!HOUSEKEEPING_STATUSES.includes(to)) return 'Geçersiz kat hizmeti durumu';
+  if (from === to) return null;
+  if (to === 'INSPECTED' && from !== 'CLEAN') {
+    return `"${HOUSEKEEPING_STATUS_LABELS[from] ?? from}" odaya "Kontrol edildi" denemez; önce oda temizlenmeli.`;
+  }
+  return null;
+}
+
+export const setHousekeepingStatusSchema = z.object({
+  status: z.enum(HOUSEKEEPING_STATUSES, { error: 'Geçersiz kat hizmeti durumu' }),
   expectedUpdatedAt,
 });
 
+/* ─────────────── Arıza kayıtları (bloklar) ─────────────── */
+
 export const blockRoomSchema = z
   .object({
+    type: z.enum(ROOM_BLOCK_TYPES, { error: 'Kayıt tipini seçin (Arızalı / Hizmet dışı)' }),
     startDate: dateField,
     // Boş bırakılırsa blok süresizdir (odayı elle açana kadar kapalı kalır).
     endDate: dateField.nullable().optional(),
     reason: z
-      .string({ error: 'Blok sebebi zorunlu' })
+      .string({ error: 'Sebep zorunlu' })
       .trim()
-      .min(1, 'Blok sebebi zorunlu')
+      .min(1, 'Sebep zorunlu')
       .max(200, 'Sebep en fazla 200 karakter'),
   })
   .refine((value) => value.endDate == null || value.endDate > value.startDate, {
     path: ['endDate'],
-    message: 'Blok bitişi başlangıçtan sonra olmalı',
+    message: 'Bitiş başlangıçtan sonra olmalı',
   });
+
+export const blockListQuerySchema = paginationQuerySchema.extend({
+  roomId: z.string().uuid({ message: 'Geçersiz oda' }).optional(),
+  scope: z.enum(ROOM_BLOCK_SCOPES, { error: 'Geçersiz kapsam' }).default('ACTIVE'),
+});
+
+/* ─────────────── Oda atama ─────────────── */
 
 export const assignRoomSchema = z.object({
   roomId: z.string({ error: 'Oda seçilmedi' }).uuid({ message: 'Geçersiz oda' }),
 });
+
+export const assignableRoomsQuerySchema = paginationQuerySchema.extend({
+  includeOtherTypes: queryBoolean.default(false),
+});
+
+/* ─────────────── Müsaitlik ─────────────── */
 
 /**
  * Müsaitlik penceresi. Üst sınır kasıtlı: bir yıllık takvim istemek sunucuyu

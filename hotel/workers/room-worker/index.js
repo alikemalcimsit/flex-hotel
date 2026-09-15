@@ -2,6 +2,20 @@ import { BaseWorker } from '@hotelos/actor-kit';
 import { roomWorkerManifest } from './manifest.js';
 
 /**
+ * Hata iş kuralından mı geliyor? Servis katmanının tipli hataları HTTP
+ * durumu taşır; 4xx olanlar ("rezervasyon atanabilir durumda değil") tekrar
+ * denemekle düzelmez — beklemeden personelin önüne düşmeli.
+ * @param {unknown} error
+ */
+function markBusinessErrorsFinal(error) {
+  const status = /** @type {{ statusCode?: number }} */ (error)?.statusCode;
+  if (typeof status === 'number' && status >= 400 && status < 500) {
+    /** @type {{ retryable?: boolean }} */ (error).retryable = false;
+  }
+  return error;
+}
+
+/**
  * Oda aktörü.
  *
  * Servisi ve altyapıyı dışarıdan alır: worker paketi ne Prisma ne HTTP bilir,
@@ -10,8 +24,8 @@ import { roomWorkerManifest } from './manifest.js';
 class RoomWorker extends BaseWorker {
   /**
    * @param {{
-   *   autoAssignRoom: (hotelId: string, reservationId: string) => Promise<{ assigned: boolean, room?: { number: string }, reason?: string }>,
-   *   applySystemRoomStatus: (hotelId: string, roomId: string, status: string, reason: string) => Promise<unknown>,
+   *   autoAssignRoom: (hotelId: string, reservationId: string) => Promise<{ assigned: boolean, room?: { id: string, number: string }, reason?: string }>,
+   *   applySystemRoomState: (hotelId: string, roomId: string, state: { occupancy?: string, housekeepingStatus?: string }, reason: string) => Promise<unknown>,
    * }} service
    * @param {object} deps BaseWorker bağımlılıkları
    */
@@ -30,7 +44,12 @@ class RoomWorker extends BaseWorker {
             return { message: 'Oda zaten atanmış, dokunulmadı', meta: { roomId: payload.roomId } };
           }
 
-          const result = await service.autoAssignRoom(payload.hotelId, payload.reservationId);
+          let result;
+          try {
+            result = await service.autoAssignRoom(payload.hotelId, payload.reservationId);
+          } catch (error) {
+            throw markBusinessErrorsFinal(error);
+          }
 
           if (!result.assigned) {
             // Boş oda yokluğu geçici bir arıza değil; tekrar denemek yerine
@@ -46,15 +65,33 @@ class RoomWorker extends BaseWorker {
           };
         },
 
+        /** Misafir girdi: oda dolu. Kat hizmeti durumuna dokunulmaz. */
         'guest.checked_in': async (payload) => {
-          await service.applySystemRoomStatus(payload.hotelId, payload.roomId, 'OCCUPIED', 'Misafir giriş yaptı');
+          try {
+            await service.applySystemRoomState(payload.hotelId, payload.roomId, { occupancy: 'OCCUPIED' }, 'Misafir giriş yaptı');
+          } catch (error) {
+            throw markBusinessErrorsFinal(error);
+          }
           return { message: 'Oda dolu olarak işaretlendi' };
         },
 
+        /**
+         * Misafir çıktı: oda boş **ve kirli**. Yalnızca "boş" yapmak, temizlenmemiş
+         * odayı bir sonraki misafire hazır gösterirdi; housekeeping (modül 14)
+         * kirli odadan devralır.
+         */
         'guest.checked_out': async (payload) => {
-          // Çıkış sonrası oda kirlidir; housekeeping (modül 14) buradan devralır.
-          await service.applySystemRoomStatus(payload.hotelId, payload.roomId, 'DIRTY', 'Misafir çıkış yaptı');
-          return { message: 'Oda kirli olarak işaretlendi' };
+          try {
+            await service.applySystemRoomState(
+              payload.hotelId,
+              payload.roomId,
+              { occupancy: 'VACANT', housekeepingStatus: 'DIRTY' },
+              'Misafir çıkış yaptı',
+            );
+          } catch (error) {
+            throw markBusinessErrorsFinal(error);
+          }
+          return { message: 'Oda boş ve kirli olarak işaretlendi' };
         },
       },
       deps,
@@ -74,7 +111,7 @@ class RoomWorker extends BaseWorker {
       case 'guest.checked_in':
         return 'Oda "dolu" olarak işaretlenecek';
       case 'guest.checked_out':
-        return 'Oda "kirli" olarak işaretlenecek';
+        return 'Oda "boş · kirli" olarak işaretlenecek';
       default:
         return super.describeFallback(eventName, payload);
     }

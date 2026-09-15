@@ -104,3 +104,15 @@ tekrar kullanılamayan kodlar ve sessizce yanlış fiyat hesapları.
   olarak otomatik uygulanıyor ama `findUnique` bundan muaf.
 - **Ayar verisini doğrudan Prisma'dan okumayın.** `modules/settings/service.js`
   içindeki cache'li "sıcak okuma" fonksiyonlarını kullanın.
+- **"Bugün" otelin günüdür.** `lib/business-date.js` → `getBusinessDate(hotelId)`;
+  sunucu saatiyle (`new Date()`) hesaplanan gün İstanbul'da gece yarısından
+  sonra dünü gösterir.
+- **Envanteri azaltan yazmalar kilitlenir.** `lib/locks.js` → önce oda tipleri,
+  sonra odalar, id'ye göre sıralı (`SELECT ... FOR UPDATE`). Farklı sırayla
+  kilitleyen iki işlem birbirini kilitler.
+- **Oda durumunu doğrudan yazmayın.** Doluluk yalnızca giriş-çıkış akışıyla
+  (`applySystemRoomState`), oda değişikliği `changeRoom` ile değişir; kat
+  hizmeti `PATCH /rooms/:id/housekeeping`.
+- **Canlı ekranlar socket'ten haber alır, veri almaz.** `lib/realtime.js`
+  yalnızca "şu otelde şu değişti" yayınlar; panel kendi sorgusunu tazeler.
+  Socket'te henüz kimlik doğrulama yok, yük taşımayın.

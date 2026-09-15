@@ -1,13 +1,15 @@
 import { z } from 'zod';
 import {
+  assignableRoomsQuerySchema,
   assignRoomSchema,
   availabilityQuerySchema,
+  blockListQuerySchema,
   blockRoomSchema,
   idParamSchema,
   listQuerySchema,
   roomInputSchema,
   roomListQuerySchema,
-  setRoomStatusSchema,
+  setHousekeepingStatusSchema,
   stayAvailabilityQuerySchema,
   updateRoomSchema,
 } from '@hotelos/hotel-contracts';
@@ -16,24 +18,18 @@ import { withHotelContext } from '../../lib/tenant.js';
 import * as service from './service.js';
 
 /**
- * Oda envanteri, müsaitlik ve atama route'ları.
+ * Oda envanteri, oda durumu, arıza kayıtları, müsaitlik ve atama route'ları.
  *
- * İzinler ikiye ayrılıyor: envanter tanımını değiştirmek (oda ekleme, bloklama)
- * yönetim işidir; oda atamak ve durum değiştirmek ön büro işidir. Modül 2'nin
- * rol matrisi bu ayrımı kullanacak.
+ * İzinler ikiye ayrılıyor: envanter tanımını değiştirmek (oda ekleme, arıza
+ * kaydı) yönetim işidir; oda atamak ve kat hizmeti durumunu değiştirmek ön
+ * büro / kat hizmetleri işidir. Modül 2'nin rol matrisi bu ayrımı kullanacak.
+ *
+ * Doluluğu (Boş/Dolu) değiştiren bir route yok, kasıtlı: doluluğun tek
+ * yazıcısı giriş-çıkış akışıdır (modül 6 → room-worker).
  */
 
 const reservationParamSchema = z.object({
   reservationId: z.string().uuid({ message: 'Geçersiz rezervasyon' }),
-});
-
-const assignableQuerySchema = z.object({
-  includeOtherTypes: z.coerce.boolean().default(false),
-});
-
-const blockListQuerySchema = z.object({
-  roomId: z.string().uuid({ message: 'Geçersiz oda' }).optional(),
-  includePast: z.coerce.boolean().default(false),
 });
 
 /**
@@ -67,18 +63,18 @@ export async function roomsRoutes(app) {
     return { success: true, data: { id: request.params.id } };
   });
 
-  /* ── Oda durumu (ön büro / kat hizmetleri) ── */
+  /* ── Kat hizmeti durumu ── */
 
   app.patch(
-    '/:id/status',
-    { ...operate, schema: { params: idParamSchema, body: setRoomStatusSchema } },
+    '/:id/housekeeping',
+    { ...operate, schema: { params: idParamSchema, body: setHousekeepingStatusSchema } },
     async (request) => ({
       success: true,
-      data: await service.setRoomStatus(request.hotelId, request.params.id, request.body),
+      data: await service.setHousekeepingStatus(request.hotelId, request.params.id, request.body),
     }),
   );
 
-  /* ── Bloklar ── */
+  /* ── Arıza kayıtları ── */
 
   app.get('/blocks', { ...view, schema: { querystring: blockListQuerySchema } }, async (request) => ({
     success: true,
@@ -95,10 +91,12 @@ export async function roomsRoutes(app) {
     },
   );
 
-  app.delete('/blocks/:id', { ...manage, schema: { params: idParamSchema } }, async (request) => {
-    await service.unblockRoom(request.hotelId, request.params.id);
-    return { success: true, data: { id: request.params.id } };
-  });
+  // Silme değil "kaldırma": başlamamış kayıt iptal edilir, süren kayıt bugün
+  // biter; hangisi olduğu yanıttaki `mode` alanında.
+  app.delete('/blocks/:id', { ...manage, schema: { params: idParamSchema } }, async (request) => ({
+    success: true,
+    data: await service.removeBlock(request.hotelId, request.params.id),
+  }));
 
   /* ── Müsaitlik ── */
 
@@ -129,12 +127,10 @@ export async function roomsRoutes(app) {
 
   app.get(
     '/assignments/:reservationId/candidates',
-    { ...view, schema: { params: reservationParamSchema, querystring: assignableQuerySchema } },
+    { ...view, schema: { params: reservationParamSchema, querystring: assignableRoomsQuerySchema } },
     async (request) => ({
       success: true,
-      data: await service.getAssignableRooms(request.hotelId, request.params.reservationId, {
-        includeOtherTypes: request.query.includeOtherTypes,
-      }),
+      data: await service.getAssignableRooms(request.hotelId, request.params.reservationId, request.query),
     }),
   );
 

@@ -53,16 +53,20 @@ const REQUEST_TIMEOUT_MS = 20_000;
 export async function api(path, options = {}) {
   let response;
   const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+  const { headers: extraHeaders, ...rest } = options;
 
   try {
     response = await fetch(`${API_URL}${path}`, {
       signal: timeout,
+      ...rest,
+      // Başlıklar en son birleştirilir: `options.headers` verilseydi eskiden
+      // bütün başlıkları (x-actor dahil) sessizce eziyordu. İçerik tipi yalnızca
+      // gövde varken gönderilir.
       headers: {
-        'Content-Type': 'application/json',
+        ...(rest.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
         ...actorHeader(),
-        ...(options.headers ?? {}),
+        ...(extraHeaders ?? {}),
       },
-      ...options,
     });
   } catch (error) {
     if (error?.name === 'TimeoutError') {

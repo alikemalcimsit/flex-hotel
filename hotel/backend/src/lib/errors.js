@@ -67,16 +67,44 @@ export class InUseError extends ConflictError {
  *
  * Bu kısıtlar son savunma hattı: uygulama kodu aynı kuralları önceden kontrol
  * edip daha zengin mesaj veriyor, ama yarış durumunda ya da uygulama dışından
- * gelen bir yazımda devreye giren bunlar. Kullanıcının "23P01" görmemesi için
- * burada karşılıkları var.
+ * gelen bir yazımda devreye giren bunlar. Kullanıcının "Sunucuda beklenmeyen
+ * bir hata" ya da "23P01" görmemesi için her kısıtın burada karşılığı olmalı —
+ * yeni migration kısıt ekliyorsa bu tabloya da eklenir.
+ *
+ * `code` frontend'in ve aktörlerin dallanması için: otomatik atama, odası
+ * yarışta kapılan rezervasyonu `ROOM_NOT_FREE` görünce sıradaki odayı dener.
  */
-const CONSTRAINT_MESSAGES = Object.freeze({
-  Season_no_overlap: 'Bu tarih aralığı mevcut bir sezonla çakışıyor. Aynı güne iki sezon çarpanı düşemez.',
-  Season_date_order: 'Sezon bitiş tarihi başlangıç tarihinden önce olamaz.',
-  Hotel_cancellation_policy_coherent:
-    'İptal politikası ya tamamen kapalı olmalı ya da hem gün hem ceza oranı dolu olmalı.',
-  RoomType_hotelId_code_active_key: 'Bu kodlu bir oda tipi zaten var.',
-  Room_hotelId_number_active_key: 'Bu numaralı bir oda zaten var.',
+const CONSTRAINT_RULES = Object.freeze({
+  Season_no_overlap: {
+    code: 'CONSTRAINT',
+    message: 'Bu tarih aralığı mevcut bir sezonla çakışıyor. Aynı güne iki sezon çarpanı düşemez.',
+  },
+  Season_date_order: { code: 'CONSTRAINT', message: 'Sezon bitiş tarihi başlangıç tarihinden önce olamaz.' },
+  Hotel_cancellation_policy_coherent: {
+    code: 'CONSTRAINT',
+    message: 'İptal politikası ya tamamen kapalı olmalı ya da hem gün hem ceza oranı dolu olmalı.',
+  },
+  RoomType_hotelId_code_active_key: { code: 'DUPLICATE', message: 'Bu kodlu bir oda tipi zaten var.' },
+  Room_hotelId_number_active_key: { code: 'DUPLICATE', message: 'Bu numaralı bir oda zaten var.' },
+  Reservation_no_double_booking: {
+    code: 'ROOM_NOT_FREE',
+    message: 'Bu oda seçilen gecelerde başka bir rezervasyona ait. Aynı oda aynı geceye iki misafire verilemez.',
+  },
+  Reservation_date_order: { code: 'CONSTRAINT', message: 'Çıkış tarihi girişten en az bir gece sonra olmalı.' },
+  Reservation_room_blocked: {
+    code: 'ROOM_NOT_FREE',
+    message: 'Oda bu tarihlerde arızalı veya hizmet dışı; misafir atanamaz.',
+  },
+  RoomBlock_no_overlap: {
+    code: 'BLOCK_OVERLAP',
+    message: 'Bu oda için bu tarihlerle çakışan başka bir arıza kaydı var. Mevcut kaydı bitirip yenisini açın.',
+  },
+  RoomBlock_date_order: { code: 'CONSTRAINT', message: 'Arıza kaydının bitişi başlangıcından sonra olmalı.' },
+  RoomBlock_day_precision: { code: 'CONSTRAINT', message: 'Arıza kaydı tarihleri gün hassasiyetinde olmalı.' },
+  RoomBlock_has_reservations: {
+    code: 'HAS_RESERVATIONS',
+    message: 'Bu tarihlerde odada rezervasyon var; arıza kaydı açılamaz. Önce misafiri başka odaya taşıyın.',
+  },
 });
 
 /**
@@ -87,25 +115,32 @@ const CONSTRAINT_MESSAGES = Object.freeze({
 function findConstraintName(error) {
   const meta = /** @type {{ meta?: { constraint?: string | string[] }, message?: string }} */ (error);
   const fromMeta = Array.isArray(meta?.meta?.constraint) ? meta.meta.constraint[0] : meta?.meta?.constraint;
-  if (fromMeta && Object.hasOwn(CONSTRAINT_MESSAGES, fromMeta)) return fromMeta;
+  if (fromMeta && Object.hasOwn(CONSTRAINT_RULES, fromMeta)) return fromMeta;
 
-  // Prisma, CHECK/EXCLUDE ihlallerini tipli bir koda çevirmiyor; kısıt adı
-  // yalnızca ham mesajda geçiyor.
+  // Prisma, CHECK/EXCLUDE/tetikleyici ihlallerini tipli bir koda çevirmiyor;
+  // kısıt adı yalnızca ham mesajda geçiyor.
   const message = typeof meta?.message === 'string' ? meta.message : '';
-  return Object.keys(CONSTRAINT_MESSAGES).find((name) => message.includes(name));
+  return Object.keys(CONSTRAINT_RULES).find((name) => message.includes(name));
 }
 
 /**
  * Prisma/PostgreSQL hatalarını bizim hata tiplerimize çevirir.
  * Yarış durumunda (aynı kodla iki eşzamanlı ekleme) P2002 buradan 409 olur.
+ *
+ * Zaten bizim tipimizde olan hata (servisin kendi fırlattığı ConflictError
+ * gibi) dokunulmadan geri fırlatılır.
+ *
  * @param {unknown} error
  * @param {{ uniqueMessage?: string }} [options]
  * @returns {never}
  */
 export function rethrowPrismaError(error, { uniqueMessage = 'Bu kayıt zaten mevcut' } = {}) {
+  if (error instanceof AppError) throw error;
+
   const constraint = findConstraintName(error);
   if (constraint) {
-    throw new ConflictError(CONSTRAINT_MESSAGES[constraint], 'CONSTRAINT', { constraint });
+    const rule = CONSTRAINT_RULES[constraint];
+    throw new ConflictError(rule.message, rule.code, { constraint });
   }
 
   const code = /** @type {{ code?: string, meta?: { target?: string[] } }} */ (error)?.code;

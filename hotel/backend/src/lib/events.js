@@ -1,6 +1,6 @@
-import { InMemoryEventBus, INVENTORY_CHANGED_EVENTS, SETTINGS_CHANGED_EVENTS } from '@hotelos/core';
+import { InMemoryEventBus, SETTINGS_CHANGED_EVENTS } from '@hotelos/core';
 import { prismaUnfiltered } from '../db.js';
-import { cache, invalidateHotelSettings } from './cache.js';
+import { invalidateHotelSettings } from './cache.js';
 
 /**
  * Uygulamanın event bus'ı ve kalıcılığı.
@@ -135,20 +135,23 @@ let coreUnsubscribers = [];
  * (testler, gelecekte çok kiracılı kurulum). Eski abonelikler kaldırılmazsa
  * aynı event iki dinleyiciye gider — cache iki kez temizlenir (zararsız) ama
  * aynı desendeki aktörler işi iki kez yapar (zararlı).
+ *
+ * Bu dosya yüklendiği anda da bir kez çağrılır (en altta): "yazma cache'i
+ * temizler" garantisi sunucunun nasıl başlatıldığına bağlı olmamalı. Servisi
+ * sunucu dışında kullanan bir betik ya da test, aksi hâlde 5 dakika boyunca
+ * silinmiş oda tipini fiyat hesabında görürdü.
  */
 export function registerCoreSubscribers() {
   for (const unsubscribe of coreUnsubscribers) unsubscribe();
 
+  // Oda envanteri ve müsaitlik cache'lenmiyor: oda satırı artık kat hizmeti
+  // durumu gibi dakikada değişen bilgi taşıyor, bayat bir kopya "temiz"
+  // görünen kirli odaya misafir yollar. Yalnızca nadiren değişen ayarlar tutulur.
   coreUnsubscribers = [
     eventBus.subscribeMany(SETTINGS_CHANGED_EVENTS, 'settings-cache', (payload) => {
       invalidateHotelSettings(payload.hotelId);
     }),
-
-    // Envanter değişince oda listesi cache'i tazelenir. Müsaitlik hesabının
-    // kendisi cache'lenmiyor (her tarih penceresi ayrı sonuç, çok değişken) —
-    // yalnızca sabit girdisi olan oda listesi tutuluyor.
-    eventBus.subscribeMany(INVENTORY_CHANGED_EVENTS, 'inventory-cache', (payload) => {
-      cache.invalidatePrefix(`inventory:${payload.hotelId}:`);
-    }),
   ];
 }
+
+registerCoreSubscribers();

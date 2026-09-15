@@ -18,6 +18,19 @@ const numberFormatter = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 
 const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' });
 
 /**
+ * Gün hassasiyetli değerler ("2026-10-15") saat dilimi taşımaz; tarayıcının
+ * yerel saatiyle biçimlendirilirse UTC'nin gerisindeki bir bölgede bir gün
+ * önce görünür. Bu yüzden UTC ile basılır.
+ */
+const dayOnlyFormatter = new Intl.DateTimeFormat('tr-TR', {
+  day: '2-digit',
+  month: 'short',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
+const DAY_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
  * @param {string | number | null | undefined} value Decimal string
  * @param {string} [currency] ISO kodu
  */
@@ -50,6 +63,9 @@ export function formatMultiplier(value) {
  */
 export function formatDate(value) {
   if (!value) return '—';
+  if (typeof value === 'string' && DAY_ONLY_PATTERN.test(value)) {
+    return dayOnlyFormatter.format(new Date(`${value}T00:00:00.000Z`));
+  }
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return '—';
   return dateFormatter.format(date);

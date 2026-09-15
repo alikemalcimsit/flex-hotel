@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Badge, Icon } from '@hotelos/ui';
 import { api } from '../lib/api.js';
 import { socket } from '../lib/socket.js';
+import { useHotelSettings } from '../lib/useHotel.js';
 import { visibleSections } from '../layout/navigation.js';
 import { useAuthStore } from '../store/auth.js';
 
@@ -20,7 +21,7 @@ const HEALTH_POLL_MS = 10_000;
 
 /** Hızlı erişim kartlarının alt yazısı; menüde olmayan bilgi. */
 const SHORTCUT_HINTS = {
-  '/odalar/liste': 'Oda ekle, durum değiştir, blokla',
+  '/odalar/liste': 'Doluluk, kat hizmeti, arıza kayıtları',
   '/odalar/musaitlik': 'Oda tipi bazında boş oda takvimi',
   '/odalar/atama': 'Bekleyen rezervasyonlara oda ata',
   '/ayarlar/otel': 'Ad, iletişim, giriş/çıkış saatleri',
@@ -38,7 +39,7 @@ export function HomePage() {
     retry: false,
     refetchInterval: HEALTH_POLL_MS,
   });
-  const hotelQuery = useQuery({ queryKey: ['settings', 'hotel'], queryFn: () => api('/settings/hotel') });
+  const hotelQuery = useHotelSettings();
   const [socketConnected, setSocketConnected] = useState(socket.connected);
 
   useEffect(() => {
