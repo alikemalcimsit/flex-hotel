@@ -1,0 +1,216 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Montserrat, DarkMinimal şablonunun dosyaları. Şablon yalnızca latin
+ * dosyasını tanımlıyordu; Türkçe harfler latin-ext'te olduğu için ikisi de
+ * kendi aralığıyla yükleniyor, tarayıcı gerekeni indiriyor.
+ */
+@font-face {
+  font-family: 'Montserrat Variable';
+  src: url('/fonts/montserrat-latin-wght-normal.woff2') format('woff2-variations');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Montserrat Variable';
+  src: url('/fonts/montserrat-latin-ext-wght-normal.woff2') format('woff2-variations');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308,
+    U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113,
+    U+2C60-2C7F, U+A720-A7FF;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 6rem;
+    color-scheme: dark;
+    scrollbar-width: thin;
+    scrollbar-color: theme('colors.card') theme('colors.background');
+  }
+
+  body {
+    @apply bg-background font-sans text-ink antialiased;
+    overflow-x: hidden;
+  }
+
+  /* Mobilde gezinme ekranın altında; içerik onun arkasında kalmasın. */
+  @media (max-width: 767px) {
+    html {
+      scroll-padding-top: 1.5rem;
+    }
+
+    body {
+      padding-bottom: 70px;
+    }
+  }
+
+  /* Klavye odağı her zaman görünür — asla kaldırılmaz. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-sec ring-offset-2 ring-offset-background;
+  }
+
+  ::selection {
+    @apply bg-sec text-background;
+  }
+}
+
+@layer components {
+  /* Şablonun bölüm kabuğu: üstte ince çizgi, ortalanmış dar sütun. */
+  .section-shell {
+    @apply w-full border-t border-line py-12 text-ink;
+  }
+
+  .section-inner {
+    @apply mx-auto max-w-5xl;
+  }
+
+  /* Bölüm etiketi — şablondaki "My work", "Let's talk". */
+  .section-label {
+    @apply mb-2 text-lg;
+  }
+
+  .section-heading {
+    @apply mb-8 text-4xl font-medium md:text-5xl;
+  }
+
+  /* Vurgu metnindeki kayan parıltı. */
+  .shiny-sec {
+    background: linear-gradient(
+      135deg,
+      theme('colors.sec') 25%,
+      theme('colors.sec-light') 50%,
+      theme('colors.sec') 75%
+    );
+    background-size: 400% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    @apply animate-shine;
+  }
+
+  /* Önizleme zemini: şablonun çizgi renginde ızgara, üstten aşağı sönüyor. */
+  .tpl-grid {
+    background-image: linear-gradient(to right, theme('colors.line') 1px, transparent 1px),
+      linear-gradient(to bottom, theme('colors.line') 1px, transparent 1px);
+    background-size: 28px 28px;
+    mask-image: radial-gradient(ellipse at top, #000 15%, transparent 75%);
+  }
+
+  /*
+   * Hakkımızda şeması (CoreDiagram). Süre ve gecikme her öğeye satır içi
+   * veriliyor; sektörler sırayla yandığı için hepsi farklı.
+   *
+   * Işık: çizgi `pathLength=100` ile normalize, 8 birimlik tire turun ilk
+   * çeyreğinde çekirdekten sektöre akıp gözden çıkıyor.
+   */
+  .diagram-pulse {
+    stroke-dasharray: 8 100;
+    stroke-dashoffset: 8;
+    animation-name: diagram-pulse;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+  }
+
+  /* Işık kutuya vardığında sektör renginde kısa bir halka. */
+  .diagram-node {
+    animation-name: diagram-ping;
+    animation-timing-function: ease-out;
+    animation-iteration-count: infinite;
+  }
+
+  .diagram-core-glow {
+    background: radial-gradient(closest-side, theme('colors.sec / 22%'), transparent);
+    animation: diagram-breathe 4s ease-in-out infinite;
+  }
+
+  /* Şablonun yarı saydam, ince kenarlı kutusu. */
+  .tpl-box {
+    @apply rounded-2xl border border-line-soft bg-panel;
+  }
+
+  /* Kare ikon düğmesi — şablondaki GitHub/LinkedIn/önizleme düğmeleri. */
+  .tpl-icon-btn {
+    @apply flex items-center justify-center rounded-xl border border-line-soft bg-panel p-3
+           text-ink-muted transition duration-300 ease-in-out hover:bg-line-soft hover:text-white;
+  }
+
+  /* Yazılı düğme — ikon düğmesiyle aynı kabuk. */
+  .tpl-btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-line-soft bg-panel
+           px-5 py-3 text-ink-muted transition duration-300 ease-in-out hover:bg-line-soft hover:text-white;
+  }
+
+  /* Tam genişlik hap — şablondaki "More projects on GitHub". */
+  .tpl-pill {
+    @apply flex w-full items-center justify-center gap-2 rounded-full border border-line-soft bg-panel p-3
+           text-ink-muted transition duration-300 ease-in-out hover:scale-105 hover:bg-line-soft hover:text-white;
+  }
+
+  .tpl-input {
+    @apply rounded-lg border border-line-soft bg-panel px-4 py-2 text-ink placeholder:text-ink-muted
+           focus:outline-none focus:ring-2 focus:ring-sec;
+  }
+}
+
+@keyframes diagram-pulse {
+  0% {
+    stroke-dashoffset: 8;
+  }
+  25%,
+  100% {
+    stroke-dashoffset: -100;
+  }
+}
+
+/* Işık hattın yaklaşık üçte ikisinde kutunun kenarına varıyor: turun ~%16'sı. */
+@keyframes diagram-ping {
+  0%,
+  15%,
+  38%,
+  100% {
+    box-shadow:
+      0 0 0 0 transparent,
+      0 0 0 0 transparent;
+  }
+  21% {
+    box-shadow:
+      0 0 0 1px var(--node-color),
+      0 0 28px -6px var(--node-color);
+  }
+}
+
+@keyframes diagram-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+}
+
+/* Hareketi azalt tercihi: animasyon ve geçişler kapanır. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -67,6 +67,12 @@ TEST_DATABASE_URL=postgresql://... npm run test:integration -w @hotelos/hotel-ba
 - `shared/` → sektörden bağımsız çekirdek (core, actor-kit, ui, auth, channels, agents, workers, mcp-server)
 - `hotel/` → otel paketi (contracts, frontend, backend, agents, workers)
 - `clinic/` → gelecek sektör paketi (boş)
+- `web/` → FlexAI kurumsal tanıtım sitesi. HotelOS ürününün parçası değil,
+  bağımsız bir Vite/React uygulaması (workspaces listesine dahil değil —
+  kendi `node_modules`'ü için `web/` içinde ayrıca `npm install` gerekir).
+  `npm run dev` (kendi klasöründen) → http://localhost:5173 (varsayılan Vite
+  portu; HotelOS frontend'iyle aynı anda çalıştırırken `-- --port 5183` gibi
+  farklı bir port verin).
 
 Kurallar: sadece JavaScript (ESM), TypeScript yok. Backend modülleri
 `hotel/backend/src/modules/`, sayfalar `hotel/frontend/src/pages/`.
