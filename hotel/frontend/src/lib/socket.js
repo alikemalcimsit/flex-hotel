@@ -9,7 +9,18 @@ import { API_URL } from './api.js';
  * ya da ağ bir an koptuğunda panel kendiliğinden toparlanmalı, ama kapalı bir
  * sunucuya saniyede onlarca kez vurmamalı.
  */
-export const socket = io(API_URL, {
+/**
+ * ⚠️ Adresin yalnızca kökü verilir, yolu değil.
+ *
+ * `io('https://hotel.flexai.tr/api')` çağrısında socket.io `/api` kısmını
+ * **namespace** sayar ve sunucuda olmayan bir namespace'e bağlanmaya çalışır;
+ * bağlantı sessizce kurulmaz (panel "canlı değil"de kalır, üretimde tam olarak
+ * bu oldu). Taşıma yolu her iki ortamda da kökteki `/socket.io`: üretimde
+ * nginx'in websocket yükseltmesi tanımlı olan konumu burasıdır.
+ */
+const apiOrigin = new URL(API_URL, globalThis.location?.origin ?? 'http://localhost').origin;
+
+export const socket = io(apiOrigin, {
   autoConnect: true,
   reconnection: true,
   reconnectionDelay: 1000,
