@@ -5,6 +5,7 @@ import { Modal } from '../../components/Modal.jsx';
 import { AssignmentKindBadge, HousekeepingBadge, OccupancyBadge } from '../../components/RoomStateBadges.jsx';
 import { api, withQuery } from '../../lib/api.js';
 import { formatDate } from '../../lib/format.js';
+import { MoveReasonField } from './MoveReasonField.jsx';
 
 /** Bir sayfada listelenecek aday oda sayısı. */
 const CANDIDATE_PAGE_SIZE = 8;
@@ -21,13 +22,14 @@ const CANDIDATE_PAGE_SIZE = 8;
  *   reservation: { id: string, confirmationCode: string, status: string, checkIn: string, checkOut: string,
  *                  adults: number, children: number, roomType: object, room: object | null },
  *   isMoving: boolean,
- *   onPick: (room: object) => void,
+ *   onPick: (room: object, reason: string) => void,
  *   onClose: () => void,
  * }} props
  */
 export function MoveRoomDialog({ reservation, isMoving, onPick, onClose }) {
   const [includeOtherTypes, setIncludeOtherTypes] = useState(false);
   const [page, setPage] = useState(1);
+  const [reason, setReason] = useState('');
 
   const query = useQuery({
     queryKey: ['rooms', 'candidates', reservation.id, { includeOtherTypes, page }],
@@ -87,6 +89,12 @@ export function MoveRoomDialog({ reservation, isMoving, onPick, onClose }) {
         </Alert>
       )}
 
+      {reservation.room && (
+        <div className="mb-5">
+          <MoveReasonField value={reason} onChange={setReason} disabled={isMoving} />
+        </div>
+      )}
+
       <Checkbox
         label="Diğer oda tiplerini de göster"
         name="includeOtherTypes"
@@ -117,7 +125,7 @@ export function MoveRoomDialog({ reservation, isMoving, onPick, onClose }) {
       {query.data && candidates.length === 0 && (
         <Alert tone="warning" title="Bu tarihlerde uygun boş oda yok">
           {includeOtherTypes
-            ? 'Konaklamanın tamamı boyunca boş olan bir oda gerekiyor. Tarihleri ya da odalardaki arıza kayıtlarını kontrol edin.'
+            ? `${inHouse ? 'Kalan geceler' : 'Konaklamanın tamamı'} boyunca boş olan bir oda gerekiyor. Tarihleri ya da odalardaki arıza kayıtlarını kontrol edin.`
             : 'Diğer oda tiplerini göstererek misafiri başka bir tipe yerleştirebilirsiniz.'}
         </Alert>
       )}
@@ -145,7 +153,7 @@ export function MoveRoomDialog({ reservation, isMoving, onPick, onClose }) {
                 )}
                 <AssignmentKindBadge kind={room.kind} />
               </div>
-              <Button size="sm" icon="check" onClick={() => onPick(room)} disabled={isMoving}>
+              <Button size="sm" icon="check" onClick={() => onPick(room, reason.trim())} disabled={isMoving}>
                 {isMoving ? 'İşleniyor…' : reservation.room ? 'Buraya taşı' : 'Ata'}
               </Button>
             </li>

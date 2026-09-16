@@ -310,3 +310,21 @@ describe('listQuerySchema', () => {
     assert.deepEqual(listQuerySchema.parse({ page: '3', pageSize: '50' }), { page: 3, pageSize: 50 });
   });
 });
+
+describe('generalSettingsSchema — telefon ülke kodu', () => {
+  const base = { defaultBoardType: 'BB', cancellationPolicyDays: 0, cancellationPolicyPenaltyPct: '0' };
+
+  it('başındaki + atılır', () => {
+    assert.equal(generalSettingsSchema.parse({ ...base, phoneCountryCode: ' +90 ' }).phoneCountryCode, '90');
+  });
+
+  it('0 ile başlayan, harfli ya da uzun kod reddedilir', () => {
+    for (const phoneCountryCode of ['090', 'TR', '1234', '']) {
+      assert.equal(generalSettingsSchema.safeParse({ ...base, phoneCountryCode }).success, false, phoneCountryCode);
+    }
+  });
+
+  it('gönderilmezse değişmez (alan isteğe bağlı)', () => {
+    assert.equal(generalSettingsSchema.parse(base).phoneCountryCode, undefined);
+  });
+});

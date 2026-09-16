@@ -86,6 +86,13 @@ const generalSettingsBase = z.object({
     .min(0, 'Gün sayısı negatif olamaz')
     .max(365, 'Gün sayısı 365\'ten büyük olamaz'),
   cancellationPolicyPenaltyPct: decimalField({ scale: 2, min: 0, max: 100, label: 'Ceza oranı' }),
+  // İsteğe bağlı: gönderilmezse değişmez. Başta "+" yazılabilir.
+  phoneCountryCode: z
+    .string({ error: 'Ülke kodu metin olmalı' })
+    .trim()
+    .transform((value) => value.replace(/^\+/, ''))
+    .pipe(z.string().regex(/^[1-9]\d{0,2}$/, 'Ülke kodu 1-3 rakam olmalı (Türkiye için 90)'))
+    .optional(),
 });
 
 /**

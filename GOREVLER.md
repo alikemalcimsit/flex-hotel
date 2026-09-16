@@ -108,6 +108,10 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 >   `lib/permissions.js` (`useCan`) — modül 2 gelince rol → izin eşlemesi oradan
 >   gerçek oturuma bağlanır, düğmeler zaten izin adıyla gizleniyor.
 
+> **Ek (17 Eylül 2026 — modül 7):** Genel parametrelere **telefon ülke kodu** eklendi
+> (`Hotel.phoneCountryCode`, varsayılan 90, CHECK kısıtlı; `updateGeneralSettings`
+> alanı gönderilmezse değiştirmez).
+
 ### 2. Kullanıcı, rol, yetki (RBAC) — Ali Kemal
 **Gün sonu:** Personel kendi hesabıyla giriyor; rolüne göre menüler ve işlemler kısıtlı. Kat görevlisi folyoyu göremiyor, resepsiyon fatura silemiyor.
 
@@ -128,6 +132,15 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 > Frontend tarafında `App.jsx` içindeki `RequireRole` ve sidebar'daki "Ayarlar" menüsü
 > sahte oturumdaki `user.role` alanına bakıyor — bunlar güvenlik sınırı değil, gerçek
 > giriş gelince aynı yerden gerçek role bağlanacak.
+> **Modül 7'den ek (17 Eylül 2026 — Ahmet):** "şu anki personel" (bana atanan,
+> Üstlen, işi başlatana atama) `lib/staff.js → currentStaff` içinde isteğin `x-actor`
+> e-postasından bulunuyor; okuma uçları 60 sn önbellekli sürümü (`currentStaffCached`)
+> kullanıyor. JWT gelince yalnızca bu iki fonksiyon kimliği token'dan okumalı. Yeni
+> izinler: `messages.view`, `messages.reply`, `requests.view`, `requests.manage`
+> (backend ve frontend `permissions.js`). Kat görevlisi rolü tanımlanırken
+> `requests.*` verilip `messages.*` verilmeyebilir — ekranlar buna göre ayrışıyor.
+> Atanabilir personel listesi `/guest-requests/assignees` (aktif kullanıcılar);
+> kullanıcı yönetimi senin.
 - [ ] Backend: gerçek login (e-posta + şifre → JWT + refresh), logout, refresh, `/me`
 - [ ] Backend: User CRUD API'leri (ekle, düzenle, pasife al, şifre sıfırla)
 - [ ] Backend: izin listesi tanımı (örn. `reservation.create`, `folio.view`, `invoice.cancel`) ve rol → izin eşlemesi
@@ -272,6 +285,11 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 > 4. **Overbooking kuralı** için hazır parça: `rooms/rules.js` → `findNewOverbooking`
 >    (önceki/sonraki envanteri karşılaştırır). "Onaya gönder" dalı modül 11 ile bağlanır.
 > 5. **"Bugün" / geçmiş tarih** kontrolünde `new Date()` değil `getBusinessDate(hotelId)`.
+> 5a. **Her rezervasyon yazması event yayınlamalı** (17 Eylül 2026): oda planı
+>    cevapları envanter sürümüyle önbelleğe alınıyor ve canlı paneller bu event'lerle
+>    tazeleniyor. `reservation.updated`, `reservation.cancelled` gibi yeni event'leri
+>    `shared/core/events/catalog.js`'e ekleyince `INVENTORY_CHANGED_EVENTS` listesine de
+>    ekleyin; yoksa tarih değişikliği / iptal panellerde 15 sn gecikmeyle görünür.
 > 6. Oda seçimi elle yapılacaksa `GET /rooms/assignments/:reservationId/candidates`
 >    ve `PUT /rooms/assignments/:reservationId` hazır; kapasite, arıza, tip farkı
 >    (`kind`) ve overbooking kontrolleri içinde. Rezervasyon detay ekranın
@@ -313,21 +331,50 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 > paydası satılabilir oda (toplam − arızalı); oda bekleyen rezervasyon paya dahil.
 >
 > **Oda değişikliği tek kapıdan:** `rooms/service.js` → `changeRoom(hotelId,
-> reservationId, roomId)`. Dönen `mode`:
+> reservationId, roomId, { reason })`. Dönen `mode`:
 > - `ASSIGNED` (odası yoktu) / `MOVED` (misafir gelmemiş) → `assignRoom` yolu.
 > - `IN_HOUSE_MOVED` (misafir içeride) → rezervasyonun odası değişir **ve aynı
 >   transaction'da** eski oda boş + kirli, yeni oda dolu olur. Modül 6 ve 14
 >   bunun üstüne kurulmalı; oda durumunu ayrıca yazmayın.
 > - `UNCHANGED` → zaten o odada, yazma yapılmaz.
-> ⚠️ Rezervasyonun tek bir `roomId`'si olduğu için oda değişikliğinde hedef oda
-> **konaklamanın tamamında** boş olmalı (çifte rezervasyon kısıtı da böyle bakar).
-> Gece gece oda geçmişi (bir konaklamanın iki odada geçmesi) ayrı bir tablo ister —
-> night audit (modül 18) ve faturalama (modül 16) ile birlikte tasarlanmalı.
+>
+> **🔧 Revizyon (17 Eylül 2026 — Ahmet): oda değişikliği geçmişi yeniden yazmıyor.**
+> İlk sürümde rezervasyonun tek `roomId`'si vardı; içerideki misafir taşınınca geçmiş
+> geceler de yeni odaya yazılmış sayılıyordu. Hedef odada konaklamanın *geçmiş*
+> gecelerinde bitmiş bir arıza kaydı ya da başka misafir varsa taşıma
+> reddediliyordu (oda bugün tamamen boş olsa bile). Şimdi:
+> - `Reservation.roomSince`: misafirin mevcut odada kalmaya başladığı gece
+>   (boşsa konaklamanın tamamı o odada). Açık dilim = `[coalesce(roomSince, checkIn), checkOut)`.
+> - `RoomStaySegment`: kapanmış oda dilimleri (eski oda, geceler, sebep, taşıyan).
+>   Migration `20260917090000_room_stay_segments`.
+> - Çifte rezervasyon kısıtı ve arıza tetikleyicisi yalnızca **açık dilime** bakar;
+>   uygunluk kontrolü içerideki misafir için **kalan gecelere** bakar.
+> - Müsaitlik (`buildAvailabilityCalendar`, `freeRoomsForStay`) dilimleri biliyor:
+>   geçmiş gecelerde eski oda dolu, yeni oda boş görünür.
+> - Izgarada taşınan konaklama iki bar olur (`movedOut` eski odada, `movedIn` yeni odada);
+>   detayda "Oda geçmişi" listelenir.
+>
+> **Diğer revizyonlar:** günlük özet çıkış yapmış konaklamaları da sayıyor (öğlen
+> "8 çıkıştan 5'i yapıldı": `departures` / `departuresDone`, `arrivals` / `arrivalsDone`;
+> geçmiş gecelerin doluluğu sonradan düşmüyor); oda numaraları doğal sırada
+> (1, 2, 10 — oda listesi de); ızgarada misafir adı / onay koduyla arama; görünüm
+> adres çubuğunda (yenileyince kaybolmuyor, link paylaşılabiliyor); taşıma sebebi;
+> bitmiş konaklamanın oda ataması kaldırılamıyor (`STAY_ENDED`).
+>
+> **2500 eşzamanlı panel için:** plan cevapları otelin **envanter sürümüyle**
+> anahtarlanıp önbelleğe alınıyor ve aynı anda gelen aynı istekler tek hesaplamada
+> birleşiyor (`lib/read-cache.js`, `lib/live-version.js`). Sürüm,
+> `LIVE_VIEW_EVENTS` + ayar event'leriyle artıyor; bu yüzden **envanteri değiştiren
+> her yazma bir event yayınlamalı** — yoksa ekran en fazla 15 sn bayat kalır.
+> Panel tarafında değişiklik haberine ve yeniden bağlanmaya rastgele gecikme
+> ekleniyor (herkes aynı milisaniyede istek atmasın). Sağlık ucunda `planCache`
+> isabet oranı görünüyor.
 >
 > **Canlı yayın altyapısı (modül 10 ve 12'yi de ilgilendirir):** `lib/realtime.js`
 > event bus'ı socket.io'ya köprülüyor; `hotel:<hotelId>` odasına `inventory.changed`
 > kanalından **yalnızca "şu değişti" haberi** düşüyor (veri değil — socket'te henüz
-> kimlik doğrulama yok). Panel tarafında `lib/useLiveInventory.js` bu haberi alıp
+> kimlik doğrulama yok). Panel tarafında `lib/useLiveChannel.js` (oda planı için
+> `useLiveInventory` sarmalayıcısı) bu haberi alıp
 > ilgili react-query anahtarlarını tazeliyor; olaylar 400 ms geciktirilerek
 > toplanıyor (tek işlem birden çok event yayınlar). Activity Feed aynı köprüye
 > ikinci bir kanal ekleyerek bağlanabilir.
@@ -357,16 +404,82 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 > (oda planı ekranında sürükle-bırak ile kullanılıyor). Check-in/out akışında
 > oda durumunu elle yazmayın; giriş-çıkış için room-worker, oda değişikliği için
 > bu fonksiyon tek yazıcıdır.
+>
+> **Ek (17 Eylül 2026):** taşınmış misafirde `Reservation.roomSince` dolu olabilir.
+> Erken çıkışta `checkOut`'u kısaltırken `roomSince <= checkOut` kısıtı var
+> (`Reservation_room_since_valid`): taşındığı gün çıkan misafirin çıkış tarihi
+> taşıma günüyle eşit olabilir, daha önce olamaz. Oda geçmişi için
+> `RoomStaySegment` + açık dilim kullanılır (bkz. modül 5 notu).
 
 ### 7. Misafir mesajları / istek takibi — arkadaşın
 **Gün sonu:** Personel, misafirlerle yapılan tüm chat/WhatsApp konuşmalarını görüyor, gerekirse elle cevaplıyor; misafir istekleri görev olarak takip ediliyor.
-- [ ] Backend: Conversation / Message API'leri (liste, detay, mesaj gönder, okundu işaretle)
-- [ ] Backend: GuestRequest (istek) tablosu + API (tip: havlu, oda servisi, uyandırma; durum)
-- [ ] Ekran: Konuşma listesi (kanal ikonu, misafir, son mesaj, okunmamış sayısı)
-- [ ] Ekran: Konuşma detayı (balonlar; AI cevapları etiketli; elle cevap kutusu)
-- [ ] Ekran: "Manuele al" butonu (concierge bu konuşmaya karışmaz)
-- [ ] Ekran: İstekler listesi (oda, istek, durum, atanan) + tamamla
-- [ ] Frontend: yeni mesaj gelince socket ile anlık güncelleme + ses/rozet
+- [x] Backend: Conversation / Message API'leri (liste, detay, mesaj gönder, okundu işaretle)
+- [x] Backend: GuestRequest (istek) tablosu + API (tip: havlu, oda servisi, uyandırma; durum)
+- [x] Ekran: Konuşma listesi (kanal ikonu, misafir, son mesaj, okunmamış sayısı)
+- [x] Ekran: Konuşma detayı (balonlar; AI cevapları etiketli; elle cevap kutusu)
+- [x] Ekran: "Manuele al" butonu (concierge bu konuşmaya karışmaz)
+- [x] Ekran: İstekler listesi (oda, istek, durum, atanan) + tamamla
+- [x] Frontend: yeni mesaj gelince socket ile anlık güncelleme + ses/rozet
+- [ ] Gerçek kanal trafiği (WhatsApp / web chat) — **modül 8 bekleniyor**; ekran ve sözleşme hazır
+
+> **📌 Modül 7 tamamlandı (17 Eylül 2026 — Ahmet). Modül 8'in kısmı bilinçli olarak boş.**
+>
+> **Kanal yok, sözleşme var.** Gelen kutusu kanaldan bağımsız. WhatsApp / web chat
+> geçidi ve AI asistanı modül 8'de; o gelene kadar ekran "bağlantı kurulmadı" der,
+> personelin cevapları **"gönderim bekliyor"** olarak saklanır. Gönderilmiş gibi
+> gösteren, sahte gelen mesaj üreten hiçbir şey yok. Devir sözleşmesi modül 8'in altında.
+>
+> **Veri** (migration'lar `20260917120000_guest_messaging`,
+> `20260917121000_conversation_state_version`, `20260917130000_guest_phone_match`):
+> - `Conversation`: durum (açık/kapalı), mod (`AI` / `MANUAL`), atanan, okunmamış
+>   sayısı, cevap beklemenin başladığı an, son mesaj özeti, `stateVersion`.
+> - `Message`: yazar (misafir / personel / AI / sistem), iç not, teslim durumu
+>   (`RECEIVED`, `PENDING` → `SENT` → `DELIVERED` → `READ`, `FAILED`), kanal mesaj kimliği.
+> - `GuestRequest`: kategori, öncelik, durum, hedef süre (`dueAt`), zamanlı iş
+>   (`scheduledFor`), oda / konaklama / misafir, kaynak konuşma ve mesaj.
+> - `Hotel.phoneCountryCode` (Genel parametreler → Misafir iletişimi).
+>
+> **API:** `/messaging/conversations` (imleçli liste; görünüm: açık, cevap bekleyen,
+> bana atanan, atanmamış, kapalı, tümü), `/messaging/summary`, `/messaging/channels`,
+> `/messaging/conversations/:id` (+ `/messages` imleçli, `POST /messages`, `POST /read`,
+> `PATCH` yönetim). `/guest-requests` (liste, `/summary`, `/assignees`,
+> `/room-context`, `POST /`, `POST /from-conversation/:id`, `PATCH /:id`, `POST /:id/status`).
+>
+> **Kurallar:**
+> - Hizmet süresi önceliğe göre (`GUEST_REQUEST_SLA_MINUTES`: acil 15, yüksek 30,
+>   normal 60, düşük 240 dk); uyandırma gibi zamanlı işte istenen saat. Başlatılmış
+>   işi geri almak süreyi **sıfırlamaz** (gecikme gizlenemez); tamamlanmış / iptal
+>   işi yeniden açmak sıfırlar (misafir yeniden bekliyor).
+> - Durum geçişi tek kural: `guestRequestTransitionError` (contracts). İptal sebep ister.
+> - Konuşma yönetimi `expectedStateVersion` ile korunur — misafirin yazması çakışma
+>   sayılmaz; istek işlemleri `expectedUpdatedAt` ile.
+> - Personel yazınca AI modundaki konuşma personele geçer; kapalı konuşmaya
+>   misafir ya da personel yazınca konuşma açılır. Aynı istemci kimliğiyle ikinci
+>   gönderim yeni mesaj yazmaz (çift tık, ağ tekrarı).
+> - Saatler **otelin saat diliminde** girilir ve gösterilir (`zonedWallTimeToUtc`,
+>   contracts; yaz saati geçişleri test edildi).
+> - Misafir telefondan bulunur: kartta `+`/`00` ile yazılmış numara birebir,
+>   `0` ile ya da ülke kodsuz yazılmış numara otelin telefon ülke koduyla
+>   karşılaştırılır; son rakamları aynı başka ülke numarası eşleşmez
+>   (`phoneMatchScore`). Aday kartlar ifade dizininden (`Guest_phone_match_idx`) gelir.
+>
+> **Ekranlar:** `/mesajlar` (geniş ekranda liste · konuşma · misafir/konaklama/istekler;
+> dar ekranda tek sütun), `/istekler` (özet kutuları filtre olarak, kategori çipleri,
+> akan geri sayım, satırdan başlat/tamamla/ata, detay + düzenleme, adres çubuğunda
+> görünüm). Mesajdan tek tıkla istek; web chat konuşması oda seçilerek içerideki
+> konaklamaya bağlanır. Yan menüde rozetler (cevap bekleyen konuşma / açık istek;
+> süresi aşılan varsa kırmızı), sekme başlığında sayı, yeni misafir mesajında ses
+> (kapatılabilir; birden çok sekmede bir kez çalar).
+>
+> **2500 panel için:** rozet ve sekme sayıları iki parçalı önbellekte — otel geneli
+> sayılar (sürüm + dakika anahtarlı) bütün personelde ortak, yalnızca "bana atanan"
+> kişi başına. Gelen kutusu ilk sayfası ve aramasız istek listeleri de sürüm
+> anahtarlı önbellekte; canlı haberde yalnızca açık olan konuşmanın geçmişi
+> tazelenir. Sağlık ucunda `messagingCache` / `requestCache`.
+>
+> **Sınırlar (bilinçli):** konaklamaya bağlama yalnızca içerideki misafir için
+> (gelecek rezervasyon araması modül 4 ile gelir); "şu anki personel" geçici olarak
+> `x-actor` e-postası (modül 2 notu); hazır cevap şablonları modül 9'la.
 
 ### 8. WhatsApp / web chat ile konuşarak rezervasyon — Ali Kemal
 **Gün sonu:** Misafir web chat'e "15-18 Ekim 2 kişilik oda" yazıyor; AI konuşup onay alıyor; rezervasyon kendiliğinden oluşuyor, oda atanıyor, onay mesajı gidiyor.
@@ -379,6 +492,44 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 - [ ] Bütçe aşımı veya agent kapalıysa konuşma manuel göreve düşer (7'deki ekrana)
 - [ ] Uçtan uca demo: chat → rezervasyon → oda → onay mesajı, Activity Feed'de izlenir
 
+> **📌 Modül 7'den devir (17 Eylül 2026 — Ahmet): gelen kutusu hazır; kanal ve AI tarafı sende.**
+> Modül 7 senin kısmını boş bıraktı, sahte doldurmadı. Bağlanma noktaları:
+>
+> 1. **Geçidi kaydet:** `hotel/backend/src/lib/channels.js` →
+>    `registerChannel('WHATSAPP', { name: 'whatsapp-gateway' })` (dönen fonksiyon
+>    kapanışta kaydı siler). Kayıt olunca ekrandaki "bağlantı kurulmadı" uyarısı kalkar.
+> 2. **Gelen mesaj:** `modules/messaging/service.js → receiveInboundMessage(hotelId,
+>    { channel, externalId, externalMessageId, text, displayName?, sentAt? })`.
+>    **HTTP ucu yok** — webhook imzasını / token'ını sen doğrula, sonra süreç içinde
+>    çağır. `externalMessageId` zorunlu: aynı webhook iki kez gelirse
+>    `{ duplicate: true }` döner, tek kayıt olur. Konuşma yoksa açılır; misafir
+>    telefondan / e-postadan bulunur, içerideki (yoksa yaklaşan) konaklamaya bağlanır;
+>    aynı numaradan eşzamanlı mesajlar tek konuşmada toplanır.
+> 3. **Giden mesaj:** personel ya da AI yazınca `guest.message.reply` yayınlanır
+>    (`conversationId, messageId, channel, recipient, author`). Geçit dinler, gönderir,
+>    sonucu `markMessageDelivery(hotelId, messageId, { delivery: 'SENT' | 'DELIVERED' |
+>    'READ' | 'FAILED', externalMessageId?, failureReason?, at? })` ile bildirir. Durum
+>    yalnızca ileri gider (geç gelen bildirim geri almaz). **Geçit kapalıyken yazılmış
+>    cevaplar bekliyor:** açılışta `Message` içinde `delivery = 'PENDING'`,
+>    `direction = 'OUT'`, `internal = false` olanları gönder (`hotelId + delivery` index'li).
+> 4. **Concierge (AI):** `registerAutoResponder({ name })` ile kaydol. Kayıt varken
+>    yeni konuşmalar `AI` modunda açılır ve ekranda "AI'a devret" görünür.
+>    `guest.message.received` gövdesinde `mode` var — yalnızca `AI` ise cevap üret.
+>    Cevabı `appendAiReply(hotelId, conversationId, { text, meta })` ile yaz; konuşma bu
+>    arada personele alındıysa ya da kapandıysa 409 `CONVERSATION_MANUAL` döner, gönderme.
+> 5. **Manuele düşme** (bütçe aşımı, ajan hatası): `updateConversation(hotelId, id,
+>    { mode: 'MANUAL', expectedStateVersion })`. Misafir mesajıyla bekleme zaten
+>    başladığı için konuşma "cevap bekleyen" görünümüne ve yan menü rozetine düşer.
+> 6. **AI'ın açtığı istek:** personel formu `source: 'AI'` kabul etmez. Ajan istek
+>    açacaksa `guest-requests/service.js`'teki `insertRequest` çekirdeğini kullanan,
+>    kaynağı `AI` olan bir sarmalayıcı ekle (`createRequestFromConversation` kaynağı
+>    `CONVERSATION` yazar).
+> 7. **Web chat:** `externalId` = widget oturum kimliği. Misafir kimliği taşımaz;
+>    personel ekranda odayı seçip konuşmayı içerideki konaklamaya bağlıyor.
+>
+> Kanal kaydı ve event bus süreç içi; backend çok örnekli çalıştırılacaksa ikisi
+> birlikte paylaşılan bir yere taşınmalı.
+
 ### 9. Bildirim merkezi — arkadaşın
 **Gün sonu:** Sistem misafire e-posta/SMS/WhatsApp, personele uygulama içi bildirim gönderiyor; her gönderim loglu; şablonlar ekrandan düzenleniyor.
 - [ ] Backend: Notification, NotificationTemplate, ChannelConfig tabloları + API
@@ -388,6 +539,14 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 - [ ] Ekran: Gönderim geçmişi (kanal, alıcı, durum, hata, tekrar gönder)
 - [ ] Frontend: üst barda zil ikonu, personel bildirimleri listesi
 - [ ] Aktör: notification-worker paketi (`notification.send.requested` → gönder → `notification.sent/failed`; `reservation.created` → onay şablonu; `room.assigned` → oda bilgisi şablonu)
+
+> **Modül 7'den not (17 Eylül 2026 — Ahmet):** personel bildirimi için hazır
+> event'ler: `guest.request.created` (`requestId, category, priority, roomId`),
+> `guest.request.updated`, `guest.message.received`. Yeni mesaj sesi ve tercihi
+> şimdilik `frontend/src/lib/inboxSound.js`'te; zil / bildirim tercihleri gelince oraya
+> taşınabilir. Misafire giden WhatsApp mesajının **teslimi** modül 8'in geçidinde
+> (bkz. modül 8 notu) — bildirim merkezinin WhatsApp adaptörü aynı geçidi kullanmalı,
+> ikinci bir gönderici kurulmamalı. Hazır cevap şablonları gelince mesaj kutusuna eklenecek.
 
 ### 10. Aktör Activity Feed + audit log — Ali Kemal
 **Gün sonu:** Admin, sistemde olan biteni canlı izliyor: hangi aktör hangi event'i işledi, ne kadar sürdü, hata var mı; bir rezervasyonun tüm zincirini tek tıkla görüyor.
@@ -512,6 +671,12 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 > - Oda ataması, **bugün girecek** misafir için temiz/kontrol edilmiş odayı öne alıyor;
 >   yani kat hizmetinin zamanında işaretlenmesi doğrudan atama kalitesini etkiler.
 > - Sorun var → teknik servis (modül 20): arıza kaydını `blockRoom` açar, bu modül açmaz.
+>
+> **Modül 7'den ek (17 Eylül 2026):** misafir istekleri `HOUSEKEEPING` ve `AMENITY`
+> kategorisinde `guest.request.created` yayınlıyor (`requestId, category, priority,
+> roomId`). Kat görevi üreteceksen bu event'i dinle ve görevi isteğe bağla; görev
+> bitince isteği `changeRequestStatus(hotelId, requestId, { status: 'DONE', note,
+> expectedUpdatedAt })` ile kapat — istek ekranı misafirin gözünden takip olarak kalır.
 
 ### 15. Folyo yönetimi — arkadaşın
 **Gün sonu:** Her konaklamanın hesabı tek ekranda: oda ücreti, restoran, minibar kalemleri; bölme, birleştirme, transfer yapılabiliyor.
@@ -566,6 +731,11 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 >   de buradan beslenir) → `applySystemRoomState(..., { housekeepingStatus: 'DIRTY' }, 'Gün sonu')`.
 > - **Oda ücreti basarken** paydayı arızalı odalardan ayır: arızalı oda satılabilir
 >   envanterde yok, hizmet dışı oda var (DailyStats doluluk hesabı için).
+> - **"O gece misafir hangi odadaydı"** (17 Eylül 2026): oda değiştirmiş
+>   konaklamada cevap `RoomStaySegment` (kapanmış dilimler) + açık dilimdir
+>   (`[coalesce(roomSince, checkIn), checkOut)` → `roomId`). Oda ücreti ve
+>   kat hizmeti raporu `reservation.roomId`'ye tek başına bakmamalı.
+>   `modules/plan/rules.js` → `summarizeDays` aynı hesabı yapıyor (örnek).
 **Gün sonu:** Kat görevlisi odadan tüketilen minibar ürünlerini giriyor, çamaşır siparişi alınıyor; ikisi de folyoya otomatik yansıyor.
 - [ ] Backend: MinibarItem, MinibarConsumption, LaundryOrder tabloları + API
 - [ ] Backend: tüketim kaydı → `minibar.consumed` event → folyo kalemi
@@ -599,6 +769,11 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 >   arızalı kayıt overbooking yaratacaksa 409 `WOULD_OVERBOOK`. Acil arızada ekranın
 >   "misafiri başka odaya taşı" adımını göstermesi gerekir (atama API'si hazır).
 > - Geçmiş tarihli kayıt açılamaz (iş günü: `getBusinessDate`); çakışan iki kayıt 409 `BLOCK_OVERLAP`.
+>
+> **Modül 7'den ek (17 Eylül 2026):** "klima çalışmıyor" gibi misafir istekleri
+> `MAINTENANCE` kategorisinde `guest.request.created` ile geliyor. Bilet açılınca
+> isteği `IN_PROGRESS` yap, bilet çözülünce `DONE` (bkz. `changeRequestStatus`);
+> ikisi ayrı kayıt, istek misafirin beklediği işi, bilet teknik işi anlatır.
 
 ### 21. Kayıp eşya — arkadaşın
 **Gün sonu:** Bulunan eşyalar fotoğraflı kayıt altında; misafirle eşleştirilip teslim edildiği izleniyor.
@@ -617,6 +792,13 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 - [ ] Ekran: Konaklama geçmişi sekmesi, harcama sekmesi, notlar sekmesi
 - [ ] Ekran: Birleştirme (iki kaydı seç, hangi alanlar kalacak)
 - [ ] Rezervasyon formuna misafir kartı önizlemesi (tercihler görünsün)
+
+> **Modül 7'den not (17 Eylül 2026 — Ahmet):** gelen WhatsApp mesajı misafir kartını
+> telefondan buluyor (`Guest_phone_match_idx` ifade dizini + `phoneMatchScore`;
+> ülke kodsuz numara `Hotel.phoneCountryCode` ile okunur). Aynı numaraya birden
+> çok kart varsa en son güncellenen alınıyor. `mergeGuests` birleştirirken
+> `Conversation.guestId` ve `GuestRequest.guestId`'yi de taşımalı. Misafir kartı
+> ekranında telefon girişine "ülke kodu yoksa otelin kodu varsayılır" ipucu konmalı.
 
 ---
 

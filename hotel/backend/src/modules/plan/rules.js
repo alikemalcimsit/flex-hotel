@@ -1,5 +1,5 @@
-import { addDays, eachNight, nightCount, toIsoDay, toUtcDayStart } from '@hotelos/core';
-import { consumesInventory, INVENTORY_REMOVING_BLOCK_TYPE } from '../rooms/rules.js';
+import { addDays, DAY_MS, eachNight, nightCount, toIsoDay, toUtcDayStart } from '@hotelos/core';
+import { consumesInventory, INVENTORY_REMOVING_BLOCK_TYPE, openSliceStart } from '../rooms/rules.js';
 
 /**
  * Oda planının (rack chart) saf çekirdeği — veritabanı, HTTP veya Prisma bilmez.
@@ -19,12 +19,24 @@ import { consumesInventory, INVENTORY_REMOVING_BLOCK_TYPE } from '../rooms/rules
  *
  * Bir konaklama pencereden önce başlamış ya da sonra bitiyor olabilir. Bar
  * kırpılır ama `continuesBefore` / `continuesAfter` ile işaretlenir: ekran ok
- * çizer, kullanıcı barın devam ettiğini bilir. Kırpmayı unutmak, ızgarada
- * negatif başlangıç indeksine ve kaymış satırlara yol açar.
+ * çizer, kullanıcı barın devam ettiğini bilir.
+ *
+ * ### Oda değiştirmiş konaklama
+ *
+ * İçerideki misafir taşındıysa konaklama **iki (ya da daha fazla) bar** olur:
+ * eski odada kapanmış dilim (`RoomStaySegment`), yeni odada açık dilim
+ * (`roomSince`'ten itibaren). İkisi de aynı rezervasyonu gösterir; ekran
+ * birbirine okla bağlar.
  */
 
-/** Plan ızgarasında bir rezervasyon barının en az kaç sütun kapladığı. */
+/** Plan ızgarasında bir barın en az kaç sütun kapladığı. */
 const MIN_SEGMENT_SPAN = 1;
+
+/** Çıkış yapmış konaklama yalnızca geçmiş gecelerde yer tutar (bkz. `countsNight`). */
+const CHECKED_OUT = 'CHECKED_OUT';
+
+/** Girişi yapılmış sayılan durumlar (özetteki "yapıldı" sayısı). */
+const ARRIVED_STATUSES = new Set(['CHECKED_IN', CHECKED_OUT]);
 
 /**
  * Pencere günleri (gece başlangıçları), ISO gün metni olarak.
@@ -69,22 +81,27 @@ export function placeInWindow(range, { from, days }) {
 /**
  * Odaların satırlarını ve satırlardaki barları kurar.
  *
- * Aynı satırda hem rezervasyon hem arıza barı olabilir (arıza kaydı ileri
- * tarihli, rezervasyon bugünkü olabilir); ikisi de aynı sütun sistemine oturur.
- * Çakışan rezervasyon zaten veritabanı kısıtıyla imkânsız, ama arıza kaydı ile
- * geçmiş bir konaklama üst üste gelebilir — ekran bunu üst üste değil, arıza
- * barını ince bir şerit olarak çizerek gösterir.
+ * - Rezervasyonun **açık dilimi** kendi odasının satırına düşer
+ *   (`movedIn`: misafir bu odaya sonradan taşındı).
+ * - **Kapanmış dilimler** eski odaların satırına düşer (`movedOut`: misafir
+ *   buradan başka odaya taşındı). Dilimin rezervasyon bilgisi `segment.reservation`
+ *   içinde gelir.
+ * - Arıza kayıtları ayrı listededir; ekran onları rezervasyonların altında çizer.
+ *
+ * Aynı rezervasyon birden çok satırda görünebildiği için her barın kendi
+ * anahtarı (`key`) var.
  *
  * @param {{
  *   rooms: Array<{ id: string }>,
- *   reservations: Array<{ id: string, roomId: string | null, checkIn: Date | string, checkOut: Date | string, status: string }>,
+ *   reservations: Array<{ id: string, roomId: string | null, checkIn: Date | string, checkOut: Date | string, roomSince?: Date | string | null, status: string }>,
  *   blocks: Array<{ id: string, roomId: string, type?: string, startDate: Date | string, endDate?: Date | string | null }>,
+ *   segments?: Array<{ id: string, roomId: string, startDate: Date | string, endDate: Date | string, reason?: string | null, reservation: object }>,
  *   from: Date | string,
  *   days: number,
  * }} input
  * @returns {Map<string, { reservations: object[], blocks: object[] }>} oda kimliği → barlar
  */
-export function buildRoomSegments({ rooms, reservations, blocks, from, days }) {
+export function buildRoomSegments({ rooms, reservations, blocks, segments = [], from, days }) {
   const window = { from, days };
   /** @type {Map<string, { reservations: object[], blocks: object[] }>} */
   const byRoom = new Map(rooms.map((room) => [room.id, { reservations: [], blocks: [] }]));
@@ -93,9 +110,37 @@ export function buildRoomSegments({ rooms, reservations, blocks, from, days }) {
     if (!reservation.roomId) continue;
     const row = byRoom.get(reservation.roomId);
     if (!row) continue;
-    const placement = placeInWindow({ start: reservation.checkIn, end: reservation.checkOut }, window);
+    const openStart = openSliceStart(reservation);
+    const placement = placeInWindow({ start: openStart, end: reservation.checkOut }, window);
     if (!placement) continue;
-    row.reservations.push({ ...reservation, ...placement });
+    row.reservations.push({
+      ...reservation,
+      ...placement,
+      key: `${reservation.id}:open`,
+      segmentId: null,
+      sliceFrom: openStart,
+      sliceTo: reservation.checkOut,
+      movedIn: toUtcDayStart(openStart) > toUtcDayStart(reservation.checkIn),
+      movedOut: false,
+    });
+  }
+
+  for (const segment of segments) {
+    const row = byRoom.get(segment.roomId);
+    if (!row || !segment.reservation) continue;
+    const placement = placeInWindow({ start: segment.startDate, end: segment.endDate }, window);
+    if (!placement) continue;
+    row.reservations.push({
+      ...segment.reservation,
+      ...placement,
+      key: `${segment.reservation.id}:${segment.id}`,
+      segmentId: segment.id,
+      sliceFrom: segment.startDate,
+      sliceTo: segment.endDate,
+      segmentReason: segment.reason ?? null,
+      movedIn: toUtcDayStart(segment.startDate) > toUtcDayStart(segment.reservation.checkIn),
+      movedOut: true,
+    });
   }
 
   for (const block of blocks) {
@@ -117,58 +162,112 @@ export function buildRoomSegments({ rooms, reservations, blocks, from, days }) {
 }
 
 /**
+ * Bir konaklama verilen gecede odayı/satışı tüketiyor mu?
+ *
+ * Bekleyen, onaylı ve içerideki konaklama her gecesinde tüketir. Çıkış yapmış
+ * konaklama yalnızca **geçmiş** gecelerde (misafir gerçekten kaldı) sayılır:
+ * erken çıkışta rezervasyonun çıkış tarihi güncellenmemiş olabilir ve ileriki
+ * geceleri dolu göstermek yanlış olur.
+ *
+ * @param {{ status: string }} reservation
+ * @param {number} nightTime gece başlangıcı (ms)
+ * @param {number} businessTime iş günü başlangıcı (ms)
+ */
+function countsNight(reservation, nightTime, businessTime) {
+  if (consumesInventory(reservation)) return true;
+  return reservation.status === CHECKED_OUT && nightTime < businessTime;
+}
+
+/**
  * Izgaranın başlığındaki günlük özet — **otelin tamamından**, sayfadan değil.
  *
- * Ön büro şefi ızgaraya bakarken "yarın kaç giriş var, kaç oda boş kalıyor"
- * sorusunun cevabını ister. Sayfalanmış satırlardan hesaplamak, 3. sayfaya
- * geçince doluluğun değişmesi demekti.
- *
  * Tanımlar (otelcilik karşılıkları):
- * - `arrivals`: o gün giriş yapacak konaklama (oda atanmış ya da atanmamış).
- * - `departures`: o sabah çıkacak konaklama — o geceyi **doldurmaz**.
+ * - `arrivals` / `arrivalsDone`: o gün giriş yapacak konaklama / girişi yapılmış olanlar.
+ * - `departures` / `departuresDone`: o sabah çıkacak konaklama / çıkışı yapılmış olanlar.
+ *   Çıkış yapmış konaklamalar da sayılır: öğlen "8 çıkıştan 5'i yapıldı" okunmalı,
+ *   sayı gün içinde azalmamalı.
  * - `stayovers`: o gece kalan ama o gün girmeyen konaklama.
+ * - `sold`: o geceyi tüketen konaklama (dolu + oda bekleyen). Geçmiş gecelerde
+ *   çıkış yapmış konaklamalar da dahil — dünün doluluğu sonradan düşmez.
  * - `sellable`: toplam oda − arızalı (hizmet dışı odalar satışta sayılır).
- * - `occupancyPct`: (dolu + oda bekleyen) / satılabilir — oda bekleyen
- *   rezervasyon da envanteri tükettiği için paya dahildir.
+ * - `occupancyPct`: sold / sellable.
  *
  * @param {{
  *   totalRooms: number,
- *   reservations: Array<{ roomId: string | null, checkIn: Date | string, checkOut: Date | string, status: string }>,
+ *   reservations: Array<{ id: string, roomId: string | null, checkIn: Date | string, checkOut: Date | string, roomSince?: Date | string | null, status: string }>,
  *   blocks: Array<{ roomId: string, type?: string, startDate: Date | string, endDate?: Date | string | null }>,
+ *   segments?: Array<{ reservationId: string, roomId: string, startDate: Date | string, endDate: Date | string }>,
  *   from: Date | string,
  *   days: number,
+ *   businessDate: Date | string,
  * }} input
- * @returns {Array<{ date: string, arrivals: number, departures: number, stayovers: number, occupied: number, unassigned: number, outOfOrder: number, outOfService: number, sellable: number, free: number, occupancyPct: number }>}
  */
-export function summarizeDays({ totalRooms, reservations, blocks, from, days }) {
+export function summarizeDays({ totalRooms, reservations, blocks, segments = [], from, days, businessDate }) {
   const dayList = planDays(from, days);
   const index = new Map(dayList.map((day, position) => [day, position]));
+  const windowStart = toUtcDayStart(from);
+  const businessTime = toUtcDayStart(businessDate);
   const zeros = () => dayList.map(() => 0);
+  const sets = () => dayList.map(() => new Set());
 
   const arrivals = zeros();
+  const arrivalsDone = zeros();
   const departures = zeros();
-  const occupied = zeros();
+  const departuresDone = zeros();
+  const sold = zeros();
   const unassigned = zeros();
-  const nightsCovered = dayList.map(() => new Set());
-  const outOfOrder = dayList.map(() => new Set());
-  const outOfService = dayList.map(() => new Set());
+  const roomsTaken = sets();
+  const outOfOrder = sets();
+  const outOfService = sets();
 
-  for (const reservation of reservations) {
-    if (!consumesInventory(reservation)) continue;
+  const nightTime = (position) => windowStart + position * DAY_MS;
+  const byId = new Map(reservations.map((reservation) => [reservation.id, reservation]));
 
-    const arrival = index.get(toIsoDay(reservation.checkIn));
-    if (arrival !== undefined) arrivals[arrival] += 1;
-    const departure = index.get(toIsoDay(reservation.checkOut));
-    if (departure !== undefined) departures[departure] += 1;
-
-    const placement = placeInWindow({ start: reservation.checkIn, end: reservation.checkOut }, { from, days });
+  // Kapanmış dilimler: taşınan misafirin eski odası o gece doluydu.
+  /** @type {Map<string, Set<number>>} */
+  const segmentNights = new Map();
+  for (const segment of segments) {
+    const parent = byId.get(segment.reservationId);
+    if (!parent) continue;
+    const placement = placeInWindow({ start: segment.startDate, end: segment.endDate }, { from, days });
     if (!placement) continue;
     for (let offset = 0; offset < placement.span; offset += 1) {
       const position = placement.startIndex + offset;
-      if (reservation.roomId) {
-        occupied[position] += 1;
-        nightsCovered[position].add(reservation.roomId);
-      } else {
+      if (!countsNight(parent, nightTime(position), businessTime)) continue;
+      roomsTaken[position].add(segment.roomId);
+      if (!segmentNights.has(parent.id)) segmentNights.set(parent.id, new Set());
+      segmentNights.get(parent.id).add(position);
+    }
+  }
+
+  for (const reservation of reservations) {
+    const counted = consumesInventory(reservation) || reservation.status === CHECKED_OUT;
+    if (!counted) continue;
+
+    const arrival = index.get(toIsoDay(reservation.checkIn));
+    if (arrival !== undefined) {
+      arrivals[arrival] += 1;
+      if (ARRIVED_STATUSES.has(reservation.status)) arrivalsDone[arrival] += 1;
+    }
+    const departure = index.get(toIsoDay(reservation.checkOut));
+    if (departure !== undefined) {
+      departures[departure] += 1;
+      if (reservation.status === CHECKED_OUT) departuresDone[departure] += 1;
+    }
+
+    const placement = placeInWindow({ start: reservation.checkIn, end: reservation.checkOut }, { from, days });
+    if (!placement) continue;
+    const openStart = toUtcDayStart(openSliceStart(reservation));
+
+    for (let offset = 0; offset < placement.span; offset += 1) {
+      const position = placement.startIndex + offset;
+      const time = nightTime(position);
+      if (!countsNight(reservation, time, businessTime)) continue;
+
+      sold[position] += 1;
+      if (reservation.roomId && time >= openStart) {
+        roomsTaken[position].add(reservation.roomId);
+      } else if (!segmentNights.get(reservation.id)?.has(position)) {
         unassigned[position] += 1;
       }
     }
@@ -186,23 +285,25 @@ export function summarizeDays({ totalRooms, reservations, blocks, from, days }) 
   return dayList.map((date, position) => {
     const outOfOrderCount = outOfOrder[position].size;
     const sellable = Math.max(0, totalRooms - outOfOrderCount);
-    const sold = occupied[position] + unassigned[position];
-    // Arızalı oda hem dolu hem arızalı olabilir (misafir içerideyken arıza
-    // açıldı); tek oda iki kez düşülmesin diye küme birleşimi kullanılıyor.
-    const unavailable = new Set([...nightsCovered[position], ...outOfOrder[position]]).size;
+    // Arızalı oda aynı gece dolu da olabilir (misafir içerideyken arıza açıldı);
+    // tek oda iki kez düşülmesin diye küme birleşimi.
+    const unavailable = new Set([...roomsTaken[position], ...outOfOrder[position]]).size;
 
     return {
       date,
       arrivals: arrivals[position],
+      arrivalsDone: arrivalsDone[position],
       departures: departures[position],
-      stayovers: Math.max(0, occupied[position] + unassigned[position] - arrivals[position]),
-      occupied: occupied[position],
+      departuresDone: departuresDone[position],
+      stayovers: Math.max(0, sold[position] - arrivals[position]),
+      sold: sold[position],
+      occupied: sold[position] - unassigned[position],
       unassigned: unassigned[position],
       outOfOrder: outOfOrderCount,
       outOfService: outOfService[position].size,
       sellable,
-      free: totalRooms - unavailable - unassigned[position],
-      occupancyPct: sellable === 0 ? 0 : Math.round((sold / sellable) * 100),
+      free: Math.max(0, totalRooms - unavailable - unassigned[position]),
+      occupancyPct: sellable === 0 ? 0 : Math.round((sold[position] / sellable) * 100),
     };
   });
 }

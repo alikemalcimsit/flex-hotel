@@ -1,4 +1,4 @@
-import { INVENTORY_CHANGED_EVENTS } from '@hotelos/core';
+import { LIVE_VIEW_EVENTS, MESSAGING_CHANGED_EVENTS, REQUESTS_CHANGED_EVENTS } from '@hotelos/core';
 import { eventBus } from './events.js';
 
 /**
@@ -25,21 +25,30 @@ import { eventBus } from './events.js';
  * Yani canlı yayın bir hızlandırıcıdır, doğruluğun şartı değil.
  */
 
-/** Panelin dinlediği tek kanal adı. */
+/** Oda planı ve oda listesi kanalı. */
 export const INVENTORY_CHANNEL = 'inventory.changed';
 
+/** Gelen kutusu kanalı. */
+export const MESSAGING_CHANNEL = 'messaging.changed';
+
+/** Misafir istekleri kanalı. */
+export const REQUESTS_CHANNEL = 'requests.changed';
+
 /**
- * Yayınlanan event'ler: envanteri/odayı etkileyen her şey + oda durumu.
- * Katalogdaki `INVENTORY_CHANGED_EVENTS` zaten "canlı ekranlar bunları dinler"
- * diye tanımlı; oda durumu (kirli/temiz, boş/dolu) ona ek.
+ * Kanal → o kanala haber düşüren event'ler. Ekran yalnızca ilgilendiği kanalı
+ * dinler; gelen kutusu açık olmayan panel envanter haberleriyle uğraşmaz.
  */
-const BROADCAST_EVENTS = Object.freeze([...new Set([...INVENTORY_CHANGED_EVENTS, 'room.status.changed'])]);
+const CHANNEL_EVENTS = Object.freeze({
+  [INVENTORY_CHANNEL]: LIVE_VIEW_EVENTS,
+  [MESSAGING_CHANNEL]: MESSAGING_CHANGED_EVENTS,
+  [REQUESTS_CHANNEL]: REQUESTS_CHANGED_EVENTS,
+});
 
 /** @param {string} hotelId */
 export const hotelRoom = (hotelId) => `hotel:${hotelId}`;
 
-/** @type {(() => void) | null} */
-let unsubscribe = null;
+/** @type {Array<() => void>} */
+let unsubscribers = [];
 
 /**
  * Köprüyü kurar. İdempotent: ikinci çağrıda önceki abonelik kapatılır, yoksa
@@ -50,31 +59,36 @@ let unsubscribe = null;
  * @returns {() => void} aboneliği kapatır
  */
 export function registerRealtimeBridge(io, logger = console) {
-  unsubscribe?.();
+  stopRealtimeBridge();
 
-  unsubscribe = eventBus.subscribeMany(BROADCAST_EVENTS, 'socket-bridge', (payload, envelope) => {
-    const hotelId = payload?.hotelId;
-    if (!hotelId) {
-      logger.warn?.({ event: envelope?.name }, 'hotelId taşımayan event yayınlanmadı');
-      return;
-    }
+  unsubscribers = Object.entries(CHANNEL_EVENTS).map(([channel, events]) =>
+    eventBus.subscribeMany(events, `socket-bridge:${channel}`, (payload, envelope) => {
+      const hotelId = payload?.hotelId;
+      if (!hotelId) {
+        logger.warn?.({ event: envelope?.name }, 'hotelId taşımayan event yayınlanmadı');
+        return;
+      }
 
-    io.to(hotelRoom(hotelId)).emit(INVENTORY_CHANNEL, {
-      event: envelope?.name ?? null,
-      roomId: payload.roomId ?? null,
-      reservationId: payload.reservationId ?? null,
-      // Ekran "kim yaptı" bilgisini kendi yaptığı değişikliği ayırmak için
-      // kullanabilir (kendi tıklamasında ikinci bir tazeleme gereksiz).
-      actor: envelope?.actor ?? null,
-      at: envelope?.occurredAt ?? new Date().toISOString(),
-    });
-  });
+      io.to(hotelRoom(hotelId)).emit(channel, {
+        event: envelope?.name ?? null,
+        // Yalnızca kimlikler: içerik (misafir adı, mesaj metni) socket'e çıkmaz.
+        roomId: payload.roomId ?? null,
+        reservationId: payload.reservationId ?? null,
+        conversationId: payload.conversationId ?? null,
+        requestId: payload.requestId ?? null,
+        // Ekran "kim yaptı" bilgisini kendi yaptığı değişikliği ayırmak için
+        // kullanabilir (kendi tıklamasında ikinci bir tazeleme gereksiz).
+        actor: envelope?.actor ?? null,
+        at: envelope?.occurredAt ?? new Date().toISOString(),
+      });
+    }),
+  );
 
-  return unsubscribe;
+  return stopRealtimeBridge;
 }
 
 /** Testler ve kapanış için: köprüyü söker. */
 export function stopRealtimeBridge() {
-  unsubscribe?.();
-  unsubscribe = null;
+  for (const unsubscribe of unsubscribers) unsubscribe();
+  unsubscribers = [];
 }

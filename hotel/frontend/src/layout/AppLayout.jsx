@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { useFrontOfficeBadges } from '../lib/frontOffice.js';
 import { useHotelSettings } from '../lib/useHotel.js';
 import { useAuthStore } from '../store/auth.js';
 import { useUiStore } from '../store/ui.js';
@@ -10,6 +11,9 @@ import { useMediaQuery } from './useMediaQuery.js';
 
 /** Tailwind'in `xl` kırılımı: bunun üstünde yan menü sabit, altında çekmece. */
 const DESKTOP_QUERY = '(min-width: 80rem)';
+
+/** Sekme başlığı; cevap bekleyen mesaj varsa önüne sayısı eklenir. */
+const DOCUMENT_TITLE = 'FlexHotel';
 
 /**
  * Panelin kabuğu — Spark Admin düzeni: koyu yan menü, yapışkan üst bar, açık
@@ -32,6 +36,16 @@ export function AppLayout() {
   const drawerFirstLinkRef = useRef(null);
 
   const hotelQuery = useHotelSettings();
+  const badges = useFrontOfficeBadges();
+  const waitingCount = badges.messages?.count ?? 0;
+
+  // Panel başka sekmedeyken de "misafir yazdı" görülsün: sekme başlığında sayı.
+  useEffect(() => {
+    document.title = waitingCount > 0 ? `(${waitingCount}) ${DOCUMENT_TITLE}` : DOCUMENT_TITLE;
+  }, [waitingCount]);
+  useEffect(() => () => {
+    document.title = DOCUMENT_TITLE;
+  }, []);
 
   const isCollapsed = isDesktop && isSidebarCollapsed;
   const isDrawerOpen = !isDesktop && isMobileNavOpen;
@@ -91,6 +105,7 @@ export function AppLayout() {
           ref={drawerFirstLinkRef}
           role={user?.role}
           hotel={hotelQuery.data}
+          badges={badges}
           isCollapsed={isCollapsed}
           showClose={!isDesktop}
           onClose={() => {

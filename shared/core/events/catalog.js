@@ -129,6 +129,65 @@ export const EVENT_CATALOG = Object.freeze({
     reservationId: z.string().uuid(),
     roomId: z.string().uuid(),
   }),
+
+  /* ── Misafir mesajları ve istekleri (modül 7) ──
+     Kanallar (WhatsApp, web chat) modül 8'de. Sözleşme:
+     - Kanal gelen mesajı `messaging/service.js → receiveInboundMessage` ile
+       teslim eder; servis kaydeder ve `guest.message.received` yayınlar
+       (router/concierge ajanları bunu dinler).
+     - Personelin ya da AI'ın cevabı `guest.message.reply` yayınlar; kanal
+       bunu dinleyip gönderir ve `markMessageDelivery` ile sonucu bildirir. */
+
+  'guest.message.received': hotelScoped.extend({
+    conversationId: z.string().uuid(),
+    messageId: z.string().uuid(),
+    channel: z.string(),
+    guestId: z.string().uuid().nullable(),
+    /** Konuşma "manuele alınmış"sa AI asistanı cevap vermemeli. */
+    mode: z.enum(['AI', 'MANUAL']),
+  }),
+
+  'guest.message.reply': hotelScoped.extend({
+    conversationId: z.string().uuid(),
+    messageId: z.string().uuid(),
+    channel: z.string(),
+    /** Kanaldaki alıcı: telefon numarası, web chat oturumu. */
+    recipient: z.string(),
+    author: z.enum(['STAFF', 'AI', 'SYSTEM']),
+  }),
+
+  'guest.message.delivery': hotelScoped.extend({
+    conversationId: z.string().uuid(),
+    messageId: z.string().uuid(),
+    delivery: z.enum(['SENT', 'DELIVERED', 'READ', 'FAILED']),
+  }),
+
+  /** Konuşmanın durumu, modu, ataması ya da bağlı konaklaması değişti. */
+  'conversation.updated': hotelScoped.extend({
+    conversationId: z.string().uuid(),
+    changedFields: z.array(z.string()).default([]),
+    mode: z.enum(['AI', 'MANUAL']),
+    status: z.enum(['OPEN', 'CLOSED']),
+  }),
+
+  /** Konuşma okundu: diğer paneller okunmamış rozetini düşürsün. */
+  'conversation.read': hotelScoped.extend({
+    conversationId: z.string().uuid(),
+  }),
+
+  'guest.request.created': hotelScoped.extend({
+    requestId: z.string().uuid(),
+    category: z.string(),
+    priority: z.enum(['LOW', 'NORMAL', 'HIGH', 'URGENT']),
+    roomId: z.string().uuid().nullable(),
+    conversationId: z.string().uuid().nullable(),
+  }),
+
+  'guest.request.updated': hotelScoped.extend({
+    requestId: z.string().uuid(),
+    status: z.enum(['OPEN', 'IN_PROGRESS', 'DONE', 'CANCELLED']),
+    changedFields: z.array(z.string()).default([]),
+  }),
 });
 
 /** @typedef {keyof typeof EVENT_CATALOG} EventName */
@@ -183,3 +242,23 @@ export const INVENTORY_CHANGED_EVENTS = Object.freeze([
   'guest.checked_in',
   'guest.checked_out',
 ]);
+
+/**
+ * Canlı ekranları (oda planı, oda listesi) etkileyen her şey: envanter
+ * değişiklikleri + oda durumu (Boş/Dolu, Kirli/Temiz). Socket yayını ve canlı
+ * ekranların okuma önbelleği bu listeyi kullanır — ikisi ayrışırsa ekran ya
+ * haber alır ama eski cevabı görür ya da hiç haber almaz.
+ */
+export const LIVE_VIEW_EVENTS = Object.freeze([...new Set([...INVENTORY_CHANGED_EVENTS, 'room.status.changed'])]);
+
+/** Gelen kutusunu etkileyen event'ler (canlı yayın: `messaging.changed`). */
+export const MESSAGING_CHANGED_EVENTS = Object.freeze([
+  'guest.message.received',
+  'guest.message.reply',
+  'guest.message.delivery',
+  'conversation.updated',
+  'conversation.read',
+]);
+
+/** İstek listesini etkileyen event'ler (canlı yayın: `requests.changed`). */
+export const REQUESTS_CHANGED_EVENTS = Object.freeze(['guest.request.created', 'guest.request.updated']);

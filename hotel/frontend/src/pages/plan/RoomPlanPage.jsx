@@ -1,7 +1,9 @@
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   HOUSEKEEPING_STATUS_LABELS,
+  MAX_PLAN_DAYS,
   PLAN_ROOMS_PAGE_SIZE,
   PLAN_WINDOW_OPTIONS,
   ROOM_CONDITION_LABELS,
@@ -16,11 +18,12 @@ import { useHotelToday } from '../../lib/useHotel.js';
 import { useLiveInventory } from '../../lib/useLiveInventory.js';
 import { toastError, toastSuccess } from '../../store/toast.js';
 import { useRoomTypes } from '../rooms/useRoomTypes.js';
+import { MoveConfirmDialog } from './MoveConfirmDialog.jsx';
 import { MoveRoomDialog } from './MoveRoomDialog.jsx';
 import { PlanGrid } from './PlanGrid.jsx';
 import { ReservationDrawer } from './ReservationDrawer.jsx';
 import { UnassignedStrip } from './UnassignedStrip.jsx';
-import { BLOCK_TONES, RESERVATION_TONES, addDays, conflictOnRow } from './planTheme.js';
+import { BLOCK_TONES, RESERVATION_TONES, addDays, conflictOnRow, remainingStay } from './planTheme.js';
 
 /**
  * Oda planı — otelin tamamının tek ekranda görüldüğü yer.
@@ -32,6 +35,13 @@ import { BLOCK_TONES, RESERVATION_TONES, addDays, conflictOnRow } from './planTh
  * 2. **Izgara:** satır oda, sütun gece. Barlar konaklama, şeritler arıza kaydı.
  * 3. **Çekmece:** bara tıklayınca açılan detay ve işlemler.
  *
+ * ### Görünüm adres çubuğunda
+ *
+ * Tarih, gün sayısı, filtreler ve sayfa URL'de durur: sayfa yenilenince görünüm
+ * kaybolmaz, "şu tarihe bak" diye link paylaşılabilir, tarayıcının geri tuşu
+ * önceki görünüme döner. Başlangıç tarihi yalnızca kullanıcı başka bir güne
+ * gittiyse yazılır; yoksa ekran otelin bugününü takip eder.
+ *
  * ### Canlı
  *
  * Değişiklikler socket ile gelir (bkz. `useLiveInventory`). Bağlantı koparsa
@@ -42,14 +52,22 @@ import { BLOCK_TONES, RESERVATION_TONES, addDays, conflictOnRow } from './planTh
  *
  * İçerideki misafiri taşımak fiziksel bir iştir (eşya taşınır, anahtar
  * değişir) ve oda durumlarını değiştirir. Sürükle-bırak kazara olabilir; bu
- * yüzden yalnızca bu durumda onay isteniyor.
+ * yüzden yalnızca bu durumda onay (ve sebep) isteniyor.
  */
 
 /** Socket kopukken ekranın kendini tazeleme sıklığı. */
 const OFFLINE_REFRESH_MS = 60_000;
 
+/** Arama kutusuna yazarken sunucuya gitmeden önce beklenen süre. */
+const SEARCH_DEBOUNCE_MS = 300;
+
 /** Filtre "hepsi" seçeneği — boş metin sorguya eklenmiyor (bkz. withQuery). */
 const ALL = '';
+
+const ISO_DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Adres çubuğunda taşınan filtreler (sunucu sorgusuyla aynı adlar). */
+const FILTER_KEYS = Object.freeze(['search', 'roomTypeId', 'floor', 'occupancy', 'housekeepingStatus', 'condition']);
 
 const CONDITION_OPTIONS = [
   { value: ALL, label: 'Tümü' },
@@ -66,14 +84,40 @@ const OCCUPANCY_OPTIONS = [
   ...Object.entries(ROOM_OCCUPANCY_LABELS).map(([value, label]) => ({ value, label })),
 ];
 
-const EMPTY_FILTERS = Object.freeze({
-  search: ALL,
-  roomTypeId: ALL,
-  floor: ALL,
-  occupancy: ALL,
-  housekeepingStatus: ALL,
-  condition: ALL,
-});
+const DAY_OPTIONS = PLAN_WINDOW_OPTIONS.map((value) => ({ value: String(value), label: `${value} gün` }));
+
+/**
+ * Adres çubuğundaki görünüm. Elle değiştirilmiş (geçersiz) değerler sessizce
+ * varsayılana döner — sunucuya bozuk istek gitmesin.
+ * @param {URLSearchParams} params
+ */
+function readView(params) {
+  const from = params.get('from');
+  const days = Number(params.get('days'));
+  const page = Number(params.get('page'));
+  const filters = Object.fromEntries(FILTER_KEYS.map((key) => [key, params.get(key) ?? ALL]));
+  return {
+    pinnedFrom: from && ISO_DAY_PATTERN.test(from) ? from : null,
+    days: Number.isInteger(days) && days >= 1 && days <= MAX_PLAN_DAYS ? days : PLAN_WINDOW_OPTIONS[1],
+    page: Number.isInteger(page) && page >= 1 ? page : 1,
+    filters,
+  };
+}
+
+/** Oda değişikliği sonucunu kullanıcıya anlatan metin. */
+function changeRoomMessage(data) {
+  const roomNumber = data.reservation?.roomNumber ?? '';
+  switch (data.mode) {
+    case 'UNCHANGED':
+      return 'Rezervasyon zaten bu odada';
+    case 'IN_HOUSE_MOVED':
+      return `Misafir ${data.previousRoomNumber} → ${roomNumber} odasına taşındı. ${data.previousRoomNumber} numaralı oda kirli olarak işaretlendi.`;
+    case 'MOVED':
+      return `Rezervasyon ${data.previousRoomNumber} → ${roomNumber} odasına taşındı`;
+    default:
+      return `${roomNumber} numaralı oda atandı`;
+  }
+}
 
 export function RoomPlanPage() {
   const queryClient = useQueryClient();
@@ -81,16 +125,45 @@ export function RoomPlanPage() {
   const { today } = useHotelToday();
   const { options: roomTypeOptions } = useRoomTypes();
 
-  // Kullanıcı başka bir güne gitmediyse pencere otelin bugününü takip eder.
-  const [pinnedFrom, setPinnedFrom] = useState(null);
-  const [days, setDays] = useState(PLAN_WINDOW_OPTIONS[1]);
-  const [filters, setFilters] = useState(EMPTY_FILTERS);
-  const [page, setPage] = useState(1);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const view = readView(searchParams);
+  const { pinnedFrom, days, page, filters } = view;
+  const from = pinnedFrom ?? today;
+
+  /** Görünümü günceller; filtre ya da pencere değişince sayfa başa döner. */
+  const updateView = useCallback(
+    (changes, { resetPage = true, replace = false } = {}) => {
+      setSearchParams(
+        (current) => {
+          const next = new URLSearchParams(current);
+          for (const [key, value] of Object.entries(changes)) {
+            if (value === null || value === undefined || value === ALL) next.delete(key);
+            else next.set(key, String(value));
+          }
+          if (resetPage && !('page' in changes)) next.delete('page');
+          return next;
+        },
+        // Yazarken her duraklama geçmişe ayrı adım olarak eklenmesin.
+        { replace },
+      );
+    },
+    [setSearchParams],
+  );
+
+  // Arama kutusu yerel: her tuşta adres ve sorgu değişmesin.
+  const [searchText, setSearchText] = useState(filters.search);
+  useEffect(() => setSearchText(filters.search), [filters.search]);
+  useEffect(() => {
+    if (searchText === filters.search) return undefined;
+    // Kırpma sunucuda: burada kırpılırsa "ayşe " yazıp duraklayan kullanıcının
+    // boşluğu silinir ve sonraki harf bitişik yazılır.
+    const timer = setTimeout(() => updateView({ search: searchText }, { replace: true }), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [searchText, filters.search, updateView]);
 
   // Sürüklenen kayıt hem state'te (ızgara onu soluklaştırsın diye) hem ref'te
   // tutuluyor: "bırak" olayı, sürüklemeyi başlatan çizimden önce gelebilir ve
-  // o an state'i okuyan bir kapanış (closure) boş görür — bırakma sessizce
-  // kaybolurdu. Ref her zaman günceldir.
+  // o an state'i okuyan bir kapanış boş görür — bırakma sessizce kaybolurdu.
   const draggingRef = useRef(null);
   const [dragging, setDragging] = useState(null);
   const [dropTargetId, setDropTargetId] = useState(null);
@@ -99,21 +172,11 @@ export function RoomPlanPage() {
   const [pendingMove, setPendingMove] = useState(null);
   const [unassignTarget, setUnassignTarget] = useState(null);
 
-  const from = pinnedFrom ?? today;
   const { isLive } = useLiveInventory([['plan'], ['rooms']]);
 
   const planQuery = useQuery({
     queryKey: ['plan', 'grid', { from, days, page, ...filters }],
-    queryFn: () =>
-      api(
-        withQuery('/plan', {
-          from,
-          days,
-          page,
-          pageSize: PLAN_ROOMS_PAGE_SIZE,
-          ...filters,
-        }),
-      ),
+    queryFn: () => api(withQuery('/plan', { from, days, page, pageSize: PLAN_ROOMS_PAGE_SIZE, ...filters })),
     enabled: Boolean(from),
     placeholderData: keepPreviousData,
     refetchInterval: isLive ? false : OFFLINE_REFRESH_MS,
@@ -127,26 +190,16 @@ export function RoomPlanPage() {
     refetchInterval: isLive ? false : OFFLINE_REFRESH_MS,
   });
 
-  const refresh = () => {
+  const refresh = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['plan'] });
     queryClient.invalidateQueries({ queryKey: ['rooms'] });
-  };
+  }, [queryClient]);
 
   const changeRoomMutation = useMutation({
-    mutationFn: ({ reservationId, roomId }) => apiPut(`/plan/reservations/${reservationId}/room`, { roomId }),
+    mutationFn: ({ reservationId, roomId, reason }) =>
+      apiPut(`/plan/reservations/${reservationId}/room`, { roomId, reason: reason || null }),
     onSuccess: (data) => {
-      const roomNumber = data.reservation?.roomNumber ?? '';
-      if (data.mode === 'UNCHANGED') {
-        toastSuccess('Rezervasyon zaten bu odada');
-      } else if (data.mode === 'IN_HOUSE_MOVED') {
-        toastSuccess(
-          `Misafir ${data.previousRoomNumber} → ${roomNumber} odasına taşındı. ${data.previousRoomNumber} numaralı oda kirli olarak işaretlendi.`,
-        );
-      } else if (data.mode === 'MOVED') {
-        toastSuccess(`Rezervasyon ${data.previousRoomNumber} → ${roomNumber} odasına taşındı`);
-      } else {
-        toastSuccess(`${roomNumber} numaralı oda atandı`);
-      }
+      toastSuccess(changeRoomMessage(data));
       setPendingMove(null);
       setMoveTarget(null);
       refresh();
@@ -159,7 +212,6 @@ export function RoomPlanPage() {
     onSuccess: () => {
       toastSuccess('Oda ataması kaldırıldı');
       setUnassignTarget(null);
-      setDetailId(null);
       refresh();
     },
     onError: (error) => toastError(error.message),
@@ -175,52 +227,60 @@ export function RoomPlanPage() {
     onError: (error) => toastError(error.message),
   });
 
-  const startDrag = (payload) => {
+  const startDrag = useCallback((payload) => {
     draggingRef.current = payload;
     setDragging(payload);
-  };
+  }, []);
 
-  const endDrag = () => {
+  const endDrag = useCallback(() => {
     draggingRef.current = null;
     setDragging(null);
     setDropTargetId(null);
-  };
+  }, []);
+
+  const mutateChangeRoom = changeRoomMutation.mutate;
 
   /** Sürüklenen kaydı bir odanın satırına bırakma. */
-  const handleDrop = (room) => {
-    const payload = draggingRef.current;
-    endDrag();
-    if (!payload || payload.roomId === room.id) return;
+  const handleDrop = useCallback(
+    (room) => {
+      const payload = draggingRef.current;
+      endDrag();
+      if (!payload || payload.roomId === room.id) return;
 
-    // Ekrandaki veriyle görülebilen çakışmayı sunucuya sormadan söylüyoruz:
-    // kullanıcı "neden olmadı" cevabını bir tık beklemeden almalı. Görünmeyen
-    // engelleri (kapasite, overbooking, pencere dışı konaklama) sunucu söyler.
-    const conflict = conflictOnRow(room, payload, payload.reservationId);
-    if (conflict) {
-      toastError(
-        conflict.kind === 'BLOCK'
-          ? `${room.number} numaralı odada bu tarihlerde arıza kaydı var: ${conflict.label}`
-          : `${room.number} numaralı oda bu tarihlerde dolu: ${conflict.label}`,
-      );
-      return;
-    }
+      // Ekrandaki veriyle görülebilen çakışmayı sunucuya sormadan söylüyoruz:
+      // kullanıcı "neden olmadı" cevabını bir tık beklemeden almalı. Görünmeyen
+      // engelleri (kapasite, overbooking, pencere dışı konaklama) sunucu söyler.
+      const conflict = conflictOnRow(room, remainingStay(payload, today), payload.reservationId);
+      if (conflict) {
+        toastError(
+          conflict.kind === 'BLOCK'
+            ? `${room.number} numaralı odada bu tarihlerde arıza kaydı var: ${conflict.label}`
+            : `${room.number} numaralı oda bu tarihlerde dolu: ${conflict.label}`,
+        );
+        return;
+      }
 
-    // İçerideki misafirin taşınması fiziksel bir iş; kazara sürüklemeyi onaya bağlıyoruz.
-    if (payload.status === 'CHECKED_IN') {
-      setPendingMove({ ...payload, room });
-      return;
-    }
-    changeRoomMutation.mutate({ reservationId: payload.reservationId, roomId: room.id });
-  };
+      // İçerideki misafirin taşınması fiziksel bir iş; kazara sürüklemeyi onaya bağlıyoruz.
+      if (payload.status === 'CHECKED_IN') {
+        setPendingMove({ ...payload, room });
+        return;
+      }
+      mutateChangeRoom({ reservationId: payload.reservationId, roomId: room.id });
+    },
+    [endDrag, mutateChangeRoom, today],
+  );
 
-  const setFilter = (key) => (event) => {
-    setFilters((current) => ({ ...current, [key]: event.target.value }));
-    setPage(1);
-  };
+  const setFilter = (key) => (event) => updateView({ [key]: event.target.value });
+
+  // Adresten elle gelen gün sayısı listede yoksa seçenek olarak eklenir; yoksa
+  // açılır liste yanlış değeri gösterirdi.
+  const dayOptions = DAY_OPTIONS.some((option) => option.value === String(days))
+    ? DAY_OPTIONS
+    : [...DAY_OPTIONS, { value: String(days), label: `${days} gün` }];
 
   const data = planQuery.data;
   const meta = data?.meta;
-  const filtersActive = Object.values(filters).some((value) => value !== ALL);
+  const filtersActive = FILTER_KEYS.some((key) => filters[key] !== ALL);
 
   return (
     <div className="flex flex-col gap-5">
@@ -236,36 +296,31 @@ export function RoomPlanPage() {
             name="from"
             type="date"
             value={from ?? ''}
-            onChange={(event) => {
-              if (event.target.value) {
-                setPinnedFrom(event.target.value);
-                setPage(1);
-              }
-            }}
+            onChange={(event) => event.target.value && updateView({ from: event.target.value })}
             className="w-full sm:w-44"
           />
           <Select
             label="Gün"
             name="days"
-            value={days}
-            onChange={(event) => setDays(Number(event.target.value))}
-            options={PLAN_WINDOW_OPTIONS.map((value) => ({ value: String(value), label: `${value} gün` }))}
+            value={String(days)}
+            onChange={(event) => updateView({ days: event.target.value })}
+            options={dayOptions}
             className="w-28"
           />
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" icon="chevronLeft" onClick={() => setPinnedFrom(addDays(from, -days))}>
+            <Button variant="outline" icon="chevronLeft" onClick={() => updateView({ from: addDays(from, -days) })}>
               Geri
             </Button>
-            <Button variant="secondary" onClick={() => setPinnedFrom(null)}>
+            <Button variant="secondary" onClick={() => updateView({ from: null })} disabled={!pinnedFrom}>
               Bugün
             </Button>
-            <Button variant="outline" onClick={() => setPinnedFrom(addDays(from, days))}>
+            <Button variant="outline" onClick={() => updateView({ from: addDays(from, days) })}>
               İleri
               <Icon name="chevronRight" className="size-4 shrink-0" />
             </Button>
           </div>
 
-          <span className="ml-auto flex items-center gap-2">
+          <span className="ml-auto flex items-center gap-2" aria-live="polite">
             {planQuery.isFetching && <Spinner className="size-4" />}
             <Badge tone={isLive ? 'success' : 'warning'}>{isLive ? 'Canlı' : 'Canlı değil'}</Badge>
           </span>
@@ -273,13 +328,13 @@ export function RoomPlanPage() {
 
         <div className="flex flex-wrap items-end gap-3 border-t border-line pt-4">
           <Input
-            label="Oda ara"
+            label="Ara"
             name="search"
             type="search"
-            placeholder="Oda numarası…"
-            value={filters.search}
-            onChange={setFilter('search')}
-            className="w-full sm:w-44"
+            placeholder="Oda, misafir ya da onay kodu…"
+            value={searchText}
+            onChange={(event) => setSearchText(event.target.value)}
+            className="w-full sm:w-64"
           />
           <Select
             label="Oda tipi"
@@ -327,8 +382,8 @@ export function RoomPlanPage() {
               variant="ghost"
               icon="close"
               onClick={() => {
-                setFilters(EMPTY_FILTERS);
-                setPage(1);
+                setSearchText(ALL);
+                updateView(Object.fromEntries(FILTER_KEYS.map((key) => [key, null])));
               }}
             >
               Filtreleri temizle
@@ -372,10 +427,10 @@ export function RoomPlanPage() {
         <Card>
           <EmptyState
             icon="bed"
-            title={filtersActive ? 'Filtreye uyan oda yok' : 'Henüz oda tanımlanmamış'}
+            title={filtersActive ? 'Aramaya uyan oda yok' : 'Henüz oda tanımlanmamış'}
             description={
               filtersActive
-                ? 'Filtreleri temizleyip tekrar deneyin.'
+                ? 'Misafir aramasında yalnızca bu tarih aralığındaki konaklamalar aranır. Filtreleri temizleyin ya da tarihi değiştirin.'
                 : 'Ayarlar → Oda tipleri ve Odalar → Oda listesi bölümünden oda ekleyin.'
             }
           />
@@ -391,6 +446,7 @@ export function RoomPlanPage() {
             canOperate={canOperate}
             dragging={dragging}
             dropTargetId={dropTargetId}
+            search={filters.search}
             onDragStartReservation={startDrag}
             onDragEnd={endDrag}
             onHoverRoom={setDropTargetId}
@@ -405,7 +461,13 @@ export function RoomPlanPage() {
                 <span className="text-xs font-semibold text-ink-muted">
                   {meta.total} odadan {data.items.length} tanesi
                 </span>
-                <Button variant="outline" size="sm" icon="chevronLeft" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  icon="chevronLeft"
+                  disabled={page <= 1}
+                  onClick={() => updateView({ page: page - 1 }, { resetPage: false })}
+                >
                   Önceki
                 </Button>
                 <span className="text-sm font-semibold text-ink-soft" aria-live="polite">
@@ -415,7 +477,7 @@ export function RoomPlanPage() {
                   variant="outline"
                   size="sm"
                   disabled={page >= meta.totalPages}
-                  onClick={() => setPage(page + 1)}
+                  onClick={() => updateView({ page: page + 1 }, { resetPage: false })}
                 >
                   Sonraki
                   <Icon name="chevronRight" className="size-3.5" />
@@ -452,33 +514,28 @@ export function RoomPlanPage() {
           isMoving={changeRoomMutation.isPending}
           onClose={() => setMoveTarget(null)}
           // Buradan gelen seçim bilinçli: pencere zaten "misafir odada, eski oda
-          // kirliye düşecek" uyarısını gösteriyor. Ayrıca onay sormak, üst üste
-          // iki diyalog ve gereksiz bir tık demek — onay yalnızca kazara
-          // olabilecek sürükle-bırakta isteniyor.
-          onPick={(room) => changeRoomMutation.mutate({ reservationId: moveTarget.id, roomId: room.id })}
+          // kirliye düşecek" uyarısını ve sebep alanını gösteriyor. Ayrıca onay
+          // sormak üst üste iki diyalog demek — onay yalnızca kazara olabilecek
+          // sürükle-bırakta isteniyor.
+          onPick={(room, reason) => changeRoomMutation.mutate({ reservationId: moveTarget.id, roomId: room.id, reason })}
         />
       )}
 
-      <ConfirmDialog
-        open={Boolean(pendingMove)}
-        title="İçerideki misafir taşınacak"
-        confirmLabel="Taşı"
-        confirmVariant="primary"
-        confirmIcon="key"
-        message={
-          pendingMove
-            ? `${pendingMove.guestName ?? 'Misafir'} ${pendingMove.roomNumber} numaralı odadan ${pendingMove.room.number} numaralı odaya taşınacak. ` +
-              `${pendingMove.roomNumber} numaralı oda boş ve kirli olarak işaretlenecek, ${pendingMove.room.number} dolu sayılacak.`
-            : ''
-        }
-        isPending={changeRoomMutation.isPending}
-        error={changeRoomMutation.error}
-        onClose={() => {
-          setPendingMove(null);
-          changeRoomMutation.reset();
-        }}
-        onConfirm={() => changeRoomMutation.mutate({ reservationId: pendingMove.reservationId, roomId: pendingMove.room.id })}
-      />
+      {pendingMove && (
+        <MoveConfirmDialog
+          key={`${pendingMove.reservationId}-${pendingMove.room.id}`}
+          move={pendingMove}
+          isPending={changeRoomMutation.isPending}
+          error={changeRoomMutation.error}
+          onClose={() => {
+            setPendingMove(null);
+            changeRoomMutation.reset();
+          }}
+          onConfirm={(reason) =>
+            changeRoomMutation.mutate({ reservationId: pendingMove.reservationId, roomId: pendingMove.room.id, reason })
+          }
+        />
+      )}
 
       <ConfirmDialog
         open={Boolean(unassignTarget)}
@@ -518,6 +575,9 @@ function Legend() {
           {tone.label}
         </span>
       ))}
+      <span className="flex items-center gap-1.5">
+        <span aria-hidden="true">↳ / →</span> odaya taşındı / odadan taşındı
+      </span>
       <span className="font-medium text-ink-muted">
         Satır başındaki iki nokta: doluluk ve kat hizmeti. Bir sütun bir gecedir; çıkış günü boyanmaz.
       </span>

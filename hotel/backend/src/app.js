@@ -17,7 +17,12 @@ import {
   originChecker,
   resolveJwtSecret,
 } from './lib/http-security.js';
+import { guestRequestRoutes } from './modules/guest-requests/routes.js';
+import { requestCacheStats } from './modules/guest-requests/service.js';
+import { messagingRoutes } from './modules/messaging/routes.js';
+import { messagingCacheStats } from './modules/messaging/service.js';
 import { planRoutes } from './modules/plan/routes.js';
+import { planCacheStats } from './modules/plan/service.js';
 import { roomsRoutes } from './modules/rooms/routes.js';
 import { settingsRoutes } from './modules/settings/routes.js';
 
@@ -149,12 +154,24 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
 
   app.get('/health', async () => {
     const db = await checkDb();
-    return { success: true, data: { status: 'ok', db, cache: cache.stats() } };
+    return {
+      success: true,
+      data: {
+        status: 'ok',
+        db,
+        cache: cache.stats(),
+        planCache: planCacheStats(),
+        messagingCache: messagingCacheStats(),
+        requestCache: requestCacheStats(),
+      },
+    };
   });
 
   await app.register(settingsRoutes, { prefix: '/settings' });
   await app.register(roomsRoutes, { prefix: '/rooms' });
   await app.register(planRoutes, { prefix: '/plan' });
+  await app.register(messagingRoutes, { prefix: '/messaging' });
+  await app.register(guestRequestRoutes, { prefix: '/guest-requests' });
 
   app.addHook('onClose', async () => {
     await disconnectDb();

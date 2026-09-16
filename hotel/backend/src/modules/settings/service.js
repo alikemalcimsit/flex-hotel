@@ -61,6 +61,7 @@ function toHotelDto(row) {
     logoUrl: row.logoUrl,
     currency: row.currency,
     timezone: row.timezone,
+    phoneCountryCode: row.phoneCountryCode,
     checkInTime: row.checkInTime,
     checkOutTime: row.checkOutTime,
     defaultBoardType: row.defaultBoardType,
@@ -268,6 +269,7 @@ export async function updateGeneralSettings(hotelId, input) {
           defaultBoardType: data.defaultBoardType,
           cancellationPolicyDays: data.cancellationPolicyDays,
           cancellationPolicyPenaltyPct: data.cancellationPolicyPenaltyPct,
+          phoneCountryCode: data.phoneCountryCode,
         },
         'Otel kaydı bulunamadı',
       );

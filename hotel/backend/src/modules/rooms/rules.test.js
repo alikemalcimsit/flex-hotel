@@ -6,10 +6,12 @@ import {
   availabilityForStay,
   blockRemovalMode,
   buildAvailabilityCalendar,
+  compareRoomsNaturally,
   consumesInventory,
   findNewOverbooking,
   fitsCapacity,
   freeRoomsForStay,
+  openSliceStart,
   pickBestRoom,
   rankRooms,
   roomChangeMode,
@@ -522,5 +524,86 @@ describe('consumesInventory', () => {
   it('durumları doğru ayırır', () => {
     assert.equal(consumesInventory({ status: 'CONFIRMED' }), true);
     assert.equal(consumesInventory({ status: 'CANCELLED' }), false);
+  });
+});
+
+describe('oda değiştirmiş konaklama (açık dilim + kapanmış dilimler)', () => {
+  // Misafir 15'te 101'e girdi, 17'de 102'ye taşındı, 19'da çıkacak.
+  const moved = reservation({
+    id: 'res-moved',
+    roomId: 'r102',
+    checkIn: '2026-10-15',
+    checkOut: '2026-10-19',
+    roomSince: '2026-10-17',
+    status: 'CHECKED_IN',
+  });
+  const segment = { reservationId: 'res-moved', roomId: 'r101', startDate: '2026-10-15', endDate: '2026-10-17' };
+
+  it('açık dilim taşındığı geceden başlar', () => {
+    assert.equal(openSliceStart(moved), '2026-10-17');
+    assert.equal(openSliceStart(reservation({ roomSince: null })), '2026-10-15');
+  });
+
+  it('roomSince girişten önce olamaz; öyle gelirse giriş esas alınır', () => {
+    assert.equal(openSliceStart(reservation({ roomSince: '2026-10-10' })), '2026-10-15');
+  });
+
+  it('taşınmadan önceki geceler eski odayı, sonrası yeni odayı doldurur', () => {
+    const cal = calendar({ reservations: [moved], segments: [segment] });
+    for (const day of ['2026-10-15', '2026-10-16', '2026-10-17', '2026-10-18']) {
+      assert.equal(freeOn(cal, STD, day), 2, `${day}: tek oda dolu olmalı`);
+      assert.equal(cal.byRoomType[STD].days[day].unassigned, 0, `${day}: oda bekleyen yok`);
+    }
+  });
+
+  it('eski oda taşındıktan sonra boş, yeni oda taşınmadan önce boş', () => {
+    const free16 = freeRoomsForStay({
+      rooms: ROOMS, reservations: [moved], blocks: [], segments: [segment],
+      roomTypeId: STD, checkIn: '2026-10-16', checkOut: '2026-10-17',
+    }).map((room) => room.id);
+    assert.deepEqual(free16, ['r102', 'r103'], '16 gecesi misafir 101 odasındaydı');
+
+    const free18 = freeRoomsForStay({
+      rooms: ROOMS, reservations: [moved], blocks: [], segments: [segment],
+      roomTypeId: STD, checkIn: '2026-10-18', checkOut: '2026-10-19',
+    }).map((room) => room.id);
+    assert.deepEqual(free18, ['r101', 'r103'], '18 gecesi misafir 102 odasında');
+  });
+
+  it('kaydın kendisi (dilimleriyle birlikte) engel sayılmaz', () => {
+    const free = freeRoomsForStay({
+      rooms: ROOMS, reservations: [moved], blocks: [], segments: [segment],
+      roomTypeId: STD, checkIn: '2026-10-15', checkOut: '2026-10-19', excludeReservationId: 'res-moved',
+    }).map((room) => room.id);
+    assert.deepEqual(free, ['r101', 'r102', 'r103']);
+  });
+
+  it('dilimi kayıp erken geceler güvenli tarafta talep sayılır (oda işgal etmez ama envanterden düşer)', () => {
+    const cal = calendar({ reservations: [moved], segments: [] });
+    assert.equal(cal.byRoomType[STD].days['2026-10-15'].unassigned, 1);
+    assert.equal(freeOn(cal, STD, '2026-10-15'), 2);
+  });
+
+  it('iptal edilmiş konaklamanın dilimi envanteri tutmaz', () => {
+    const cancelled = { ...moved, status: 'CANCELLED' };
+    const cal = calendar({ reservations: [cancelled], segments: [segment] });
+    assert.equal(freeOn(cal, STD, '2026-10-15'), 3);
+  });
+});
+
+describe('compareRoomsNaturally — villa/bungalov numaraları', () => {
+  it('numaraları sayısal sıralar, metin gibi değil', () => {
+    const rooms = ['10', '2', '1', '101A', '101', '11'].map((number) => ({ number, floor: 0 }));
+    assert.deepEqual(rooms.sort(compareRoomsNaturally).map((room) => room.number), ['1', '2', '10', '11', '101', '101A']);
+  });
+
+  it('önce kat gelir', () => {
+    const rooms = [{ number: '1', floor: 2 }, { number: '999', floor: 1 }];
+    assert.deepEqual(rooms.sort(compareRoomsNaturally).map((room) => room.number), ['999', '1']);
+  });
+
+  it('harf büyüklüğü sırayı bozmaz', () => {
+    const rooms = ['b2', 'A1', 'a3'].map((number) => ({ number, floor: 1 }));
+    assert.deepEqual(rooms.sort(compareRoomsNaturally).map((room) => room.number), ['A1', 'a3', 'b2']);
   });
 });

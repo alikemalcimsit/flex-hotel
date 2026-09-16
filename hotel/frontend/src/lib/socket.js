@@ -27,5 +27,7 @@ export const socket = io(apiOrigin, {
   reconnectionDelayMax: 10_000,
 });
 
-/** Backend'in canlı değişiklik kanalı (bkz. `lib/realtime.js`). */
+/** Backend'in canlı değişiklik kanalları (bkz. backend `lib/realtime.js`). */
 export const INVENTORY_CHANNEL = 'inventory.changed';
+export const MESSAGING_CHANNEL = 'messaging.changed';
+export const REQUESTS_CHANNEL = 'requests.changed';

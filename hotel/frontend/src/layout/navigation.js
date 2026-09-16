@@ -1,3 +1,5 @@
+import { PERMISSIONS, ROLE_PERMISSIONS } from '../lib/permissions.js';
+
 /**
  * Menü yapısı — tek kaynak.
  *
@@ -5,8 +7,10 @@
  * (Odalar, Ayarlar) aynı listeden beslenir; bir alt sayfa eklenince üç yer
  * ayrı ayrı güncellenmez.
  *
- * `roles` dolu olan girdiler yalnızca o rollere gösterilir.
- * Not: bu görsel bir kısıt; gerçek yetki kontrolü modül 2 (RBAC) ile sunucuya gelecek.
+ * `roles` dolu olan girdiler yalnızca o rollere, `permission` taşıyanlar
+ * yalnızca o izne sahip rollere gösterilir. `badge` yan menüde sayı rozeti
+ * gösterilecek maddeyi işaretler (bkz. `lib/frontOffice.js`).
+ * Not: bu görsel bir kısıt; gerçek yetki kontrolü sunucuda.
  */
 export const NAV_SECTIONS = Object.freeze([
   {
@@ -18,6 +22,20 @@ export const NAV_SECTIONS = Object.freeze([
     // Odalar ön büro işi: resepsiyon ve kat hizmetleri de görmeli, yalnızca admin değil.
     items: [
       { label: 'Oda planı', to: '/oda-plani', icon: 'calendar' },
+      {
+        label: 'Mesajlar',
+        to: '/mesajlar',
+        icon: 'message',
+        badge: 'messages',
+        permission: PERMISSIONS.MESSAGES_VIEW,
+      },
+      {
+        label: 'İstekler',
+        to: '/istekler',
+        icon: 'clipboard',
+        badge: 'requests',
+        permission: PERMISSIONS.REQUESTS_VIEW,
+      },
       {
         label: 'Odalar',
         to: '/odalar',
@@ -64,9 +82,13 @@ export const ROLE_LABELS = Object.freeze({
  * @param {string | undefined} role
  */
 export function visibleSections(role) {
+  const granted = ROLE_PERMISSIONS[role] ?? [];
   return NAV_SECTIONS.map((section) => ({
     ...section,
-    items: section.items.filter((item) => !item.roles || item.roles.includes(role)),
+    items: section.items.filter(
+      (item) =>
+        (!item.roles || item.roles.includes(role)) && (!item.permission || granted.includes(item.permission)),
+    ),
   })).filter((section) => section.items.length > 0);
 }
 

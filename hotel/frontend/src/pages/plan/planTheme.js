@@ -3,9 +3,9 @@ import { RESERVATION_STATUS_LABELS, ROOM_BLOCK_TYPE_LABELS } from '@hotelos/hote
 /**
  * Oda planının görsel dili — ızgara, lejant ve çekmece aynı kaynaktan beslenir.
  *
- * Renk asla tek başına anlam taşımaz: her barın metni (misafir adı + durum),
- * her lejant girdisinin adı var. Renk körlüğü ve siyah-beyaz çıktı için
- * `pattern` alanı ayrıca desen (çizgili zemin) veriyor.
+ * Renk asla tek başına anlam taşımaz: her barın metni (misafir adı), erişilebilir
+ * adı (durum dahil) ve her lejant girdisinin adı var; bekleyen rezervasyon
+ * ayrıca kesikli çerçeveyle, arıza kaydı uyarı simgesiyle ayrılır.
  *
  * Ton seçimi operasyonel: içerideki misafir (yeşil) ile bekleyen (kesikli
  * çerçeve) bir bakışta ayrılmalı, çünkü ikisi farklı iş demek — biri odada,
@@ -91,52 +91,46 @@ export function addDays(isoDay, days) {
   return date.toISOString().slice(0, 10);
 }
 
-/**
- * Bir konaklamanın penceredeki yeri — sunucudaki `placeInWindow`'un tarayıcı
- * eşi. Yalnızca **ipucu** için kullanılır (sürüklerken hangi satır uygun
- * görünüyor); kararı her zaman sunucu verir.
- *
- * @param {{ checkIn: string, checkOut: string }} stay
- * @param {string[]} dates pencere günleri
- * @returns {{ startIndex: number, span: number } | null}
- */
-export function placeStay(stay, dates) {
-  if (dates.length === 0) return null;
-  const windowStart = dates[0];
-  const windowEnd = addDays(dates[dates.length - 1], 1);
-
-  const start = stay.checkIn > windowStart ? stay.checkIn : windowStart;
-  const end = stay.checkOut < windowEnd ? stay.checkOut : windowEnd;
-  if (end <= start) return null;
-
-  const dayMs = 86_400_000;
-  const toTime = (day) => new Date(`${day}T00:00:00.000Z`).getTime();
-  return {
-    startIndex: Math.round((toTime(start) - toTime(windowStart)) / dayMs),
-    span: Math.max(1, Math.round((toTime(end) - toTime(start)) / dayMs)),
-  };
-}
-
 /** İki aralık (yarı açık) çakışıyor mu — sürükleme ipucu için. */
 export function overlaps(a, b) {
   return a.checkIn < b.checkOut && b.checkIn < a.checkOut;
 }
 
 /**
+ * Sürüklenen konaklamanın hangi geceleri yeni odada geçecek?
+ *
+ * İçerideki misafir için bugünden itibaren: geçmiş geceler zaten eski odada
+ * geçti (sunucu da böyle bakar). Diğerleri için konaklamanın tamamı.
+ *
+ * @param {{ checkIn: string, checkOut: string, status: string }} stay
+ * @param {string} today otelin iş günü
+ */
+export function remainingStay(stay, today) {
+  const from = stay.status === 'CHECKED_IN' && stay.checkIn < today ? today : stay.checkIn;
+  return { checkIn: from, checkOut: stay.checkOut };
+}
+
+/**
  * Bir odanın satırında, verilen konaklamayla çakışan ne var?
  *
- * Yalnızca **ekrandaki pencereden** bakar, yani eksik bilgiyle çalışır: bar
- * pencerenin dışına taşan bir konaklamaya ait olabilir. Bu yüzden "çakışma yok"
- * bir garanti değil, "çakışma var" ise kesindir — kullanıcıyı sunucuya gidip
- * hata almaktan kurtarır ve nedenini hemen söyler.
+ * Yalnızca **ekrandaki pencereden** bakar, yani eksik bilgiyle çalışır. Bu
+ * yüzden "çakışma yok" bir garanti değil; "çakışma var" ise kesindir —
+ * kullanıcıyı sunucuya gidip hata almaktan kurtarır ve nedenini hemen söyler.
+ * Çıkış yapmış konaklamalar odayı tutmaz (sunucu da saymaz).
  *
  * @param {{ reservations: Array<object>, blocks: Array<object> }} room
- * @param {{ checkIn: string, checkOut: string }} stay
+ * @param {{ checkIn: string, checkOut: string }} stay kalan geceler (bkz. `remainingStay`)
  * @param {string} [reservationId] kaydın kendisi engel sayılmaz
  * @returns {{ kind: 'RESERVATION' | 'BLOCK', label: string } | null}
  */
 export function conflictOnRow(room, stay, reservationId) {
-  const bar = room.reservations.find((entry) => entry.id !== reservationId && overlaps(entry, stay));
+  const bar = room.reservations.find(
+    (entry) =>
+      entry.id !== reservationId &&
+      entry.status !== 'CHECKED_OUT' &&
+      // Bar bu odada yalnızca kendi diliminin gecelerini tutar (oda değiştirmiş konaklama).
+      overlaps({ checkIn: entry.sliceFrom, checkOut: entry.sliceTo }, stay),
+  );
   if (bar) return { kind: 'RESERVATION', label: bar.guestName ?? bar.confirmationCode };
 
   const block = room.blocks.find((entry) =>

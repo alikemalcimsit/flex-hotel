@@ -6,6 +6,7 @@ import { AppLayout } from './layout/AppLayout.jsx';
 import { ToastHost } from './components/ToastHost.jsx';
 import { LoginPage } from './pages/LoginPage.jsx';
 import { HomePage } from './pages/HomePage.jsx';
+import { PERMISSIONS, useCan } from './lib/permissions.js';
 
 /**
  * Bölüm sayfaları istendiğinde yüklenir.
@@ -28,6 +29,10 @@ const RoomTypesTab = lazy(() => import('./pages/settings/RoomTypesTab.jsx').then
 const TaxesTab = lazy(() => import('./pages/settings/TaxesTab.jsx').then((m) => ({ default: m.TaxesTab })));
 const SeasonsTab = lazy(() => import('./pages/settings/SeasonsTab.jsx').then((m) => ({ default: m.SeasonsTab })));
 const GeneralTab = lazy(() => import('./pages/settings/GeneralTab.jsx').then((m) => ({ default: m.GeneralTab })));
+const MessagesPage = lazy(() => import('./pages/messages/MessagesPage.jsx').then((m) => ({ default: m.MessagesPage })));
+const GuestRequestsPage = lazy(() =>
+  import('./pages/requests/GuestRequestsPage.jsx').then((m) => ({ default: m.GuestRequestsPage })),
+);
 
 /** Giriş yapılmamışsa login'e yönlendirir. */
 function RequireAuth({ children }) {
@@ -45,6 +50,15 @@ function RequireRole({ role, children }) {
   if (!user) return <Navigate to="/login" replace />;
   if (user.role !== role) return <Navigate to="/" replace />;
   return children;
+}
+
+/**
+ * İzni olmayan kullanıcı sayfayı açarsa ana sayfaya döner (menüde de
+ * görünmez). Aynı ⚠️ geçerli: asıl kontrol sunucuda.
+ */
+function RequirePermission({ permission, children }) {
+  const can = useCan();
+  return can(permission) ? children : <Navigate to="/" replace />;
 }
 
 export default function App() {
@@ -65,6 +79,23 @@ export default function App() {
           >
             <Route index element={<HomePage />} />
             <Route path="oda-plani" element={<RoomPlanPage />} />
+            {/* Konuşma adreste: yenileyince açık kalır, bağlantı paylaşılabilir. */}
+            <Route
+              path="mesajlar/:conversationId?"
+              element={
+                <RequirePermission permission={PERMISSIONS.MESSAGES_VIEW}>
+                  <MessagesPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="istekler"
+              element={
+                <RequirePermission permission={PERMISSIONS.REQUESTS_VIEW}>
+                  <GuestRequestsPage />
+                </RequirePermission>
+              }
+            />
             <Route path="odalar" element={<RoomsPage />}>
               <Route index element={<Navigate to="/odalar/liste" replace />} />
               <Route path="liste" element={<RoomListTab />} />
@@ -86,7 +117,6 @@ export default function App() {
               <Route path="sezonlar" element={<SeasonsTab />} />
               <Route path="genel" element={<GeneralTab />} />
             </Route>
-            {/* TODO: modül sayfaları buraya */}
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

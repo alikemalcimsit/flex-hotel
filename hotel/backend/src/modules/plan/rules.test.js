@@ -125,16 +125,17 @@ describe('buildRoomSegments', () => {
 });
 
 describe('summarizeDays', () => {
-  const base = { totalRooms: 10, from: WINDOW.from, days: 3, blocks: [] };
+  // İş günü pencerenin ilk günü: geçmiş gece yok, çıkış yapmışlar yalnızca giriş/çıkış sayar.
+  const base = { totalRooms: 10, from: WINDOW.from, days: 3, blocks: [], businessDate: WINDOW.from };
 
   it('giriş, çıkış ve konaklayanları ayırır', () => {
     const summary = summarizeDays({
       ...base,
       reservations: [
         // 16'da giren, 18'de çıkan: 16 ve 17 geceleri dolu.
-        { roomId: 'r1', checkIn: day('2026-09-16'), checkOut: day('2026-09-18'), status: 'CHECKED_IN' },
+        { id: 's1', roomId: 'r1', checkIn: day('2026-09-16'), checkOut: day('2026-09-18'), status: 'CHECKED_IN' },
         // 17'de giren.
-        { roomId: 'r2', checkIn: day('2026-09-17'), checkOut: day('2026-09-19'), status: 'CONFIRMED' },
+        { id: 's2', roomId: 'r2', checkIn: day('2026-09-17'), checkOut: day('2026-09-19'), status: 'CONFIRMED' },
       ],
     });
 
@@ -152,8 +153,8 @@ describe('summarizeDays', () => {
     const summary = summarizeDays({
       ...base,
       reservations: [
-        { roomId: 'r1', checkIn: day('2026-09-16'), checkOut: day('2026-09-18'), status: 'CANCELLED' },
-        { roomId: 'r2', checkIn: day('2026-09-16'), checkOut: day('2026-09-18'), status: 'NO_SHOW' },
+        { id: 's3', roomId: 'r1', checkIn: day('2026-09-16'), checkOut: day('2026-09-18'), status: 'CANCELLED' },
+        { id: 's4', roomId: 'r2', checkIn: day('2026-09-16'), checkOut: day('2026-09-18'), status: 'NO_SHOW' },
       ],
     });
 
@@ -164,7 +165,7 @@ describe('summarizeDays', () => {
   it('oda bekleyen rezervasyon doluluğa girer ama odayı işgal etmez', () => {
     const summary = summarizeDays({
       ...base,
-      reservations: [{ roomId: null, checkIn: day('2026-09-16'), checkOut: day('2026-09-17'), status: 'CONFIRMED' }],
+      reservations: [{ id: 's5', roomId: null, checkIn: day('2026-09-16'), checkOut: day('2026-09-17'), status: 'CONFIRMED' }],
     });
 
     assert.equal(summary[0].unassigned, 1);
@@ -178,8 +179,8 @@ describe('summarizeDays', () => {
       ...base,
       reservations: [],
       blocks: [
-        { roomId: 'r1', type: 'OUT_OF_ORDER', startDate: day('2026-09-16'), endDate: day('2026-09-17') },
-        { roomId: 'r2', type: 'OUT_OF_SERVICE', startDate: day('2026-09-16'), endDate: day('2026-09-17') },
+        { id: 's6', roomId: 'r1', type: 'OUT_OF_ORDER', startDate: day('2026-09-16'), endDate: day('2026-09-17') },
+        { id: 's7', roomId: 'r2', type: 'OUT_OF_SERVICE', startDate: day('2026-09-16'), endDate: day('2026-09-17') },
       ],
     });
 
@@ -192,8 +193,8 @@ describe('summarizeDays', () => {
   it('dolu oda aynı anda arızalıysa envanterden iki kez düşülmez', () => {
     const summary = summarizeDays({
       ...base,
-      reservations: [{ roomId: 'r1', checkIn: day('2026-09-16'), checkOut: day('2026-09-17'), status: 'CHECKED_IN' }],
-      blocks: [{ roomId: 'r1', type: 'OUT_OF_ORDER', startDate: day('2026-09-16'), endDate: day('2026-09-17') }],
+      reservations: [{ id: 's8', roomId: 'r1', checkIn: day('2026-09-16'), checkOut: day('2026-09-17'), status: 'CHECKED_IN' }],
+      blocks: [{ id: 's9', roomId: 'r1', type: 'OUT_OF_ORDER', startDate: day('2026-09-16'), endDate: day('2026-09-17') }],
     });
 
     assert.equal(summary[0].free, 9);
@@ -205,13 +206,13 @@ describe('summarizeDays', () => {
       ...base,
       totalRooms: 10,
       reservations: [
-        { roomId: 'r1', checkIn: day('2026-09-16'), checkOut: day('2026-09-17'), status: 'CHECKED_IN' },
-        { roomId: 'r2', checkIn: day('2026-09-16'), checkOut: day('2026-09-17'), status: 'CHECKED_IN' },
+        { id: 's10', roomId: 'r1', checkIn: day('2026-09-16'), checkOut: day('2026-09-17'), status: 'CHECKED_IN' },
+        { id: 's11', roomId: 'r2', checkIn: day('2026-09-16'), checkOut: day('2026-09-17'), status: 'CHECKED_IN' },
       ],
       // İki oda arızalı → satılabilir 8; 2/8 = %25.
       blocks: [
-        { roomId: 'r9', type: 'OUT_OF_ORDER', startDate: day('2026-09-16'), endDate: day('2026-09-17') },
-        { roomId: 'r10', type: 'OUT_OF_ORDER', startDate: day('2026-09-16'), endDate: day('2026-09-17') },
+        { id: 's12', roomId: 'r9', type: 'OUT_OF_ORDER', startDate: day('2026-09-16'), endDate: day('2026-09-17') },
+        { id: 's13', roomId: 'r10', type: 'OUT_OF_ORDER', startDate: day('2026-09-16'), endDate: day('2026-09-17') },
       ],
     });
 
@@ -223,10 +224,120 @@ describe('summarizeDays', () => {
       ...base,
       totalRooms: 1,
       reservations: [],
-      blocks: [{ roomId: 'r1', type: 'OUT_OF_ORDER', startDate: day('2026-09-16'), endDate: day('2026-09-17') }],
+      blocks: [{ id: 's14', roomId: 'r1', type: 'OUT_OF_ORDER', startDate: day('2026-09-16'), endDate: day('2026-09-17') }],
     });
 
     assert.equal(summary[0].sellable, 0);
     assert.equal(summary[0].occupancyPct, 0);
+  });
+});
+
+describe('summarizeDays — çıkış yapmış konaklamalar ve yapılan işlemler', () => {
+  const from = day('2026-09-14');
+  // İş günü 16 Eylül: 14 ve 15 geceleri geçmiş.
+  const base = { totalRooms: 10, from, days: 4, blocks: [], businessDate: day('2026-09-16') };
+
+  it('çıkış yapmış konaklama geçmiş gecelerin doluluğunda kalır', () => {
+    const summary = summarizeDays({
+      ...base,
+      reservations: [{ id: 'co', roomId: 'r1', checkIn: day('2026-09-14'), checkOut: day('2026-09-16'), status: 'CHECKED_OUT' }],
+    });
+    assert.equal(summary[0].sold, 1, '14 gecesi misafir kaldı');
+    assert.equal(summary[1].sold, 1, '15 gecesi misafir kaldı');
+    assert.equal(summary[0].occupancyPct, 10);
+  });
+
+  it('erken çıkan misafirin ileriki geceleri boş sayılır', () => {
+    // Rezervasyon 18'e kadardı ama misafir çıkış yaptı; tarih güncellenmemiş olabilir.
+    const summary = summarizeDays({
+      ...base,
+      reservations: [{ id: 'early', roomId: 'r1', checkIn: day('2026-09-14'), checkOut: day('2026-09-18'), status: 'CHECKED_OUT' }],
+    });
+    assert.equal(summary[1].sold, 1, '15 gecesi (geçmiş) dolu');
+    assert.equal(summary[2].sold, 0, '16 gecesi (bugün) boş');
+    assert.equal(summary[2].free, 10);
+  });
+
+  it('bugünkü çıkışlar yapıldıkça sayı azalmaz, yapılan ayrıca sayılır', () => {
+    const summary = summarizeDays({
+      ...base,
+      reservations: [
+        { id: 'd1', roomId: 'r1', checkIn: day('2026-09-14'), checkOut: day('2026-09-16'), status: 'CHECKED_OUT' },
+        { id: 'd2', roomId: 'r2', checkIn: day('2026-09-14'), checkOut: day('2026-09-16'), status: 'CHECKED_IN' },
+      ],
+    });
+    assert.equal(summary[2].departures, 2);
+    assert.equal(summary[2].departuresDone, 1);
+  });
+
+  it('bugünkü girişlerden yapılanlar ayrıca sayılır', () => {
+    const summary = summarizeDays({
+      ...base,
+      reservations: [
+        { id: 'a1', roomId: 'r1', checkIn: day('2026-09-16'), checkOut: day('2026-09-17'), status: 'CHECKED_IN' },
+        { id: 'a2', roomId: 'r2', checkIn: day('2026-09-16'), checkOut: day('2026-09-17'), status: 'CONFIRMED' },
+        { id: 'a3', roomId: null, checkIn: day('2026-09-16'), checkOut: day('2026-09-17'), status: 'NO_SHOW' },
+      ],
+    });
+    assert.equal(summary[2].arrivals, 2, 'gelmedi kaydı giriş sayılmaz');
+    assert.equal(summary[2].arrivalsDone, 1);
+  });
+
+  it('oda değiştirmiş konaklama her gece tek oda tutar', () => {
+    const summary = summarizeDays({
+      ...base,
+      reservations: [
+        { id: 'mv', roomId: 'r2', checkIn: day('2026-09-14'), checkOut: day('2026-09-18'), roomSince: day('2026-09-16'), status: 'CHECKED_IN' },
+      ],
+      segments: [{ reservationId: 'mv', roomId: 'r1', startDate: day('2026-09-14'), endDate: day('2026-09-16') }],
+    });
+    for (const row of summary) {
+      assert.equal(row.sold, 1, `${row.date}: tek konaklama`);
+      assert.equal(row.unassigned, 0, `${row.date}: oda bekleyen yok`);
+      assert.equal(row.free, 9, `${row.date}: tek oda dolu`);
+    }
+  });
+});
+
+describe('buildRoomSegments — oda değiştirmiş konaklama', () => {
+  const rooms = [{ id: 'r1' }, { id: 'r2' }];
+  const moved = {
+    id: 'mv',
+    roomId: 'r2',
+    checkIn: day('2026-09-15'),
+    checkOut: day('2026-09-20'),
+    roomSince: day('2026-09-17'),
+    status: 'CHECKED_IN',
+  };
+  const segments = [
+    { id: 'seg1', roomId: 'r1', startDate: day('2026-09-15'), endDate: day('2026-09-17'), reason: 'Klima', reservation: moved },
+  ];
+
+  it('eski odada kapanmış dilim, yeni odada açık dilim çizilir', () => {
+    const rows = buildRoomSegments({ rooms, reservations: [moved], blocks: [], segments, ...WINDOW });
+
+    const old = rows.get('r1').reservations[0];
+    assert.equal(old.movedOut, true);
+    assert.equal(old.startIndex, 0);
+    assert.equal(old.span, 1, '16 gecesi (15 pencere dışında)');
+    assert.equal(old.continuesBefore, true);
+    assert.equal(old.segmentReason, 'Klima');
+
+    const current = rows.get('r2').reservations[0];
+    assert.equal(current.movedIn, true);
+    assert.equal(current.startIndex, 1, 'yeni oda 17 gecesinden başlar');
+    assert.equal(current.span, 3);
+  });
+
+  it('her barın ayrı anahtarı var (aynı rezervasyon iki satırda)', () => {
+    const rows = buildRoomSegments({ rooms, reservations: [moved], blocks: [], segments, ...WINDOW });
+    assert.notEqual(rows.get('r1').reservations[0].key, rows.get('r2').reservations[0].key);
+  });
+
+  it('taşınmamış konaklamada taşıma işareti yoktur', () => {
+    const plain = { ...moved, roomSince: null };
+    const rows = buildRoomSegments({ rooms, reservations: [plain], blocks: [], ...WINDOW });
+    assert.equal(rows.get('r2').reservations[0].movedIn, false);
+    assert.equal(rows.get('r2').reservations[0].startIndex, 0);
   });
 });

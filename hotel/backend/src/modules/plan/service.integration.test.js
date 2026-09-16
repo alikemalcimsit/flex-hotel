@@ -20,10 +20,12 @@ const skip = TEST_DB ? false : 'TEST_DATABASE_URL tanımlı değil — entegrasy
 const HOTEL_TIME_ZONE = 'Europe/Istanbul';
 
 describe('oda planı servisi (entegrasyon)', { skip }, () => {
+  /** @type {(client: any) => Promise<void>} */ let resetDatabase;
   /** @type {any} */ let prismaUnfiltered;
   /** @type {any} */ let plan;
   /** @type {any} */ let rooms;
   /** @type {any} */ let core;
+  /** @type {any} */ let contracts;
   let hotelId;
   let stdTypeId;
   let dlxTypeId;
@@ -31,11 +33,13 @@ describe('oda planı servisi (entegrasyon)', { skip }, () => {
 
   before(async () => {
     process.env.DATABASE_URL = TEST_DB;
+    ({ resetDatabase } = await import('../../test-support/reset-database.js'));
     const db = await import('../../db.js');
     prismaUnfiltered = db.prismaUnfiltered;
     plan = await import('./service.js');
     rooms = await import('../rooms/service.js');
     core = await import('@hotelos/core');
+    contracts = await import('@hotelos/hotel-contracts');
   });
 
   after(async () => {
@@ -43,18 +47,7 @@ describe('oda planı servisi (entegrasyon)', { skip }, () => {
   });
 
   beforeEach(async () => {
-    await prismaUnfiltered.auditLog.deleteMany({});
-    await prismaUnfiltered.eventLog.deleteMany({});
-    await prismaUnfiltered.folioItem.deleteMany({});
-    await prismaUnfiltered.folio.deleteMany({});
-    await prismaUnfiltered.reservation.deleteMany({});
-    await prismaUnfiltered.roomBlock.deleteMany({});
-    await prismaUnfiltered.room.deleteMany({});
-    await prismaUnfiltered.roomType.deleteMany({});
-    await prismaUnfiltered.guest.deleteMany({});
-    await prismaUnfiltered.season.deleteMany({});
-    await prismaUnfiltered.tax.deleteMany({});
-    await prismaUnfiltered.hotel.deleteMany({});
+    await resetDatabase(prismaUnfiltered);
 
     const hotel = await prismaUnfiltered.hotel.create({
       data: { name: 'Plan Test Otel', code: `PLAN-${randomUUID().slice(0, 8)}` },
@@ -116,6 +109,20 @@ describe('oda planı servisi (entegrasyon)', { skip }, () => {
       },
     });
   }
+
+  /** Servisi atlayıp doğrudan arıza kaydı yazar (geçmişte başlamış kayıtlar için). */
+  const insertBlock = ({ roomId, type = 'OUT_OF_ORDER', start, end }) =>
+    prismaUnfiltered.roomBlock.create({
+      data: {
+        hotelId,
+        roomId,
+        type,
+        startDate: dayDate(start),
+        endDate: end == null ? null : dayDate(end),
+        reason: 'Test',
+        createdBy: 'test',
+      },
+    });
 
   const loadPlan = (overrides = {}) =>
     plan.getRoomPlan(hotelId, { from: dayDate(0), days: 7, page: 1, pageSize: 40, ...overrides });
@@ -430,6 +437,192 @@ describe('oda planı servisi (entegrasyon)', { skip }, () => {
         () => asUser(() => rooms.changeRoom(hotelId, staying.id, room['201'].id)),
         (error) => error.code === 'WOULD_OVERBOOK',
       );
+    });
+  });
+
+  describe('içerideki misafirin taşınma geçmişi', () => {
+    /** Misafir 3 gün önce 101'e girdi, 3 gün daha kalacak. */
+    const seedInHouse = async (overrides = {}) => {
+      const reservation = await seedReservation({
+        roomId: room['101'].id,
+        checkIn: -3,
+        checkOut: 3,
+        status: 'CHECKED_IN',
+        ...overrides,
+      });
+      await prismaUnfiltered.room.update({ where: { id: room['101'].id }, data: { occupancy: 'OCCUPIED' } });
+      return reservation;
+    };
+
+    it('eski odadaki geceler kapanmış dilim olur, açık dilim bugünden başlar', async () => {
+      const staying = await seedInHouse();
+      const result = await asUser(() =>
+        rooms.changeRoom(hotelId, staying.id, room['102'].id, { reason: 'Klima arızası' }),
+      );
+      assert.ok(contracts.ROOM_CHANGE_MODES.includes(result.mode));
+
+      const segments = await prismaUnfiltered.roomStaySegment.findMany({ where: { reservationId: staying.id } });
+      assert.equal(segments.length, 1);
+      assert.equal(segments[0].roomId, room['101'].id);
+      assert.equal(core.toIsoDay(segments[0].startDate), day(-3));
+      assert.equal(core.toIsoDay(segments[0].endDate), day(0));
+      assert.equal(segments[0].reason, 'Klima arızası');
+
+      const after = await prismaUnfiltered.reservation.findUnique({ where: { id: staying.id } });
+      assert.equal(core.toIsoDay(after.roomSince), day(0));
+    });
+
+    it('hedef odada geçmiş gecelerde bitmiş arıza kaydı varsa taşıma yine yapılır', async () => {
+      // Eskiden tüm konaklamaya bakılıyordu: 102 dün arızalıydı diye bugün boş olsa da reddediliyordu.
+      const staying = await seedInHouse();
+      await insertBlock({ roomId: room['102'].id, start: -3, end: -1 });
+
+      const result = await asUser(() => rooms.changeRoom(hotelId, staying.id, room['102'].id));
+      assert.equal(result.mode, 'IN_HOUSE_MOVED');
+    });
+
+    it('hedef odada geçmiş gecelerde başka misafir kalmışsa taşıma yine yapılır', async () => {
+      const staying = await seedInHouse();
+      await seedReservation({ roomId: room['102'].id, checkIn: -3, checkOut: -1, status: 'CHECKED_OUT' });
+
+      const result = await asUser(() => rooms.changeRoom(hotelId, staying.id, room['102'].id));
+      assert.equal(result.mode, 'IN_HOUSE_MOVED');
+    });
+
+    it('bugün ya da ileride arızalı odaya taşıma hâlâ reddedilir', async () => {
+      const staying = await seedInHouse();
+      await insertBlock({ roomId: room['102'].id, start: 1, end: 2 });
+
+      await assert.rejects(
+        () => asUser(() => rooms.changeRoom(hotelId, staying.id, room['102'].id)),
+        (error) => error.code === 'ROOM_NOT_FREE',
+      );
+    });
+
+    it('aynı gün ikinci taşımada boş dilim yazılmaz', async () => {
+      const staying = await seedInHouse();
+      await asUser(() => rooms.changeRoom(hotelId, staying.id, room['102'].id));
+      await asUser(() => rooms.changeRoom(hotelId, staying.id, room['103'].id));
+
+      const segments = await prismaUnfiltered.roomStaySegment.findMany({ where: { reservationId: staying.id } });
+      assert.equal(segments.length, 1, '102 odasında hiç gece geçmedi');
+      assert.equal(segments[0].roomId, room['101'].id);
+    });
+
+    it('boşalan oda bu geceden itibaren başka misafire verilebilir', async () => {
+      const staying = await seedInHouse();
+      await asUser(() => rooms.changeRoom(hotelId, staying.id, room['102'].id));
+
+      const next = await seedReservation({ roomId: null, checkIn: 0, checkOut: 2 });
+      const assigned = await asUser(() => rooms.assignRoom(hotelId, next.id, room['101'].id));
+      assert.equal(assigned.roomNumber, '101');
+    });
+
+    it('ızgarada iki bar görünür, özet her gece tek oda sayar', async () => {
+      const staying = await seedInHouse();
+      await asUser(() => rooms.changeRoom(hotelId, staying.id, room['102'].id, { reason: 'Klima' }));
+
+      const view = await loadPlan({ from: dayDate(-3), days: 6 });
+      const oldBar = rowOf(view, '101').reservations[0];
+      const newBar = rowOf(view, '102').reservations[0];
+      assert.equal(oldBar.movedOut, true);
+      assert.equal(oldBar.span, 3);
+      assert.equal(oldBar.moveReason, 'Klima');
+      assert.equal(newBar.movedIn, true);
+      assert.equal(newBar.startIndex, 3);
+      for (const night of view.summary) {
+        assert.equal(night.sold, 1, `${night.date}: tek konaklama`);
+        assert.equal(night.free, 3, `${night.date}: dört odalı otelde tek oda dolu`);
+      }
+    });
+
+    it('detay oda geçmişini gece sırasıyla verir', async () => {
+      const staying = await seedInHouse();
+      await asUser(() => rooms.changeRoom(hotelId, staying.id, room['102'].id, { reason: 'Misafir talebi' }));
+
+      const detail = await plan.getReservationDetail(hotelId, staying.id);
+      assert.deepEqual(
+        detail.roomHistory.map((entry) => [entry.roomNumber, entry.from, entry.to, entry.reason]),
+        [
+          ['101', day(-3), day(0), 'Misafir talebi'],
+          ['102', day(0), day(3), null],
+        ],
+      );
+    });
+
+    it('geçmiş gecelerin müsaitliği eski odayı dolu sayar', async () => {
+      const staying = await seedInHouse();
+      await asUser(() => rooms.changeRoom(hotelId, staying.id, room['102'].id));
+
+      const past = await rooms.getAvailabilityCalendar(hotelId, { from: dayDate(-2), to: dayDate(-1) });
+      const std = past.roomTypes.find((type) => type.code === 'STD');
+      assert.equal(std.days[day(-2)].free, 2, 'iki gün önce misafir 101 odasındaydı');
+      assert.equal(std.days[day(-2)].unassigned, 0);
+    });
+
+    it('aday listesi geçmiş gecelere değil kalan gecelere bakar', async () => {
+      const staying = await seedInHouse();
+      await insertBlock({ roomId: room['103'].id, start: -3, end: -1 });
+
+      const candidates = await rooms.getAssignableRooms(hotelId, staying.id, { page: 1, pageSize: 10 });
+      assert.ok(candidates.items.some((entry) => entry.number === '103'), '103 bugün boş, listede olmalı');
+    });
+  });
+
+  describe('önbellek ve arama', () => {
+    it('değişiklikten sonra ızgara eski cevabı döndürmez', async () => {
+      const reservation = await seedReservation({ roomId: null, checkIn: 1, checkOut: 2 });
+      const before = await loadPlan();
+      assert.equal(rowOf(before, '101').reservations.length, 0);
+
+      await asUser(() => rooms.changeRoom(hotelId, reservation.id, room['101'].id));
+      const after = await loadPlan();
+      assert.equal(rowOf(after, '101').reservations.length, 1);
+    });
+
+    it('eşzamanlı aynı istekler aynı cevabı paylaşır', async () => {
+      const results = await Promise.all(Array.from({ length: 20 }, () => loadPlan()));
+      assert.ok(results.every((result) => result === results[0]));
+    });
+
+    it('misafir adıyla arama odayı bulur (birden çok kelime)', async () => {
+      await seedReservation({ roomId: room['103'].id, checkIn: 1, checkOut: 2, guestName: ['Ayşe', 'Yılmaz'] });
+      const result = await loadPlan({ search: 'ayşe yıl' });
+      assert.deepEqual(result.items.map((entry) => entry.number), ['103']);
+    });
+
+    it('onay koduyla arama odayı bulur, pencere dışındaki konaklama eşleşmez', async () => {
+      const inside = await seedReservation({ roomId: room['102'].id, checkIn: 1, checkOut: 2 });
+      await seedReservation({ roomId: room['201'].id, roomTypeId: dlxTypeId, adults: 1, checkIn: 40, checkOut: 42 });
+
+      const byCode = await loadPlan({ search: inside.confirmationCode });
+      assert.deepEqual(byCode.items.map((entry) => entry.number), ['102']);
+
+      const outside = await loadPlan({ search: 'Test' });
+      assert.ok(!outside.items.some((entry) => entry.number === '201'), '40 gün sonraki konaklama bu pencerede aranmaz');
+    });
+
+    it('oda numaraları doğal sırayla gelir (1, 2, 10)', async () => {
+      for (const number of ['10', '2', '1']) {
+        await prismaUnfiltered.room.create({ data: { hotelId, number, roomTypeId: stdTypeId, floor: 0 } });
+      }
+      const result = await loadPlan({ floor: 0 });
+      assert.deepEqual(result.items.map((entry) => entry.number), ['1', '2', '10']);
+
+      const list = await rooms.listRooms(hotelId, { page: 1, pageSize: 10, floor: 0 });
+      assert.deepEqual(list.items.map((entry) => entry.number), ['1', '2', '10']);
+    });
+  });
+
+  describe('bitmiş konaklama', () => {
+    it('oda ataması kaldırılamaz (geçmiş yeniden yazılmaz)', async () => {
+      const past = await seedReservation({ roomId: room['101'].id, checkIn: -4, checkOut: -1, status: 'CONFIRMED' });
+      await assert.rejects(
+        () => asUser(() => rooms.unassignRoom(hotelId, past.id)),
+        (error) => error.code === 'STAY_ENDED',
+      );
+      const detail = await plan.getReservationDetail(hotelId, past.id);
+      assert.equal(detail.actions.canUnassign, false);
     });
   });
 });

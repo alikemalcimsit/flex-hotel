@@ -105,6 +105,41 @@ const CONSTRAINT_RULES = Object.freeze({
     code: 'HAS_RESERVATIONS',
     message: 'Bu tarihlerde odada rezervasyon var; arıza kaydı açılamaz. Önce misafiri başka odaya taşıyın.',
   },
+  Reservation_room_since_valid: {
+    code: 'CONSTRAINT',
+    message: 'Oda değişikliği tarihi konaklamanın içinde olmalı; çıkış tarihi taşıma gününden önceye çekilemez.',
+  },
+  RoomStaySegment_no_overlap: {
+    code: 'ROOM_NOT_FREE',
+    message: 'Bu odanın geçmişinde aynı gecelere yazılmış başka bir konaklama var.',
+  },
+  RoomStaySegment_date_order: { code: 'CONSTRAINT', message: 'Oda geçmişi diliminin bitişi başlangıcından sonra olmalı.' },
+  RoomStaySegment_day_precision: { code: 'CONSTRAINT', message: 'Oda geçmişi tarihleri gün hassasiyetinde olmalı.' },
+
+  Message_conversation_external_unique: {
+    code: 'DUPLICATE_MESSAGE',
+    message: 'Bu kanal mesajı zaten kayıtlı.',
+  },
+  Message_internal_note_valid: { code: 'CONSTRAINT', message: 'İç not yalnızca personel tarafından yazılabilir.' },
+  Message_delivery_matches_direction: {
+    code: 'CONSTRAINT',
+    message: 'Mesajın teslim durumu yönüyle uyuşmuyor (gelen mesaj gönderilemez).',
+  },
+  Conversation_unread_non_negative: { code: 'CONSTRAINT', message: 'Okunmamış mesaj sayısı eksi olamaz.' },
+  Conversation_state_version_non_negative: { code: 'CONSTRAINT', message: 'Konuşma sürümü geçersiz.' },
+  Conversation_closed_has_time: { code: 'CONSTRAINT', message: 'Kapalı konuşmanın kapanış zamanı olmalı.' },
+
+  Hotel_phone_country_code_valid: {
+    code: 'CONSTRAINT',
+    message: 'Telefon ülke kodu 1-3 rakam olmalı ve 0 ile başlamamalı.',
+  },
+  GuestRequest_title_present: { code: 'CONSTRAINT', message: 'İsteğin başlığı boş olamaz.' },
+  GuestRequest_done_has_completion: {
+    code: 'CONSTRAINT',
+    message: 'Tamamlanan isteğin tamamlanma zamanı olmalı.',
+  },
+  GuestRequest_cancel_has_reason: { code: 'CONSTRAINT', message: 'İptal edilen isteğin sebebi yazılmalı.' },
+  GuestRequest_wake_up_scheduled: { code: 'CONSTRAINT', message: 'Uyandırma isteğinin saati olmalı.' },
 });
 
 /**

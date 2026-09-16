@@ -1,10 +1,11 @@
 import { z } from './locale.js';
 import {
   HOUSEKEEPING_STATUSES,
+  MAX_MOVE_REASON_LENGTH,
   MAX_PLAN_DAYS,
+  PLAN_ASSIGNABLE_STATUSES,
   PLAN_ROOMS_PAGE_SIZE,
   PLAN_WINDOW_OPTIONS,
-  RESERVATION_STATUSES,
   ROOM_CONDITIONS,
   ROOM_OCCUPANCIES,
 } from './constants.js';
@@ -67,6 +68,14 @@ export const roomPlanQuerySchema = z.object({
  */
 export const changeRoomSchema = z.object({
   roomId: z.string({ error: 'Oda seçilmedi' }).uuid({ message: 'Geçersiz oda' }),
+  // İsteğe bağlı ama önerilir: "klima arızası", "misafir talebi", "upgrade".
+  // Taşıma geçmişine ve denetim izine yazılır.
+  reason: z
+    .string()
+    .trim()
+    .max(MAX_MOVE_REASON_LENGTH, `Sebep en fazla ${MAX_MOVE_REASON_LENGTH} karakter`)
+    .optional()
+    .nullable(),
 });
 
 /** Plan ekranının rezervasyon detayı çekmecesi için kimlik parametresi. */
@@ -89,7 +98,8 @@ export const planUnassignedQuerySchema = z.object({
     .min(1, 'Gün sayısı en az 1 olmalı')
     .max(MAX_PLAN_DAYS, `Gün sayısı en fazla ${MAX_PLAN_DAYS} olabilir`)
     .default(PLAN_WINDOW_OPTIONS[1]),
-  status: z.enum(RESERVATION_STATUSES, { error: 'Geçersiz rezervasyon durumu' }).optional(),
+  // Yalnızca oda verilebilecek durumlar: iptal edilmiş kaydı şeride çağırmanın anlamı yok.
+  status: z.enum(PLAN_ASSIGNABLE_STATUSES, { error: 'Geçersiz rezervasyon durumu' }).optional(),
   limit: z.coerce
     .number({ error: 'Kayıt sayısı sayı olmalı' })
     .int('Kayıt sayısı tam sayı olmalı')

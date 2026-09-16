@@ -25,6 +25,7 @@ const skip = TEST_DB ? false : 'TEST_DATABASE_URL tanımlı değil — entegrasy
 const HOTEL_TIME_ZONE = 'Europe/Istanbul';
 
 describe('oda envanteri servisi (entegrasyon)', { skip }, () => {
+  /** @type {(client: any) => Promise<void>} */ let resetDatabase;
   /** @type {any} */ let prismaUnfiltered;
   /** @type {any} */ let service;
   /** @type {any} */ let core;
@@ -35,6 +36,7 @@ describe('oda envanteri servisi (entegrasyon)', { skip }, () => {
 
   before(async () => {
     process.env.DATABASE_URL = TEST_DB;
+    ({ resetDatabase } = await import('../../test-support/reset-database.js'));
     const db = await import('../../db.js');
     prismaUnfiltered = db.prismaUnfiltered;
     service = await import('./service.js');
@@ -46,18 +48,7 @@ describe('oda envanteri servisi (entegrasyon)', { skip }, () => {
   });
 
   beforeEach(async () => {
-    await prismaUnfiltered.auditLog.deleteMany({});
-    await prismaUnfiltered.eventLog.deleteMany({});
-    await prismaUnfiltered.folioItem.deleteMany({});
-    await prismaUnfiltered.folio.deleteMany({});
-    await prismaUnfiltered.reservation.deleteMany({});
-    await prismaUnfiltered.roomBlock.deleteMany({});
-    await prismaUnfiltered.room.deleteMany({});
-    await prismaUnfiltered.roomType.deleteMany({});
-    await prismaUnfiltered.guest.deleteMany({});
-    await prismaUnfiltered.season.deleteMany({});
-    await prismaUnfiltered.tax.deleteMany({});
-    await prismaUnfiltered.hotel.deleteMany({});
+    await resetDatabase(prismaUnfiltered);
 
     const hotel = await prismaUnfiltered.hotel.create({
       data: { name: 'Test Otel', code: `TEST-${randomUUID().slice(0, 8)}` },

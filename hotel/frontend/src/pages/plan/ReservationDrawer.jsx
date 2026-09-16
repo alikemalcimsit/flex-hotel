@@ -139,6 +139,27 @@ export function ReservationDrawer({ reservationId, canOperate, onClose, onChange
             </div>
           )}
 
+          {detail.roomHistory.length > 1 && (
+            <section aria-label="Oda geçmişi">
+              <h3 className="mb-2 text-xs font-bold uppercase tracking-[0.06em] text-ink-muted">Oda geçmişi</h3>
+              <ol className="flex flex-col gap-1.5">
+                {detail.roomHistory.map((entry) => (
+                  <li
+                    key={`${entry.roomId}-${entry.from}`}
+                    className="flex flex-wrap items-baseline gap-x-2 rounded-item bg-surface-muted px-3 py-2 text-sm"
+                  >
+                    <span className="font-bold tabular-nums text-ink">{entry.roomNumber}</span>
+                    <span className="text-ink-soft">
+                      {formatDate(entry.from)} → {formatDate(entry.to)}
+                    </span>
+                    {entry.reason && <span className="text-xs text-ink-muted">· {entry.reason}</span>}
+                    {entry.movedBy && <span className="text-xs text-ink-muted">· taşıyan {entry.movedBy}</span>}
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )}
+
           {detail.notes && (
             <div className="rounded-panel border border-line bg-surface-muted px-4 py-3 text-sm text-ink-soft">
               <span className="mb-1 block text-xs font-bold uppercase tracking-[0.06em] text-ink-muted">Not</span>

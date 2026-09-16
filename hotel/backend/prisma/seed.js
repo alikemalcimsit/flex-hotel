@@ -254,10 +254,302 @@ async function main() {
     }
   }
 
+  const { conversations, requests } = await seedMessaging(hotelId, guests, roomByNumber);
+
   console.log(
     `Seed tamam: 1 otel, ${users.length} kullanıcı, ${ROOM_TYPES.length} oda tipi, ${ROOMS.length} oda, ` +
-      `${GUESTS.length} misafir, ${reservationPlans.length} rezervasyon.`,
+      `${GUESTS.length} misafir, ${reservationPlans.length} rezervasyon, ${conversations} konuşma, ${requests} istek.`,
   );
+}
+
+const MINUTE_MS = 60_000;
+
+/** Şu andan `minutes` dakika önce. */
+const minutesAgo = (minutes) => new Date(Date.now() - minutes * MINUTE_MS);
+
+/**
+ * Demo konuşmalar (modül 7).
+ *
+ * Kanal geçidi (modül 8) olmadığı için personelin giden mesajları dürüstçe
+ * "gönderim bekliyor" durumundadır — gönderilmiş gibi yazılmaz. Sayaçlar
+ * (okunmamış, cevap bekleme, son mesaj özeti) mesajlardan hesaplanır; servis
+ * aynı kuralı uygular.
+ */
+const CONVERSATION_PLANS = [
+  {
+    channel: 'WHATSAPP',
+    address: '905321110001',
+    displayName: 'Ayşe',
+    guest: 0,
+    stay: 'DEMO-0006',
+    messages: [
+      { key: 'ayse-1', author: 'GUEST', text: 'Merhaba, odaya iki havlu daha alabilir miyiz?', at: 42 },
+      {
+        key: 'ayse-2',
+        author: 'STAFF',
+        actor: 'Resepsiyon',
+        text: 'Merhaba Ayşe Hanım, kat görevlimiz 15 dakika içinde getirecek.',
+        at: 38,
+      },
+      { key: 'ayse-3', author: 'NOTE', actor: 'Resepsiyon', text: 'Misafir ikinci kez havlu istedi, kat şefine iletildi.', at: 37 },
+      { key: 'ayse-4', author: 'GUEST', text: 'Teşekkürler! Bir de klima gece biraz ses yapıyor.', at: 7 },
+    ],
+  },
+  {
+    channel: 'WHATSAPP',
+    address: '905321110002',
+    displayName: 'Mehmet K.',
+    guest: 1,
+    stay: 'DEMO-0007',
+    messages: [{ key: 'mehmet-1', author: 'GUEST', text: 'Yarın sabah 06:30 için uyandırma rica ediyorum.', at: 18 }],
+  },
+  {
+    channel: 'WEBCHAT',
+    address: 'webchat-demo-oturum-1',
+    displayName: 'Web sitesi ziyaretçisi',
+    guest: null,
+    stay: null,
+    messages: [
+      { key: 'web-1', author: 'GUEST', text: 'Ekim sonunda iki kişilik oda fiyatınız nedir? Kahvaltı dahil mi?', at: 95 },
+      { key: 'web-2', author: 'STAFF', actor: 'Resepsiyon', text: 'Merhaba, giriş ve çıkış tarihlerinizi paylaşır mısınız?', at: 90 },
+      { key: 'web-3', author: 'GUEST', text: '28-31 Ekim, iki yetişkin.', at: 74 },
+    ],
+  },
+  {
+    channel: 'WHATSAPP',
+    address: '441234567890',
+    displayName: 'John',
+    guest: 2,
+    stay: 'DEMO-0003',
+    closed: true,
+    messages: [
+      { key: 'john-1', author: 'GUEST', text: 'Is a late checkout possible on my last day?', at: 300 },
+      { key: 'john-2', author: 'STAFF', actor: 'Resepsiyon', text: 'Yes, you can stay until 14:00 at no extra charge.', at: 290 },
+    ],
+  },
+];
+
+/**
+ * Demo istekler (modül 7). Zamanlar göreli: bir kısmı gecikmiş görünür.
+ * Konuşmaya bağlı isteklerde `room` yalnızca yedek; oda konaklamadan gelir.
+ */
+const REQUEST_PLANS = [
+  {
+    title: '2 ek havlu',
+    category: 'AMENITY',
+    room: '101',
+    conversation: '905321110001',
+    message: 'ayse-1',
+    status: 'IN_PROGRESS',
+    createdMinutesAgo: 38,
+    assignee: 'resepsiyon@hotel.local',
+  },
+  {
+    title: 'Klima gece ses yapıyor',
+    category: 'MAINTENANCE',
+    room: '101',
+    conversation: '905321110001',
+    message: 'ayse-4',
+    status: 'OPEN',
+    createdMinutesAgo: 5,
+  },
+  {
+    title: 'Uyandırma',
+    category: 'WAKE_UP',
+    room: '103',
+    conversation: '905321110002',
+    message: 'mehmet-1',
+    status: 'OPEN',
+    createdMinutesAgo: 16,
+    wakeUpTomorrowAt: { hour: 6, minute: 30 },
+  },
+  {
+    title: 'Ekstra oda temizliği',
+    category: 'HOUSEKEEPING',
+    room: '202',
+    status: 'OPEN',
+    source: 'PHONE',
+    createdMinutesAgo: 95,
+  },
+  {
+    title: 'Koridorda gürültü şikâyeti',
+    category: 'COMPLAINT',
+    room: '203',
+    status: 'OPEN',
+    source: 'PHONE',
+    createdMinutesAgo: 4,
+    description: 'Yan odadan gece yarısı yüksek ses geldiği bildirildi.',
+  },
+  {
+    title: 'Oda servisi menüsü',
+    category: 'ROOM_SERVICE',
+    room: '301',
+    status: 'DONE',
+    source: 'FRONT_DESK',
+    createdMinutesAgo: 180,
+    completedMinutesAgo: 160,
+    resolutionNote: 'Menü odaya bırakıldı.',
+  },
+];
+
+/**
+ * Otelin saat dilimine göre "yarın HH:MM" anı.
+ * @param {string} timeZone
+ * @param {{ hour: number, minute: number }} time
+ * @param {(wallTime: string, timeZone: string) => Date | null} toUtc
+ */
+function tomorrowAtInTimeZone(timeZone, { hour, minute }, toUtc) {
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(
+    new Date(),
+  );
+  const [year, month, day] = today.split('-').map(Number);
+  const tomorrow = new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10);
+  const pad = (value) => String(value).padStart(2, '0');
+  return toUtc(`${tomorrow}T${pad(hour)}:${pad(minute)}`, timeZone);
+}
+
+async function seedMessaging(hotelId, guests, roomByNumber) {
+  const { guestRequestDueAt, defaultGuestRequestPriority, zonedWallTimeToUtc } = await import('@hotelos/hotel-contracts');
+  const hotel = await prisma.hotel.findFirst({ where: { id: hotelId }, select: { timezone: true } });
+  const conversationByAddress = {};
+  const messageByKey = {};
+
+  for (const plan of CONVERSATION_PLANS) {
+    const stay = plan.stay
+      ? await prisma.reservation.findFirst({ where: { confirmationCode: plan.stay }, select: { id: true } })
+      : null;
+    const existing = await prisma.conversation.findFirst({
+      where: { hotelId, channel: plan.channel, externalId: plan.address },
+    });
+    const conversation =
+      existing ??
+      (await prisma.conversation.create({
+        data: {
+          hotelId,
+          channel: plan.channel,
+          externalId: plan.address,
+          displayName: plan.displayName,
+          guestId: plan.guest === null ? null : guests[plan.guest].id,
+          reservationId: stay?.id ?? null,
+          mode: 'MANUAL',
+        },
+      }));
+    conversationByAddress[plan.address] = conversation;
+
+    for (const entry of plan.messages) {
+      const externalId = `demo:${entry.key}`;
+      const found = await prisma.message.findFirst({ where: { conversationId: conversation.id, meta: { path: ['demoKey'], equals: entry.key } } });
+      if (found) {
+        messageByKey[entry.key] = found;
+        continue;
+      }
+      // Var olan konuşmanın geçmişine sonradan mesaj eklenmez (özet bozulurdu).
+      if (existing) continue;
+      const inbound = entry.author === 'GUEST';
+      const note = entry.author === 'NOTE';
+      messageByKey[entry.key] = await prisma.message.create({
+        data: {
+          hotelId,
+          conversationId: conversation.id,
+          direction: inbound ? 'IN' : 'OUT',
+          author: inbound ? 'GUEST' : 'STAFF',
+          text: entry.text,
+          actorName: inbound ? plan.displayName : entry.actor,
+          internal: note,
+          // Kanal yok: giden cevap gönderilmeyi bekliyor; iç not kanala gitmez.
+          delivery: inbound ? 'RECEIVED' : note ? 'SENT' : 'PENDING',
+          externalId: inbound ? externalId : null,
+          createdAt: minutesAgo(entry.at),
+          meta: { demoKey: entry.key },
+        },
+      });
+    }
+
+    // Var olan konuşmaya dokunulmaz: seed tekrar çalıştığında personelin
+    // gerçek işlemleri (cevap, kapatma, okundu) ezilmesin.
+    if (existing) continue;
+
+    // Sayaçlar kaydedilen mesajlardan: son görünür mesaj, son cevaptan sonraki misafir mesajları.
+    const visible = plan.messages.filter((entry) => entry.author !== 'NOTE');
+    const last = visible.at(-1);
+    const lastAt = messageByKey[last.key].createdAt;
+    const lastReplyIndex = visible.map((entry) => entry.author).lastIndexOf('STAFF');
+    const waiting = visible.slice(lastReplyIndex + 1).filter((entry) => entry.author === 'GUEST');
+    await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: {
+        lastMessageAt: lastAt,
+        lastMessagePreview: last.text.slice(0, 160),
+        lastMessageAuthor: last.author === 'GUEST' ? 'GUEST' : 'STAFF',
+        unreadCount: plan.closed ? 0 : waiting.length,
+        awaitingReplySince:
+          plan.closed || waiting.length === 0 ? null : messageByKey[waiting[0].key].createdAt,
+        status: plan.closed ? 'CLOSED' : 'OPEN',
+        closedAt: plan.closed ? new Date(lastAt.getTime() + 5 * MINUTE_MS) : null,
+        closedBy: plan.closed ? 'resepsiyon@hotel.local' : null,
+      },
+    });
+  }
+
+  let requests = 0;
+  for (const plan of REQUEST_PLANS) {
+    const conversation = plan.conversation ? conversationByAddress[plan.conversation] : null;
+    const existing = await prisma.guestRequest.findFirst({ where: { hotelId, title: plan.title } });
+    if (existing) {
+      requests += 1;
+      continue;
+    }
+    // Konuşmadan açılan istek konuşmanın konaklamasına ve o konaklamanın
+    // bugünkü odasına bağlanır (servis de böyle yapar); diğerleri odadaki
+    // içerideki misafire.
+    const stay = conversation?.reservationId
+      ? await prisma.reservation.findFirst({
+          where: { id: conversation.reservationId },
+          select: { id: true, guestId: true, roomId: true },
+        })
+      : await prisma.reservation.findFirst({
+          where: { hotelId, roomId: roomByNumber[plan.room].id, status: 'CHECKED_IN' },
+          select: { id: true, guestId: true, roomId: true },
+        });
+    const roomId = stay?.roomId ?? roomByNumber[plan.room].id;
+    const assignee = plan.assignee
+      ? await prisma.user.findFirst({ where: { email: plan.assignee }, select: { id: true } })
+      : null;
+    const createdAt = minutesAgo(plan.createdMinutesAgo);
+    const priority = defaultGuestRequestPriority(plan.category);
+    const scheduledFor = plan.wakeUpTomorrowAt
+      ? tomorrowAtInTimeZone(hotel.timezone, plan.wakeUpTomorrowAt, zonedWallTimeToUtc)
+      : null;
+
+    await prisma.guestRequest.create({
+      data: {
+        hotelId,
+        category: plan.category,
+        title: plan.title,
+        description: plan.description ?? null,
+        priority,
+        status: plan.status,
+        source: conversation ? 'CONVERSATION' : plan.source,
+        dueAt: guestRequestDueAt({ priority, createdAt, scheduledFor }),
+        scheduledFor,
+        roomId,
+        reservationId: stay?.id ?? null,
+        guestId: stay?.guestId ?? conversation?.guestId ?? null,
+        conversationId: conversation?.id ?? null,
+        messageId: plan.message ? messageByKey[plan.message]?.id ?? null : null,
+        assignedToId: assignee?.id ?? null,
+        createdBy: 'seed',
+        createdAt,
+        startedAt: plan.status === 'IN_PROGRESS' ? minutesAgo(plan.createdMinutesAgo - 3) : null,
+        completedAt: plan.completedMinutesAgo ? minutesAgo(plan.completedMinutesAgo) : null,
+        completedBy: plan.completedMinutesAgo ? 'resepsiyon@hotel.local' : null,
+        resolutionNote: plan.resolutionNote ?? null,
+      },
+    });
+    requests += 1;
+  }
+
+  return { conversations: CONVERSATION_PLANS.length, requests };
 }
 
 main()

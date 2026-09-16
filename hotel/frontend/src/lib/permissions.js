@@ -15,13 +15,25 @@ export const PERMISSIONS = Object.freeze({
   ROOMS_VIEW: 'rooms.view',
   ROOMS_MANAGE: 'rooms.manage',
   ROOMS_OPERATE: 'rooms.operate',
+  MESSAGES_VIEW: 'messages.view',
+  MESSAGES_REPLY: 'messages.reply',
+  REQUESTS_VIEW: 'requests.view',
+  REQUESTS_MANAGE: 'requests.manage',
 });
 
 export const ROLE_PERMISSIONS = Object.freeze({
   ADMIN: Object.values(PERMISSIONS),
   // Ön büro odaları görür, atar ve kat hizmeti durumunu işler; envanteri
-  // (oda ekleme, arıza kaydı) yönetim değiştirir.
-  FRONT_DESK: [PERMISSIONS.ROOMS_VIEW, PERMISSIONS.ROOMS_OPERATE],
+  // (oda ekleme, arıza kaydı) yönetim değiştirir. Misafirle yazışma ve
+  // istek takibi ön büronun asıl işidir.
+  FRONT_DESK: [
+    PERMISSIONS.ROOMS_VIEW,
+    PERMISSIONS.ROOMS_OPERATE,
+    PERMISSIONS.MESSAGES_VIEW,
+    PERMISSIONS.MESSAGES_REPLY,
+    PERMISSIONS.REQUESTS_VIEW,
+    PERMISSIONS.REQUESTS_MANAGE,
+  ],
 });
 
 /**

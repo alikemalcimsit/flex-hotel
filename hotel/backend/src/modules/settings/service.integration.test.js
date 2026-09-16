@@ -25,6 +25,7 @@ const TEST_DB = process.env.TEST_DATABASE_URL;
 const skip = TEST_DB ? false : 'TEST_DATABASE_URL tanımlı değil — entegrasyon testleri atlandı';
 
 describe('ayarlar servisi (entegrasyon)', { skip }, () => {
+  /** @type {(client: any) => Promise<void>} */ let resetDatabase;
   /** @type {any} */ let prisma;
   /** @type {any} */ let prismaUnfiltered;
   /** @type {any} */ let service;
@@ -35,6 +36,7 @@ describe('ayarlar servisi (entegrasyon)', { skip }, () => {
     // db.js, import anında PrismaClient kuruyor; bu yüzden bağlantı adresi
     // import'tan önce ayarlanmalı — dinamik import bunun için.
     process.env.DATABASE_URL = TEST_DB;
+    ({ resetDatabase } = await import('../../test-support/reset-database.js'));
     const db = await import('../../db.js');
     prisma = db.prisma;
     prismaUnfiltered = db.prismaUnfiltered;
@@ -47,19 +49,7 @@ describe('ayarlar servisi (entegrasyon)', { skip }, () => {
   });
 
   beforeEach(async () => {
-    // Bağımlı tablolar önce; yabancı anahtar kısıtları yüzünden sıra önemli.
-    await prismaUnfiltered.auditLog.deleteMany({});
-    await prismaUnfiltered.eventLog.deleteMany({});
-    await prismaUnfiltered.folioItem.deleteMany({});
-    await prismaUnfiltered.folio.deleteMany({});
-    await prismaUnfiltered.reservation.deleteMany({});
-    await prismaUnfiltered.guest.deleteMany({});
-    await prismaUnfiltered.roomBlock.deleteMany({});
-    await prismaUnfiltered.season.deleteMany({});
-    await prismaUnfiltered.tax.deleteMany({});
-    await prismaUnfiltered.room.deleteMany({});
-    await prismaUnfiltered.roomType.deleteMany({});
-    await prismaUnfiltered.hotel.deleteMany({});
+    await resetDatabase(prismaUnfiltered);
 
     const hotel = await prismaUnfiltered.hotel.create({
       data: { name: 'Test Otel', code: `TEST-${randomUUID().slice(0, 8)}` },
@@ -406,6 +396,27 @@ describe('ayarlar servisi (entegrasyon)', { skip }, () => {
       // Cache geçersiz kılınmasaydı burada hâlâ 1 görürdük.
       const second = await service.getActiveRoomTypes(hotelId);
       assert.equal(second.length, 2);
+    });
+
+    it('telefon ülke kodu güncellenir, gönderilmezse korunur; okuma önbelleği tazelenir', async () => {
+      const general = { defaultBoardType: 'BB', cancellationPolicyDays: 0, cancellationPolicyPenaltyPct: '0' };
+      assert.equal((await service.getHotelSettings(hotelId)).phoneCountryCode, '90', 'varsayılan');
+
+      const hotel = await service.getHotel(hotelId);
+      const updated = await asUser(() =>
+        service.updateGeneralSettings(hotelId, {
+          ...general,
+          phoneCountryCode: '44',
+          expectedUpdatedAt: new Date(hotel.updatedAt),
+        }),
+      );
+      assert.equal(updated.phoneCountryCode, '44');
+      assert.equal((await service.getHotelSettings(hotelId)).phoneCountryCode, '44');
+
+      const again = await asUser(() =>
+        service.updateGeneralSettings(hotelId, { ...general, expectedUpdatedAt: new Date(updated.updatedAt) }),
+      );
+      assert.equal(again.phoneCountryCode, '44');
     });
 
     it('sezon çarpanı doğru güne düşer', async () => {

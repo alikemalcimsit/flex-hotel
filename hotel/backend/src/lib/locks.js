@@ -53,3 +53,24 @@ export function lockRoomTypes(tx, hotelId, roomTypeIds) {
 export function lockRooms(tx, hotelId, roomIds) {
   return lockRows(tx, 'Room', hotelId, roomIds);
 }
+
+/**
+ * Konuşma satırı: okunmamış sayacı ve son mesaj özeti aynı anda gelen iki
+ * mesajda birbirini ezmesin diye mesaj yazan her işlem önce konuşmayı kilitler.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} conversationIds
+ */
+export function lockConversations(tx, hotelId, conversationIds) {
+  return lockRows(tx, 'Conversation', hotelId, conversationIds);
+}
+
+/**
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} requestIds
+ */
+export function lockGuestRequests(tx, hotelId, requestIds) {
+  return lockRows(tx, 'GuestRequest', hotelId, requestIds);
+}

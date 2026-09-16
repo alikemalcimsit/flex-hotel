@@ -23,6 +23,7 @@ import {
   blockRemovalMode,
   buildAvailabilityCalendar,
   availabilityForStay,
+  compareRoomsNaturally,
   consumesInventory,
   findNewOverbooking,
   fitsCapacity,
@@ -30,6 +31,7 @@ import {
   INVENTORY_CONSUMING_STATUSES,
   INVENTORY_REMOVING_BLOCK_TYPE,
   rankRooms,
+  openSliceStart,
   roomChangeMode,
 } from './rules.js';
 
@@ -291,7 +293,7 @@ export async function loadInventorySnapshot(client, hotelId, from, to, { roomTyp
   });
   const roomIds = rooms.map((room) => room.id);
 
-  const [reservations, blocks] = await Promise.all([
+  const [reservations, blocks, segments] = await Promise.all([
     client.reservation.findMany({
       where: {
         hotelId,
@@ -299,7 +301,16 @@ export async function loadInventorySnapshot(client, hotelId, from, to, { roomTyp
         // Yarı açık kesişim: pencerede en az bir gecesi olanlar (fazlası zararsız).
         checkIn: { lt: to },
         checkOut: { gt: from },
-        ...(roomTypeIds ? { OR: [{ roomTypeId: { in: roomTypeIds } }, { roomId: { in: roomIds } }] } : {}),
+        ...(roomTypeIds
+          ? {
+              OR: [
+                { roomTypeId: { in: roomTypeIds } },
+                { roomId: { in: roomIds } },
+                // Bu tiplerin odalarında kalıp sonra başka odaya taşınmış olanlar.
+                { roomSegments: { some: { roomId: { in: roomIds }, deletedAt: null } } },
+              ],
+            }
+          : {}),
       },
       select: {
         id: true,
@@ -307,6 +318,7 @@ export async function loadInventorySnapshot(client, hotelId, from, to, { roomTyp
         roomTypeId: true,
         checkIn: true,
         checkOut: true,
+        roomSince: true,
         status: true,
         adults: true,
         children: true,
@@ -322,9 +334,22 @@ export async function loadInventorySnapshot(client, hotelId, from, to, { roomTyp
       },
       select: { id: true, roomId: true, type: true, startDate: true, endDate: true, reason: true },
     }),
+    // Oda değiştirmiş konaklamaların eski odalarda geçen geceleri. Yalnızca
+    // envanteri hâlâ tüketen konaklamalarınki: çıkış yapmışın geçmişi
+    // müsaitliği etkilemez.
+    client.roomStaySegment.findMany({
+      where: {
+        hotelId,
+        startDate: { lt: to },
+        endDate: { gt: from },
+        reservation: { status: { in: INVENTORY_CONSUMING_STATUSES }, deletedAt: null },
+        ...(roomTypeIds ? { roomId: { in: roomIds } } : {}),
+      },
+      select: { id: true, reservationId: true, roomId: true, startDate: true, endDate: true },
+    }),
   ]);
 
-  return { rooms, reservations, blocks };
+  return { rooms, reservations, blocks, segments };
 }
 
 /**
@@ -422,17 +447,37 @@ export async function listRooms(hotelId, query) {
     ...conditionWhere(query.condition, businessDate),
   };
 
-  const [items, total] = await prisma.$transaction([
-    prisma.room.findMany({
-      where,
-      include: roomInclude(businessDate),
-      orderBy: [{ floor: 'asc' }, { number: 'asc' }],
-      ...toSkipTake(query),
-    }),
-    prisma.room.count({ where }),
-  ]);
+  const { ids, total } = await naturalRoomPage(prisma, where, query);
+  const rows = await prisma.room.findMany({ where: { id: { in: ids } }, include: roomInclude(businessDate) });
+  const byId = new Map(rows.map((row) => [row.id, row]));
 
-  return buildPage(items.map(toRoomDto), total, query);
+  return buildPage(
+    ids.map((id) => byId.get(id)).filter(Boolean).map(toRoomDto),
+    total,
+    query,
+  );
+}
+
+/**
+ * Filtreye uyan odaların doğal sıradaki (kat, sonra numara: 1, 2, 10) bir sayfası.
+ *
+ * Veritabanı numarayı metin olarak sıralar (1, 10, 2); villa ve bungalov
+ * numaralı otellerde liste karışır. Bu yüzden önce yalnızca kimlik/kat/numara
+ * çekilip bellekte sıralanır, sonra sayfanın ayrıntısı okunur. En büyük tek
+ * otelde bile birkaç bin hafif satırdır; iki sorgu, gece başına sorgu yok.
+ *
+ * Modül 5 (oda planı) da aynı sırayı kullanır.
+ *
+ * @param {typeof prisma | import('@prisma/client').Prisma.TransactionClient} client
+ * @param {object} where
+ * @param {{ page: number, pageSize: number }} paging
+ * @returns {Promise<{ ids: string[], total: number }>}
+ */
+export async function naturalRoomPage(client, where, paging) {
+  const matching = await client.room.findMany({ where, select: { id: true, floor: true, number: true } });
+  matching.sort(compareRoomsNaturally);
+  const { skip, take } = toSkipTake(paging);
+  return { ids: matching.slice(skip, skip + take).map((room) => room.id), total: matching.length };
 }
 
 /**
@@ -1135,6 +1180,20 @@ export async function checkAvailability(hotelId, { checkIn, checkOut, roomTypeId
 /* ══════════════════ Oda atama ══════════════════ */
 
 /**
+ * Oda uygunluğunun aranacağı ilk gece: içerideki misafir için bugün (geçmiş
+ * geceler çoktan eski odada geçti), diğerleri için giriş günü.
+ *
+ * @param {{ status: string, checkIn: Date }} reservation
+ * @param {Date} businessDate
+ * @returns {Date}
+ */
+function inHouseStayFrom(reservation, businessDate) {
+  const checkIn = new Date(toUtcDayStart(reservation.checkIn));
+  if (reservation.status !== 'CHECKED_IN') return checkIn;
+  return businessDate > checkIn ? businessDate : checkIn;
+}
+
+/**
  * @param {import('@prisma/client').Prisma.TransactionClient} tx
  * @param {string} hotelId
  * @param {string} reservationId
@@ -1193,8 +1252,10 @@ function assertAssignable(reservation, businessDate, { allowInHouse = false } = 
  * @param {{ includeOtherTypes: boolean }} options
  */
 async function rankAssignableRooms(client, hotelId, reservation, businessDate, { includeOtherTypes }) {
+  // İçerideki misafir için yalnızca kalan geceler aranır (bkz. assertRoomUsableForStay).
+  const stayFrom = inHouseStayFrom(reservation, businessDate);
   const [snapshot, roomTypeRows] = await Promise.all([
-    loadInventorySnapshot(client, hotelId, reservation.checkIn, reservation.checkOut),
+    loadInventorySnapshot(client, hotelId, stayFrom, reservation.checkOut),
     client.roomType.findMany({
       where: { hotelId },
       select: { id: true, code: true, name: true, basePrice: true, capacityAdults: true, capacityChildren: true },
@@ -1207,7 +1268,7 @@ async function rankAssignableRooms(client, hotelId, reservation, businessDate, {
   const reservedType = typeById.get(reservation.roomTypeId);
   if (!reservedType) return [];
 
-  const stay = { checkIn: reservation.checkIn, checkOut: reservation.checkOut };
+  const stay = { checkIn: stayFrom, checkOut: reservation.checkOut };
   const free = freeRoomsForStay({
     ...snapshot,
     roomTypeId: includeOtherTypes ? undefined : reservation.roomTypeId,
@@ -1224,9 +1285,10 @@ async function rankAssignableRooms(client, hotelId, reservation, businessDate, {
 
   const wouldOverbook = (room) => {
     if (!overbooksByType.has(room.roomTypeId)) {
+      const place = (row) => ({ ...row, roomId: room.id, roomSince: stayFrom > row.checkIn ? stayFrom : row.roomSince ?? null });
       const reservations = inSnapshot
-        ? snapshot.reservations.map((row) => (row.id === reservation.id ? { ...row, roomId: room.id } : row))
-        : [...snapshot.reservations, { ...reservation, roomId: room.id }];
+        ? snapshot.reservations.map((row) => (row.id === reservation.id ? place(row) : row))
+        : [...snapshot.reservations, place(reservation)];
       const after = buildAvailabilityCalendar({
         ...snapshot,
         reservations,
@@ -1294,6 +1356,7 @@ export async function getAssignableRooms(hotelId, reservationId, { includeOtherT
         roomId: true,
         checkIn: true,
         checkOut: true,
+        roomSince: true,
         status: true,
         adults: true,
         children: true,
@@ -1321,20 +1384,21 @@ export async function getAssignableRooms(hotelId, reservationId, { includeOtherT
  * yeni overbooking. Hepsi kullanıcıya **neden** olmadığını söylemek için;
  * garantiyi veritabanı verir.
  *
- * ⚠️ Kontroller konaklamanın **tamamı** için yapılır, kalan geceler için değil:
- * bir rezervasyonun tek bir `roomId`'si var, dolayısıyla oda değiştirince
- * geçmiş geceler de yeni odaya yazılmış sayılır (çifte rezervasyon kısıtı da
- * böyle bakar). Gece gece oda geçmişi tutulması modül 18'in konusu.
+ * İçerideki misafir taşınırken kontrol **kalan geceler** içindir: önceki
+ * geceler eski odada geçti (`RoomStaySegment`) ve veritabanı kısıtları da
+ * yalnızca açık dilime (`roomSince`'ten itibaren) bakar.
  *
  * @param {import('@prisma/client').Prisma.TransactionClient} tx
  * @param {string} hotelId
  * @param {{
  *   room: { id: string, number: string, roomTypeId: string, roomType: { code: string, capacityAdults: number, capacityChildren: number } },
- *   reservation: { id: string, roomTypeId: string, checkIn: Date, checkOut: Date, adults: number, children: number },
- *   actionLabel: string overbooking mesajının öznesi
- * }} context
+ *   reservation: { id: string, roomTypeId: string, checkIn: Date, checkOut: Date, roomSince?: Date | null, adults: number, children: number },
+ *   actionLabel: string,
+ *   stayFrom?: Date,
+ * }} context `actionLabel`: overbooking mesajının öznesi; `stayFrom`: kontrolün
+ *   başlayacağı gece (içerideki misafir için bugün, aksi hâlde giriş).
  */
-async function assertRoomUsableForStay(tx, hotelId, { room, reservation, actionLabel }) {
+async function assertRoomUsableForStay(tx, hotelId, { room, reservation, actionLabel, stayFrom }) {
   if (room.roomTypeId !== reservation.roomTypeId && !fitsCapacity(reservation, room.roomType)) {
     throw new ConflictError(
       `${room.number} numaralı oda (${room.roomType.code}) en fazla ${room.roomType.capacityAdults} yetişkin, ` +
@@ -1344,10 +1408,13 @@ async function assertRoomUsableForStay(tx, hotelId, { room, reservation, actionL
     );
   }
 
-  const snapshot = await loadInventorySnapshot(tx, hotelId, reservation.checkIn, reservation.checkOut, {
+  // Misafir içerideyse yalnızca kalan geceler önemli: geçmiş gecelerde hedef
+  // odada kim kaldığı ya da odanın arızalı olup olmadığı taşımayı engellemez.
+  const from = stayFrom ?? reservation.checkIn;
+  const snapshot = await loadInventorySnapshot(tx, hotelId, from, reservation.checkOut, {
     roomTypeIds: [room.roomTypeId],
   });
-  const stayRange = { start: reservation.checkIn, end: reservation.checkOut };
+  const stayRange = { start: from, end: reservation.checkOut };
 
   const blocking = snapshot.blocks.find(
     (block) => block.roomId === room.id && rangesOverlapHalfOpen({ start: block.startDate, end: block.endDate }, stayRange),
@@ -1362,13 +1429,20 @@ async function assertRoomUsableForStay(tx, hotelId, { room, reservation, actionL
     );
   }
 
-  const occupiedBy = snapshot.reservations.find(
-    (row) =>
-      row.id !== reservation.id &&
-      row.roomId === room.id &&
-      consumesInventory(row) &&
-      rangesOverlapHalfOpen({ start: row.checkIn, end: row.checkOut }, stayRange),
-  );
+  const occupiedBy =
+    snapshot.reservations.find(
+      (row) =>
+        row.id !== reservation.id &&
+        row.roomId === room.id &&
+        consumesInventory(row) &&
+        rangesOverlapHalfOpen({ start: openSliceStart(row), end: row.checkOut }, stayRange),
+    ) ??
+    snapshot.segments.find(
+      (segment) =>
+        segment.reservationId !== reservation.id &&
+        segment.roomId === room.id &&
+        rangesOverlapHalfOpen({ start: segment.startDate, end: segment.endDate }, stayRange),
+    );
   if (occupiedBy) {
     throw new ConflictError(
       `${room.number} numaralı oda bu gecelerde başka bir rezervasyona ait.`,
@@ -1376,17 +1450,21 @@ async function assertRoomUsableForStay(tx, hotelId, { room, reservation, actionL
     );
   }
 
-  const moved = { ...reservation, roomId: room.id };
+  const placed = (row) => ({
+    ...row,
+    roomId: room.id,
+    roomSince: toUtcDayStart(from) > toUtcDayStart(row.checkIn) ? new Date(toUtcDayStart(from)) : row.roomSince ?? null,
+  });
   await assertNoNewOverbooking(tx, hotelId, {
     roomTypeIds: [room.roomTypeId],
-    from: reservation.checkIn,
+    from,
     to: reservation.checkOut,
     snapshot,
     apply: (base) => ({
       ...base,
       reservations: base.reservations.some((row) => row.id === reservation.id)
-        ? base.reservations.map((row) => (row.id === reservation.id ? { ...row, roomId: room.id } : row))
-        : [...base.reservations, moved],
+        ? base.reservations.map((row) => (row.id === reservation.id ? placed(row) : row))
+        : [...base.reservations, placed(reservation)],
     }),
     action: actionLabel,
   });
@@ -1407,9 +1485,9 @@ async function assertRoomUsableForStay(tx, hotelId, { room, reservation, actionL
  * @param {string} hotelId
  * @param {string} reservationId
  * @param {string} roomId
- * @param {{ assignedBy?: 'manual' | 'auto' }} [options]
+ * @param {{ assignedBy?: 'manual' | 'auto', reason?: string | null }} [options]
  */
-export async function assignRoom(hotelId, reservationId, roomId, { assignedBy = 'manual' } = {}) {
+export async function assignRoom(hotelId, reservationId, roomId, { assignedBy = 'manual', reason = null } = {}) {
   const businessDate = await getBusinessDate(hotelId);
 
   try {
@@ -1452,7 +1530,7 @@ export async function assignRoom(hotelId, reservationId, roomId, { assignedBy = 
         entityId: reservationId,
         action: 'UPDATE',
         before: { roomId: previousRoomId, roomNumber: previousRoomNumber },
-        after: { roomId, roomNumber: room.number },
+        after: { roomId, roomNumber: room.number, reason: reason || null },
       });
 
       // Oda değiştirildiyse önce eskisinin bırakıldığı duyurulur; zincir
@@ -1485,6 +1563,8 @@ export async function assignRoom(hotelId, reservationId, roomId, { assignedBy = 
  * @param {string} reservationId
  */
 export async function unassignRoom(hotelId, reservationId) {
+  const businessDate = await getBusinessDate(hotelId);
+
   return writeWithEvents(async (tx, stage) => {
     const reservation = await loadAssignableReservation(tx, hotelId, reservationId);
 
@@ -1496,6 +1576,11 @@ export async function unassignRoom(hotelId, reservationId) {
         'Misafir odada olduğu için oda kaydı kaldırılamaz. Önce oda değişikliği veya çıkış işlemi yapın.',
         'GUEST_IN_ROOM',
       );
+    }
+    // Bitmiş konaklamanın odasını silmek geçmişi yeniden yazar: gece
+    // raporları "o gece bu oda boştu" der.
+    if (toUtcDayStart(reservation.checkOut) <= businessDate.getTime()) {
+      throw new ConflictError('Bu konaklamanın tarihleri geçmiş; oda kaydı değiştirilemez.', 'STAY_ENDED');
     }
 
     await lockRooms(tx, hotelId, [reservation.roomId]);
@@ -1534,12 +1619,18 @@ export async function unassignRoom(hotelId, reservationId) {
  *   satılamaz, yeni oda "boş" görünüp ikinci kez satılırdı.
  * - `UNCHANGED`: zaten o odada; yazma yapılmaz (sürükle-bırakta sık olur).
  *
+ * İçerideki misafir taşınırken eski odada geçen geceler kapanmış bir dilim
+ * (`RoomStaySegment`) olarak yazılır, rezervasyonun açık dilimi bugünden
+ * başlar (`roomSince`). Böylece geçmiş yeniden yazılmaz: dün gece misafir
+ * hâlâ eski odada görünür, gece kapanışı ve faturalama doğru odayı okur.
+ *
  * @param {string} hotelId
  * @param {string} reservationId
  * @param {string} roomId
+ * @param {{ reason?: string | null }} [options] taşıma sebebi (geçmişe ve denetim izine yazılır)
  * @returns {Promise<{ mode: 'ASSIGNED' | 'MOVED' | 'IN_HOUSE_MOVED' | 'UNCHANGED', reservation: object, previousRoomNumber: string | null }>}
  */
-export async function changeRoom(hotelId, reservationId, roomId) {
+export async function changeRoom(hotelId, reservationId, roomId, { reason = null } = {}) {
   const current = await prisma.reservation.findFirst({
     where: { id: reservationId, hotelId },
     select: { id: true, roomId: true, status: true, room: { select: { number: true } } },
@@ -1550,7 +1641,7 @@ export async function changeRoom(hotelId, reservationId, roomId) {
   const mode = roomChangeMode(current);
 
   if (mode !== 'IN_HOUSE_MOVED') {
-    const reservation = await assignRoom(hotelId, reservationId, roomId);
+    const reservation = await assignRoom(hotelId, reservationId, roomId, { reason });
     return { mode: current.roomId === roomId ? 'UNCHANGED' : mode, reservation, previousRoomNumber };
   }
 
@@ -1575,9 +1666,13 @@ export async function changeRoom(hotelId, reservationId, roomId) {
       await lockRoomTypes(tx, hotelId, [room.roomTypeId]);
       await lockRooms(tx, hotelId, [roomId, reservation.roomId]);
 
+      // Kalan geceler: bugünden (ya da henüz başlamadıysa girişten) çıkışa.
+      const stayFrom = inHouseStayFrom(reservation, businessDate);
+
       await assertRoomUsableForStay(tx, hotelId, {
         room,
         reservation,
+        stayFrom,
         actionLabel: `Misafiri ${room.number} numaralı odaya taşımak`,
       });
 
@@ -1588,21 +1683,58 @@ export async function changeRoom(hotelId, reservationId, roomId) {
           })
         : null;
 
-      await tx.reservation.update({ where: { id: reservationId }, data: { roomId } });
+      // Eski odadaki geceler kapanır. Aynı gün ikinci kez taşınan misafirin
+      // eski odada gecesi yoktur (boş aralık yazılmaz).
+      const previousStart = new Date(toUtcDayStart(openSliceStart(reservation)));
+      const segment =
+        previousRoom && stayFrom > previousStart
+          ? await tx.roomStaySegment.create({
+              data: {
+                hotelId,
+                reservationId,
+                roomId: previousRoom.id,
+                startDate: previousStart,
+                endDate: stayFrom,
+                movedBy: currentActor(),
+                reason: reason || null,
+              },
+            })
+          : null;
+
+      const roomSince = stayFrom > new Date(toUtcDayStart(reservation.checkIn)) ? stayFrom : null;
+      await tx.reservation.update({ where: { id: reservationId }, data: { roomId, roomSince } });
 
       await recordAudit(tx, {
         hotelId,
         entity: 'Reservation',
         entityId: reservationId,
         action: 'UPDATE',
-        before: { roomId: reservation.roomId, roomNumber: previousRoom?.number ?? null },
-        after: { roomId, roomNumber: room.number },
+        before: {
+          roomId: reservation.roomId,
+          roomNumber: previousRoom?.number ?? null,
+          roomSince: reservation.roomSince ? toIsoDay(reservation.roomSince) : null,
+        },
+        after: {
+          roomId,
+          roomNumber: room.number,
+          roomSince: roomSince ? toIsoDay(roomSince) : null,
+          segmentId: segment?.id ?? null,
+          reason: reason || null,
+        },
       });
 
-      const reason = `Misafir ${previousRoom?.number ?? '—'} → ${room.number} odasına taşındı`;
+      const stateReason =
+        `Misafir ${previousRoom?.number ?? '—'} → ${room.number} odasına taşındı` + (reason ? ` (${reason})` : '');
       if (previousRoom) {
         // Boşalan oda temizlik bekler: misafir eşyasıyla çıktı, oda kullanılmış.
-        await writeRoomState(tx, stage, hotelId, previousRoom, { occupancy: 'VACANT', housekeepingStatus: 'DIRTY' }, reason);
+        await writeRoomState(
+          tx,
+          stage,
+          hotelId,
+          previousRoom,
+          { occupancy: 'VACANT', housekeepingStatus: 'DIRTY' },
+          stateReason,
+        );
       }
       await writeRoomState(
         tx,
@@ -1610,7 +1742,7 @@ export async function changeRoom(hotelId, reservationId, roomId) {
         hotelId,
         { id: room.id, number: room.number, occupancy: room.occupancy, housekeepingStatus: room.housekeepingStatus },
         { occupancy: 'OCCUPIED' },
-        reason,
+        stateReason,
       );
 
       if (previousRoom) {

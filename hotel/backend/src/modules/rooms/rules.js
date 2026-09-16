@@ -42,6 +42,24 @@ export function consumesInventory(reservation) {
 }
 
 /**
+ * Konaklamanın **açık dilimi** — misafirin şu anki `roomId` odasında kaldığı
+ * gecelerin başlangıcı.
+ *
+ * İçerideki misafir oda değiştirdiyse (`roomSince`), öncesindeki geceler eski
+ * odalardadır ve `RoomStaySegment` olarak ayrıca gelir. `roomSince` boşsa
+ * konaklamanın tamamı `roomId` odasındadır.
+ *
+ * @param {{ checkIn: Date | string, roomSince?: Date | string | null }} reservation
+ * @returns {Date | string}
+ */
+export function openSliceStart(reservation) {
+  if (reservation.roomSince == null) return reservation.checkIn;
+  return toUtcDayStart(reservation.roomSince) > toUtcDayStart(reservation.checkIn)
+    ? reservation.roomSince
+    : reservation.checkIn;
+}
+
+/**
  * Konaklama/blok, pencereyle kesişen gecelerini verir.
  * @param {{ start: Date | string, end?: Date | string | null }} range
  * @param {Date | string} windowFrom
@@ -64,10 +82,16 @@ function nightsWithinWindow(range, windowFrom, windowTo) {
  * Tek geçişte hesaplar — gece başına sorgu atmaz. 90 günlük pencere ve 1000
  * odalı bir otelde bile bellekte kalır.
  *
+ * Oda değiştirmiş konaklamada geceler iki kaynaktan gelir: açık dilim
+ * (`roomSince`'ten itibaren `roomId`) ve kapanmış dilimler (`segments`).
+ * Kapanmış dilimi olmayan erken geceler (tutarsız veri) güvenli tarafta
+ * "oda bekleyen talep" sayılır: envanterden düşer ama bir odayı işgal etmez.
+ *
  * @param {{
  *   rooms: Array<{ id: string, roomTypeId: string }>,
- *   reservations: Array<{ roomId: string | null, roomTypeId: string, checkIn: Date | string, checkOut: Date | string, status: string }>,
+ *   reservations: Array<{ id?: string, roomId: string | null, roomTypeId: string, checkIn: Date | string, checkOut: Date | string, roomSince?: Date | string | null, status: string }>,
  *   blocks: Array<{ roomId: string, type?: string, startDate: Date | string, endDate?: Date | string | null }>,
+ *   segments?: Array<{ reservationId: string, roomId: string, startDate: Date | string, endDate: Date | string }>,
  *   from: Date | string,
  *   to: Date | string,
  *   roomTypeIds?: string[],
@@ -77,7 +101,7 @@ function nightsWithinWindow(range, windowFrom, windowTo) {
  *   byRoomType: Record<string, { total: number, days: Record<string, { total: number, occupied: number, outOfOrder: number, outOfService: number, unassigned: number, free: number }> }>,
  * }}
  */
-export function buildAvailabilityCalendar({ rooms, reservations, blocks, from, to, roomTypeIds = [] }) {
+export function buildAvailabilityCalendar({ rooms, reservations, blocks, segments = [], from, to, roomTypeIds = [] }) {
   const nights = eachNight(from, to);
   const days = nights.map(toIsoDay);
   const dayIndex = new Map(days.map((day, index) => [day, index]));
@@ -100,21 +124,45 @@ export function buildAvailabilityCalendar({ rooms, reservations, blocks, from, t
   const outOfServiceRoomsByNight = days.map(() => new Set());
   const unassignedByNight = days.map(() => new Map());
 
+  const consumingIds = new Set(
+    reservations.filter((reservation) => reservation.id && consumesInventory(reservation)).map((reservation) => reservation.id),
+  );
+
+  // Kapanmış dilimler: taşınan misafirin eski odasında geçirdiği geceler.
+  /** @type {Map<string, Set<number>>} rezervasyon → dilimle karşılanan gece indeksleri */
+  const segmentNights = new Map();
+  for (const segment of segments) {
+    if (!consumingIds.has(segment.reservationId)) continue;
+    const covered = nightsWithinWindow({ start: segment.startDate, end: segment.endDate }, from, to);
+    for (const night of covered) {
+      const index = dayIndex.get(toIsoDay(night));
+      if (index === undefined) continue;
+      occupiedRoomsByNight[index].add(segment.roomId);
+      unavailableRoomsByNight[index].add(segment.roomId);
+      if (!segmentNights.has(segment.reservationId)) segmentNights.set(segment.reservationId, new Set());
+      segmentNights.get(segment.reservationId).add(index);
+    }
+  }
+
   for (const reservation of reservations) {
     if (!consumesInventory(reservation)) continue;
 
+    const openStart = toUtcDayStart(openSliceStart(reservation));
     const covered = nightsWithinWindow({ start: reservation.checkIn, end: reservation.checkOut }, from, to);
     for (const night of covered) {
       const index = dayIndex.get(toIsoDay(night));
       if (index === undefined) continue;
 
-      if (reservation.roomId) {
+      if (reservation.roomId && night.getTime() >= openStart) {
         occupiedRoomsByNight[index].add(reservation.roomId);
         unavailableRoomsByNight[index].add(reservation.roomId);
-      } else {
-        const counts = unassignedByNight[index];
-        counts.set(reservation.roomTypeId, (counts.get(reservation.roomTypeId) ?? 0) + 1);
+        continue;
       }
+      // Bu gece eski odada geçti; oda yukarıdaki dilim döngüsünde işaretlendi.
+      if (reservation.id && segmentNights.get(reservation.id)?.has(index)) continue;
+
+      const counts = unassignedByNight[index];
+      counts.set(reservation.roomTypeId, (counts.get(reservation.roomTypeId) ?? 0) + 1);
     }
   }
 
@@ -250,6 +298,7 @@ export function findNewOverbooking(before, after, roomTypeIds) {
  *   rooms: Array<{ id: string, roomTypeId: string }>,
  *   reservations: Array<{ id: string, roomId: string | null, checkIn: Date | string, checkOut: Date | string, status: string }>,
  *   blocks: Array<{ roomId: string, startDate: Date | string, endDate?: Date | string | null }>,
+ *   segments?: Array<{ reservationId: string, roomId: string, startDate: Date | string, endDate: Date | string }>,
  *   roomTypeId?: string,
  *   checkIn: Date | string,
  *   checkOut: Date | string,
@@ -261,6 +310,7 @@ export function freeRoomsForStay({
   rooms,
   reservations,
   blocks,
+  segments = [],
   roomTypeId,
   checkIn,
   checkOut,
@@ -269,13 +319,24 @@ export function freeRoomsForStay({
   const stay = { start: checkIn, end: checkOut };
 
   const takenRoomIds = new Set();
+  const consumingIds = new Set();
   for (const reservation of reservations) {
-    if (!reservation.roomId) continue;
     if (!consumesInventory(reservation)) continue;
+    consumingIds.add(reservation.id);
+    if (!reservation.roomId) continue;
     // Kaydın kendisi engel sayılmaz (oda değiştirme senaryosu).
     if (excludeReservationId && reservation.id === excludeReservationId) continue;
-    if (rangesOverlapHalfOpen({ start: reservation.checkIn, end: reservation.checkOut }, stay)) {
+    // Yalnızca açık dilim: misafir bu odaya sonradan taşındıysa önceki geceler başka odadaydı.
+    if (rangesOverlapHalfOpen({ start: openSliceStart(reservation), end: reservation.checkOut }, stay)) {
       takenRoomIds.add(reservation.roomId);
+    }
+  }
+
+  for (const segment of segments) {
+    if (excludeReservationId && segment.reservationId === excludeReservationId) continue;
+    if (!consumingIds.has(segment.reservationId)) continue;
+    if (rangesOverlapHalfOpen({ start: segment.startDate, end: segment.endDate }, stay)) {
+      takenRoomIds.add(segment.roomId);
     }
   }
 
@@ -288,6 +349,24 @@ export function freeRoomsForStay({
   return rooms.filter(
     (room) => (!roomTypeId || room.roomTypeId === roomTypeId) && !takenRoomIds.has(room.id),
   );
+}
+
+const ROOM_NUMBER_COLLATOR = new Intl.Collator('tr', { numeric: true, sensitivity: 'base' });
+
+/**
+ * Oda numaralarının doğal sırası: kat, sonra numara sayısal duyarlıkla
+ * (1, 2, 10, 101, 101A).
+ *
+ * Metin sıralaması (1, 10, 101, 2) villa ve bungalov numaralı otellerde
+ * listeyi ve oda planını karıştırır. Oda listesi, oda planı ve otomatik atama
+ * aynı sırayı kullanır.
+ *
+ * @param {{ floor: number, number: string }} a
+ * @param {{ floor: number, number: string }} b
+ */
+export function compareRoomsNaturally(a, b) {
+  if (a.floor !== b.floor) return a.floor - b.floor;
+  return ROOM_NUMBER_COLLATOR.compare(a.number, b.number);
 }
 
 /** Bugün gelen misafir için kat hizmeti tercihi: hazır oda önce. */
@@ -323,8 +402,7 @@ export function rankRooms(candidates, { arrivalIsToday = false } = {}) {
         (HOUSEKEEPING_RANK[b.housekeepingStatus] ?? UNKNOWN_RANK);
       if (housekeepingDelta !== 0) return housekeepingDelta;
     }
-    if (a.floor !== b.floor) return a.floor - b.floor;
-    return a.number.localeCompare(b.number, 'tr', { numeric: true });
+    return compareRoomsNaturally(a, b);
   });
 }
 

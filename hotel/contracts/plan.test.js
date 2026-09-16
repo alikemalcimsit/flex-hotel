@@ -62,6 +62,10 @@ describe('planUnassignedQuerySchema', () => {
     assert.equal(parsed.limit, 25);
   });
 
+  it('oda verilemeyecek durum istenemez', () => {
+    assert.equal(planUnassignedQuerySchema.safeParse({ from: '2026-09-16', status: 'CANCELLED' }).success, false);
+  });
+
   it('sınırsız liste istenemez', () => {
     assert.equal(planUnassignedQuerySchema.safeParse({ from: '2026-09-16', limit: 1000 }).success, false);
   });
@@ -73,6 +77,12 @@ describe('changeRoomSchema', () => {
     const result = changeRoomSchema.safeParse({ roomId: '101' });
     assert.equal(result.success, false);
     assert.equal(result.error.issues[0].message, 'Geçersiz oda');
+  });
+
+  it('sebep isteğe bağlıdır ama sınırlıdır', () => {
+    const roomId = '00000000-0000-4000-8000-000000000000';
+    assert.equal(changeRoomSchema.parse({ roomId, reason: '  Klima arızası ' }).reason, 'Klima arızası');
+    assert.equal(changeRoomSchema.safeParse({ roomId, reason: 'x'.repeat(201) }).success, false);
   });
 
   it('oda seçilmediğinde Türkçe mesaj verir', () => {

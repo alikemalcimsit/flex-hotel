@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { generalSettingsSchema } from '@hotelos/hotel-contracts';
+import { DEFAULT_PHONE_COUNTRY_CODE, generalSettingsSchema } from '@hotelos/hotel-contracts';
 import { Alert, Card, Input, Select } from '@hotelos/ui';
 import { FormActions } from '../../components/FormActions.jsx';
 import { QueryFallback } from '../../components/QueryFallback.jsx';
@@ -17,6 +17,7 @@ export function GeneralTab() {
     defaultBoardType: 'BB',
     cancellationPolicyDays: '0',
     cancellationPolicyPenaltyPct: '0',
+    phoneCountryCode: DEFAULT_PHONE_COUNTRY_CODE,
   });
   const [errors, setErrors] = useState({});
 
@@ -29,6 +30,7 @@ export function GeneralTab() {
       defaultBoardType: hotel.defaultBoardType ?? 'BB',
       cancellationPolicyDays: String(hotel.cancellationPolicyDays ?? 0),
       cancellationPolicyPenaltyPct: hotel.cancellationPolicyPenaltyPct ?? '0',
+      phoneCountryCode: hotel.phoneCountryCode ?? DEFAULT_PHONE_COUNTRY_CODE,
     });
     setErrors({});
   }, [hotel]);
@@ -121,6 +123,29 @@ export function GeneralTab() {
         </div>
         <Alert tone="info" title="Özet" className="mt-5">
           {policySummary}
+        </Alert>
+      </Card>
+
+      <Card
+        title="Misafir iletişimi"
+        description="Misafir kartına ülke kodu yazılmadan girilen telefonlar (ör. 0532 111 00 01) bu kodla okunur."
+      >
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Input
+            label="Telefon ülke kodu"
+            name="phoneCountryCode"
+            inputMode="numeric"
+            maxLength={4}
+            value={form.phoneCountryCode}
+            onChange={setField('phoneCountryCode')}
+            error={errors.phoneCountryCode}
+            placeholder={DEFAULT_PHONE_COUNTRY_CODE}
+          />
+        </div>
+        <Alert tone="info" className="mt-5">
+          WhatsApp mesajı geldiğinde misafir kartı bu kodla bulunur: +{form.phoneCountryCode.replace(/^\+/, '') || '…'} 532 111
+          00 01 numarasından yazan misafir, kartında "0532 111 00 01" yazılıysa tanınır. Başka ülkeden misafirlerin
+          numarasını kartta + ile yazın.
         </Alert>
       </Card>
 

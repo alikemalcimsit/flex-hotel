@@ -25,6 +25,15 @@ export const PERMISSIONS = Object.freeze({
   ROOMS_MANAGE: 'rooms.manage',
   /** Günlük operasyon: oda atama, durum değiştirme. Ön büro ve kat hizmetleri. */
   ROOMS_OPERATE: 'rooms.operate',
+
+  /** Misafir konuşmalarını okumak. */
+  MESSAGES_VIEW: 'messages.view',
+  /** Misafire yazmak, konuşmayı atamak/kapatmak/manuele almak. */
+  MESSAGES_REPLY: 'messages.reply',
+  /** Misafir isteklerini görmek. */
+  REQUESTS_VIEW: 'requests.view',
+  /** İstek açmak, atamak, durumunu değiştirmek (kat hizmetleri dahil). */
+  REQUESTS_MANAGE: 'requests.manage',
 });
 
 let warned = false;

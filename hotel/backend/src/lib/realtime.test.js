@@ -81,7 +81,15 @@ describe('registerRealtimeBridge', () => {
 
     // Oda numarası, durum değerleri, misafir adı: hiçbiri socket'e çıkmamalı —
     // socket'te henüz kimlik doğrulama yok.
-    assert.deepEqual(Object.keys(io.emitted[0].payload).sort(), ['actor', 'at', 'event', 'reservationId', 'roomId']);
+    assert.deepEqual(Object.keys(io.emitted[0].payload).sort(), [
+      'actor',
+      'at',
+      'conversationId',
+      'event',
+      'requestId',
+      'reservationId',
+      'roomId',
+    ]);
   });
 
   it('atama event\'i rezervasyon kimliğini taşır', async () => {
@@ -150,5 +158,44 @@ describe('registerRealtimeBridge', () => {
     );
 
     assert.equal(io.emitted.length, 0);
+  });
+
+  it('gelen mesaj gelen kutusu kanalına düşer, içerik taşımaz', async () => {
+    const io = fakeIo();
+    realtime.registerRealtimeBridge(io);
+
+    const conversationId = '55555555-5555-4555-8555-555555555555';
+    await eventBus.dispatch(
+      eventBus.createEnvelope('guest.message.received', {
+        hotelId: HOTEL_ID,
+        conversationId,
+        messageId: '66666666-6666-4666-8666-666666666666',
+        channel: 'WHATSAPP',
+        guestId: null,
+        mode: 'MANUAL',
+      }),
+    );
+
+    assert.equal(io.emitted.length, 1);
+    assert.equal(io.emitted[0].channel, realtime.MESSAGING_CHANNEL);
+    assert.equal(io.emitted[0].payload.conversationId, conversationId);
+    assert.equal(JSON.stringify(io.emitted[0].payload).includes('WHATSAPP'), false);
+  });
+
+  it('istek olayı istek kanalına düşer', async () => {
+    const io = fakeIo();
+    realtime.registerRealtimeBridge(io);
+
+    await eventBus.dispatch(
+      eventBus.createEnvelope('guest.request.updated', {
+        hotelId: HOTEL_ID,
+        requestId: '77777777-7777-4777-8777-777777777777',
+        status: 'DONE',
+        changedFields: ['status'],
+      }),
+    );
+
+    assert.equal(io.emitted.length, 1);
+    assert.equal(io.emitted[0].channel, realtime.REQUESTS_CHANNEL);
   });
 });

@@ -53,7 +53,9 @@ export async function planRoutes(app) {
     { ...operate, schema: { params: reservationParamSchema, body: changeRoomSchema } },
     async (request) => ({
       success: true,
-      data: await changeRoom(request.hotelId, request.params.reservationId, request.body.roomId),
+      data: await changeRoom(request.hotelId, request.params.reservationId, request.body.roomId, {
+        reason: request.body.reason,
+      }),
     }),
   );
 
