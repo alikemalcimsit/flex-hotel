@@ -11,6 +11,7 @@ import { prisma } from '../../db.js';
 import { recordAudit } from '../../lib/audit.js';
 import { getBusinessDate } from '../../lib/business-date.js';
 import { hasAutoResponder, isChannelConnected } from '../../lib/channels.js';
+import { parseCursor } from '../../lib/cursor.js';
 import { ConflictError, NotFoundError, rethrowPrismaError, StaleWriteError, ValidationError } from '../../lib/errors.js';
 import { LIVE_SCOPES, liveVersion } from '../../lib/live-version.js';
 import { lockConversations } from '../../lib/locks.js';
@@ -19,7 +20,6 @@ import { assertAssignableStaff, currentStaff, currentStaffCached } from '../../l
 import { writeWithEvents } from '../../lib/write.js';
 import { getHotelSettings } from '../settings/service.js';
 import {
-  decodeCursor,
   deliveryAdvances,
   encodeCursor,
   messagePreview,
@@ -167,17 +167,6 @@ function toMessageDto(row) {
 }
 
 /* ══════════════════ Yardımcılar ══════════════════ */
-
-/**
- * @param {string | undefined} raw
- * @param {string} field
- */
-function parseCursor(raw, field) {
-  if (!raw) return null;
-  const cursor = decodeCursor(raw);
-  if (!cursor) throw new ValidationError('Sayfalama imleci geçersiz; listeyi yenileyin.', { field });
-  return cursor;
-}
 
 /**
  * Kanal adresinden misafir kartı.

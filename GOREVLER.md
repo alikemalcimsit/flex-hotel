@@ -532,21 +532,111 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 9. Bildirim merkezi — arkadaşın
 **Gün sonu:** Sistem misafire e-posta/SMS/WhatsApp, personele uygulama içi bildirim gönderiyor; her gönderim loglu; şablonlar ekrandan düzenleniyor.
-- [ ] Backend: Notification, NotificationTemplate, ChannelConfig tabloları + API
-- [ ] Backend: kanal adaptörleri (SMTP e-posta, SMS sağlayıcı, WhatsApp gönderim, uygulama içi)
-- [ ] Ekran: Şablon listesi + editör (değişkenler: {misafirAdi}, {odaNo}, {tarih})
-- [ ] Ekran: Kanal ayarları (SMTP bilgileri, SMS API key, WhatsApp token)
-- [ ] Ekran: Gönderim geçmişi (kanal, alıcı, durum, hata, tekrar gönder)
-- [ ] Frontend: üst barda zil ikonu, personel bildirimleri listesi
-- [ ] Aktör: notification-worker paketi (`notification.send.requested` → gönder → `notification.sent/failed`; `reservation.created` → onay şablonu; `room.assigned` → oda bilgisi şablonu)
+- [x] Backend: Notification, NotificationTemplate, ChannelConfig tabloları + API
+- [x] Backend: kanal adaptörleri (SMTP e-posta, SMS sağlayıcı, uygulama içi) — WhatsApp gönderimi **modül 8'in geçidinde** (kayıt noktası hazır)
+- [x] Ekran: Şablon listesi + editör (değişkenler: {misafirAdi}, {odaNo}, {tarih} ve diğerleri)
+- [x] Ekran: Kanal ayarları (SMTP bilgileri, SMS API bilgisi; WhatsApp geçit bağlanınca)
+- [x] Ekran: Gönderim geçmişi (kanal, alıcı, durum, hata, tekrar gönder)
+- [x] Frontend: üst barda zil ikonu, personel bildirimleri listesi
+- [x] Aktör: notification-worker paketi (`reservation.created` → onay, `room.assigned` → oda bilgisi, `guest.checked_in/out` → hoş geldiniz / teşekkür; gönderim ayrı göndericide → `notification.sent/failed`)
 
 > **Modül 7'den not (17 Eylül 2026 — Ahmet):** personel bildirimi için hazır
 > event'ler: `guest.request.created` (`requestId, category, priority, roomId`),
 > `guest.request.updated`, `guest.message.received`. Yeni mesaj sesi ve tercihi
-> şimdilik `frontend/src/lib/inboxSound.js`'te; zil / bildirim tercihleri gelince oraya
-> taşınabilir. Misafire giden WhatsApp mesajının **teslimi** modül 8'in geçidinde
-> (bkz. modül 8 notu) — bildirim merkezinin WhatsApp adaptörü aynı geçidi kullanmalı,
-> ikinci bir gönderici kurulmamalı. Hazır cevap şablonları gelince mesaj kutusuna eklenecek.
+> şimdilik `frontend/src/lib/inboxSound.js`'te. Misafire giden WhatsApp mesajının
+> **teslimi** modül 8'in geçidinde — bildirim merkezinin WhatsApp adaptörü aynı
+> geçidi kullanmalı, ikinci bir gönderici kurulmamalı.
+
+> **📌 Modül 9 tamamlandı (17 Eylül 2026 — Ahmet). WhatsApp kısmı modül 8'e bırakıldı.**
+>
+> **Veri** (migration `20260918090000_notification_center`):
+> - `Notification`: kuyruk + geçmiş. Metin kuyruğa girerken **dondurulur** (şablon
+>   sonra değişse de giden metin görülür). Durum `PENDING → SENDING → SENT → DELIVERED`,
+>   ya da `FAILED` / `CANCELLED`; deneme sayısı, sıradaki deneme, sağlayıcı kaydı,
+>   hata kodu. Aynı olay iki kez işlense de ikinci bildirim açılmaz (`dedupeKey`,
+>   kısmi tekil index). Durum tutarlılığı veritabanı kısıtlarıyla korunur.
+> - `NotificationTemplate`: olay × kanal × dil (tr/en) başına tek metin. Kurulumda
+>   16 önerilen metin yüklenir (`ensureDefaultTemplates`, seed çağırıyor).
+> - `NotificationChannelConfig`: kanal ayarı; parola **AES-256-GCM ile şifreli**
+>   (`SETTINGS_SECRET_KEY`), hiçbir cevapta dönmez; son test / son hata.
+> - `StaffAlert` (+ `StaffAlertRead`, `StaffAlertState`): zil. Uyarı bir kişiye ya da
+>   bir izne gider (kişi başına satır çoğaltılmaz); aynı konu tek uyarıda birleşir.
+> - `GuestRequest.overdueAlertedAt`: gecikme uyarısı bir kez.
+>
+> **Akış:** olay → notification-worker (`enqueueTriggerNotifications`) → kuyruk →
+> gönderici (`dispatcher.js`, `FOR UPDATE SKIP LOCKED` ile üstlenir; HTTP isteğinin
+> yolunda değil) → sağlayıcı. Geçici hatada 30 sn / 2 dk / 10 dk / 30 dk arayla
+> yeniden dener (en fazla 5 deneme); kalıcı hatada (yanlış parola, onaysız başlık)
+> hemen vazgeçer ve yöneticinin ziline "misafire ulaşmadı" düşer (aynı gün aynı
+> hata tek uyarı). Süreç gönderim ortasında kapanırsa 5 dk sonra sıraya geri alınır.
+> SMS teslim raporu Netgsm'den 2 dakikada bir sorulur (`DELIVERED` / `FAILED`).
+>
+> **Kurallar:**
+> - Oda bilgisi yalnızca giriş günü ya da misafir içerideyken gider (günler önceki
+>   atamada oda değişebilir); olay geç işlendiyse ve oda yine değiştiyse eskisi gitmez.
+> - Dil: Türk (ya da uyruğu bilinmeyen) misafire Türkçe, diğerlerine İngilizce;
+>   İngilizce metin kapalıysa Türkçeye düşülür.
+> - SMS: Netgsm şartnamesine göre uzunluk (Türkçe harf 2 karakter, en fazla 6 parça);
+>   desteklenmeyen karakter şablona yazılamaz, misafir adındaki yabancı harfler
+>   karşılığına çevrilir. Otel isterse **sessiz saatler** (ör. 22:00–08:00): o arada
+>   sıraya giren SMS bitişte gider. Bildirimler bilgilendirme amaçlı (İYS filtresi yok).
+> - Misafir kanal bazında bildirim istemiyorsa satır "gönderilmedi" olarak kalır
+>   (`Guest.preferences.notifications.optOut: ['SMS', ...]` — ekranı modül 22'de).
+> - Tekrar gönderim yeni kayıt açar ve misafir kartındaki güncel adrese gider.
+>   Yalnızca sıradaki bildirim iptal edilir (sebep zorunlu). Kanal testleri tekrar
+>   gönderilmez, zil açmaz, özet sayılarına girmez.
+> - Servis katmanının alan hatası (`ValidationError(..., { field })`) artık şema
+>   hatalarıyla aynı biçimde `fields` olarak döner; formlar alanın altında gösterir.
+>
+> **Zil (personel uyarıları):** cevapsız misafir mesajı (AI modundaysa değil) →
+> konuşmanın sahibine, yoksa mesaj görenlere; acil istek ve geciken istek → isteğin
+> sahibine, yoksa istek yönetenlere; aktörün personele bıraktığı iş → işin modülüne
+> yetkili olanlara; misafire ulaşmayan bildirim → bildirim yöneticilerine. Kişi
+> türleri susturabilir. 30 gün saklanır.
+>
+> **API:** `/notifications/history` (imleçli; durum, kanal, olay, arama),
+> `/summary`, `/history/:id`, `POST /history/:id/resend`, `POST /history/:id/cancel`,
+> `GET|PUT /templates`, `GET /channels`, `PUT /channels/:channel`, `POST /channels/test`.
+> `/staff-alerts` (imleçli), `/summary`, `POST /seen`, `POST /read-all`,
+> `POST /:id/read`, `PUT /preferences`. Yetki: geçmiş `notifications.view`
+> (ön büroda da var), diğerleri `notifications.manage`; zil herkese (kendi uyarıları).
+>
+> **Ekranlar:** `/bildirimler/gecmis` (özet kutuları filtre olarak, canlı liste,
+> detay: tam metin, denemeler, tekrar gönder / iptal), `/bildirimler/sablonlar`
+> (olaylar; kanal ve dil; değişken çipleri; örnek değerlerle önizleme; SMS karakter
+> ve parça sayacı; kaydedilmemiş değişiklik uyarısı), `/bildirimler/kanallar`
+> (SMTP, Netgsm, sessiz saatler, test gönder, son hata). Üst barda zil.
+>
+> **2500 personel için:** uyarılar kişi başına çoğaltılmaz; rozet sunucudan bir kez
+> (görülmemiş kimlikler, 99 üst sınır) gelir, sonra socket haberiyle panelde artar
+> (haber yalnızca kimlik + kime taşır). Özet 5 dk + rastgele payla tazelenir,
+> yeniden bağlanmada rastgele beklemeyle. Hız sınırı artık **IP + personel**
+> başına (`RATE_LIMIT_MAX`, varsayılan 600/dk); nginx arkasında gerçek IP için
+> `TRUST_PROXY` (varsayılan `loopback`) ve nginx'te
+> `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;` gerekli.
+>
+> **Canlıya alırken:** sunucu ortamına `SETTINGS_SECRET_KEY` (32 bayt base64;
+> komut `.env.example`'da) eklenmeli — yoksa kanal parolası kaydedilemez, ekran
+> bunu söyler. Anahtar değişirse kayıtlı parolalar yeniden girilir. Migration
+> `20260918090000_notification_center` uygulanmalı; mevcut otel için şablonlar
+> seed ile yüklenir (var olana dokunmaz).
+>
+> **Diğer modüllere devir:**
+> - **Modül 8 (WhatsApp):** geçit açılırken
+>   `modules/notifications/providers/index.js → registerNotificationProvider({ channel:
+>   'WHATSAPP', name, send })`. `send({ hotelId, settings, secret, to, toName,
+>   subject, text })` → `{ providerMessageId }`; hata `ProviderError(message, { code,
+>   retryable, configIssue })`. Kayıt olunca Kanallar ekranında WhatsApp açılabilir;
+>   şablonlar şimdiden düzenlenebilir. Meta onaylı şablon eşlemesi geçidin işi.
+> - **Modül 4 / 6:** `reservation.created`, `guest.checked_in`, `guest.checked_out`
+>   yayınlandığında bildirimler kendiliğinden gider (gövdede `reservationId`, varsa `roomId`).
+> - **Modül 2:** zil ve "şu anki personel" geçici olarak `x-actor` e-postasıyla;
+>   rol → izin eşlemesi backend `lib/permissions.js`'te geçici (`permissionsForRole`).
+> - **Modül 11 / 12:** aktörün bıraktığı işler (`ManualTask`) zile düşüyor; modülden
+>   izne eşleme `notifications/rules.js → manualTaskPermission`.
+> - **Modül 22:** misafir kartına kanal bazında "bildirim istemiyor" seçeneği
+>   (`preferences.notifications.optOut`).
+> - Mesaj kutusundaki hazır cevaplar bu şablonlardan ayrı; modül 7'ye eklenecek.
 
 ### 10. Aktör Activity Feed + audit log — Ali Kemal
 **Gün sonu:** Admin, sistemde olan biteni canlı izliyor: hangi aktör hangi event'i işledi, ne kadar sürdü, hata var mı; bir rezervasyonun tüm zincirini tek tıkla görüyor.

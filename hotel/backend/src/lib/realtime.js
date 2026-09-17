@@ -1,4 +1,10 @@
-import { LIVE_VIEW_EVENTS, MESSAGING_CHANGED_EVENTS, REQUESTS_CHANGED_EVENTS } from '@hotelos/core';
+import {
+  LIVE_VIEW_EVENTS,
+  MESSAGING_CHANGED_EVENTS,
+  NOTIFICATIONS_CHANGED_EVENTS,
+  REQUESTS_CHANGED_EVENTS,
+  STAFF_ALERT_EVENTS,
+} from '@hotelos/core';
 import { eventBus } from './events.js';
 
 /**
@@ -34,6 +40,15 @@ export const MESSAGING_CHANNEL = 'messaging.changed';
 /** Misafir istekleri kanalı. */
 export const REQUESTS_CHANNEL = 'requests.changed';
 
+/** Bildirim geçmişi kanalı. */
+export const NOTIFICATIONS_CHANNEL = 'notifications.changed';
+
+/**
+ * Zil kanalı. Haber, uyarının kime gittiğini (`userId` / `permission`)
+ * taşır; panel yalnızca kendini ilgilendirene tepki verir.
+ */
+export const STAFF_ALERTS_CHANNEL = 'staff.alerts';
+
 /**
  * Kanal → o kanala haber düşüren event'ler. Ekran yalnızca ilgilendiği kanalı
  * dinler; gelen kutusu açık olmayan panel envanter haberleriyle uğraşmaz.
@@ -42,6 +57,8 @@ const CHANNEL_EVENTS = Object.freeze({
   [INVENTORY_CHANNEL]: LIVE_VIEW_EVENTS,
   [MESSAGING_CHANNEL]: MESSAGING_CHANGED_EVENTS,
   [REQUESTS_CHANNEL]: REQUESTS_CHANGED_EVENTS,
+  [NOTIFICATIONS_CHANNEL]: NOTIFICATIONS_CHANGED_EVENTS,
+  [STAFF_ALERTS_CHANNEL]: STAFF_ALERT_EVENTS,
 });
 
 /** @param {string} hotelId */
@@ -76,6 +93,12 @@ export function registerRealtimeBridge(io, logger = console) {
         reservationId: payload.reservationId ?? null,
         conversationId: payload.conversationId ?? null,
         requestId: payload.requestId ?? null,
+        notificationId: payload.notificationId ?? null,
+        // Zil: uyarı kimliği, türü ve kime gittiği (içerik yok).
+        alertId: payload.alertId ?? null,
+        kind: payload.kind ?? null,
+        userId: payload.userId ?? null,
+        permission: payload.permission ?? null,
         // Ekran "kim yaptı" bilgisini kendi yaptığı değişikliği ayırmak için
         // kullanabilir (kendi tıklamasında ikinci bir tazeleme gereksiz).
         actor: envelope?.actor ?? null,

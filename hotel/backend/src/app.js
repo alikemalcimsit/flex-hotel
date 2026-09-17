@@ -15,19 +15,27 @@ import {
   CORS_METHODS,
   correlationIdFrom,
   originChecker,
+  rateLimitKey,
   resolveJwtSecret,
+  resolveTrustProxy,
 } from './lib/http-security.js';
 import { guestRequestRoutes } from './modules/guest-requests/routes.js';
 import { requestCacheStats } from './modules/guest-requests/service.js';
 import { messagingRoutes } from './modules/messaging/routes.js';
 import { messagingCacheStats } from './modules/messaging/service.js';
+import { notificationRoutes, staffAlertRoutes } from './modules/notifications/routes.js';
+import { registerNotificationSubscribers } from './modules/notifications/subscribers.js';
 import { planRoutes } from './modules/plan/routes.js';
 import { planCacheStats } from './modules/plan/service.js';
 import { roomsRoutes } from './modules/rooms/routes.js';
 import { settingsRoutes } from './modules/settings/routes.js';
 
-/** Bir istemcinin dakikada atabileceği istek sayısı. */
-const DEFAULT_RATE_LIMIT_MAX = 300;
+/**
+ * Bir personelin (IP + kullanıcı) dakikada atabileceği istek sayısı. Canlı
+ * ekranlar (gelen kutusu, istekler, oda planı) yoğun otelde değişiklik
+ * başına birkaç sorgu atar; sınır cömert ama sınırsız değil.
+ */
+const DEFAULT_RATE_LIMIT_MAX = 600;
 
 /**
  * Zod doğrulama hatasını kullanıcıya gösterilebilir tek satıra çevirir.
@@ -63,12 +71,14 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   const app = Fastify({
     logger,
     genReqId: (request) => correlationIdFrom(request.headers['x-correlation-id']),
+    trustProxy: resolveTrustProxy(),
   });
 
   setEventLogger(app.log);
   setActorLogger(app.log);
   registerCoreSubscribers();
   registerActors();
+  registerNotificationSubscribers();
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
@@ -85,11 +95,12 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   });
   await app.register(jwt, { secret: resolveJwtSecret(app.log) });
 
-  // Tek bir istemcinin sunucuyu boğmasını engeller. Ayarlar ekranı düşük
-  // hacimli; sınır cömert ama sınırsız değil.
+  // Tek bir istemcinin sunucuyu boğmasını engeller. Sayaç kişi başınadır
+  // (bkz. `rateLimitKey`): aynı otel ağındaki paneller birbirinin kotasını yemez.
   await app.register(rateLimit, {
     max: maxRequests,
     timeWindow: '1 minute',
+    keyGenerator: rateLimitKey,
     // Eklenti bu nesneyi hata olarak error handler'a devrediyor; `statusCode`
     // ve `message` olmazsa handler onu 500 sanıyor. Zarfı tek yerde (error
     // handler'da) kurmak için sadece bu üç alanı veriyoruz.
@@ -145,6 +156,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
       error: error.message ?? 'İstek işlenemedi',
       code: error.code ?? 'ERROR',
       ...(error.details ? { details: error.details } : {}),
+      ...(error.fields ? { fields: error.fields } : {}),
     });
   });
 
@@ -172,6 +184,8 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   await app.register(planRoutes, { prefix: '/plan' });
   await app.register(messagingRoutes, { prefix: '/messaging' });
   await app.register(guestRequestRoutes, { prefix: '/guest-requests' });
+  await app.register(notificationRoutes, { prefix: '/notifications' });
+  await app.register(staffAlertRoutes, { prefix: '/staff-alerts' });
 
   app.addHook('onClose', async () => {
     await disconnectDb();

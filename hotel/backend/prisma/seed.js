@@ -256,9 +256,15 @@ async function main() {
 
   const { conversations, requests } = await seedMessaging(hotelId, guests, roomByNumber);
 
+  // Bildirim şablonları (modül 9): var olan (otelin düzenlediği) şablona dokunulmaz.
+  // Kanal ayarı yazılmaz: SMTP / Netgsm bilgisi otelin kendi hesabıdır, panelden girilir.
+  const { ensureDefaultTemplates } = await import('../src/modules/notifications/service.js');
+  const templates = await ensureDefaultTemplates(hotelId, prisma);
+
   console.log(
     `Seed tamam: 1 otel, ${users.length} kullanıcı, ${ROOM_TYPES.length} oda tipi, ${ROOMS.length} oda, ` +
-      `${GUESTS.length} misafir, ${reservationPlans.length} rezervasyon, ${conversations} konuşma, ${requests} istek.`,
+      `${GUESTS.length} misafir, ${reservationPlans.length} rezervasyon, ${conversations} konuşma, ${requests} istek, ` +
+      `${templates} yeni bildirim şablonu.`,
   );
 }
 

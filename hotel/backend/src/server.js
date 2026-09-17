@@ -3,6 +3,8 @@ import { buildApp } from './app.js';
 import { originChecker } from './lib/http-security.js';
 import { hotelRoom, registerRealtimeBridge, stopRealtimeBridge } from './lib/realtime.js';
 import { resolveHotelId } from './lib/tenant.js';
+import { startNotificationJobs } from './modules/notifications/jobs.js';
+import { closeProviders } from './modules/notifications/providers/index.js';
 
 /**
  * Sunucu önyüklemesi. Uygulamanın kendisi `app.js`'te — testler oradan
@@ -48,9 +50,15 @@ io.on('connection', async (socket) => {
 registerRealtimeBridge(io, app.log);
 app.decorate('io', io);
 
+// Bildirim göndericisi ve zamanlanmış işler yalnızca sunucu sürecinde çalışır
+// (testler ve betikler `buildApp` ile açıp kapatır, arka plan işi başlatmaz).
+const stopNotificationJobs = startNotificationJobs(app.log);
+
 // Açık socket bağlantıları kapatılmazsa HTTP sunucusu kapanmayı bekler ve
 // süreç yöneticisi (systemd) onu zorla öldürene kadar asılı kalır.
 app.addHook('onClose', async () => {
+  stopNotificationJobs();
+  closeProviders();
   stopRealtimeBridge();
   await new Promise((resolve) => {
     io.close(() => resolve());

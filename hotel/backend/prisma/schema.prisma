@@ -130,10 +130,46 @@ enum NotificationChannel {
   PUSH
 }
 
+/// Misafir bildiriminin yolculuğu (modül 9). Bkz. contracts `NOTIFICATION_STATUSES`.
 enum NotificationStatus {
   PENDING
+  SENDING
   SENT
+  DELIVERED
   FAILED
+  CANCELLED
+}
+
+/// Bildirimin kaynağı: şablonlu olaylar ve kanal testi.
+enum NotificationSource {
+  RESERVATION_CONFIRMED
+  ROOM_ASSIGNED
+  CHECKED_IN
+  CHECKED_OUT
+  CHANNEL_TEST
+}
+
+/// Şablonu olan olaylar.
+enum NotificationTrigger {
+  RESERVATION_CONFIRMED
+  ROOM_ASSIGNED
+  CHECKED_IN
+  CHECKED_OUT
+}
+
+/// Personel uyarısı türleri (üst bardaki zil).
+enum StaffAlertKind {
+  GUEST_MESSAGE
+  URGENT_REQUEST
+  OVERDUE_REQUEST
+  MANUAL_TASK
+  NOTIFICATION_FAILED
+}
+
+enum StaffAlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
 }
 
 enum MessageDirection {
@@ -219,61 +255,64 @@ enum LogLevel {
 // ───────────── SİSTEM ─────────────
 
 model Hotel {
-  id                             String    @id @default(uuid())
-  name                           String
-  code                           String    @unique
-  timezone                       String    @default("Europe/Istanbul")
-  currency                       String    @default("TRY")
+  id                           String    @id @default(uuid())
+  name                         String
+  code                         String    @unique
+  timezone                     String    @default("Europe/Istanbul")
+  currency                     String    @default("TRY")
   /// Ülke kodu yazılmamış telefonların yorumlandığı kod (Türkiye: 90). Misafiri
   /// WhatsApp numarasından bulurken kullanılır (modül 7).
-  phoneCountryCode               String    @default("90")
-  address                        String?
-  phone                          String?
-  email                          String?
-  logoUrl                        String?
-  checkInTime                    String    @default("14:00")
-  checkOutTime                   String    @default("12:00")
-  defaultBoardType               BoardType @default(BB)
-  cancellationPolicyDays         Int       @default(0)
-  cancellationPolicyPenaltyPct   Decimal   @default(0) @db.Decimal(5, 2)
-  settings                       Json      @default("{}")
-  createdAt                      DateTime  @default(now())
-  updatedAt                      DateTime  @updatedAt
-  deletedAt                      DateTime?
+  phoneCountryCode             String    @default("90")
+  address                      String?
+  phone                        String?
+  email                        String?
+  logoUrl                      String?
+  checkInTime                  String    @default("14:00")
+  checkOutTime                 String    @default("12:00")
+  defaultBoardType             BoardType @default(BB)
+  cancellationPolicyDays       Int       @default(0)
+  cancellationPolicyPenaltyPct Decimal   @default(0) @db.Decimal(5, 2)
+  settings                     Json      @default("{}")
+  createdAt                    DateTime  @default(now())
+  updatedAt                    DateTime  @updatedAt
+  deletedAt                    DateTime?
 
-  users              User[]
-  refreshTokens      RefreshToken[]
-  eventLogs          EventLog[]
-  processedEvents    ProcessedEvent[]
-  actorSettings      ActorSetting[]
-  activityLogs       ActivityLog[]
-  auditLogs          AuditLog[]
-  approvals          Approval[]
-  pendingActions     PendingAction[]
-  manualTasks        ManualTask[]
-  llmUsages          LlmUsage[]
-  notifications      Notification[]
-  roomTypes          RoomType[]
-  rooms              Room[]
-  roomBlocks         RoomBlock[]
-  roomStaySegments   RoomStaySegment[]
-  guests             Guest[]
-  reservations       Reservation[]
-  reservationGuests  ReservationGuest[]
-  ratePlans          RatePlan[]
-  seasons            Season[]
-  taxes              Tax[]
-  conversations      Conversation[]
-  messages           Message[]
-  guestRequests      GuestRequest[]
-  folios             Folio[]
-  folioItems         FolioItem[]
-  invoices           Invoice[]
-  payments           Payment[]
-  nightAudits        NightAudit[]
-  housekeepingTasks  HousekeepingTask[]
-  maintenanceTickets MaintenanceTicket[]
-  lostItems          LostItem[]
+  users                 User[]
+  refreshTokens         RefreshToken[]
+  eventLogs             EventLog[]
+  processedEvents       ProcessedEvent[]
+  actorSettings         ActorSetting[]
+  activityLogs          ActivityLog[]
+  auditLogs             AuditLog[]
+  approvals             Approval[]
+  pendingActions        PendingAction[]
+  manualTasks           ManualTask[]
+  llmUsages             LlmUsage[]
+  notifications         Notification[]
+  notificationTemplates NotificationTemplate[]
+  notificationChannels  NotificationChannelConfig[]
+  staffAlerts           StaffAlert[]
+  roomTypes             RoomType[]
+  rooms                 Room[]
+  roomBlocks            RoomBlock[]
+  roomStaySegments      RoomStaySegment[]
+  guests                Guest[]
+  reservations          Reservation[]
+  reservationGuests     ReservationGuest[]
+  ratePlans             RatePlan[]
+  seasons               Season[]
+  taxes                 Tax[]
+  conversations         Conversation[]
+  messages              Message[]
+  guestRequests         GuestRequest[]
+  folios                Folio[]
+  folioItems            FolioItem[]
+  invoices              Invoice[]
+  payments              Payment[]
+  nightAudits           NightAudit[]
+  housekeepingTasks     HousekeepingTask[]
+  maintenanceTickets    MaintenanceTicket[]
+  lostItems             LostItem[]
 }
 
 model User {
@@ -291,8 +330,11 @@ model User {
   hotel         Hotel          @relation(fields: [hotelId], references: [id])
   refreshTokens RefreshToken[]
 
-  assignedConversations Conversation[] @relation("ConversationAssignee")
-  assignedRequests      GuestRequest[] @relation("GuestRequestAssignee")
+  assignedConversations Conversation[]   @relation("ConversationAssignee")
+  assignedRequests      GuestRequest[]   @relation("GuestRequestAssignee")
+  staffAlerts           StaffAlert[]
+  staffAlertReads       StaffAlertRead[]
+  staffAlertState       StaffAlertState?
 }
 
 model RefreshToken {
@@ -479,22 +521,173 @@ model LlmUsage {
   @@index([actorName, date])
 }
 
+/// Misafire giden bildirim (modül 9) — aynı zamanda gönderim kuyruğu (outbox).
+///
+/// Metin kuyruğa yazılırken şablondan üretilip dondurulur: şablon sonradan
+/// değişse de geçmiş, misafire gerçekte ne gittiğini gösterir.
 model Notification {
-  id         String              @id @default(uuid())
-  hotelId    String
-  channel    NotificationChannel
-  to         String
-  template   String
-  params     Json                @default("{}")
-  status     NotificationStatus  @default(PENDING)
-  providerId String?
-  error      String?
-  sentAt     DateTime?
-  createdAt  DateTime            @default(now())
-  updatedAt  DateTime            @updatedAt
-  deletedAt  DateTime?
+  id                String              @id @default(uuid())
+  hotelId           String
+  channel           NotificationChannel
+  source            NotificationSource
+  language          String              @default("tr")
+  /// E-posta adresi ya da uluslararası telefon (yalnızca rakam).
+  recipient         String
+  recipientName     String?
+  subject           String?
+  body              String
+  /// Şablon değişkenlerinin gönderim anındaki değerleri (denetim için).
+  params            Json                @default("{}")
+  status            NotificationStatus  @default(PENDING)
+  attempts          Int                 @default(0)
+  /// `PENDING` iken bir sonraki deneme zamanı (sessiz saat ve yeniden deneme).
+  nextAttemptAt     DateTime?
+  /// `SENDING` iken göndericinin üstlendiği an; takılı kalanı bulmak için.
+  lockedAt          DateTime?
+  provider          String?
+  providerMessageId String?
+  errorCode         String?
+  error             String?
+  sentAt            DateTime?
+  deliveredAt       DateTime?
+  failedAt          DateTime?
+  cancelledAt       DateTime?
+  cancelReason      String?
+  templateId        String?
+  guestId           String?
+  reservationId     String?
+  resendOfId        String?
+  /// Aynı olay için ikinci bildirim açılmasın (ör. aynı oda ataması iki kez işlendi).
+  dedupeKey         String?
+  createdBy         String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  deletedAt         DateTime?
+
+  hotel       Hotel                 @relation(fields: [hotelId], references: [id])
+  template    NotificationTemplate? @relation(fields: [templateId], references: [id])
+  guest       Guest?                @relation(fields: [guestId], references: [id])
+  reservation Reservation?          @relation(fields: [reservationId], references: [id])
+  resendOf    Notification?         @relation("NotificationResend", fields: [resendOfId], references: [id])
+  resends     Notification[]        @relation("NotificationResend")
+
+  // Geçmiş ekranı: en yeni önce, imleçle.
+  @@index([hotelId, createdAt, id])
+  @@index([hotelId, status, createdAt])
+  @@index([hotelId, channel, createdAt])
+  // Gönderici: zamanı gelmiş bekleyenler (bütün oteller).
+  @@index([status, nextAttemptAt])
+  // Teslim raporu eşleştirmesi.
+  @@index([provider, providerMessageId])
+  @@index([reservationId])
+  @@index([guestId])
+}
+
+/// Bildirim şablonu: olay × kanal × dil başına bir tane (modül 9).
+model NotificationTemplate {
+  id        String              @id @default(uuid())
+  hotelId   String
+  key       NotificationTrigger
+  channel   NotificationChannel
+  language  String
+  subject   String?
+  body      String
+  isActive  Boolean             @default(true)
+  updatedBy String?
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  deletedAt DateTime?
+
+  hotel         Hotel          @relation(fields: [hotelId], references: [id])
+  notifications Notification[]
+
+  @@index([hotelId, key])
+}
+
+/// Kanal ayarı (SMTP, SMS sağlayıcısı, WhatsApp) — otel × kanal başına bir tane.
+///
+/// Parola ve API anahtarı `secret` alanında **şifreli** durur (AES-256-GCM,
+/// anahtar sunucu ortamında); API hiçbir zaman geri döndürmez.
+model NotificationChannelConfig {
+  id               String              @id @default(uuid())
+  hotelId          String
+  channel          NotificationChannel
+  enabled          Boolean             @default(false)
+  /// Gizli olmayan ayarlar (sunucu, port, gönderen, başlık, sessiz saatler).
+  settings         Json                @default("{}")
+  secret           String?
+  secretUpdatedAt  DateTime?
+  lastTestAt       DateTime?
+  lastTestOk       Boolean?
+  lastTestError    String?
+  lastFailureAt    DateTime?
+  lastFailureError String?
+  updatedBy        String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  deletedAt        DateTime?
 
   hotel Hotel @relation(fields: [hotelId], references: [id])
+}
+
+/// Personel uyarısı (üst bardaki zil).
+///
+/// Soft-delete yok: uyarı bir iş kaydı değil, `STAFF_ALERT_RETENTION_DAYS`
+/// sonra kalıcı silinir. Kime gideceği ya bir kişi (`userId`) ya da bir izin
+/// (`permission`, o izne sahip herkes) — 2500 kişiye satır çoğaltılmaz.
+model StaffAlert {
+  id         String             @id @default(uuid())
+  hotelId    String
+  kind       StaffAlertKind
+  severity   StaffAlertSeverity @default(INFO)
+  title      String
+  body       String?
+  link       String?
+  userId     String?
+  permission String?
+  entityType String?
+  entityId   String?
+  /// Aynı konu için tek uyarı (aynı konuşmadan gelen yeni mesaj eskisini öne alır).
+  dedupeKey  String?
+  /// Uyarının en son tetiklendiği an (birleşen uyarıda güncellenir).
+  occurredAt DateTime           @default(now())
+  /// Birleşen tetiklenme sayısı ("3 yeni mesaj").
+  count      Int                @default(1)
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  hotel Hotel            @relation(fields: [hotelId], references: [id])
+  user  User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reads StaffAlertRead[]
+
+  @@index([hotelId, occurredAt, id])
+  @@index([hotelId, userId, occurredAt])
+  @@index([hotelId, permission, occurredAt])
+  @@index([occurredAt])
+}
+
+/// Kişinin okuduğu uyarı.
+model StaffAlertRead {
+  alertId String
+  userId  String
+  readAt  DateTime @default(now())
+
+  alert StaffAlert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([alertId, userId])
+  @@index([userId])
+}
+
+/// Kişinin zil durumu: son bakış (rozet bundan sonrasını sayar) ve susturduğu türler.
+model StaffAlertState {
+  userId     String           @id
+  hotelId    String
+  lastSeenAt DateTime?
+  mutedKinds StaffAlertKind[] @default([])
+  updatedAt  DateTime         @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 // ───────────── ÖN BÜRO ─────────────
@@ -614,6 +807,7 @@ model Guest {
   guestRequests     GuestRequest[]
   folios            Folio[]
   lostItems         LostItem[]
+  notifications     Notification[]
 
   @@index([phone])
   @@index([email])
@@ -656,6 +850,7 @@ model Reservation {
   roomSegments      RoomStaySegment[]
   conversations     Conversation[]
   guestRequests     GuestRequest[]
+  notifications     Notification[]
 
   // Müsaitlik sorgusunun sıcak yolu: "şu otelde, şu oda tipinde, şu tarihlerde
   // envanteri tüketen rezervasyonlar". Dolu bir otelde saniyede onlarca kez çalışır.
@@ -778,36 +973,36 @@ model Tax {
 /// okunmamış sayacı burada tutulur; mesaj yazan her işlem aynı transaction'da
 /// günceller.
 model Conversation {
-  id                   String              @id @default(uuid())
-  hotelId              String
-  channel              NotificationChannel
+  id                 String              @id @default(uuid())
+  hotelId            String
+  channel            NotificationChannel
   /// Kanaldaki karşı taraf: telefon numarası, web chat oturum kimliği.
-  externalId           String
+  externalId         String
   /// Kanalın bildirdiği görünen ad (misafir kaydıyla eşleşmemişse ekranda bu görünür).
-  displayName          String?
-  guestId              String?
-  reservationId        String?
-  summary              String?
-  status               ConversationStatus  @default(OPEN)
-  mode                 ConversationMode    @default(MANUAL)
-  assignedToId         String?
-  unreadCount          Int                 @default(0)
+  displayName        String?
+  guestId            String?
+  reservationId      String?
+  summary            String?
+  status             ConversationStatus  @default(OPEN)
+  mode               ConversationMode    @default(MANUAL)
+  assignedToId       String?
+  unreadCount        Int                 @default(0)
   /// Yönetim sürümü: durum, mod, atama ya da konaklama değişince artar.
   /// Yeni mesaj `updatedAt`'i değiştirir ama bunu değiştirmez — yoğun gelen
   /// kutusunda personel "ata" derken misafirin yazması çakışma sayılmasın.
-  stateVersion         Int                 @default(0)
-  lastMessageAt        DateTime            @default(now())
-  lastMessagePreview   String?
-  lastMessageAuthor    MessageAuthor?
+  stateVersion       Int                 @default(0)
+  lastMessageAt      DateTime            @default(now())
+  lastMessagePreview String?
+  lastMessageAuthor  MessageAuthor?
   /// Misafirin cevapsız bekleyen ilk mesajının zamanı; personel/AI cevap
   /// verince boşalır. "12 dakikadır cevap bekliyor" buradan hesaplanır.
-  awaitingReplySince   DateTime?
-  lastReadAt           DateTime?
-  closedAt             DateTime?
-  closedBy             String?
-  createdAt            DateTime            @default(now())
-  updatedAt            DateTime            @updatedAt
-  deletedAt            DateTime?
+  awaitingReplySince DateTime?
+  lastReadAt         DateTime?
+  closedAt           DateTime?
+  closedBy           String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  deletedAt          DateTime?
 
   hotel       Hotel          @relation(fields: [hotelId], references: [id])
   guest       Guest?         @relation(fields: [guestId], references: [id])
@@ -862,31 +1057,33 @@ model Message {
 /// "gecikmiş" sayılır. Uyandırma gibi zamanlı isteklerde `scheduledFor` asıl
 /// zamandır.
 model GuestRequest {
-  id              String                @id @default(uuid())
-  hotelId         String
-  reservationId   String?
-  guestId         String?
-  roomId          String?
-  conversationId  String?
-  messageId       String?
-  category        GuestRequestCategory
-  title           String
-  description     String?
-  priority        GuestRequestPriority  @default(NORMAL)
-  status          GuestRequestStatus    @default(OPEN)
-  source          GuestRequestSource    @default(FRONT_DESK)
-  dueAt           DateTime
-  scheduledFor    DateTime?
-  assignedToId    String?
-  createdBy       String
-  startedAt       DateTime?
-  completedAt     DateTime?
-  completedBy     String?
-  resolutionNote  String?
-  cancelledReason String?
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
-  deletedAt       DateTime?
+  id               String               @id @default(uuid())
+  hotelId          String
+  reservationId    String?
+  guestId          String?
+  roomId           String?
+  conversationId   String?
+  messageId        String?
+  category         GuestRequestCategory
+  title            String
+  description      String?
+  priority         GuestRequestPriority @default(NORMAL)
+  status           GuestRequestStatus   @default(OPEN)
+  source           GuestRequestSource   @default(FRONT_DESK)
+  dueAt            DateTime
+  scheduledFor     DateTime?
+  assignedToId     String?
+  createdBy        String
+  startedAt        DateTime?
+  completedAt      DateTime?
+  completedBy      String?
+  resolutionNote   String?
+  cancelledReason  String?
+  /// Gecikme uyarısının gönderildiği an; hedef süre değişince sıfırlanır (modül 9).
+  overdueAlertedAt DateTime?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  deletedAt        DateTime?
 
   hotel        Hotel         @relation(fields: [hotelId], references: [id])
   reservation  Reservation?  @relation(fields: [reservationId], references: [id])

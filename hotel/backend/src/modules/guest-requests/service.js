@@ -533,6 +533,8 @@ export async function updateRequest(hotelId, requestId, input) {
       (data.priority !== undefined || data.scheduledFor !== undefined)
     ) {
       data.dueAt = guestRequestDueAt({ priority, createdAt: before.createdAt, scheduledFor });
+      // Hedef değişti: yeni hedef aşılırsa yeniden uyarılsın (modül 9).
+      data.overdueAlertedAt = null;
     }
 
     const after = await tx.guestRequest.update({ where: { id: requestId }, data, include: REQUEST_INCLUDE });
@@ -608,6 +610,7 @@ export async function changeRequestStatus(hotelId, requestId, input) {
           before.scheduledFor && before.scheduledFor > now
             ? before.scheduledFor
             : guestRequestDueAt({ priority: before.priority, createdAt: now }),
+        overdueAlertedAt: null,
       });
     }
 

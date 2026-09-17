@@ -1,6 +1,7 @@
 import { forwardRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Icon } from '@hotelos/ui';
+import { AlertBell } from './AlertBell.jsx';
 import { findLocation } from './navigation.js';
 import { UserMenu } from './UserMenu.jsx';
 import { useFullscreen } from './useFullscreen.js';
@@ -14,10 +15,11 @@ const ICON_BUTTON =
  * Üst bar — Spark Admin'in `.navbar-custom`'ı: yapışkan, yarı saydam, bulanık
  * zemin.
  *
- * Şablondan alınmayanlar: "Oluştur" hızlı eylemleri, bildirim listesi ve
- * ortadaki genel arama. Üçünün de henüz panelde karşılığı yok (bildirimler
- * modül 9); sahte veriyle doldurmak yerine hiç konmadı. Ortada arama yerine
- * konum satırı var: bölüm › sayfa › sekme.
+ * Şablondan alınmayanlar: "Oluştur" hızlı eylemleri ve ortadaki genel arama.
+ * İkisinin de henüz panelde karşılığı yok; sahte veriyle doldurmak yerine hiç
+ * konmadı. Ortada arama yerine konum satırı var: bölüm › sayfa › sekme.
+ * Bildirim listesi şablondaki gibi zilde: personele düşen gerçek uyarılar
+ * (modül 9, `AlertBell`).
  *
  * @param {{
  *   user: { name?: string, email?: string } | null,
@@ -89,6 +91,7 @@ export const Topbar = forwardRef(function Topbar(
       </div>
 
       <div className="flex shrink-0 items-center gap-3">
+        <AlertBell />
         {fullscreen.isSupported && (
           <button
             type="button"

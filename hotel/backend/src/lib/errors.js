@@ -44,10 +44,16 @@ export class StaleWriteError extends ConflictError {
   }
 }
 
-/** Girdi iş kuralına takıldı (zod'un yakalayamadığı semantik doğrulama). */
+/**
+ * Girdi iş kuralına takıldı (zod'un yakalayamadığı semantik doğrulama).
+ * `details.field` verilirse hata, şema hatalarıyla aynı biçimde (`fields`)
+ * döner: form mesajı ilgili alanın altında gösterir.
+ */
 export class ValidationError extends AppError {
   constructor(message, details) {
     super(message, { statusCode: 422, code: 'VALIDATION', details });
+    const field = /** @type {{ field?: unknown } | undefined} */ (details)?.field;
+    this.fields = typeof field === 'string' ? { [field]: message } : undefined;
   }
 }
 
@@ -133,6 +139,29 @@ const CONSTRAINT_RULES = Object.freeze({
     code: 'CONSTRAINT',
     message: 'Telefon ülke kodu 1-3 rakam olmalı ve 0 ile başlamamalı.',
   },
+  Notification_dedupe_unique: {
+    code: 'DUPLICATE_NOTIFICATION',
+    message: 'Bu olay için bildirim zaten sıraya alınmış.',
+  },
+  Notification_recipient_present: { code: 'CONSTRAINT', message: 'Bildirimin alıcısı boş olamaz.' },
+  Notification_body_present: { code: 'CONSTRAINT', message: 'Bildirim metni boş olamaz.' },
+  Notification_attempts_non_negative: { code: 'CONSTRAINT', message: 'Deneme sayısı eksi olamaz.' },
+  Notification_language_valid: { code: 'CONSTRAINT', message: 'Bildirim dili iki harfli kod olmalı.' },
+  Notification_sending_locked: { code: 'CONSTRAINT', message: 'Gönderilen bildirimin üstlenilme zamanı olmalı.' },
+  Notification_sent_has_time: { code: 'CONSTRAINT', message: 'Gönderilen bildirimin gönderim zamanı olmalı.' },
+  Notification_delivered_has_time: { code: 'CONSTRAINT', message: 'İletilen bildirimin iletim zamanı olmalı.' },
+  Notification_failed_has_time: { code: 'CONSTRAINT', message: 'Başarısız bildirimin hata zamanı olmalı.' },
+  Notification_cancelled_has_reason: { code: 'CONSTRAINT', message: 'Gönderilmeyen bildirimin sebebi yazılmalı.' },
+  NotificationTemplate_active_unique: {
+    code: 'DUPLICATE',
+    message: 'Bu olay, kanal ve dil için şablon zaten var.',
+  },
+  NotificationTemplate_body_present: { code: 'CONSTRAINT', message: 'Şablon metni boş olamaz.' },
+  NotificationTemplate_language_valid: { code: 'CONSTRAINT', message: 'Şablon dili iki harfli kod olmalı.' },
+  NotificationChannelConfig_active_unique: { code: 'DUPLICATE', message: 'Bu kanalın ayarı zaten var.' },
+  StaffAlert_has_audience: { code: 'CONSTRAINT', message: 'Uyarının bir alıcısı (kişi ya da izin) olmalı.' },
+  StaffAlert_title_present: { code: 'CONSTRAINT', message: 'Uyarı başlığı boş olamaz.' },
+  StaffAlert_count_positive: { code: 'CONSTRAINT', message: 'Uyarı sayısı en az 1 olmalı.' },
   GuestRequest_title_present: { code: 'CONSTRAINT', message: 'İsteğin başlığı boş olamaz.' },
   GuestRequest_done_has_completion: {
     code: 'CONSTRAINT',

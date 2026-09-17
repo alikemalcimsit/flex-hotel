@@ -19,13 +19,16 @@ export const PERMISSIONS = Object.freeze({
   MESSAGES_REPLY: 'messages.reply',
   REQUESTS_VIEW: 'requests.view',
   REQUESTS_MANAGE: 'requests.manage',
+  NOTIFICATIONS_VIEW: 'notifications.view',
+  NOTIFICATIONS_MANAGE: 'notifications.manage',
 });
 
 export const ROLE_PERMISSIONS = Object.freeze({
   ADMIN: Object.values(PERMISSIONS),
   // Ön büro odaları görür, atar ve kat hizmeti durumunu işler; envanteri
   // (oda ekleme, arıza kaydı) yönetim değiştirir. Misafirle yazışma ve
-  // istek takibi ön büronun asıl işidir.
+  // istek takibi ön büronun asıl işidir. Misafire giden bildirimlerin
+  // geçmişini görür ("onay e-postası gitti mi?"); şablon ve kanal ayarı yönetimde.
   FRONT_DESK: [
     PERMISSIONS.ROOMS_VIEW,
     PERMISSIONS.ROOMS_OPERATE,
@@ -33,6 +36,7 @@ export const ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.MESSAGES_REPLY,
     PERMISSIONS.REQUESTS_VIEW,
     PERMISSIONS.REQUESTS_MANAGE,
+    PERMISSIONS.NOTIFICATIONS_VIEW,
   ],
 });
 

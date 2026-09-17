@@ -12,11 +12,11 @@ import {
   InUseError,
   NotFoundError,
   rethrowPrismaError,
-  StaleWriteError,
   ValidationError,
 } from '../../lib/errors.js';
 import { lockRooms, lockRoomTypes } from '../../lib/locks.js';
 import { buildPage, toSkipTake } from '../../lib/pagination.js';
+import { updateWithVersionCheck } from '../../lib/versioned-update.js';
 import { writeWithEvents } from '../../lib/write.js';
 import {
   assignmentKind,
@@ -233,25 +233,6 @@ function blockSnapshot({ roomNumber, state, removal, ...rest }) {
 }
 
 /* ══════════════════ Ortak yardımcılar ══════════════════ */
-
-/**
- * Optimistic lock'lu güncelleme (bkz. settings/service.js'teki eşi).
- * @param {import('@prisma/client').Prisma.TransactionClient} tx
- * @param {string} model
- * @param {Record<string, unknown>} identity
- * @param {Date} expectedUpdatedAt
- * @param {Record<string, unknown>} data
- * @param {string} notFoundMessage
- */
-async function updateWithVersionCheck(tx, model, identity, expectedUpdatedAt, data, notFoundMessage) {
-  const result = await tx[model].updateMany({ where: { ...identity, updatedAt: expectedUpdatedAt }, data });
-
-  if (result.count === 0) {
-    const exists = await tx[model].findFirst({ where: identity, select: { id: true } });
-    if (!exists) throw new NotFoundError(notFoundMessage);
-    throw new StaleWriteError();
-  }
-}
 
 /**
  * @param {import('@prisma/client').Prisma.TransactionClient | typeof prisma} client

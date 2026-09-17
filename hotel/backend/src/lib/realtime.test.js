@@ -86,10 +86,37 @@ describe('registerRealtimeBridge', () => {
       'at',
       'conversationId',
       'event',
+      'kind',
+      'notificationId',
+      'permission',
       'requestId',
       'reservationId',
       'roomId',
-    ]);
+      'userId',
+      'alertId',
+    ].sort());
+  });
+
+  it('personel uyarısı kime gittiğini taşır, başlığını ve metnini taşımaz', async () => {
+    const io = fakeIo();
+    realtime.registerRealtimeBridge(io);
+    const ALERT_ID = '66666666-6666-4666-8666-666666666666';
+
+    await eventBus.dispatch(
+      eventBus.createEnvelope('staff.alert.raised', {
+        hotelId: HOTEL_ID,
+        alertId: ALERT_ID,
+        kind: 'GUEST_MESSAGE',
+        userId: null,
+        permission: 'messages.view',
+      }),
+    );
+
+    assert.equal(io.emitted.length, 1);
+    assert.equal(io.emitted[0].channel, realtime.STAFF_ALERTS_CHANNEL);
+    assert.equal(io.emitted[0].payload.alertId, ALERT_ID);
+    assert.equal(io.emitted[0].payload.permission, 'messages.view');
+    assert.equal('title' in io.emitted[0].payload, false);
   });
 
   it('atama event\'i rezervasyon kimliğini taşır', async () => {

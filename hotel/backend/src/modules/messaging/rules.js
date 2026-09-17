@@ -11,52 +11,9 @@ import { MESSAGE_PREVIEW_LENGTH } from '@hotelos/hotel-contracts';
  *   aynı biçimde yazılmamış olabilir (+90, 0090, boşluk).
  */
 
-const CURSOR_SEPARATOR = '|';
 const ELLIPSIS = '…';
 
-/**
- * @param {{ at: Date, id: string }} position sıralama anahtarı (zaman + kimlik)
- * @returns {string}
- */
-export function encodeCursor({ at, id }) {
-  return Buffer.from(`${at.toISOString()}${CURSOR_SEPARATOR}${id}`, 'utf8').toString('base64url');
-}
-
-/**
- * Bozuk ya da elle değiştirilmiş imleç `null` döner; çağıran bunu doğrulama
- * hatasına çevirir (500 değil).
- *
- * @param {string | undefined | null} value
- * @returns {{ at: Date, id: string } | null}
- */
-export function decodeCursor(value) {
-  if (!value) return null;
-  let decoded;
-  try {
-    decoded = Buffer.from(value, 'base64url').toString('utf8');
-  } catch {
-    return null;
-  }
-  const separator = decoded.lastIndexOf(CURSOR_SEPARATOR);
-  if (separator <= 0) return null;
-  const at = new Date(decoded.slice(0, separator));
-  const id = decoded.slice(separator + 1);
-  if (Number.isNaN(at.getTime()) || !/^[0-9a-f-]{36}$/i.test(id)) return null;
-  return { at, id };
-}
-
-/**
- * "Bu konumdan daha eski" filtresi — (zaman, kimlik) azalan sırası için.
- * Aynı milisaniyede yazılmış iki kayıt kimlikle ayrılır.
- *
- * @param {string} timeField
- * @param {{ at: Date, id: string }} cursor
- */
-export function olderThan(timeField, cursor) {
-  return {
-    OR: [{ [timeField]: { lt: cursor.at } }, { [timeField]: cursor.at, id: { lt: cursor.id } }],
-  };
-}
+export { decodeCursor, encodeCursor, olderThan } from '../../lib/cursor.js';
 
 /**
  * Liste satırındaki son mesaj: satır sonları ve fazla boşluklar tek boşluğa

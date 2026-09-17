@@ -30,6 +30,18 @@ const TaxesTab = lazy(() => import('./pages/settings/TaxesTab.jsx').then((m) => 
 const SeasonsTab = lazy(() => import('./pages/settings/SeasonsTab.jsx').then((m) => ({ default: m.SeasonsTab })));
 const GeneralTab = lazy(() => import('./pages/settings/GeneralTab.jsx').then((m) => ({ default: m.GeneralTab })));
 const MessagesPage = lazy(() => import('./pages/messages/MessagesPage.jsx').then((m) => ({ default: m.MessagesPage })));
+const NotificationsPage = lazy(() =>
+  import('./pages/notifications/NotificationsPage.jsx').then((m) => ({ default: m.NotificationsPage })),
+);
+const NotificationHistoryTab = lazy(() =>
+  import('./pages/notifications/HistoryTab.jsx').then((m) => ({ default: m.HistoryTab })),
+);
+const NotificationTemplatesTab = lazy(() =>
+  import('./pages/notifications/TemplatesTab.jsx').then((m) => ({ default: m.TemplatesTab })),
+);
+const NotificationChannelsTab = lazy(() =>
+  import('./pages/notifications/ChannelsTab.jsx').then((m) => ({ default: m.ChannelsTab })),
+);
 const GuestRequestsPage = lazy(() =>
   import('./pages/requests/GuestRequestsPage.jsx').then((m) => ({ default: m.GuestRequestsPage })),
 );
@@ -101,6 +113,33 @@ export default function App() {
               <Route path="liste" element={<RoomListTab />} />
               <Route path="musaitlik" element={<AvailabilityTab />} />
               <Route path="atama" element={<AssignmentTab />} />
+            </Route>
+            <Route
+              path="bildirimler"
+              element={
+                <RequirePermission permission={PERMISSIONS.NOTIFICATIONS_VIEW}>
+                  <NotificationsPage />
+                </RequirePermission>
+              }
+            >
+              <Route index element={<Navigate to="/bildirimler/gecmis" replace />} />
+              <Route path="gecmis" element={<NotificationHistoryTab />} />
+              <Route
+                path="sablonlar"
+                element={
+                  <RequirePermission permission={PERMISSIONS.NOTIFICATIONS_MANAGE}>
+                    <NotificationTemplatesTab />
+                  </RequirePermission>
+                }
+              />
+              <Route
+                path="kanallar"
+                element={
+                  <RequirePermission permission={PERMISSIONS.NOTIFICATIONS_MANAGE}>
+                    <NotificationChannelsTab />
+                  </RequirePermission>
+                }
+              />
             </Route>
             <Route
               path="ayarlar"

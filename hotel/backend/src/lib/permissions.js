@@ -34,7 +34,41 @@ export const PERMISSIONS = Object.freeze({
   REQUESTS_VIEW: 'requests.view',
   /** İstek açmak, atamak, durumunu değiştirmek (kat hizmetleri dahil). */
   REQUESTS_MANAGE: 'requests.manage',
+
+  /** Misafire giden bildirimlerin geçmişi. */
+  NOTIFICATIONS_VIEW: 'notifications.view',
+  /** Şablonlar, kanal ayarları (SMTP / SMS), tekrar gönderme ve iptal. */
+  NOTIFICATIONS_MANAGE: 'notifications.manage',
 });
+
+/**
+ * ⚠️ GEÇİCİ rol → izin eşlemesi (frontend `lib/permissions.js` ile birebir).
+ *
+ * Güvenlik kontrolü için kullanılmaz (yukarıdaki not). Yalnızca "bu izne
+ * gönderilen personel uyarısını kim görür" sorusu için: zil, izne göre
+ * yayınlanan uyarıyı kullanıcının rolünden süzüyor. Modül 2 gerçek matrisi
+ * getirince `permissionsForRole` oradan okuyacak.
+ */
+const ROLE_PERMISSIONS = Object.freeze({
+  ADMIN: Object.freeze(Object.values(PERMISSIONS)),
+  FRONT_DESK: Object.freeze([
+    PERMISSIONS.ROOMS_VIEW,
+    PERMISSIONS.ROOMS_OPERATE,
+    PERMISSIONS.MESSAGES_VIEW,
+    PERMISSIONS.MESSAGES_REPLY,
+    PERMISSIONS.REQUESTS_VIEW,
+    PERMISSIONS.REQUESTS_MANAGE,
+    PERMISSIONS.NOTIFICATIONS_VIEW,
+  ]),
+});
+
+/**
+ * @param {string | null | undefined} role
+ * @returns {readonly string[]}
+ */
+export function permissionsForRole(role) {
+  return ROLE_PERMISSIONS[role] ?? [];
+}
 
 let warned = false;
 

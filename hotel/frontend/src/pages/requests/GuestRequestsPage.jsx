@@ -11,6 +11,7 @@ import {
 } from '@hotelos/hotel-contracts';
 import { Alert, Badge, Button, Card, EmptyState, Icon, Input, Select, Spinner } from '@hotelos/ui';
 import { PageHeader } from '../../components/PageHeader.jsx';
+import { SummaryTile } from '../../components/SummaryTile.jsx';
 import { api, withQuery } from '../../lib/api.js';
 import { requestKeys, useAssignees, useRequestSummary } from '../../lib/frontOffice.js';
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
@@ -544,40 +545,4 @@ function emptyTitle(view, filtersActive) {
     default:
       return 'Açık istek yok';
   }
-}
-
-const TILE_TONES = {
-  neutral: 'text-ink',
-  warning: 'text-warning-ink',
-  danger: 'text-sec-strong',
-};
-
-/**
- * Özet kutusu. `onClick` verilirse aynı zamanda filtre düğmesidir.
- * @param {{ label: string, value?: number, hint: string, icon: string, tone?: 'neutral' | 'warning' | 'danger', selected?: boolean, onClick?: () => void }} props
- */
-function SummaryTile({ label, value, hint, icon, tone = 'neutral', selected = false, onClick }) {
-  const Tag = onClick ? 'button' : 'div';
-  return (
-    <Tag
-      {...(onClick ? { type: 'button', 'aria-pressed': selected, onClick } : {})}
-      className={`flex items-start justify-between gap-3 rounded-card border bg-surface p-4 text-left shadow-soft transition-colors sm:p-5 ${
-        selected ? 'border-ink' : onClick ? 'border-transparent hover:border-line-strong' : 'border-transparent'
-      }`}
-    >
-      <span className="min-w-0">
-        <span className="block text-xs font-bold uppercase tracking-[0.06em] text-ink-muted">{label}</span>
-        <span className={`mt-1 block text-3xl font-bold tabular-nums ${TILE_TONES[tone]}`}>{value ?? '—'}</span>
-        <span className="mt-0.5 block text-xs text-ink-muted sm:truncate">{hint}</span>
-      </span>
-      <span
-        aria-hidden="true"
-        className={`grid size-10 shrink-0 place-items-center rounded-item ${
-          tone === 'danger' ? 'bg-danger-soft text-sec-strong' : tone === 'warning' ? 'bg-warning-soft text-warning-ink' : 'bg-black/[0.04] text-ink-soft'
-        }`}
-      >
-        <Icon name={icon} className="size-5" />
-      </span>
-    </Tag>
-  );
 }

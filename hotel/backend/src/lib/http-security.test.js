@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
-import { actorFrom, allowedOrigins, correlationIdFrom, originChecker, resolveJwtSecret } from './http-security.js';
+import {
+  actorFrom,
+  allowedOrigins,
+  correlationIdFrom,
+  originChecker,
+  rateLimitKey,
+  resolveJwtSecret,
+  resolveTrustProxy,
+} from './http-security.js';
 
 const ORIGINAL_ENV = { ...process.env };
 const silentLogger = { warn: () => {} };
@@ -103,5 +111,27 @@ describe('actorFrom', () => {
     assert.equal(actorFrom(undefined), 'anonim');
     assert.equal(actorFrom('   '), 'anonim');
     assert.equal(actorFrom(['admin']), 'anonim');
+  });
+});
+
+describe('resolveTrustProxy', () => {
+  it('varsayılan yalnızca aynı makinedeki vekildir', () => {
+    assert.equal(resolveTrustProxy({}), 'loopback');
+    assert.equal(resolveTrustProxy({ TRUST_PROXY: '  ' }), 'loopback');
+  });
+
+  it('açıkça kapatılabilir ya da adres listesi verilebilir', () => {
+    assert.equal(resolveTrustProxy({ TRUST_PROXY: 'false' }), false);
+    assert.equal(resolveTrustProxy({ TRUST_PROXY: 'true' }), true);
+    assert.equal(resolveTrustProxy({ TRUST_PROXY: '10.0.0.0/8' }), '10.0.0.0/8');
+  });
+});
+
+describe('rateLimitKey', () => {
+  it('aynı IP arkasındaki farklı personel ayrı sayılır', () => {
+    const a = rateLimitKey({ ip: '85.1.2.3', headers: { 'x-actor': 'ayse@otel.com' } });
+    const b = rateLimitKey({ ip: '85.1.2.3', headers: { 'x-actor': 'mehmet@otel.com' } });
+    assert.notEqual(a, b);
+    assert.equal(rateLimitKey({ ip: '85.1.2.3', headers: {} }), '85.1.2.3|anonim');
   });
 });

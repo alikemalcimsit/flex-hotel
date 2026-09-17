@@ -8,7 +8,8 @@ import { PERMISSIONS, ROLE_PERMISSIONS } from '../lib/permissions.js';
  * ayrı ayrı güncellenmez.
  *
  * `roles` dolu olan girdiler yalnızca o rollere, `permission` taşıyanlar
- * yalnızca o izne sahip rollere gösterilir. `badge` yan menüde sayı rozeti
+ * yalnızca o izne sahip rollere gösterilir (alt sayfalar da kendi izniyle
+ * süzülür). `badge` yan menüde sayı rozeti
  * gösterilecek maddeyi işaretler (bkz. `lib/frontOffice.js`).
  * Not: bu görsel bir kısıt; gerçek yetki kontrolü sunucuda.
  */
@@ -52,6 +53,27 @@ export const NAV_SECTIONS = Object.freeze([
     title: 'Yönetim',
     items: [
       {
+        label: 'Bildirimler',
+        to: '/bildirimler',
+        icon: 'bell',
+        permission: PERMISSIONS.NOTIFICATIONS_VIEW,
+        children: [
+          { label: 'Gönderim geçmişi', to: '/bildirimler/gecmis', icon: 'clock' },
+          {
+            label: 'Şablonlar',
+            to: '/bildirimler/sablonlar',
+            icon: 'fileText',
+            permission: PERMISSIONS.NOTIFICATIONS_MANAGE,
+          },
+          {
+            label: 'Kanallar',
+            to: '/bildirimler/kanallar',
+            icon: 'send',
+            permission: PERMISSIONS.NOTIFICATIONS_MANAGE,
+          },
+        ],
+      },
+      {
         label: 'Ayarlar',
         to: '/ayarlar',
         icon: 'settings',
@@ -82,21 +104,34 @@ export const ROLE_LABELS = Object.freeze({
  * @param {string | undefined} role
  */
 export function visibleSections(role) {
-  const granted = ROLE_PERMISSIONS[role] ?? [];
+  const allowed = allowedFor(role);
   return NAV_SECTIONS.map((section) => ({
     ...section,
-    items: section.items.filter(
-      (item) =>
-        (!item.roles || item.roles.includes(role)) && (!item.permission || granted.includes(item.permission)),
-    ),
+    items: section.items
+      .filter(allowed)
+      .map((item) => (item.children ? { ...item, children: item.children.filter(allowed) } : item)),
   })).filter((section) => section.items.length > 0);
 }
 
-/** Bir bölümün alt sayfaları (sekmeler için). @param {string} to */
-export function childrenOf(to) {
+/** @param {string | undefined} role */
+function allowedFor(role) {
+  const granted = ROLE_PERMISSIONS[role] ?? [];
+  return (entry) =>
+    (!entry.roles || entry.roles.includes(role)) && (!entry.permission || granted.includes(entry.permission));
+}
+
+/**
+ * Bir bölümün alt sayfaları (sekmeler için). Rol verilirse yalnızca o rolün
+ * görebildikleri.
+ * @param {string} to
+ * @param {string} [role]
+ */
+export function childrenOf(to, role) {
   for (const section of NAV_SECTIONS) {
     const item = section.items.find((entry) => entry.to === to);
-    if (item) return item.children ?? [];
+    if (!item) continue;
+    const children = item.children ?? [];
+    return role === undefined ? children : children.filter(allowedFor(role));
   }
   return [];
 }

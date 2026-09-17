@@ -188,6 +188,76 @@ export const EVENT_CATALOG = Object.freeze({
     status: z.enum(['OPEN', 'IN_PROGRESS', 'DONE', 'CANCELLED']),
     changedFields: z.array(z.string()).default([]),
   }),
+
+  /* ── Bildirim merkezi (modül 9) ──
+     Misafir bildirimi kuyruğa yazılınca `notification.send.requested`
+     yayınlanır; gönderici (backend `notifications/dispatcher.js`) üstlenip
+     gönderir ve sonucu `notification.sent` / `notification.failed` ile duyurur.
+     Gönderim HTTP isteğinin yolunda yapılmaz: dinleyiciler beklendiği için
+     yavaş bir SMTP sunucusu oda atamasını bekletirdi. */
+
+  'notification.send.requested': hotelScoped.extend({
+    notificationId: z.string().uuid(),
+    channel: z.enum(['EMAIL', 'SMS', 'WHATSAPP']),
+    source: z.string(),
+  }),
+
+  'notification.sent': hotelScoped.extend({
+    notificationId: z.string().uuid(),
+    channel: z.enum(['EMAIL', 'SMS', 'WHATSAPP']),
+    provider: z.string(),
+  }),
+
+  /** Sağlayıcı teslim raporu (SMS): alıcıya ulaştı. */
+  'notification.delivered': hotelScoped.extend({
+    notificationId: z.string().uuid(),
+    channel: z.enum(['EMAIL', 'SMS', 'WHATSAPP']),
+  }),
+
+  /**
+   * Gönderim başarısız. `final: false` ise yeniden denenecek; `true` ise
+   * hakkı bitti ya da hata kalıcı (yanlış parola, tanımsız başlık).
+   */
+  'notification.failed': hotelScoped.extend({
+    notificationId: z.string().uuid(),
+    channel: z.enum(['EMAIL', 'SMS', 'WHATSAPP']),
+    errorCode: z.string().nullable(),
+    final: z.boolean(),
+  }),
+
+  /** Bekleyen gönderim iptal edildi ya da gönderilmedi (kanal kapalı, alıcı istemiyor). */
+  'notification.cancelled': hotelScoped.extend({
+    notificationId: z.string().uuid(),
+    channel: z.enum(['EMAIL', 'SMS', 'WHATSAPP']),
+  }),
+
+  /** Şablon eklendi / değişti / varsayılana döndü. */
+  'notification.template.saved': hotelScoped.extend({
+    templateId: z.string().uuid(),
+    key: z.string(),
+    channel: z.string(),
+    language: z.string(),
+    changedFields: z.array(z.string()).default([]),
+  }),
+
+  /** Kanal ayarı değişti (parola değişikliği yalnızca alan adıyla görünür). */
+  'notification.channel.updated': hotelScoped.extend({
+    channel: z.string(),
+    enabled: z.boolean(),
+    changedFields: z.array(z.string()).default([]),
+  }),
+
+  /**
+   * Personel uyarısı açıldı ya da birleşerek öne çıktı. Kime gittiği
+   * (`userId` ya da `permission`) gövdede: paneller yalnızca kendilerini
+   * ilgilendiren uyarıda rozeti artırır, herkes sunucuya sormaz.
+   */
+  'staff.alert.raised': hotelScoped.extend({
+    alertId: z.string().uuid(),
+    kind: z.enum(['GUEST_MESSAGE', 'URGENT_REQUEST', 'OVERDUE_REQUEST', 'MANUAL_TASK', 'NOTIFICATION_FAILED']),
+    userId: z.string().uuid().nullable(),
+    permission: z.string().nullable(),
+  }),
 });
 
 /** @typedef {keyof typeof EVENT_CATALOG} EventName */
@@ -262,3 +332,17 @@ export const MESSAGING_CHANGED_EVENTS = Object.freeze([
 
 /** İstek listesini etkileyen event'ler (canlı yayın: `requests.changed`). */
 export const REQUESTS_CHANGED_EVENTS = Object.freeze(['guest.request.created', 'guest.request.updated']);
+
+/** Bildirim geçmişini etkileyen event'ler (canlı yayın: `notifications.changed`). */
+export const NOTIFICATIONS_CHANGED_EVENTS = Object.freeze([
+  'notification.send.requested',
+  'notification.sent',
+  'notification.delivered',
+  'notification.failed',
+  'notification.cancelled',
+  'notification.template.saved',
+  'notification.channel.updated',
+]);
+
+/** Zil (canlı yayın: `staff.alerts`). */
+export const STAFF_ALERT_EVENTS = Object.freeze(['staff.alert.raised']);
