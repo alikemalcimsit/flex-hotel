@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   APPROVAL_STATUS_LABELS,
@@ -90,6 +90,12 @@ export function ApprovalDetailDialog({ approvalId, canDecide, timeZone, initialM
   const timing = item ? approvalTiming(item, now) : null;
   const decidable = canDecide && item && approvalDecisionError(item, now) === null;
   const busy = decideMutation.isPending;
+
+  // Satırdan "Onayla" ile açıldı ama kayıt bu arada karara bağlanmış ya da
+  // süresi dolmuşsa form gösterilmez; pencere yalnızca dökümü gösterir.
+  useEffect(() => {
+    if (item && !decidable) setMode('view');
+  }, [item, decidable]);
 
   const back = (
     <Button variant="outline" onClick={() => setMode('view')} disabled={busy}>

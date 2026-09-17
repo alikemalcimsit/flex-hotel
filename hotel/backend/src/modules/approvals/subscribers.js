@@ -36,13 +36,15 @@ export async function resumeGrantedApproval(payload, envelope) {
   const event = /** @type {any} */ (action.resumeEvent);
 
   const worker = actorRegistry.get(action.actorName);
-  if (!worker) {
-    logger.error?.({ actor: action.actorName, approvalId: approval.id }, 'Onaylanan işin aktörü kayıtlı değil');
+  const eventUsable = Boolean(event?.name && event?.payload && typeof event.payload === 'object');
+  if (!worker || !eventUsable) {
+    const reason = worker ? 'saklanan olay zarfı okunamadı' : 'aktörü artık kayıtlı değil';
+    logger.error?.({ actor: action.actorName, approvalId: approval.id, reason }, 'Onaylanan iş devam ettirilemedi');
     await createManualTaskForActor({
       hotelId: payload.hotelId,
       module: APPROVAL_MODULE_LABEL,
       title: `Onaylanan iş elle yapılacak: ${approval.summary}`,
-      description: `${action.actorName} aktörü artık kayıtlı değil; ${payload.decidedBy} onayladı.`,
+      description: `${action.actorName} aktörü: ${reason}; ${payload.decidedBy} onayladı.`,
       originalEvent: { id: action.eventId, name: event?.name ?? null, payload: event?.payload ?? null },
     });
     await markPendingActionAbandoned(payload.hotelId, action);
