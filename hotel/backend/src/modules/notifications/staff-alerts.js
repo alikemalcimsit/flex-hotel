@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto';
+import { Prisma } from '@prisma/client';
 import { STAFF_ALERT_BADGE_CAP, STAFF_ALERT_RETENTION_DAYS } from '@hotelos/hotel-contracts';
 import { prisma, prismaUnfiltered } from '../../db.js';
-import { encodeCursor, olderThan, parseCursor } from '../../lib/cursor.js';
+import { encodeCursor, parseCursor } from '../../lib/cursor.js';
 import { NotFoundError } from '../../lib/errors.js';
 import { permissionsForRole } from '../../lib/permissions.js';
-import { currentStaff } from '../../lib/staff.js';
+import { SQL_NOW, sqlTimestamp } from '../../lib/sql-time.js';
+import { currentStaffCached } from '../../lib/staff.js';
 
 /**
  * Personel uyarıları — üst bardaki zil (modül 9).
@@ -27,6 +29,14 @@ import { currentStaff } from '../../lib/staff.js';
  * görülmemiş uyarıların kimliklerini (üst sınırlı) verir; panel sonra gelen
  * uyarıları socket haberinden kendisi ekler — her uyarıda 2500 panel sunucuya
  * sormaz.
+ *
+ * ### Okuma
+ *
+ * "Bana ya da izinlerime gelenler" tek `OR` ile sorulunca veritabanı son 30
+ * günün bütün eşleşen uyarılarını okuyup sıralıyordu (yönetici için hepsi).
+ * Her kitle (kişiye özel + her izin) ayrı dalda kendi index'iyle en yeniden
+ * okunur, dallar birleşip kesilir (`visibleFeed`): iş, sayfa boyutu × dal
+ * sayısıyla sınırlı kalır.
  */
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -106,10 +116,10 @@ export async function raiseStaffAlert(tx, stage, alert) {
                                 "permission", "entityType", "entityId", "dedupeKey", "occurredAt", "count",
                                 "createdAt", "updatedAt")
       VALUES (${randomUUID()}, ${hotelId}, ${kind}::"StaffAlertKind", ${severity}::"StaffAlertSeverity", ${title},
-              ${body}, ${link}, ${userId}, ${permission}, ${entityType}, ${entityId}, ${dedupeKey}, now(), 1,
-              now(), now())
+              ${body}, ${link}, ${userId}, ${permission}, ${entityType}, ${entityId}, ${dedupeKey}, ${SQL_NOW}, 1,
+              ${SQL_NOW}, ${SQL_NOW})
       ON CONFLICT ("hotelId", "dedupeKey") WHERE "dedupeKey" IS NOT NULL
-      DO UPDATE SET "occurredAt" = now(),
+      DO UPDATE SET "occurredAt" = ${SQL_NOW},
                     "count" = "StaffAlert"."count" + 1,
                     "title" = EXCLUDED."title",
                     "body" = EXCLUDED."body",
@@ -117,7 +127,7 @@ export async function raiseStaffAlert(tx, stage, alert) {
                     "link" = EXCLUDED."link",
                     "userId" = EXCLUDED."userId",
                     "permission" = EXCLUDED."permission",
-                    "updatedAt" = now()
+                    "updatedAt" = ${SQL_NOW}
       RETURNING "id", ("xmax" <> 0) AS "collapsed"`;
     id = row.id;
     // Birleşen uyarı yeniden okunmamış: yeni bir şey oldu.
@@ -142,7 +152,7 @@ export async function raiseStaffAlert(tx, stage, alert) {
  * @param {string} hotelId
  */
 async function viewer(hotelId) {
-  const staff = await currentStaff(prisma, hotelId);
+  const staff = await currentStaffCached(prisma, hotelId);
   if (!staff) return null;
   const state = await prisma.staffAlertState.findFirst({
     where: { userId: staff.id },
@@ -157,9 +167,9 @@ async function viewer(hotelId) {
 }
 
 /**
- * Kişinin görebildiği uyarılar.
+ * Kişinin görebildiği tek uyarı (okundu işareti için).
  * @param {string} hotelId
- * @param {{ id: string, permissions: string[], mutedKinds: string[] }} me
+ * @param {{ id: string, permissions: string[] }} me
  * @param {Date} since
  */
 function visibleWhere(hotelId, me, since) {
@@ -167,8 +177,42 @@ function visibleWhere(hotelId, me, since) {
     hotelId,
     occurredAt: { gt: since },
     OR: [{ userId: me.id }, { userId: null, permission: { in: me.permissions } }],
-    ...(me.mutedKinds.length > 0 ? { kind: { notIn: me.mutedKinds } } : {}),
   };
+}
+
+/**
+ * Kişinin görebildiği uyarıların sıralı kimlikleri (en yeni önce).
+ *
+ * @param {string} hotelId
+ * @param {{ id: string, permissions: string[], mutedKinds: string[] }} me
+ * @param {{ since: Date, before?: { at: Date, id: string } | null, limit: number }} window
+ * @returns {Prisma.Sql} `id`, `occurredAt` döndüren sorgu
+ */
+function visibleFeed(hotelId, me, { since, before = null, limit }) {
+  const conditions = [Prisma.sql`"hotelId" = ${hotelId}`, Prisma.sql`"occurredAt" > ${sqlTimestamp(since)}`];
+  if (before) {
+    // `<=` taramayı imleçten başlatır; eşit zamanlılar kimlikle ayrılır.
+    conditions.push(Prisma.sql`"occurredAt" <= ${sqlTimestamp(before.at)}`);
+    conditions.push(Prisma.sql`("occurredAt" < ${sqlTimestamp(before.at)} OR "id" < ${before.id})`);
+  }
+  if (me.mutedKinds.length > 0) {
+    conditions.push(Prisma.sql`NOT ("kind"::text = ANY(${me.mutedKinds}::text[]))`);
+  }
+  const common = Prisma.join(conditions, ' AND ');
+  const branch = (audience) => Prisma.sql`(
+    SELECT "id", "occurredAt" FROM "StaffAlert"
+    WHERE ${common} AND ${audience}
+    ORDER BY "occurredAt" DESC, "id" DESC
+    LIMIT ${limit})`;
+
+  const branches = [
+    branch(Prisma.sql`"userId" = ${me.id}`),
+    ...me.permissions.map((permission) => branch(Prisma.sql`"userId" IS NULL AND "permission" = ${permission}`)),
+  ];
+  return Prisma.sql`
+    SELECT "id", "occurredAt" FROM (${Prisma.join(branches, ' UNION ALL ')}) AS feed
+    ORDER BY "occurredAt" DESC, "id" DESC
+    LIMIT ${limit}`;
 }
 
 /** @param {Date | null} lastSeenAt @param {Date} cut */
@@ -184,21 +228,22 @@ export async function listStaffAlerts(hotelId, query) {
   const me = await viewer(hotelId);
   if (!me) return { items: [], nextCursor: null, staffKnown: false };
 
-  const rows = await prisma.staffAlert.findMany({
-    where: { ...visibleWhere(hotelId, me, retentionCut()), ...(cursor ? { AND: [olderThan('occurredAt', cursor)] } : {}) },
-    orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
-    take: query.limit + 1,
-    select: ALERT_SELECT,
-  });
-  const page = rows.slice(0, query.limit);
-  const reads = page.length
-    ? await prisma.staffAlertRead.findMany({
-        where: { userId: me.id, alertId: { in: page.map((row) => row.id) } },
-        select: { alertId: true },
-      })
-    : [];
+  const keys = await prisma.$queryRaw(
+    visibleFeed(hotelId, me, { since: retentionCut(), before: cursor, limit: query.limit + 1 }),
+  );
+  const pageKeys = keys.slice(0, query.limit);
+  const ids = pageKeys.map((row) => row.id);
+  const [rows, reads] = ids.length
+    ? await Promise.all([
+        prisma.staffAlert.findMany({ where: { id: { in: ids } }, select: ALERT_SELECT }),
+        prisma.staffAlertRead.findMany({ where: { userId: me.id, alertId: { in: ids } }, select: { alertId: true } }),
+      ])
+    : [[], []];
+  const byId = new Map(rows.map((row) => [row.id, row]));
   const readIds = new Set(reads.map((row) => row.alertId));
-  const last = page.at(-1);
+  // Sıra birleşik sorgudan; satır bu arada silinmişse (saklama süresi) atlanır.
+  const page = ids.map((id) => byId.get(id)).filter(Boolean);
+  const last = pageKeys.at(-1);
 
   return {
     staffKnown: true,
@@ -215,7 +260,7 @@ export async function listStaffAlerts(hotelId, query) {
       read: readIds.has(row.id),
       unseen: !me.lastSeenAt || row.occurredAt > me.lastSeenAt,
     })),
-    nextCursor: rows.length > query.limit && last ? encodeCursor({ at: last.occurredAt, id: last.id }) : null,
+    nextCursor: keys.length > query.limit && last ? encodeCursor({ at: last.occurredAt, id: last.id }) : null,
   };
 }
 
@@ -229,12 +274,7 @@ export async function getStaffAlertSummary(hotelId) {
     return { staffKnown: false, unseenIds: [], unseenCount: 0, capped: false, lastSeenAt: null, mutedKinds: [] };
   }
   const since = unseenSince(me.lastSeenAt, retentionCut());
-  const rows = await prisma.staffAlert.findMany({
-    where: visibleWhere(hotelId, me, since),
-    orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
-    take: STAFF_ALERT_BADGE_CAP + 1,
-    select: { id: true },
-  });
+  const rows = await prisma.$queryRaw(visibleFeed(hotelId, me, { since, limit: STAFF_ALERT_BADGE_CAP + 1 }));
   const capped = rows.length > STAFF_ALERT_BADGE_CAP;
   return {
     staffKnown: true,
@@ -274,7 +314,7 @@ export async function markStaffAlertRead(hotelId, alertId) {
   const me = await viewer(hotelId);
   if (!me) throw new NotFoundError('Personel kaydı bulunamadı');
   const alert = await prisma.staffAlert.findFirst({
-    where: { id: alertId, ...visibleWhere(hotelId, { ...me, mutedKinds: [] }, retentionCut()) },
+    where: { id: alertId, ...visibleWhere(hotelId, me, retentionCut()) },
     select: { id: true },
   });
   if (!alert) throw new NotFoundError('Uyarı bulunamadı');
@@ -286,18 +326,11 @@ export async function markStaffAlertRead(hotelId, alertId) {
 export async function markAllStaffAlertsRead(hotelId) {
   const me = await viewer(hotelId);
   if (!me) throw new NotFoundError('Personel kaydı bulunamadı');
-  const muted = me.mutedKinds;
+  const feed = visibleFeed(hotelId, me, { since: retentionCut(), limit: MARK_ALL_LIMIT });
   const marked = await prisma.$executeRaw`
     INSERT INTO "StaffAlertRead" ("alertId", "userId", "readAt")
-    SELECT a."id", ${me.id}, now()
-    FROM "StaffAlert" a
-    WHERE a."hotelId" = ${hotelId}
-      AND a."occurredAt" > ${retentionCut()}
-      AND (a."userId" = ${me.id} OR (a."userId" IS NULL AND a."permission" = ANY(${me.permissions}::text[])))
-      AND NOT (a."kind"::text = ANY(${muted}::text[]))
-      AND NOT EXISTS (SELECT 1 FROM "StaffAlertRead" r WHERE r."alertId" = a."id" AND r."userId" = ${me.id})
-    ORDER BY a."occurredAt" DESC
-    LIMIT ${MARK_ALL_LIMIT}
+    SELECT feed."id", ${me.id}, ${SQL_NOW}
+    FROM (${feed}) AS feed
     ON CONFLICT DO NOTHING`;
   const state = await saveState(hotelId, me.id, { lastSeenAt: new Date() });
   return { marked, lastSeenAt: state.lastSeenAt.toISOString() };
@@ -325,7 +358,7 @@ export async function purgeExpiredStaffAlerts(now = new Date()) {
   for (;;) {
     const deleted = await prismaUnfiltered.$executeRaw`
       DELETE FROM "StaffAlert"
-      WHERE "id" IN (SELECT "id" FROM "StaffAlert" WHERE "occurredAt" < ${cut} LIMIT ${PURGE_BATCH})`;
+      WHERE "id" IN (SELECT "id" FROM "StaffAlert" WHERE "occurredAt" < ${sqlTimestamp(cut)} LIMIT ${PURGE_BATCH})`;
     total += deleted;
     if (deleted < PURGE_BATCH) return total;
   }

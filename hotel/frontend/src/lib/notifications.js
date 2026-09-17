@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { STAFF_ALERT_BADGE_CAP } from '@hotelos/hotel-contracts';
 import { api } from './api.js';
-import { STAFF_ALERTS_CHANNEL, socket } from './socket.js';
+import { STAFF_ALERTS_CHANNEL, connectSpreadMs, socket } from './socket.js';
 import { useAuthStore } from '../store/auth.js';
 
 /**
@@ -112,18 +112,18 @@ export function useStaffAlertBell() {
         clearTimeout(reconnectTimer);
         reconnectTimer = setTimeout(
           () => queryClient.invalidateQueries({ queryKey: staffAlertKeys.all }),
-          Math.random() * RECONNECT_JITTER_MS,
+          Math.random() * Math.max(RECONNECT_JITTER_MS, connectSpreadMs()),
         );
       }
       connectedOnce = true;
     };
 
     socket.on(STAFF_ALERTS_CHANNEL, handleAlert);
-    socket.on('connect', handleConnect);
+    socket.on('ready', handleConnect);
     return () => {
       clearTimeout(reconnectTimer);
       socket.off(STAFF_ALERTS_CHANNEL, handleAlert);
-      socket.off('connect', handleConnect);
+      socket.off('ready', handleConnect);
     };
   }, [actor, queryClient]);
 

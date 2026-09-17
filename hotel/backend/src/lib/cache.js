@@ -16,6 +16,14 @@ const DEFAULT_MAX_ENTRIES = 5_000;
 
 export class TtlCache {
   #store = new Map();
+  /** @type {Map<string, Promise<unknown>>} süren üretimler (tek uçuş) */
+  #inflight = new Map();
+  /**
+   * Geçersiz kılma sayacı. Üretim başladığında okunur; bitene kadar herhangi
+   * bir geçersiz kılma olduysa sonuç önbelleğe yazılmaz — üretim yazmadan
+   * önceki veriyi okumuş olabilir ve bayat kopya TTL boyunca kalırdı.
+   */
+  #generation = 0;
   #maxEntries;
   #hits = 0;
   #misses = 0;
@@ -60,6 +68,10 @@ export class TtlCache {
 
   /**
    * Cache'te varsa döner, yoksa üretici fonksiyonu çalıştırıp saklar.
+   *
+   * Aynı anahtar için süren bir üretim varsa yeni çağıran onu bekler (tek
+   * uçuş): süresi dolan otel kaydını her istek ayrı ayrı sorgulamaz.
+   *
    * @template T
    * @param {string} key
    * @param {() => Promise<T>} producer
@@ -69,17 +81,32 @@ export class TtlCache {
   async getOrSet(key, producer, ttlMs = DEFAULT_TTL_MS) {
     const cached = this.get(key);
     if (cached !== undefined) return /** @type {T} */ (cached);
-    const value = await producer();
-    this.set(key, value, ttlMs);
-    return value;
+
+    const running = this.#inflight.get(key);
+    if (running) return /** @type {Promise<T>} */ (running);
+
+    const generation = this.#generation;
+    const promise = Promise.resolve()
+      .then(producer)
+      .then((value) => {
+        if (generation === this.#generation) this.set(key, value, ttlMs);
+        return value;
+      })
+      .finally(() => {
+        if (this.#inflight.get(key) === promise) this.#inflight.delete(key);
+      });
+    this.#inflight.set(key, promise);
+    return promise;
   }
 
   /**
    * Önekle eşleşen tüm anahtarları siler. Yazma işlemleri bunu çağırır.
+   * Süren üretimler de bırakılır: sonraki okuma taze veriyle yeniden başlar.
    * @param {string} prefix
    * @returns {number} Silinen anahtar sayısı
    */
   invalidatePrefix(prefix) {
+    this.#generation += 1;
     let removed = 0;
     for (const key of this.#store.keys()) {
       if (key.startsWith(prefix)) {
@@ -87,11 +114,16 @@ export class TtlCache {
         removed += 1;
       }
     }
+    for (const key of this.#inflight.keys()) {
+      if (key.startsWith(prefix)) this.#inflight.delete(key);
+    }
     return removed;
   }
 
   clear() {
+    this.#generation += 1;
     this.#store.clear();
+    this.#inflight.clear();
   }
 
   /** Sağlık ekranı / Activity Feed için ölçüm. */

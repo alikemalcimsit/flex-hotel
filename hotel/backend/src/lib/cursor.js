@@ -46,12 +46,20 @@ export function decodeCursor(value) {
  * "Bu konumdan daha eski" filtresi — (zaman, kimlik) azalan sırası için.
  * Aynı milisaniyede yazılmış iki kayıt kimlikle ayrılır.
  *
+ * Baştaki `zaman <= imleç` koşulu mantıken gereksiz ama şart: PostgreSQL
+ * yalnızca `OR` görünce index taramasını imleçten başlatamıyor, 10 000.
+ * kayıttaki sayfa için önceki 10 000 kaydı baştan okuyordu (sayfa numarasıyla
+ * aynı yavaşlık). Bu koşul taramayı doğrudan imlecin olduğu yere götürür.
+ *
  * @param {string} timeField
  * @param {{ at: Date, id: string }} cursor
  */
 export function olderThan(timeField, cursor) {
   return {
-    OR: [{ [timeField]: { lt: cursor.at } }, { [timeField]: cursor.at, id: { lt: cursor.id } }],
+    AND: [
+      { [timeField]: { lte: cursor.at } },
+      { OR: [{ [timeField]: { lt: cursor.at } }, { [timeField]: cursor.at, id: { lt: cursor.id } }] },
+    ],
   };
 }
 

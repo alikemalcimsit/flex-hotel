@@ -188,6 +188,50 @@ function findConstraintName(error) {
 }
 
 /**
+ * Veritabanı o an yoğun: havuzda boş bağlantı yok ya da transaction zamanında
+ * başlatılamadı. Kullanıcıya "beklenmeyen hata" değil "birazdan tekrar deneyin"
+ * denir (503); istemci kısa bir beklemeyle yeniden dener.
+ */
+export class BusyError extends AppError {
+  constructor(message = 'Sistem şu an çok yoğun. Lütfen birkaç saniye sonra tekrar deneyin.') {
+    super(message, { statusCode: 503, code: 'BUSY' });
+    this.retryAfterSeconds = 2;
+  }
+}
+
+/** Prisma: havuzdan bağlantı alınamadı / transaction başlatılamadı ya da süresi doldu. */
+const BUSY_PRISMA_CODES = new Set(['P2024', 'P2028']);
+
+/** PostgreSQL: kilitlenme ve serileştirme çatışması — işlemi baştan yapmak düzeltir. */
+const RETRYABLE_PG_CODES = new Set(['40P01', '40001']);
+
+/**
+ * Tekrar denenince düzelecek bir çakışma mı (deadlock, yazma çatışması)?
+ * İşin tamamı geri alındığı için transaction baştan çalıştırılabilir.
+ *
+ * @param {unknown} error
+ */
+export function isRetryableTransactionError(error) {
+  const known = /** @type {{ code?: string, meta?: { code?: string }, message?: string }} */ (error);
+  if (known?.code === 'P2034') return true;
+  if (known?.code === 'P2010' && RETRYABLE_PG_CODES.has(String(known.meta?.code ?? ''))) return true;
+  const message = typeof known?.message === 'string' ? known.message : '';
+  return /deadlock detected|could not serialize access/i.test(message);
+}
+
+/**
+ * Havuz/transaction zaman aşımını 503'e çevirir; değilse `null`.
+ * @param {unknown} error
+ * @returns {BusyError | null}
+ */
+export function asBusyError(error) {
+  if (error instanceof BusyError) return error;
+  const code = /** @type {{ code?: string }} */ (error)?.code;
+  if (code && BUSY_PRISMA_CODES.has(code)) return new BusyError();
+  return null;
+}
+
+/**
  * Prisma/PostgreSQL hatalarını bizim hata tiplerimize çevirir.
  * Yarış durumunda (aynı kodla iki eşzamanlı ekleme) P2002 buradan 409 olur.
  *
@@ -200,6 +244,8 @@ function findConstraintName(error) {
  */
 export function rethrowPrismaError(error, { uniqueMessage = 'Bu kayıt zaten mevcut' } = {}) {
   if (error instanceof AppError) throw error;
+  const busy = asBusyError(error);
+  if (busy) throw busy;
 
   const constraint = findConstraintName(error);
   if (constraint) {

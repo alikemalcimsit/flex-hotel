@@ -5,6 +5,7 @@ import { AppError } from '../../lib/errors.js';
 import { openSecret } from '../../lib/secret-box.js';
 import { writeWithEvents } from '../../lib/write.js';
 import { getHotelSettings } from '../settings/service.js';
+import { SQL_NOW, sqlTimestamp } from '../../lib/sql-time.js';
 import { providerFor } from './providers/index.js';
 import { NETGSM_REPORT_BATCH } from './providers/netgsm.js';
 import { ProviderError } from './providers/provider-error.js';
@@ -66,10 +67,10 @@ const CLAIM_COLUMNS = Prisma.sql`n."id", n."hotelId", n."channel", n."source", n
 export function claimDueNotifications(limit = DISPATCH_BATCH) {
   return prismaUnfiltered.$queryRaw`
     UPDATE "Notification" n
-    SET "status" = 'SENDING', "lockedAt" = now(), "attempts" = n."attempts" + 1, "updatedAt" = now()
+    SET "status" = 'SENDING', "lockedAt" = ${SQL_NOW}, "attempts" = n."attempts" + 1, "updatedAt" = ${SQL_NOW}
     WHERE n."id" IN (
       SELECT "id" FROM "Notification"
-      WHERE "status" = 'PENDING' AND "deletedAt" IS NULL AND "nextAttemptAt" <= now()
+      WHERE "status" = 'PENDING' AND "deletedAt" IS NULL AND "nextAttemptAt" <= ${SQL_NOW}
       ORDER BY "nextAttemptAt"
       LIMIT ${limit}
       FOR UPDATE SKIP LOCKED
@@ -100,7 +101,7 @@ function recordChannelFailure(hotelId, channel, message) {
   // `updatedAt` değişmez: yönetici formu açıkken kaydetme bayat sayılmasın.
   return prismaUnfiltered.$executeRaw`
     UPDATE "NotificationChannelConfig"
-    SET "lastFailureAt" = now(), "lastFailureError" = ${message}
+    SET "lastFailureAt" = ${SQL_NOW}, "lastFailureError" = ${message}
     WHERE "hotelId" = ${hotelId} AND "channel" = ${channel}::"NotificationChannel" AND "deletedAt" IS NULL`;
 }
 
@@ -297,11 +298,21 @@ export function recoverStaleNotifications(now = new Date()) {
   const cut = new Date(now.getTime() - STALE_SENDING_MS);
   return prismaUnfiltered.$executeRaw`
     UPDATE "Notification"
-    SET "status" = 'PENDING', "nextAttemptAt" = now(), "lockedAt" = NULL, "updatedAt" = now()
-    WHERE "status" = 'SENDING' AND "lockedAt" < ${cut} AND "deletedAt" IS NULL`;
+    SET "status" = 'PENDING', "nextAttemptAt" = ${SQL_NOW}, "lockedAt" = NULL, "updatedAt" = ${SQL_NOW}
+    WHERE "status" = 'SENDING' AND "lockedAt" < ${sqlTimestamp(cut)} AND "deletedAt" IS NULL`;
 }
 
 /* ══════════════════ Teslim raporu ══════════════════ */
+
+/**
+ * Otel başına teslim raporu turunun kaldığı yer: bir turda sorulabilenden
+ * fazla bekleyen SMS varsa sonraki tur oradan devam eder, liste başa sarar.
+ * Yoksa hep en eski 400 SMS sorulur, yenilerin durumu 48 saat boyunca
+ * "gönderildi"de kalırdı.
+ *
+ * @type {Map<string, { at: Date, id: string }>}
+ */
+const reportCursors = new Map();
 
 /**
  * Sağlayıcıdan teslim raporu alır (bugün yalnızca Netgsm).
@@ -310,24 +321,21 @@ export function recoverStaleNotifications(now = new Date()) {
  * "iletildi" derse bildirim `DELIVERED`, "iletilemedi" derse `FAILED` olur
  * ve personel uyarılır.
  *
+ * Sorgular ham SQL: durum ve kanal sabit yazılır ki kısmi index
+ * (`Notification_sms_report_idx`, yalnızca sonucu bekleyen SMS'ler) kullanılsın;
+ * e-postalar sonsuza dek "gönderildi" kalır ve genel index'le taranırsa her
+ * turda bütün geçmiş okunurdu.
+ *
  * @param {{ error?: Function }} [logger]
  * @param {Date} [now]
  * @returns {Promise<number>} güncellenen bildirim
  */
 export async function pollDeliveryReports(logger, now = new Date()) {
   const since = new Date(now.getTime() - DELIVERY_REPORT_WINDOW_MS);
-  const hotels = await prisma.notification.groupBy({
-    by: ['hotelId'],
-    // groupBy soft-delete filtresinin dışında: koşul açıkça yazılı.
-    where: {
-      status: 'SENT',
-      channel: 'SMS',
-      provider: 'netgsm',
-      sentAt: { gte: since },
-      providerMessageId: { not: null },
-      deletedAt: null,
-    },
-  });
+  const hotels = await prismaUnfiltered.$queryRaw`
+    SELECT DISTINCT "hotelId" FROM "Notification"
+    WHERE "status" = 'SENT' AND "channel" = 'SMS' AND "providerMessageId" IS NOT NULL
+      AND "deletedAt" IS NULL AND "sentAt" >= ${sqlTimestamp(since)}`;
 
   let updated = 0;
   for (const { hotelId } of hotels) {
@@ -351,12 +359,20 @@ async function pollHotelReports(hotelId, since) {
   if (!provider?.report) return 0;
   const secret = openSecret(config.secret);
 
-  const rows = await prisma.notification.findMany({
-    where: { hotelId, status: 'SENT', channel: 'SMS', provider: provider.name, sentAt: { gte: since }, providerMessageId: { not: null } },
-    orderBy: [{ sentAt: 'asc' }],
-    take: NETGSM_REPORT_BATCH * REPORT_CALLS_PER_HOTEL,
-    select: { id: true, providerMessageId: true },
-  });
+  const limit = NETGSM_REPORT_BATCH * REPORT_CALLS_PER_HOTEL;
+  const saved = reportCursors.get(hotelId);
+  const after = saved && saved.at >= since ? saved : { at: new Date(since.getTime() - 1), id: '' };
+  const rows = await prismaUnfiltered.$queryRaw`
+    SELECT "id", "providerMessageId", "sentAt" FROM "Notification"
+    WHERE "status" = 'SENT' AND "channel" = 'SMS' AND "providerMessageId" IS NOT NULL
+      AND "deletedAt" IS NULL AND "sentAt" >= ${sqlTimestamp(since)}
+      AND "hotelId" = ${hotelId} AND "provider" = ${provider.name}
+      AND ("sentAt", "id") > (${sqlTimestamp(after.at)}, ${after.id})
+    ORDER BY "sentAt", "id"
+    LIMIT ${limit}`;
+  const last = rows.at(-1);
+  if (rows.length < limit || !last) reportCursors.delete(hotelId);
+  else reportCursors.set(hotelId, { at: last.sentAt, id: last.id });
 
   let updated = 0;
   for (let offset = 0; offset < rows.length; offset += NETGSM_REPORT_BATCH) {

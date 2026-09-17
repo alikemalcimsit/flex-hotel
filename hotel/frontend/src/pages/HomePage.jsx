@@ -8,7 +8,11 @@ import { useHotelSettings } from '../lib/useHotel.js';
 import { visibleSections } from '../layout/navigation.js';
 import { useAuthStore } from '../store/auth.js';
 
-const HEALTH_POLL_MS = 10_000;
+/**
+ * Sistem durumu kartlarının tazelenmesi. Canlı bağlantı durumu socket'ten
+ * anında gelir; sunucu/veritabanı kontrolü seyrek yeter (her açık panel sorar).
+ */
+const HEALTH_POLL_MS = 30_000;
 
 /**
  * Panel ana sayfası.

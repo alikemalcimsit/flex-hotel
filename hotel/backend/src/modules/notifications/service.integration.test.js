@@ -715,6 +715,102 @@ describe('bildirim merkezi (entegrasyon)', { skip }, () => {
     });
   });
 
+  describe('ölçek ve dayanıklılık', () => {
+    it('geçmiş onay koduyla aranır; üç harften kısa arama süzgeç sayılmaz', async () => {
+      await enqueueRoom();
+      const byCode = await service.listNotifications(hotelId, { limit: 30, search: stay.confirmationCode });
+      assert.equal(byCode.items.length, 2);
+      const noMatch = await service.listNotifications(hotelId, { limit: 30, search: 'yok-boyle-bir-sey' });
+      assert.equal(noMatch.items.length, 0);
+      const short = await service.listNotifications(hotelId, { limit: 30, search: 'ay' });
+      assert.equal(short.items.length, 2);
+    });
+
+    it('zil kişiye ve izne gelenleri imleçle atlamadan, tekrarlamadan sayfalar', async () => {
+      const base = Date.now() - 60 * 60_000;
+      const rows = [];
+      for (let index = 0; index < 9; index += 1) {
+        rows.push({
+          hotelId,
+          kind: 'MANUAL_TASK',
+          title: `Uyarı ${index}`,
+          // Aynı ana düşen uyarılar da ayrışmalı.
+          occurredAt: new Date(base + Math.floor(index / 3) * 1000),
+          ...(index % 3 === 0
+            ? { userId: users.desk.id }
+            : { permission: index % 3 === 1 ? 'messages.view' : 'settings.manage' }),
+        });
+      }
+      await db.staffAlert.createMany({ data: rows });
+
+      // Resepsiyon: kendine gelen 3 + messages.view izniyle 3 (settings.manage yok).
+      const seen = [];
+      let cursor;
+      do {
+        const page = await as(DESK, () => alerts.listStaffAlerts(hotelId, { limit: 2, cursor }));
+        seen.push(...page.items.map((item) => item.title));
+        cursor = page.nextCursor ?? undefined;
+      } while (cursor);
+      assert.equal(seen.length, 6);
+      assert.equal(new Set(seen).size, 6);
+      assert.ok(!seen.some((title) => ['Uyarı 2', 'Uyarı 5', 'Uyarı 8'].includes(title)));
+
+      const summary = await as(DESK, () => alerts.getStaffAlertSummary(hotelId));
+      assert.equal(summary.unseenCount, 6);
+      const marked = await as(DESK, () => alerts.markAllStaffAlertsRead(hotelId));
+      assert.equal(marked.marked, 6);
+    });
+
+    it('dağıtılamadan kalan olay bekleme payından sonra yeniden dağıtılır; yenisine dokunulmaz', async () => {
+      const { relayUnpublishedEvents, RELAY_GRACE_MS } = await import('../../lib/outbox.js');
+      const { eventBus } = await import('../../lib/events.js');
+      const received = [];
+      const unsubscribe = eventBus.subscribe('notification.cancelled', 'test-relay', (payload) => {
+        received.push(payload.notificationId);
+      });
+      const envelope = (notificationId, occurredAt) => ({
+        id: randomUUID(),
+        hotelId,
+        name: 'notification.cancelled',
+        payload: { hotelId, notificationId, channel: 'SMS' },
+        correlationId: randomUUID(),
+        actor: 'test',
+        occurredAt,
+        publishedAt: null,
+      });
+      const oldId = randomUUID();
+      const freshId = randomUUID();
+      try {
+        await db.eventLog.createMany({
+          data: [
+            envelope(oldId, new Date(Date.now() - RELAY_GRACE_MS - 60_000)),
+            envelope(freshId, new Date()),
+          ],
+        });
+        assert.equal(await relayUnpublishedEvents(), 1);
+        assert.deepEqual(received, [oldId]);
+        assert.equal(await relayUnpublishedEvents(), 0, 'ikinci tur aynı olayı almaz');
+        const pending = await db.eventLog.count({ where: { hotelId, publishedAt: null } });
+        assert.equal(pending, 1, 'yeni olay istek içindeki dağıtıma bırakılır');
+      } finally {
+        unsubscribe();
+      }
+    });
+
+    it('işlenmiş olay kayıtları saklama süresinden sonra silinir', async () => {
+      const { purgeProcessedEvents, PROCESSED_EVENT_RETENTION_DAYS } = await import('../../lib/maintenance-jobs.js');
+      const old = new Date(Date.now() - (PROCESSED_EVENT_RETENTION_DAYS + 1) * 24 * 60 * 60_000);
+      await db.processedEvent.createMany({
+        data: [
+          { hotelId, actorName: 'test', eventId: randomUUID(), createdAt: old },
+          { hotelId, actorName: 'test', eventId: randomUUID() },
+        ],
+      });
+      assert.equal(await purgeProcessedEvents(), 1);
+      assert.equal(await db.processedEvent.count({ where: { hotelId } }), 1);
+    });
+  });
+
   describe('aktör (uçtan uca)', () => {
     let actors;
 

@@ -368,6 +368,7 @@ model EventLog {
   deletedAt     DateTime?
 
   hotel Hotel @relation(fields: [hotelId], references: [id])
+  // Dağıtılmamış olaylar: kısmi index `EventLog_unpublished_idx` (migration'da).
 
   @@index([name])
   @@index([correlationId])
@@ -385,6 +386,8 @@ model ProcessedEvent {
   hotel Hotel @relation(fields: [hotelId], references: [id])
 
   @@unique([actorName, eventId])
+  // Saklama süresi temizliği (bkz. lib/maintenance-jobs.js).
+  @@index([createdAt])
 }
 
 model ActorSetting {
@@ -577,10 +580,17 @@ model Notification {
   @@index([hotelId, channel, createdAt])
   // Gönderici: zamanı gelmiş bekleyenler (bütün oteller).
   @@index([status, nextAttemptAt])
-  // Teslim raporu eşleştirmesi.
+  // Teslim raporu eşleştirmesi. Rapor bekleyen SMS'ler için kısmi index
+  // `Notification_sms_report_idx` migration'da.
   @@index([provider, providerMessageId])
   @@index([reservationId])
   @@index([guestId])
+  // Detaydaki tekrar gönderimler.
+  @@index([resendOfId])
+  // Arama (trigram).
+  @@index([recipient(ops: raw("gin_trgm_ops"))], map: "Notification_recipient_trgm_idx", type: Gin)
+  @@index([recipientName(ops: raw("gin_trgm_ops"))], map: "Notification_recipientName_trgm_idx", type: Gin)
+  @@index([subject(ops: raw("gin_trgm_ops"))], map: "Notification_subject_trgm_idx", type: Gin)
 }
 
 /// Bildirim şablonu: olay × kanal × dil başına bir tane (modül 9).
@@ -661,8 +671,9 @@ model StaffAlert {
   reads StaffAlertRead[]
 
   @@index([hotelId, occurredAt, id])
-  @@index([hotelId, userId, occurredAt])
-  @@index([hotelId, permission, occurredAt])
+  // Zil: kişiye özel uyarılar en yeniden. İzne gidenler için kısmi index
+  // `StaffAlert_permission_feed_idx` (userId boş) migration'da.
+  @@index([hotelId, userId, occurredAt, id])
   @@index([occurredAt])
 }
 
@@ -811,6 +822,10 @@ model Guest {
 
   @@index([phone])
   @@index([email])
+  // Ada göre arama (trigram). E-posta eşleştirmesi için ifade index'i
+  // `Guest_hotelId_email_lower_idx` (lower(email)) migration'da.
+  @@index([firstName(ops: raw("gin_trgm_ops"))], map: "Guest_firstName_trgm_idx", type: Gin)
+  @@index([lastName(ops: raw("gin_trgm_ops"))], map: "Guest_lastName_trgm_idx", type: Gin)
 }
 
 model Reservation {
@@ -857,8 +872,12 @@ model Reservation {
   @@index([hotelId, roomTypeId, status, checkIn, checkOut])
   // Belirli bir odanın takvimi (oda planı ekranı, atama kontrolü).
   @@index([hotelId, roomId, checkIn, checkOut])
-  @@index([checkIn, checkOut])
-  @@index([status])
+  // Pencere sorguları (oda planı özeti, müsaitlik): çıkışı pencereden sonra olanlar.
+  @@index([hotelId, checkOut, checkIn])
+  // Misafirin konaklamaları.
+  @@index([hotelId, guestId, checkIn])
+  // Onay koduyla arama (trigram).
+  @@index([confirmationCode(ops: raw("gin_trgm_ops"))], map: "Reservation_confirmationCode_trgm_idx", type: Gin)
 }
 
 /// Bir konaklamanın **kapanmış** oda dilimi: misafir içerideyken oda
@@ -1014,8 +1033,15 @@ model Conversation {
   @@unique([hotelId, channel, externalId])
   // Gelen kutusu: "açık konuşmalar, en son mesaj önce".
   @@index([hotelId, status, lastMessageAt])
+  // "Tümü" görünümü.
+  @@index([hotelId, lastMessageAt, id])
   @@index([hotelId, assignedToId, status])
   @@index([hotelId, guestId])
+  @@index([hotelId, reservationId])
+  // Arama (trigram).
+  @@index([displayName(ops: raw("gin_trgm_ops"))], map: "Conversation_displayName_trgm_idx", type: Gin)
+  @@index([externalId(ops: raw("gin_trgm_ops"))], map: "Conversation_externalId_trgm_idx", type: Gin)
+  @@index([lastMessagePreview(ops: raw("gin_trgm_ops"))], map: "Conversation_lastMessagePreview_trgm_idx", type: Gin)
 }
 
 model Message {
@@ -1095,10 +1121,18 @@ model GuestRequest {
 
   // İş listesi: "açık istekler, süresi en yakın önce".
   @@index([hotelId, status, dueAt])
+  // Bitmiş işler: tamamlanan, iptal ve tümü görünümleri.
+  @@index([hotelId, status, completedAt, id])
+  @@index([hotelId, status, updatedAt, id])
+  @@index([hotelId, createdAt, id])
   @@index([hotelId, assignedToId, status])
   @@index([hotelId, roomId, status])
+  @@index([hotelId, guestId])
   @@index([reservationId])
   @@index([conversationId])
+  // Arama (trigram).
+  @@index([title(ops: raw("gin_trgm_ops"))], map: "GuestRequest_title_trgm_idx", type: Gin)
+  @@index([description(ops: raw("gin_trgm_ops"))], map: "GuestRequest_description_trgm_idx", type: Gin)
 }
 
 // ───────────── FOLYO / ÖDEME ─────────────

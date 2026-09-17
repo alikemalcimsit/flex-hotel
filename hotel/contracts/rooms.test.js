@@ -8,6 +8,7 @@ import {
   housekeepingTransitionError,
   roomListQuerySchema,
   setHousekeepingStatusSchema,
+  stayAvailabilityQuerySchema,
 } from './rooms.js';
 
 /**
@@ -103,5 +104,15 @@ describe('sorgu dizesi ayrıştırma', () => {
 
   it('blok listesi varsayılan olarak sürenleri ve gelecektekileri gösterir', () => {
     assert.equal(blockListQuerySchema.parse({}).scope, 'ACTIVE');
+  });
+});
+
+describe('müsaitlik aralıkları', () => {
+  it('konaklama sorgusu en fazla bir yıl olabilir (sınırsız aralık sunucuyu kilitlerdi)', () => {
+    const ok = stayAvailabilityQuerySchema.safeParse({ checkIn: '2026-09-17', checkOut: '2027-09-17' });
+    assert.equal(ok.success, true);
+    const tooLong = stayAvailabilityQuerySchema.safeParse({ checkIn: '2026-09-17', checkOut: '2096-09-17' });
+    assert.equal(tooLong.success, false);
+    assert.match(tooLong.error.issues[0].message, /en fazla 366 gece/);
   });
 });

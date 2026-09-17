@@ -1,5 +1,13 @@
+import { setTimeout as delay } from 'node:timers/promises';
 import { prisma } from '../db.js';
+import { isRetryableTransactionError } from './errors.js';
 import { dispatchStaged, stageEvent } from './events.js';
+
+/** Kilitlenme / yazma çatışmasında işin en fazla kaç kez baştan yapılacağı. */
+const MAX_TRANSACTION_ATTEMPTS = 3;
+
+/** Yeniden denemeden önceki bekleme (ms): çakışan işlem bitsin; eşzamanlılar aynı anda dönmesin. */
+const RETRY_BASE_DELAY_MS = 40;
 
 /**
  * Yazma işlemlerinin ortak kalıbı: transaction + commit sonrası event dağıtımı.
@@ -12,21 +20,32 @@ import { dispatchStaged, stageEvent } from './events.js';
  *
  * Dinleyiciler commit'ten önce çalıştırılmaz: henüz görünmeyen veriyi okurlardı.
  *
+ * Kilitlenme (deadlock) ya da yazma çatışmasında veritabanı işlemi geri alır;
+ * iş bir kaç kez baştan çalıştırılır. Bu yüzden `work` transaction dışına yan
+ * etki bırakmamalı (e-posta göndermek, önbelleğe yazmak gibi) — yalnızca `tx`
+ * ve `stage` kullanır.
+ *
  * @template T
  * @param {(tx: import('@prisma/client').Prisma.TransactionClient, stage: (name: string, payload: object) => Promise<void>) => Promise<T>} work
- * @param {{ timeout?: number }} [options]
+ * @param {{ timeout?: number, maxWait?: number }} [options]
  * @returns {Promise<T>}
  */
 export async function writeWithEvents(work, options = {}) {
-  const staged = [];
+  for (let attempt = 1; ; attempt += 1) {
+    const staged = [];
+    try {
+      const result = await prisma.$transaction(async (tx) => {
+        const stage = async (name, payload) => {
+          staged.push(await stageEvent(tx, name, payload));
+        };
+        return work(tx, stage);
+      }, options);
 
-  const result = await prisma.$transaction(async (tx) => {
-    const stage = async (name, payload) => {
-      staged.push(await stageEvent(tx, name, payload));
-    };
-    return work(tx, stage);
-  }, options);
-
-  await dispatchStaged(staged);
-  return result;
+      await dispatchStaged(staged);
+      return result;
+    } catch (error) {
+      if (attempt >= MAX_TRANSACTION_ATTEMPTS || !isRetryableTransactionError(error)) throw error;
+      await delay(RETRY_BASE_DELAY_MS * attempt + Math.floor(Math.random() * RETRY_BASE_DELAY_MS));
+    }
+  }
 }

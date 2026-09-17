@@ -22,8 +22,10 @@ import { encodeCursor, olderThan, parseCursor } from '../../lib/cursor.js';
 import { ConflictError, NotFoundError, rethrowPrismaError, StaleWriteError, ValidationError } from '../../lib/errors.js';
 import { PERMISSIONS } from '../../lib/permissions.js';
 import { sealSecret, secretKeyConfigured } from '../../lib/secret-box.js';
+import { SQL_NOW } from '../../lib/sql-time.js';
 import { updateWithVersionCheck } from '../../lib/versioned-update.js';
 import { writeWithEvents } from '../../lib/write.js';
+import { containsText, matchReservationIdsByCode, MIN_FUZZY_TOKEN_LENGTH } from '../../lib/search.js';
 import { getHotelSettings } from '../settings/service.js';
 import { channelAvailable, resetProviderConnections } from './providers/index.js';
 import {
@@ -622,15 +624,17 @@ export async function enqueueTriggerNotifications(hotelId, trigger, { reservatio
  */
 export async function listNotifications(hotelId, query) {
   const cursor = parseCursor(query.cursor);
+  // Üç harften kısa arama milyonlarca satırı tarardı; ekran da göndermez.
   const search = query.search?.trim();
   const and = [];
-  if (search) {
+  if (search && search.length >= MIN_FUZZY_TOKEN_LENGTH) {
+    const reservationIds = await matchReservationIdsByCode(prisma, hotelId, search);
     and.push({
       OR: [
-        { recipient: { contains: search.replace(/^\+/, ''), mode: 'insensitive' } },
-        { recipientName: { contains: search, mode: 'insensitive' } },
-        { subject: { contains: search, mode: 'insensitive' } },
-        { reservation: { confirmationCode: { contains: search, mode: 'insensitive' } } },
+        { recipient: containsText(search.replace(/^\+/, '')) },
+        { recipientName: containsText(search) },
+        { subject: containsText(search) },
+        ...(reservationIds.length > 0 ? [{ reservationId: { in: reservationIds } }] : []),
       ],
     });
   }
@@ -692,8 +696,7 @@ export async function getNotificationSummary(hotelId) {
   const [byStatus, pending] = await Promise.all([
     prisma.notification.groupBy({
       by: ['status'],
-      // groupBy soft-delete filtresinin dışında: koşul açıkça yazılı.
-      where: { hotelId, createdAt: { gte: since }, source: { not: 'CHANNEL_TEST' }, deletedAt: null },
+      where: { hotelId, createdAt: { gte: since }, source: { not: 'CHANNEL_TEST' } },
       _count: { _all: true },
     }),
     prisma.notification.count({ where: { hotelId, status: { in: ['PENDING', 'SENDING'] } } }),
@@ -864,6 +867,6 @@ export async function prepareChannelTest(hotelId, { channel, to }) {
 export async function recordChannelTest(hotelId, channel, { ok, error }) {
   await prisma.$executeRaw`
     UPDATE "NotificationChannelConfig"
-    SET "lastTestAt" = now(), "lastTestOk" = ${ok}, "lastTestError" = ${error}
+    SET "lastTestAt" = ${SQL_NOW}, "lastTestOk" = ${ok}, "lastTestError" = ${error}
     WHERE "hotelId" = ${hotelId} AND "channel" = ${channel}::"NotificationChannel" AND "deletedAt" IS NULL`;
 }

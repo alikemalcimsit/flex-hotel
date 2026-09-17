@@ -155,6 +155,12 @@ export const ROOM_CHANGE_MODES = Object.freeze(['ASSIGNED', 'MOVED', 'IN_HOUSE_M
 /** Müsaitlik takviminde bir seferde sorulabilecek en uzun pencere. */
 export const MAX_AVAILABILITY_DAYS = 90;
 
+/**
+ * Tek konaklamanın en uzun süresi (gece). Müsaitlik hesabı gece başına
+ * bellekte döner; sınırsız aralık tek istekle sunucuyu kilitleyebilirdi.
+ */
+export const MAX_STAY_NIGHTS = 366;
+
 /** Sayfalama sınırları — istemci "hepsini ver" diyip sunucuyu boğamasın. */
 export const MAX_PAGE_SIZE = 200;
 export const DEFAULT_PAGE_SIZE = 25;

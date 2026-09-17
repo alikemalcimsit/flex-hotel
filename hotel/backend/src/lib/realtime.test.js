@@ -58,7 +58,7 @@ describe('registerRealtimeBridge', () => {
     );
 
     assert.equal(io.emitted.length, 1);
-    assert.equal(io.emitted[0].room, `hotel:${HOTEL_ID}`);
+    assert.equal(io.emitted[0].room, `hotel:${HOTEL_ID}:ch:${realtime.INVENTORY_CHANNEL}`);
     assert.equal(io.emitted[0].channel, realtime.INVENTORY_CHANNEL);
     assert.equal(io.emitted[0].payload.event, 'room.status.changed');
     assert.equal(io.emitted[0].payload.roomId, ROOM_ID);
@@ -94,6 +94,7 @@ describe('registerRealtimeBridge', () => {
       'roomId',
       'userId',
       'alertId',
+      'spreadMs',
     ].sort());
   });
 
@@ -116,7 +117,57 @@ describe('registerRealtimeBridge', () => {
     assert.equal(io.emitted[0].channel, realtime.STAFF_ALERTS_CHANNEL);
     assert.equal(io.emitted[0].payload.alertId, ALERT_ID);
     assert.equal(io.emitted[0].payload.permission, 'messages.view');
+    assert.equal(io.emitted[0].room, `hotel:${HOTEL_ID}:perm:messages.view`);
     assert.equal('title' in io.emitted[0].payload, false);
+  });
+
+  it('kişiye giden uyarı yalnızca o kişinin odasına düşer; muhatapsız uyarı yayınlanmaz', async () => {
+    const io = fakeIo();
+    realtime.registerRealtimeBridge(io, { warn() {} });
+    const USER_ID = '88888888-8888-4888-8888-888888888888';
+
+    await eventBus.dispatch(
+      eventBus.createEnvelope('staff.alert.raised', {
+        hotelId: HOTEL_ID,
+        alertId: '66666666-6666-4666-8666-666666666666',
+        kind: 'MANUAL_TASK',
+        userId: USER_ID,
+        permission: null,
+      }),
+    );
+    await eventBus.dispatch(
+      eventBus.createEnvelope('staff.alert.raised', {
+        hotelId: HOTEL_ID,
+        alertId: '66666666-6666-4666-8666-666666666667',
+        kind: 'MANUAL_TASK',
+        userId: null,
+        permission: null,
+      }),
+    );
+
+    assert.equal(io.emitted.length, 1);
+    assert.equal(io.emitted[0].room, `hotel:${HOTEL_ID}:user:${USER_ID}`);
+  });
+
+  it('kalabalık odada yayılma süresi büyür, üst sınırı aşmaz', async () => {
+    const io = fakeIo();
+    const rooms = new Map([[realtime.channelRoom(HOTEL_ID, realtime.REQUESTS_CHANNEL), { size: 2500 }]]);
+    io.sockets = { adapter: { rooms } };
+    realtime.registerRealtimeBridge(io);
+
+    await eventBus.dispatch(
+      eventBus.createEnvelope('guest.request.updated', {
+        hotelId: HOTEL_ID,
+        requestId: '77777777-7777-4777-8777-777777777777',
+        status: 'DONE',
+        changedFields: ['status'],
+      }),
+    );
+
+    assert.equal(io.emitted[0].payload.spreadMs, 5000);
+    rooms.set(realtime.channelRoom(HOTEL_ID, realtime.REQUESTS_CHANNEL), { size: 100_000 });
+    assert.equal(realtime.spreadFor(io, realtime.channelRoom(HOTEL_ID, realtime.REQUESTS_CHANNEL)), 8000);
+    assert.equal(realtime.spreadFor(io, 'yok'), 0);
   });
 
   it('atama event\'i rezervasyon kimliğini taşır', async () => {
@@ -224,5 +275,95 @@ describe('registerRealtimeBridge', () => {
 
     assert.equal(io.emitted.length, 1);
     assert.equal(io.emitted[0].channel, realtime.REQUESTS_CHANNEL);
+  });
+});
+
+/** Sahte socket: katıldığı odalar, yayınladıkları ve dinleyicileri. */
+function fakeSocket(auth) {
+  const handlers = new Map();
+  return {
+    handshake: { auth },
+    rooms: new Set(),
+    emitted: [],
+    on(name, handler) {
+      handlers.set(name, handler);
+    },
+    async join(rooms) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      for (const room of [rooms].flat()) this.rooms.add(room);
+    },
+    async leave(room) {
+      this.rooms.delete(room);
+    },
+    emit(name, payload) {
+      this.emitted.push({ name, payload });
+    },
+    trigger(name, ...args) {
+      return handlers.get(name)(...args);
+    },
+  };
+}
+
+describe('registerSocketHandlers', () => {
+  const USER_ID = '99999999-9999-4999-8999-999999999999';
+
+  function connect(auth, overrides = {}) {
+    let onConnection;
+    const io = {
+      on(name, handler) {
+        if (name === 'connection') onConnection = handler;
+      },
+    };
+    realtime.registerSocketHandlers(io, {
+      resolveHotelId: async () => HOTEL_ID,
+      findStaff: async (hotelId, email) => (email === 'kat@test.local' ? { id: USER_ID, role: 'HOUSEKEEPING' } : null),
+      permissionsForRole: (role) => (role === 'HOUSEKEEPING' ? ['rooms.view'] : []),
+      logger: { error() {} },
+      ...overrides,
+    });
+    const socket = fakeSocket(auth);
+    onConnection(socket);
+    return socket;
+  }
+
+  it('personel kişi ve izin odalarına katılır; bağlantı anındaki abonelik kaybolmaz', async () => {
+    const socket = connect({ actor: 'Kat@Test.local' });
+    const acks = [];
+    await socket.trigger(
+      'subscribe',
+      [realtime.REQUESTS_CHANNEL, realtime.STAFF_ALERTS_CHANNEL, 'uydurma', realtime.REQUESTS_CHANNEL],
+      (ack) => acks.push(ack),
+    );
+
+    assert.deepEqual(acks, [{ ok: true, channels: [realtime.REQUESTS_CHANNEL] }]);
+    assert.deepEqual(
+      [...socket.rooms].sort(),
+      [
+        `hotel:${HOTEL_ID}`,
+        `hotel:${HOTEL_ID}:ch:${realtime.REQUESTS_CHANNEL}`,
+        `hotel:${HOTEL_ID}:perm:rooms.view`,
+        `hotel:${HOTEL_ID}:user:${USER_ID}`,
+      ].sort(),
+    );
+    assert.deepEqual(socket.emitted, [{ name: 'ready', payload: { hotelId: HOTEL_ID, userId: USER_ID, spreadMs: 0 } }]);
+
+    await socket.trigger('unsubscribe', realtime.REQUESTS_CHANNEL);
+    assert.equal(socket.rooms.has(`hotel:${HOTEL_ID}:ch:${realtime.REQUESTS_CHANNEL}`), false);
+  });
+
+  it('kimliği bilinmeyen bağlantı yalnızca otel odasına katılır', async () => {
+    const socket = connect({ actor: 'yabanci@test.local' });
+    await socket.trigger('subscribe', [realtime.INVENTORY_CHANNEL]);
+    assert.deepEqual([...socket.rooms].sort(), [`hotel:${HOTEL_ID}`, `hotel:${HOTEL_ID}:ch:${realtime.INVENTORY_CHANNEL}`].sort());
+    assert.equal(socket.emitted[0].payload.userId, null);
+  });
+
+  it('bağlam kurulamazsa "canlı değil" bildirilir, abonelik reddedilir', async () => {
+    const socket = connect({}, { resolveHotelId: async () => { throw new Error('otel yok'); } });
+    const acks = [];
+    await socket.trigger('subscribe', [realtime.INVENTORY_CHANNEL], (ack) => acks.push(ack));
+    assert.deepEqual(acks, [{ ok: false, channels: [] }]);
+    assert.equal(socket.rooms.size, 0);
+    assert.equal(socket.emitted[0].payload.hotelId, null);
   });
 });

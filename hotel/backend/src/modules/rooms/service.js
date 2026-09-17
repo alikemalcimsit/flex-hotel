@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { addDays, currentActor, rangesOverlapHalfOpen, toDecimal, toIsoDay, toUtcDayStart } from '@hotelos/core';
 import {
   housekeepingTransitionError,
@@ -14,8 +15,11 @@ import {
   rethrowPrismaError,
   ValidationError,
 } from '../../lib/errors.js';
-import { lockRooms, lockRoomTypes } from '../../lib/locks.js';
+import { LIVE_SCOPES, liveVersion } from '../../lib/live-version.js';
+import { lockReservations, lockRooms, lockRoomTypes } from '../../lib/locks.js';
 import { buildPage, toSkipTake } from '../../lib/pagination.js';
+import { createReadCache } from '../../lib/read-cache.js';
+import { sqlTimestamp } from '../../lib/sql-time.js';
 import { updateWithVersionCheck } from '../../lib/versioned-update.js';
 import { writeWithEvents } from '../../lib/write.js';
 import {
@@ -93,6 +97,19 @@ const RETRYABLE_ASSIGNMENT_CODES = new Set(['ROOM_NOT_FREE']);
 const ASSIGNMENT_KIND_ORDER = Object.freeze(['SAME', 'UPGRADE', 'LATERAL', 'DOWNGRADE']);
 
 const ROOM_TYPE_SUMMARY = Object.freeze({ code: true, name: true });
+
+/**
+ * Müsaitlik takvimi önbelleği (okuma ekranı). Anahtar otelin envanter
+ * sürümünü içerir: rezervasyon, oda ya da arıza kaydı değişince eski cevap
+ * bir daha okunmaz (bkz. `lib/read-cache.js`). Yazma yolundaki kontroller
+ * (atama, overbooking) önbelleği hiç kullanmaz.
+ */
+const AVAILABILITY_CACHE_TTL_MS = 15_000;
+const AVAILABILITY_CACHE_MAX_ENTRIES = 300;
+const availabilityCache = createReadCache({
+  ttlMs: AVAILABILITY_CACHE_TTL_MS,
+  maxEntries: AVAILABILITY_CACHE_MAX_ENTRIES,
+});
 
 const dayLabelFormatter = new Intl.DateTimeFormat('tr-TR', {
   day: 'numeric',
@@ -274,37 +291,32 @@ export async function loadInventorySnapshot(client, hotelId, from, to, { roomTyp
   });
   const roomIds = rooms.map((room) => room.id);
 
+  // Ham SQL: 90 günlük pencerede on binlerce satır döner; Prisma'nın nesne
+  // katmanı bu okumayı üç katına uzatıyordu. Yarı açık kesişim: pencerede en
+  // az bir gecesi olanlar (fazlası zararsız).
+  const typeScope = roomTypeIds
+    ? Prisma.sql`AND (
+        r."roomTypeId" = ANY(${roomTypeIds}::text[])
+        OR r."roomId" = ANY(${roomIds}::text[])
+        -- Bu tiplerin odalarında kalıp sonra başka odaya taşınmış olanlar.
+        OR EXISTS (
+          SELECT 1 FROM "RoomStaySegment" s
+          WHERE s."reservationId" = r."id" AND s."deletedAt" IS NULL AND s."roomId" = ANY(${roomIds}::text[])
+        )
+      )`
+    : Prisma.empty;
+
   const [reservations, blocks, segments] = await Promise.all([
-    client.reservation.findMany({
-      where: {
-        hotelId,
-        status: { in: INVENTORY_CONSUMING_STATUSES },
-        // Yarı açık kesişim: pencerede en az bir gecesi olanlar (fazlası zararsız).
-        checkIn: { lt: to },
-        checkOut: { gt: from },
-        ...(roomTypeIds
-          ? {
-              OR: [
-                { roomTypeId: { in: roomTypeIds } },
-                { roomId: { in: roomIds } },
-                // Bu tiplerin odalarında kalıp sonra başka odaya taşınmış olanlar.
-                { roomSegments: { some: { roomId: { in: roomIds }, deletedAt: null } } },
-              ],
-            }
-          : {}),
-      },
-      select: {
-        id: true,
-        roomId: true,
-        roomTypeId: true,
-        checkIn: true,
-        checkOut: true,
-        roomSince: true,
-        status: true,
-        adults: true,
-        children: true,
-      },
-    }),
+    client.$queryRaw`
+      SELECT r."id", r."roomId", r."roomTypeId", r."checkIn", r."checkOut", r."roomSince",
+             r."status"::text AS "status", r."adults", r."children"
+      FROM "Reservation" r
+      WHERE r."hotelId" = ${hotelId}
+        AND r."deletedAt" IS NULL
+        AND r."status"::text = ANY(${[...INVENTORY_CONSUMING_STATUSES]}::text[])
+        AND r."checkOut" > ${sqlTimestamp(from)}
+        AND r."checkIn" < ${sqlTimestamp(to)}
+        ${typeScope}`,
     client.roomBlock.findMany({
       where: {
         hotelId,
@@ -998,13 +1010,18 @@ export async function removeBlock(hotelId, blockId) {
   const businessDate = await getBusinessDate(hotelId);
 
   return writeWithEvents(async (tx, stage) => {
+    const located = await tx.roomBlock.findFirst({ where: { id: blockId, hotelId }, select: { roomId: true } });
+    if (!located) throw new NotFoundError('Arıza kaydı bulunamadı');
+
+    await lockRooms(tx, hotelId, [located.roomId]);
+
+    // Kilitten sonra yeniden okunur: aynı anda iki kez "Bitir" basılırsa ikincisi
+    // birincinin sonucunu görür (çift denetim kaydı ve olay yazılmaz).
     const existing = await tx.roomBlock.findFirst({
       where: { id: blockId, hotelId },
       include: { room: { select: { number: true } } },
     });
     if (!existing) throw new NotFoundError('Arıza kaydı bulunamadı');
-
-    await lockRooms(tx, hotelId, [existing.roomId]);
 
     const removal = blockRemovalMode(existing, businessDate);
     if (removal === 'ALREADY_ENDED') {
@@ -1069,6 +1086,21 @@ export async function removeBlock(hotelId, blockId) {
  * @param {{ from: Date, to: Date, roomTypeId?: string }} query
  */
 export async function getAvailabilityCalendar(hotelId, { from, to, roomTypeId }) {
+  const key = JSON.stringify([
+    hotelId,
+    liveVersion(LIVE_SCOPES.INVENTORY, hotelId),
+    toIsoDay(from),
+    toIsoDay(to),
+    roomTypeId ?? '',
+  ]);
+  return availabilityCache.get(key, () => computeAvailabilityCalendar(hotelId, { from, to, roomTypeId }));
+}
+
+/**
+ * @param {string} hotelId
+ * @param {{ from: Date, to: Date, roomTypeId?: string }} query
+ */
+async function computeAvailabilityCalendar(hotelId, { from, to, roomTypeId }) {
   const [snapshot, roomTypes] = await Promise.all([
     loadInventorySnapshot(prisma, hotelId, from, to),
     prisma.roomType.findMany({
@@ -1172,6 +1204,22 @@ function inHouseStayFrom(reservation, businessDate) {
   const checkIn = new Date(toUtcDayStart(reservation.checkIn));
   if (reservation.status !== 'CHECKED_IN') return checkIn;
   return businessDate > checkIn ? businessDate : checkIn;
+}
+
+/**
+ * Rezervasyonu kilitleyip yükler. Odası değişecek her işlem bununla başlar
+ * (kilit sırası: rezervasyon → oda tipi → oda); aynı misafiri aynı anda
+ * taşıyan ikinci işlem birincinin sonucunu görerek karar verir.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string} reservationId
+ */
+async function lockAssignableReservation(tx, hotelId, reservationId) {
+  if (!(await lockReservations(tx, hotelId, [reservationId])).has(reservationId)) {
+    throw new NotFoundError('Rezervasyon bulunamadı');
+  }
+  return loadAssignableReservation(tx, hotelId, reservationId);
 }
 
 /**
@@ -1466,77 +1514,105 @@ async function assertRoomUsableForStay(tx, hotelId, { room, reservation, actionL
  * @param {string} hotelId
  * @param {string} reservationId
  * @param {string} roomId
- * @param {{ assignedBy?: 'manual' | 'auto', reason?: string | null }} [options]
+ * @param {{ assignedBy?: 'manual' | 'auto', reason?: string | null, onlyIfUnassigned?: boolean }} [options]
+ *   `onlyIfUnassigned`: otomatik atama — rezervasyona bu arada (elle) oda
+ *   verildiyse üzerine yazılmaz, `ALREADY_ASSIGNED` hatası döner.
  */
-export async function assignRoom(hotelId, reservationId, roomId, { assignedBy = 'manual', reason = null } = {}) {
+export async function assignRoom(
+  hotelId,
+  reservationId,
+  roomId,
+  { assignedBy = 'manual', reason = null, onlyIfUnassigned = false } = {},
+) {
   const businessDate = await getBusinessDate(hotelId);
 
   try {
     return await writeWithEvents(async (tx, stage) => {
-      const reservation = await loadAssignableReservation(tx, hotelId, reservationId);
+      const reservation = await lockAssignableReservation(tx, hotelId, reservationId);
+      if (onlyIfUnassigned && reservation.roomId && reservation.roomId !== roomId) {
+        throw new ConflictError(
+          `Rezervasyona bu arada ${reservation.room?.number ?? 'başka bir'} numaralı oda atanmış; dokunulmadı.`,
+          'ALREADY_ASSIGNED',
+          { roomId: reservation.roomId, roomNumber: reservation.room?.number ?? null },
+        );
+      }
       assertAssignable(reservation, businessDate);
-
-      const room = await tx.room.findFirst({
-        where: { id: roomId, hotelId },
-        include: {
-          roomType: { select: { code: true, capacityAdults: true, capacityChildren: true } },
-        },
-      });
-      if (!room) throw new NotFoundError('Oda bulunamadı');
-
-      if (reservation.roomId === roomId) {
-        return toReservationSummaryDto(reservation);
-      }
-
-      await lockRoomTypes(tx, hotelId, [room.roomTypeId]);
-      await lockRooms(tx, hotelId, [roomId, reservation.roomId]);
-
-      await assertRoomUsableForStay(tx, hotelId, {
-        room,
-        reservation,
-        actionLabel: `Misafiri ${room.number} numaralı odaya yerleştirmek`,
-      });
-
-      const previousRoomId = reservation.roomId;
-      const previousRoomNumber = reservation.room?.number ?? null;
-
-      await tx.reservation.update({ where: { id: reservationId }, data: { roomId } });
-
-      const after = await loadAssignableReservation(tx, hotelId, reservationId);
-      const dto = toReservationSummaryDto(after);
-
-      await recordAudit(tx, {
-        hotelId,
-        entity: 'Reservation',
-        entityId: reservationId,
-        action: 'UPDATE',
-        before: { roomId: previousRoomId, roomNumber: previousRoomNumber },
-        after: { roomId, roomNumber: room.number, reason: reason || null },
-      });
-
-      // Oda değiştirildiyse önce eskisinin bırakıldığı duyurulur; zincir
-      // (Activity Feed) "301'den 305'e taşındı" olarak okunabilsin.
-      if (previousRoomId) {
-        await stage('room.unassigned', {
-          hotelId,
-          reservationId,
-          roomId: previousRoomId,
-          roomNumber: previousRoomNumber ?? '',
-        });
-      }
-      await stage('room.assigned', {
-        hotelId,
-        reservationId,
-        roomId,
-        roomNumber: room.number,
-        assignedBy,
-      });
-
-      return dto;
+      return assignLockedReservation(tx, stage, hotelId, reservation, roomId, { assignedBy, reason });
     });
   } catch (error) {
     rethrowPrismaError(error);
   }
+}
+
+/**
+ * Kilitli (ve atanabilir olduğu denetlenmiş) rezervasyona odayı verir.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {(name: string, payload: object) => Promise<void>} stage
+ * @param {string} hotelId
+ * @param {Awaited<ReturnType<typeof loadAssignableReservation>>} reservation
+ * @param {string} roomId
+ * @param {{ assignedBy: 'manual' | 'auto', reason: string | null }} options
+ */
+async function assignLockedReservation(tx, stage, hotelId, reservation, roomId, { assignedBy, reason }) {
+  const reservationId = reservation.id;
+  const room = await tx.room.findFirst({
+    where: { id: roomId, hotelId },
+    include: {
+      roomType: { select: { code: true, capacityAdults: true, capacityChildren: true } },
+    },
+  });
+  if (!room) throw new NotFoundError('Oda bulunamadı');
+
+  if (reservation.roomId === roomId) {
+    return toReservationSummaryDto(reservation);
+  }
+
+  await lockRoomTypes(tx, hotelId, [room.roomTypeId]);
+  await lockRooms(tx, hotelId, [roomId, reservation.roomId]);
+
+  await assertRoomUsableForStay(tx, hotelId, {
+    room,
+    reservation,
+    actionLabel: `Misafiri ${room.number} numaralı odaya yerleştirmek`,
+  });
+
+  const previousRoomId = reservation.roomId;
+  const previousRoomNumber = reservation.room?.number ?? null;
+
+  await tx.reservation.update({ where: { id: reservationId }, data: { roomId } });
+
+  const after = await loadAssignableReservation(tx, hotelId, reservationId);
+  const dto = toReservationSummaryDto(after);
+
+  await recordAudit(tx, {
+    hotelId,
+    entity: 'Reservation',
+    entityId: reservationId,
+    action: 'UPDATE',
+    before: { roomId: previousRoomId, roomNumber: previousRoomNumber },
+    after: { roomId, roomNumber: room.number, reason: reason || null },
+  });
+
+  // Oda değiştirildiyse önce eskisinin bırakıldığı duyurulur; zincir
+  // (Activity Feed) "301'den 305'e taşındı" olarak okunabilsin.
+  if (previousRoomId) {
+    await stage('room.unassigned', {
+      hotelId,
+      reservationId,
+      roomId: previousRoomId,
+      roomNumber: previousRoomNumber ?? '',
+    });
+  }
+  await stage('room.assigned', {
+    hotelId,
+    reservationId,
+    roomId,
+    roomNumber: room.number,
+    assignedBy,
+  });
+
+  return dto;
 }
 
 /**
@@ -1547,7 +1623,7 @@ export async function unassignRoom(hotelId, reservationId) {
   const businessDate = await getBusinessDate(hotelId);
 
   return writeWithEvents(async (tx, stage) => {
-    const reservation = await loadAssignableReservation(tx, hotelId, reservationId);
+    const reservation = await lockAssignableReservation(tx, hotelId, reservationId);
 
     if (!reservation.roomId) {
       throw new ConflictError('Bu rezervasyonda atanmış oda yok', 'NOT_ASSIGNED');
@@ -1593,12 +1669,17 @@ export async function unassignRoom(hotelId, reservationId) {
  * şu odaya koy" hareketidir — ama sonuçları farklıdır:
  *
  * - `ASSIGNED` / `MOVED`: misafir henüz gelmemiş; yalnızca kayıttaki oda değişir
- *   (`assignRoom`, tüm kontrolleriyle).
+ *   (atamanın tüm kontrolleriyle).
  * - `IN_HOUSE_MOVED`: misafir içeride. Rezervasyonun odası değişir **ve** oda
  *   durumları aynı transaction'da düzeltilir: eski oda boş + kirli (teknisyen
  *   ya da kat hizmeti girecek), yeni oda dolu. Aksi hâlde eski oda "dolu" kalıp
  *   satılamaz, yeni oda "boş" görünüp ikinci kez satılırdı.
  * - `UNCHANGED`: zaten o odada; yazma yapılmaz (sürükle-bırakta sık olur).
+ *
+ * Hangi senaryonun geçerli olduğu **kilitli** rezervasyondan okunur: aynı
+ * misafiri aynı anda başka odaya taşıyan (ya da giriş yaptıran) işlem
+ * bitmeden karar verilmez; aksi hâlde ikinci taşıma eski okumayla çalışır ve
+ * ilk taşımanın odası sahipsiz "dolu" kalır.
  *
  * İçerideki misafir taşınırken eski odada geçen geceler kapanmış bir dilim
  * (`RoomStaySegment`) olarak yazılır, rezervasyonun açık dilimi bugünden
@@ -1612,25 +1693,24 @@ export async function unassignRoom(hotelId, reservationId) {
  * @returns {Promise<{ mode: 'ASSIGNED' | 'MOVED' | 'IN_HOUSE_MOVED' | 'UNCHANGED', reservation: object, previousRoomNumber: string | null }>}
  */
 export async function changeRoom(hotelId, reservationId, roomId, { reason = null } = {}) {
-  const current = await prisma.reservation.findFirst({
-    where: { id: reservationId, hotelId },
-    select: { id: true, roomId: true, status: true, room: { select: { number: true } } },
-  });
-  if (!current) throw new NotFoundError('Rezervasyon bulunamadı');
-
-  const previousRoomNumber = current.room?.number ?? null;
-  const mode = roomChangeMode(current);
-
-  if (mode !== 'IN_HOUSE_MOVED') {
-    const reservation = await assignRoom(hotelId, reservationId, roomId, { reason });
-    return { mode: current.roomId === roomId ? 'UNCHANGED' : mode, reservation, previousRoomNumber };
-  }
-
   const businessDate = await getBusinessDate(hotelId);
 
   try {
     return await writeWithEvents(async (tx, stage) => {
-      const reservation = await loadAssignableReservation(tx, hotelId, reservationId);
+      const reservation = await lockAssignableReservation(tx, hotelId, reservationId);
+      const previousRoomNumber = reservation.room?.number ?? null;
+      const mode = roomChangeMode(reservation);
+
+      if (mode !== 'IN_HOUSE_MOVED') {
+        assertAssignable(reservation, businessDate);
+        const unchanged = reservation.roomId === roomId;
+        const dto = await assignLockedReservation(tx, stage, hotelId, reservation, roomId, {
+          assignedBy: 'manual',
+          reason,
+        });
+        return { mode: unchanged ? 'UNCHANGED' : mode, reservation: dto, previousRoomNumber };
+      }
+
       if (reservation.roomId === roomId) {
         return { mode: 'UNCHANGED', reservation: toReservationSummaryDto(reservation), previousRoomNumber };
       }
@@ -1657,12 +1737,14 @@ export async function changeRoom(hotelId, reservationId, roomId, { reason = null
         actionLabel: `Misafiri ${room.number} numaralı odaya taşımak`,
       });
 
-      const previousRoom = reservation.roomId
-        ? await tx.room.findFirst({
-            where: { id: reservation.roomId, hotelId },
-            select: { id: true, number: true, occupancy: true, housekeepingStatus: true },
-          })
-        : null;
+      // Oda durumları kilit alındıktan sonra okunur: bu arada değişmiş olabilir.
+      const roomStateSelect = { id: true, number: true, occupancy: true, housekeepingStatus: true };
+      const [previousRoom, targetRoom] = await Promise.all([
+        reservation.roomId
+          ? tx.room.findFirst({ where: { id: reservation.roomId, hotelId }, select: roomStateSelect })
+          : null,
+        tx.room.findFirst({ where: { id: roomId, hotelId }, select: roomStateSelect }),
+      ]);
 
       // Eski odadaki geceler kapanır. Aynı gün ikinci kez taşınan misafirin
       // eski odada gecesi yoktur (boş aralık yazılmaz).
@@ -1717,14 +1799,7 @@ export async function changeRoom(hotelId, reservationId, roomId, { reason = null
           stateReason,
         );
       }
-      await writeRoomState(
-        tx,
-        stage,
-        hotelId,
-        { id: room.id, number: room.number, occupancy: room.occupancy, housekeepingStatus: room.housekeepingStatus },
-        { occupancy: 'OCCUPIED' },
-        stateReason,
-      );
+      await writeRoomState(tx, stage, hotelId, targetRoom, { occupancy: 'OCCUPIED' }, stateReason);
 
       if (previousRoom) {
         await stage('room.unassigned', {
@@ -1800,22 +1875,38 @@ export async function listUnassignedReservations(hotelId, query) {
  *
  * Yalnızca misafirin kendi tipinden seçer. Seçtiği oda yarışta başka bir
  * atamaya giderse (`ROOM_NOT_FREE`) taze listeyle sıradaki odayı dener —
- * eskiden bu durumda iş hata verip manuel göreve düşüyordu.
+ * eskiden bu durumda iş hata verip manuel göreve düşüyordu. Rezervasyona bu
+ * arada (elle) oda verildiyse dokunmaz (`alreadyAssigned`).
  *
  * @param {string} hotelId
  * @param {string} reservationId
- * @returns {Promise<{ assigned: boolean, room?: { id: string, number: string }, reason?: string }>}
+ * @returns {Promise<{ assigned: boolean, alreadyAssigned?: boolean, room?: { id: string, number: string }, reason?: string }>}
  */
 export async function autoAssignRoom(hotelId, reservationId) {
   for (let attempt = 1; attempt <= AUTO_ASSIGN_MAX_ATTEMPTS; attempt += 1) {
+    const current = await prisma.reservation.findFirst({
+      where: { id: reservationId, hotelId },
+      select: { roomId: true, room: { select: { number: true } } },
+    });
+    if (current?.roomId) {
+      return { assigned: false, alreadyAssigned: true, room: { id: current.roomId, number: current.room?.number ?? '' } };
+    }
+
     const { items } = await getAssignableRooms(hotelId, reservationId, { includeOtherTypes: false, page: 1, pageSize: 1 });
     const best = items[0];
     if (!best) return { assigned: false, reason: 'Uygun boş oda bulunamadı' };
 
     try {
-      await assignRoom(hotelId, reservationId, best.id, { assignedBy: 'auto' });
+      await assignRoom(hotelId, reservationId, best.id, { assignedBy: 'auto', onlyIfUnassigned: true });
       return { assigned: true, room: { id: best.id, number: best.number } };
     } catch (error) {
+      if (error?.code === 'ALREADY_ASSIGNED') {
+        return {
+          assigned: false,
+          alreadyAssigned: true,
+          room: { id: error.details.roomId, number: error.details.roomNumber ?? '' },
+        };
+      }
       if (!RETRYABLE_ASSIGNMENT_CODES.has(error?.code)) throw error;
     }
   }

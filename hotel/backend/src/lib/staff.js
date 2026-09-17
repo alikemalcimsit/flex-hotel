@@ -52,6 +52,21 @@ export function currentStaffCached(client, hotelId) {
   return staffCache.get(`${hotelId}:${actor.toLowerCase()}`, () => currentStaff(client, hotelId));
 }
 
+/**
+ * E-postası verilen aktif personel (önbellekli) — socket bağlantısında
+ * kimliği çözmek için. Sunucu yeniden başlayınca bütün paneller aynı anda
+ * bağlanır; aynı kişinin birden çok sekmesi tabloya ayrı ayrı gitmesin.
+ *
+ * @param {import('@prisma/client').PrismaClient} client
+ * @param {string} hotelId
+ * @param {string} email küçük harf
+ */
+export function findActiveStaffByEmail(client, hotelId, email) {
+  return staffCache.get(`${hotelId}:${email}`, () =>
+    client.user.findFirst({ where: { hotelId, email, isActive: true }, select: STAFF_SELECT }),
+  );
+}
+
 /** Testler için: personel önbelleğini boşaltır. */
 export function clearStaffCache() {
   staffCache.clear();

@@ -15,6 +15,14 @@ import { LIVE_SCOPES, liveVersion } from '../../lib/live-version.js';
 import { lockGuestRequests } from '../../lib/locks.js';
 import { buildPage, toSkipTake } from '../../lib/pagination.js';
 import { createReadCache } from '../../lib/read-cache.js';
+import {
+  containsText,
+  isFuzzyToken,
+  MATCH_NOTHING,
+  matchGuestIds,
+  matchRoomIdsByNumber,
+  searchTokens,
+} from '../../lib/search.js';
 import { assertAssignableStaff, currentStaff, currentStaffCached, listAssignableStaff } from '../../lib/staff.js';
 import { writeWithEvents } from '../../lib/write.js';
 import { loadConversationForRequest } from '../messaging/service.js';
@@ -53,8 +61,12 @@ const listCache = createReadCache({ ttlMs: LIST_CACHE_TTL_MS, maxEntries: LIST_C
 
 const MINUTE_MS = 60_000;
 
-/** Aramada dikkate alınan en fazla kelime. */
-const MAX_SEARCH_TOKENS = 3;
+/**
+ * Bitmiş işlerin (tamamlanan, iptal, tümü) sayfa sayısı için sayılan en fazla
+ * kayıt. Yıllar içinde milyonlara çıkan listede her sayfada hepsini saymak
+ * yerine "2000+" denir; 100 sayfadan eskisini personel aramayla bulur.
+ */
+export const REQUEST_COUNT_CAP = 2_000;
 
 const REQUEST_INCLUDE = Object.freeze({
   room: { select: { id: true, number: true, floor: true } },
@@ -224,22 +236,37 @@ function viewOrder(view) {
   }
 }
 
-/** @param {string | undefined} search */
-function searchWhere(search) {
-  const tokens = (search ?? '').split(/\s+/).filter(Boolean).slice(0, MAX_SEARCH_TOKENS);
+/**
+ * İstek araması: her kelime başlıkta, açıklamada, misafirin adında ya da oda
+ * numarasında geçmeli (ilişkiler önceden bulunur, bkz. `lib/search.js`).
+ *
+ * @param {string} hotelId
+ * @param {string | undefined} search
+ */
+async function searchWhere(hotelId, search) {
+  const tokens = searchTokens(search);
   if (tokens.length === 0) return {};
-  return {
-    AND: tokens.map((token) => ({
-      OR: [
-        { title: { contains: token, mode: 'insensitive' } },
-        { description: { contains: token, mode: 'insensitive' } },
-        { room: { number: { equals: token } } },
-        { guest: { firstName: { contains: token, mode: 'insensitive' } } },
-        { guest: { lastName: { contains: token, mode: 'insensitive' } } },
-      ],
-    })),
-  };
+  const clauses = await Promise.all(
+    tokens.map(async (token) => {
+      const or = [];
+      const roomIds = await matchRoomIdsByNumber(prisma, hotelId, token);
+      if (roomIds.length > 0) or.push({ roomId: { in: roomIds } });
+      if (isFuzzyToken(token)) {
+        const guestIds = await matchGuestIds(prisma, hotelId, token);
+        or.push({ title: containsText(token) }, { description: containsText(token) });
+        if (guestIds.length > 0) or.push({ guestId: { in: guestIds } });
+      }
+      return or.length > 0 ? { OR: or } : MATCH_NOTHING;
+    }),
+  );
+  return { AND: clauses };
 }
+
+/**
+ * Açık işler sınırlıdır ve tam sayılır; bitmiş işlerin sayımı üst sınırlıdır.
+ * @param {string} view
+ */
+const countIsCapped = (view) => ['DONE', 'CANCELLED', 'ALL'].includes(view);
 
 /**
  * @param {string} hotelId
@@ -270,19 +297,44 @@ async function queryRequests(hotelId, query, staff, now) {
     ...(query.conversationId ? { conversationId: query.conversationId } : {}),
     ...(query.assignedToId ? { assignedToId: query.assignedToId } : {}),
     ...(query.unassigned ? { assignedToId: null } : {}),
-    ...searchWhere(query.search),
+    ...(await searchWhere(hotelId, query.search)),
   };
+  const capped = countIsCapped(query.view);
 
-  const [rows, total] = await prisma.$transaction([
+  const [rows, counted] = await prisma.$transaction([
     prisma.guestRequest.findMany({ where, include: REQUEST_INCLUDE, orderBy: viewOrder(query.view), ...toSkipTake(query) }),
-    prisma.guestRequest.count({ where }),
+    // Sayım da listenin sırasıyla: sınırlı sayımda index sırayla okunur.
+    prisma.guestRequest.count({
+      where,
+      ...(capped ? { orderBy: viewOrder(query.view), take: REQUEST_COUNT_CAP + 1 } : {}),
+    }),
   ]);
-
-  return buildPage(
+  const totalCapped = capped && counted > REQUEST_COUNT_CAP;
+  const page = buildPage(
     rows.map((row) => toRequestDto(row, now)),
-    total,
+    totalCapped ? REQUEST_COUNT_CAP : counted,
     query,
   );
+  return { ...page, meta: { ...page.meta, totalCapped } };
+}
+
+/**
+ * Açık isteklerin kime atandığı: personel → sayı (sürüm başına tek sorgu;
+ * bkz. gelen kutusu özeti).
+ *
+ * @param {string} hotelId
+ * @param {number} version
+ * @returns {Promise<Map<string, number>>}
+ */
+function assignedCounts(hotelId, version) {
+  return summaryCache.get(JSON.stringify(['requests-assigned', hotelId, version]), async () => {
+    const rows = await prisma.guestRequest.groupBy({
+      by: ['assignedToId'],
+      where: { hotelId, status: { in: [...GUEST_REQUEST_ACTIVE_STATUSES] }, assignedToId: { not: null } },
+      _count: { _all: true },
+    });
+    return new Map(rows.map((row) => [row.assignedToId, row._count._all]));
+  });
 }
 
 /**
@@ -295,8 +347,8 @@ export async function getRequestSummary(hotelId) {
   const minute = Math.floor(Date.now() / MINUTE_MS);
   const active = { hotelId, status: { in: [...GUEST_REQUEST_ACTIVE_STATUSES] } };
 
-  // Otel geneli sayılar bütün personelde ortak; yalnızca "bana atanan" kişiye özel
-  // (bkz. gelen kutusu özeti).
+  // Otel geneli sayılar bütün personelde ortak; "bana atanan" personel başına
+  // sayı tablosundan (bkz. gelen kutusu özeti).
   const [shared, mine] = await Promise.all([
     summaryCache.get(JSON.stringify(['requests', hotelId, version, minute]), async () => {
       const now = new Date(minute * MINUTE_MS);
@@ -316,11 +368,7 @@ export async function getRequestSummary(hotelId) {
         byCategory: Object.fromEntries(byCategory.map((row) => [row.category, row._count._all])),
       };
     }),
-    staff
-      ? summaryCache.get(JSON.stringify(['requests-mine', hotelId, version, staff.id]), () =>
-          prisma.guestRequest.count({ where: { ...active, assignedToId: staff.id } }),
-        )
-      : 0,
+    staff ? assignedCounts(hotelId, version).then((counts) => counts.get(staff.id) ?? 0) : 0,
   ]);
 
   return { ...shared, mine, dueSoonMinutes: GUEST_REQUEST_DUE_SOON_MINUTES };

@@ -30,10 +30,13 @@ describe('imleç', () => {
     }
   });
 
-  it('aynı zamanda yazılmış kayıtlar kimlikle ayrılır', () => {
+  it('aynı zamanda yazılmış kayıtlar kimlikle ayrılır; tarama imleçten başlar', () => {
     const at = new Date('2026-09-17T08:00:00.000Z');
     assert.deepEqual(olderThan('lastMessageAt', { at, id: ID }), {
-      OR: [{ lastMessageAt: { lt: at } }, { lastMessageAt: at, id: { lt: ID } }],
+      AND: [
+        { lastMessageAt: { lte: at } },
+        { OR: [{ lastMessageAt: { lt: at } }, { lastMessageAt: at, id: { lt: ID } }] },
+      ],
     });
   });
 });

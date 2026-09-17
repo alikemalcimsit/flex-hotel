@@ -40,6 +40,7 @@ const softDeleteExtension = Prisma.defineExtension({
       findFirstOrThrow: ({ args, query, model }) => query(withNotDeleted(args, model)),
       count: ({ args, query, model }) => query(withNotDeleted(args, model)),
       aggregate: ({ args, query, model }) => query(withNotDeleted(args, model)),
+      groupBy: ({ args, query, model }) => query(withNotDeleted(args, model)),
       updateMany: ({ args, query, model }) => query(withNotDeleted(args, model)),
       deleteMany: ({ args, query, model }) => query(withNotDeleted(args, model)),
     },
@@ -47,11 +48,23 @@ const softDeleteExtension = Prisma.defineExtension({
 });
 
 /**
+ * Etkileşimli transaction süreleri.
+ *
+ * Prisma'nın varsayılanı havuzdan bağlantı için 2 sn, işin tamamı için 5 sn.
+ * Yoğun saatte (2500 personel) havuz kısa süre dolabilir ve satır kilidi
+ * bekleyen iş 5 sn'yi aşabilir; varsayılanlarla bu anlar kullanıcıya
+ * "beklenmeyen hata" olarak dönüyordu. Süreler ortamdan ayarlanabilir.
+ */
+const TRANSACTION_MAX_WAIT_MS = Number(process.env.DB_TRANSACTION_MAX_WAIT_MS ?? 8_000);
+const TRANSACTION_TIMEOUT_MS = Number(process.env.DB_TRANSACTION_TIMEOUT_MS ?? 15_000);
+
+/**
  * Filtresiz istemci. Yalnızca silinmiş kayıtları da görmesi gereken yerler
  * (audit, geri yükleme, veri taşıma) bunu kullanır.
  */
 export const prismaUnfiltered = new PrismaClient({
   log: ['warn', 'error'],
+  transactionOptions: { maxWait: TRANSACTION_MAX_WAIT_MS, timeout: TRANSACTION_TIMEOUT_MS },
 });
 
 /** Tüm servislerin kullandığı istemci: soft-delete edilmiş kayıtlar görünmez. */

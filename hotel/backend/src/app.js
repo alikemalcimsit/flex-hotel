@@ -5,6 +5,7 @@ import rateLimit from '@fastify/rate-limit';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import { enterContext } from '@hotelos/core';
 import { checkDb, disconnectDb } from './db.js';
+import { asBusyError } from './lib/errors.js';
 import { cache } from './lib/cache.js';
 import { registerActors, setActorLogger } from './lib/actors.js';
 import { registerCoreSubscribers, setEventLogger } from './lib/events.js';
@@ -36,6 +37,31 @@ import { settingsRoutes } from './modules/settings/routes.js';
  * başına birkaç sorgu atar; sınır cömert ama sınırsız değil.
  */
 const DEFAULT_RATE_LIMIT_MAX = 600;
+
+/**
+ * Hız sınırının bellekte tuttuğu en fazla sayaç (IP + personel başına bir).
+ * Eklentinin varsayılanı 5000: 2500 personel birden fazla cihazdan girince
+ * sayaçlar erken atılıyor, sınır fiilen işlemez hâle geliyordu.
+ */
+const RATE_LIMIT_TRACKED_KEYS = 20_000;
+
+/**
+ * Sağlık ucunun veritabanı kontrolü bu süre paylaşılır: açık her panel
+ * ucu sorar; her soruda havuzdan bağlantı alıp `SELECT 1` çalıştırmak 2500
+ * panelde saniyede yüzlerce gereksiz sorgu demek.
+ */
+const HEALTH_DB_CHECK_TTL_MS = 5_000;
+
+/** @type {{ at: number, result: Promise<'ok' | 'error'> | null }} */
+let lastDbCheck = { at: 0, result: null };
+
+function sharedDbCheck() {
+  const now = Date.now();
+  if (!lastDbCheck.result || now - lastDbCheck.at >= HEALTH_DB_CHECK_TTL_MS) {
+    lastDbCheck = { at: now, result: checkDb() };
+  }
+  return lastDbCheck.result;
+}
 
 /**
  * Zod doğrulama hatasını kullanıcıya gösterilebilir tek satıra çevirir.
@@ -101,6 +127,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
     max: maxRequests,
     timeWindow: '1 minute',
     keyGenerator: rateLimitKey,
+    cache: RATE_LIMIT_TRACKED_KEYS,
     // Eklenti bu nesneyi hata olarak error handler'a devrediyor; `statusCode`
     // ve `message` olmazsa handler onu 500 sanıyor. Zarfı tek yerde (error
     // handler'da) kurmak için sadece bu üç alanı veriyoruz.
@@ -138,6 +165,14 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
       return reply.status(400).send({ success: false, error: message, code: 'VALIDATION', fields });
     }
 
+    // Havuz dolu / transaction zaman aşımı: "beklenmeyen hata" değil, "yoğun".
+    const busy = asBusyError(error);
+    if (busy) {
+      request.log.warn({ err: error }, 'Veritabanı yoğun; istek 503 ile döndü');
+      reply.header('retry-after', String(busy.retryAfterSeconds));
+      return reply.status(503).send({ success: false, error: busy.message, code: busy.code });
+    }
+
     const status = error.statusCode ?? 500;
 
     if (status >= 500) {
@@ -165,7 +200,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   });
 
   app.get('/health', async () => {
-    const db = await checkDb();
+    const db = await sharedDbCheck();
     return {
       success: true,
       data: {

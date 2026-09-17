@@ -371,9 +371,14 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 > isabet oranı görünüyor.
 >
 > **Canlı yayın altyapısı (modül 10 ve 12'yi de ilgilendirir):** `lib/realtime.js`
-> event bus'ı socket.io'ya köprülüyor; `hotel:<hotelId>` odasına `inventory.changed`
-> kanalından **yalnızca "şu değişti" haberi** düşüyor (veri değil — socket'te henüz
-> kimlik doğrulama yok). Panel tarafında `lib/useLiveChannel.js` (oda planı için
+> event bus'ı socket.io'ya köprülüyor; kanal odasına (`hotel:<id>:ch:inventory.changed`)
+> **yalnızca "şu değişti" haberi** düşüyor (veri değil — socket kimliği henüz
+> istemcinin söylediği e-posta). Panel yalnızca açık ekranın kanalına abone olur
+> (`subscribe` / `unsubscribe`, `lib/socket.js` sayaçla tekler); zil haberi
+> otelin tamamına değil kişi/izin odasına gider. Sunucu her haberde odadaki panel
+> sayısına göre bir **yayılma süresi** söyler (`spreadMs`, en çok 8 sn); panel
+> tazelemesini o pencereye rastgele yayar, yan menü rozetleri ise en çok 10 sn'de
+> bir tazelenir. Panel tarafında `lib/useLiveChannel.js` (oda planı için
 > `useLiveInventory` sarmalayıcısı) bu haberi alıp
 > ilgili react-query anahtarlarını tazeliyor; olaylar 400 ms geciktirilerek
 > toplanıyor (tek işlem birden çok event yayınlar). Activity Feed aynı köprüye
@@ -631,7 +636,9 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 > - **Modül 4 / 6:** `reservation.created`, `guest.checked_in`, `guest.checked_out`
 >   yayınlandığında bildirimler kendiliğinden gider (gövdede `reservationId`, varsa `roomId`).
 > - **Modül 2:** zil ve "şu anki personel" geçici olarak `x-actor` e-postasıyla;
->   rol → izin eşlemesi backend `lib/permissions.js`'te geçici (`permissionsForRole`).
+>   socket el sıkışmasındaki `auth.actor` da aynı e-posta (kişi/izin odaları buna
+>   göre kuruluyor, JWT gelince kaynağı değişecek; `registerSocketHandlers`).
+>   Rol → izin eşlemesi backend `lib/permissions.js`'te geçici (`permissionsForRole`).
 > - **Modül 11 / 12:** aktörün bıraktığı işler (`ManualTask`) zile düşüyor; modülden
 >   izne eşleme `notifications/rules.js → manualTaskPermission`.
 > - **Modül 22:** misafir kartına kanal bazında "bildirim istemiyor" seçeneği

@@ -3,6 +3,7 @@ import {
   HOUSEKEEPING_STATUSES,
   HOUSEKEEPING_STATUS_LABELS,
   MAX_AVAILABILITY_DAYS,
+  MAX_STAY_NIGHTS,
   ROOM_BLOCK_SCOPES,
   ROOM_BLOCK_TYPES,
   ROOM_CONDITIONS,
@@ -147,4 +148,8 @@ export const stayAvailabilityQuerySchema = z
   .refine((value) => value.checkOut > value.checkIn, {
     path: ['checkOut'],
     message: 'Çıkış tarihi girişten sonra olmalı',
+  })
+  .refine((value) => (value.checkOut - value.checkIn) / 86_400_000 <= MAX_STAY_NIGHTS, {
+    path: ['checkOut'],
+    message: `Konaklama en fazla ${MAX_STAY_NIGHTS} gece olabilir`,
   });

@@ -1,4 +1,6 @@
 import { PERMISSIONS } from '../../lib/permissions.js';
+import { startRecurringJobs } from '../../lib/recurring.js';
+import { sqlTimestamp } from '../../lib/sql-time.js';
 import { writeWithEvents } from '../../lib/write.js';
 import {
   dispatchDueNotifications,
@@ -11,7 +13,7 @@ import { purgeExpiredStaffAlerts, raiseStaffAlert } from './staff-alerts.js';
 
 /**
  * Bildirim merkezinin zamanlanmış işleri (yalnızca sunucu sürecinde çalışır;
- * testler ve betikler başlatmaz).
+ * testler ve betikler başlatmaz; çalıştırıcı: `lib/recurring.js`).
  *
  * | İş                        | Sıklık  | Neden |
  * |---------------------------|---------|-------|
@@ -31,9 +33,6 @@ const OVERDUE_SCAN_INTERVAL_MS = 60_000;
 const DELIVERY_REPORT_INTERVAL_MS = 120_000;
 const ALERT_PURGE_INTERVAL_MS = 60 * 60_000;
 
-/** Sunucu açılışında ilk turun beklemesi (açılış yükü bitsin). */
-const STARTUP_DELAY_MS = 5_000;
-
 /** Bir taramada en fazla geciken istek. */
 const OVERDUE_SCAN_BATCH = 200;
 
@@ -51,11 +50,11 @@ export function scanOverdueRequests(now = new Date()) {
   return writeWithEvents(async (tx, stage) => {
     const rows = await tx.$queryRaw`
       UPDATE "GuestRequest" g
-      SET "overdueAlertedAt" = ${now}
+      SET "overdueAlertedAt" = ${sqlTimestamp(now)}
       WHERE g."id" IN (
         SELECT "id" FROM "GuestRequest"
         WHERE "overdueAlertedAt" IS NULL AND "deletedAt" IS NULL
-          AND "status" IN ('OPEN', 'IN_PROGRESS') AND "dueAt" < ${now}
+          AND "status" IN ('OPEN', 'IN_PROGRESS') AND "dueAt" < ${sqlTimestamp(now)}
         ORDER BY "dueAt"
         LIMIT ${OVERDUE_SCAN_BATCH}
         FOR UPDATE SKIP LOCKED
@@ -94,46 +93,30 @@ export function scanOverdueRequests(now = new Date()) {
  */
 export function startNotificationJobs(logger) {
   setDispatcherLogger(logger);
-  const timers = [];
-  const busy = new Set();
-
-  /** @param {string} name @param {number} interval @param {() => Promise<unknown>} task */
-  const every = (name, interval, task) => {
-    const run = async () => {
-      if (busy.has(name)) return;
-      busy.add(name);
-      try {
-        await task();
-      } catch (error) {
-        logger.error({ err: error, job: name }, 'Bildirim işi başarısız');
-      } finally {
-        busy.delete(name);
-      }
-    };
-    const startup = setTimeout(run, STARTUP_DELAY_MS);
-    const repeat = setInterval(run, interval);
-    startup.unref?.();
-    repeat.unref?.();
-    timers.push(startup, repeat);
-  };
-
-  every('dispatch', DISPATCH_INTERVAL_MS, () => dispatchDueNotifications(logger));
-  every('stale-recovery', STALE_RECOVERY_INTERVAL_MS, async () => {
-    const recovered = await recoverStaleNotifications();
-    if (recovered > 0) logger.warn({ recovered }, 'Takılı kalan bildirimler sıraya geri alındı');
-  });
-  every('overdue-requests', OVERDUE_SCAN_INTERVAL_MS, () => scanOverdueRequests());
-  every('delivery-reports', DELIVERY_REPORT_INTERVAL_MS, () => pollDeliveryReports(logger));
-  every('alert-purge', ALERT_PURGE_INTERVAL_MS, async () => {
-    const purged = await purgeExpiredStaffAlerts();
-    if (purged > 0) logger.info({ purged }, 'Süresi dolan personel uyarıları silindi');
-  });
+  const stop = startRecurringJobs(logger, [
+    { name: 'notification-dispatch', intervalMs: DISPATCH_INTERVAL_MS, run: () => dispatchDueNotifications(logger) },
+    {
+      name: 'notification-stale-recovery',
+      intervalMs: STALE_RECOVERY_INTERVAL_MS,
+      run: async () => {
+        const recovered = await recoverStaleNotifications();
+        if (recovered > 0) logger.warn({ recovered }, 'Takılı kalan bildirimler sıraya geri alındı');
+      },
+    },
+    { name: 'overdue-requests', intervalMs: OVERDUE_SCAN_INTERVAL_MS, run: () => scanOverdueRequests() },
+    { name: 'delivery-reports', intervalMs: DELIVERY_REPORT_INTERVAL_MS, run: () => pollDeliveryReports(logger) },
+    {
+      name: 'staff-alert-purge',
+      intervalMs: ALERT_PURGE_INTERVAL_MS,
+      run: async () => {
+        const purged = await purgeExpiredStaffAlerts();
+        if (purged > 0) logger.info({ purged }, 'Süresi dolan personel uyarıları silindi');
+      },
+    },
+  ]);
 
   return () => {
-    for (const timer of timers) {
-      clearTimeout(timer);
-      clearInterval(timer);
-    }
+    stop();
     stopDispatcher();
   };
 }

@@ -1,4 +1,4 @@
-import { eachNight, rangesOverlapHalfOpen, toDecimal, toIsoDay, toUtcDayStart } from '@hotelos/core';
+import { DAY_MS, eachNight, rangesOverlapHalfOpen, toDecimal, toIsoDay, toUtcDayStart } from '@hotelos/core';
 
 /**
  * Müsaitlik ve oda atamanın saf çekirdeği — veritabanı, HTTP veya Prisma bilmez.
@@ -33,6 +33,12 @@ export const INVENTORY_CONSUMING_STATUSES = Object.freeze(['PENDING', 'CONFIRMED
 /** Envanterden düşen blok tipi. */
 export const INVENTORY_REMOVING_BLOCK_TYPE = 'OUT_OF_ORDER';
 
+/** Takvimde oda-gece durumu (bit alanı). */
+const OCCUPIED = 1;
+const UNAVAILABLE = 2;
+const OUT_OF_ORDER = 4;
+const OUT_OF_SERVICE = 8;
+
 /**
  * @param {{ status: string }} reservation
  * @returns {boolean}
@@ -60,27 +66,12 @@ export function openSliceStart(reservation) {
 }
 
 /**
- * Konaklama/blok, pencereyle kesişen gecelerini verir.
- * @param {{ start: Date | string, end?: Date | string | null }} range
- * @param {Date | string} windowFrom
- * @param {Date | string} windowTo
- * @returns {Date[]}
- */
-function nightsWithinWindow(range, windowFrom, windowTo) {
-  const windowStart = toUtcDayStart(windowFrom);
-  const windowEnd = toUtcDayStart(windowTo);
-  const start = Math.max(toUtcDayStart(range.start), windowStart);
-  // Süresiz blokta üst sınır pencerenin sonudur.
-  const end = range.end == null ? windowEnd : Math.min(toUtcDayStart(range.end), windowEnd);
-  if (end <= start) return [];
-  return eachNight(new Date(start), new Date(end));
-}
-
-/**
  * Müsaitlik takvimi: oda tipi × gece kırılımında boş oda sayısı.
  *
- * Tek geçişte hesaplar — gece başına sorgu atmaz. 90 günlük pencere ve 1000
- * odalı bir otelde bile bellekte kalır.
+ * Tek geçişte hesaplar — gece başına sorgu atmaz. Oda × gece durumu tam
+ * sayı indeksli bir tabloda tutulur (90 gece × 1500 oda = 135 bin bayt);
+ * gece başına küme ya da tarih metni üretilmez. 30 bin rezervasyonluk 90
+ * günlük pencere onlarca milisaniyede hesaplanır (eski sürüm yüzlerce).
  *
  * Oda değiştirmiş konaklamada geceler iki kaynaktan gelir: açık dilim
  * (`roomSince`'ten itibaren `roomId`) ve kapanmış dilimler (`segments`).
@@ -102,11 +93,10 @@ function nightsWithinWindow(range, windowFrom, windowTo) {
  * }}
  */
 export function buildAvailabilityCalendar({ rooms, reservations, blocks, segments = [], from, to, roomTypeIds = [] }) {
-  const nights = eachNight(from, to);
-  const days = nights.map(toIsoDay);
-  const dayIndex = new Map(days.map((day, index) => [day, index]));
-
-  const roomTypeOfRoom = new Map(rooms.map((room) => [room.id, room.roomTypeId]));
+  const windowStart = toUtcDayStart(from);
+  const windowEnd = toUtcDayStart(to);
+  const nightCount = Math.max(0, Math.round((windowEnd - windowStart) / DAY_MS));
+  const days = Array.from({ length: nightCount }, (_, index) => toIsoDay(windowStart + index * DAY_MS));
 
   /** @type {Map<string, number>} tip → toplam oda */
   const totalByType = new Map();
@@ -116,13 +106,33 @@ export function buildAvailabilityCalendar({ rooms, reservations, blocks, segment
   for (const room of rooms) {
     totalByType.set(room.roomTypeId, (totalByType.get(room.roomTypeId) ?? 0) + 1);
   }
+  const types = [...totalByType.keys()];
+  const typeIndex = new Map(types.map((roomTypeId, index) => [roomTypeId, index]));
 
-  // Gece başına: hangi odalar satılamaz, hangi tipte kaç atanmamış talep var.
-  const unavailableRoomsByNight = days.map(() => new Set());
-  const occupiedRoomsByNight = days.map(() => new Set());
-  const outOfOrderRoomsByNight = days.map(() => new Set());
-  const outOfServiceRoomsByNight = days.map(() => new Set());
-  const unassignedByNight = days.map(() => new Map());
+  // Oda ve gece tam sayı indeksleriyle tutulur: 90 gece × 1500 oda bellekte
+  // 135 bin baytlık bir tablodur; gece başına küme ve tarih metni üretilmez.
+  const roomIndex = new Map();
+  const roomTypeOf = new Int32Array(rooms.length);
+  rooms.forEach((room, index) => {
+    if (roomIndex.has(room.id)) return;
+    roomIndex.set(room.id, index);
+    roomTypeOf[index] = typeIndex.get(room.roomTypeId);
+  });
+  const state = new Uint8Array(nightCount * rooms.length);
+  const unassigned = new Int32Array(nightCount * types.length);
+
+  /** @param {Date | string} start @param {Date | string | null | undefined} end */
+  const nightRange = (start, end) => {
+    const first = Math.max(toUtcDayStart(start), windowStart);
+    // Süresiz blokta üst sınır pencerenin sonudur.
+    const last = end == null ? windowEnd : Math.min(toUtcDayStart(end), windowEnd);
+    return [Math.round((first - windowStart) / DAY_MS), Math.round((last - windowStart) / DAY_MS)];
+  };
+  /** @param {string} roomId @param {number} night @param {number} flags */
+  const mark = (roomId, night, flags) => {
+    const room = roomIndex.get(roomId);
+    if (room !== undefined) state[night * rooms.length + room] |= flags;
+  };
 
   const consumingIds = new Set(
     reservations.filter((reservation) => reservation.id && consumesInventory(reservation)).map((reservation) => reservation.id),
@@ -133,14 +143,11 @@ export function buildAvailabilityCalendar({ rooms, reservations, blocks, segment
   const segmentNights = new Map();
   for (const segment of segments) {
     if (!consumingIds.has(segment.reservationId)) continue;
-    const covered = nightsWithinWindow({ start: segment.startDate, end: segment.endDate }, from, to);
-    for (const night of covered) {
-      const index = dayIndex.get(toIsoDay(night));
-      if (index === undefined) continue;
-      occupiedRoomsByNight[index].add(segment.roomId);
-      unavailableRoomsByNight[index].add(segment.roomId);
+    const [first, last] = nightRange(segment.startDate, segment.endDate);
+    for (let night = first; night < last; night += 1) {
+      mark(segment.roomId, night, OCCUPIED | UNAVAILABLE);
       if (!segmentNights.has(segment.reservationId)) segmentNights.set(segment.reservationId, new Set());
-      segmentNights.get(segment.reservationId).add(index);
+      segmentNights.get(segment.reservationId).add(night);
     }
   }
 
@@ -148,79 +155,67 @@ export function buildAvailabilityCalendar({ rooms, reservations, blocks, segment
     if (!consumesInventory(reservation)) continue;
 
     const openStart = toUtcDayStart(openSliceStart(reservation));
-    const covered = nightsWithinWindow({ start: reservation.checkIn, end: reservation.checkOut }, from, to);
-    for (const night of covered) {
-      const index = dayIndex.get(toIsoDay(night));
-      if (index === undefined) continue;
-
-      if (reservation.roomId && night.getTime() >= openStart) {
-        occupiedRoomsByNight[index].add(reservation.roomId);
-        unavailableRoomsByNight[index].add(reservation.roomId);
+    const covered = segmentNights.get(reservation.id);
+    const type = typeIndex.get(reservation.roomTypeId);
+    const [first, last] = nightRange(reservation.checkIn, reservation.checkOut);
+    for (let night = first; night < last; night += 1) {
+      if (reservation.roomId && windowStart + night * DAY_MS >= openStart) {
+        mark(reservation.roomId, night, OCCUPIED | UNAVAILABLE);
         continue;
       }
       // Bu gece eski odada geçti; oda yukarıdaki dilim döngüsünde işaretlendi.
-      if (reservation.id && segmentNights.get(reservation.id)?.has(index)) continue;
-
-      const counts = unassignedByNight[index];
-      counts.set(reservation.roomTypeId, (counts.get(reservation.roomTypeId) ?? 0) + 1);
+      if (reservation.id && covered?.has(night)) continue;
+      if (type !== undefined) unassigned[night * types.length + type] += 1;
     }
   }
 
   for (const block of blocks) {
     const removesInventory = (block.type ?? INVENTORY_REMOVING_BLOCK_TYPE) === INVENTORY_REMOVING_BLOCK_TYPE;
-    const covered = nightsWithinWindow({ start: block.startDate, end: block.endDate }, from, to);
-    for (const night of covered) {
-      const index = dayIndex.get(toIsoDay(night));
-      if (index === undefined) continue;
-      if (removesInventory) {
-        outOfOrderRoomsByNight[index].add(block.roomId);
-        unavailableRoomsByNight[index].add(block.roomId);
-      } else {
-        outOfServiceRoomsByNight[index].add(block.roomId);
+    const flags = removesInventory ? OUT_OF_ORDER | UNAVAILABLE : OUT_OF_SERVICE;
+    const [first, last] = nightRange(block.startDate, block.endDate);
+    for (let night = first; night < last; night += 1) mark(block.roomId, night, flags);
+  }
+
+  // Gece başına tip sayaçları tek geçişte.
+  const counters = new Int32Array(types.length * 4);
+  const byType = types.map(() => ({}));
+  for (let night = 0; night < nightCount; night += 1) {
+    counters.fill(0);
+    const offset = night * rooms.length;
+    for (let room = 0; room < rooms.length; room += 1) {
+      const flags = state[offset + room];
+      if (flags === 0) continue;
+      const base = roomTypeOf[room] * 4;
+      if (flags & UNAVAILABLE) {
+        counters[base] += 1;
+        // Hem dolu hem arızalı bir oda tek kez düşülür ama iki sayaçta da görünür;
+        // ekranda "neden satılamıyor" sorusunun cevabı için ikisi de lazım.
+        if (flags & OCCUPIED) counters[base + 1] += 1;
+        if (flags & OUT_OF_ORDER) counters[base + 2] += 1;
       }
+      if (flags & OUT_OF_SERVICE) counters[base + 3] += 1;
     }
+    const day = days[night];
+    types.forEach((roomTypeId, type) => {
+      const total = totalByType.get(roomTypeId);
+      const waiting = unassigned[night * types.length + type];
+      byType[type][day] = {
+        total,
+        occupied: counters[type * 4 + 1],
+        outOfOrder: counters[type * 4 + 2],
+        // Satılabilir sayılır ama atanamaz: son odalar bunlarsa ön büro uyarılmalı.
+        outOfService: counters[type * 4 + 3],
+        unassigned: waiting,
+        // Negatif kalabilir: overbooking'i gizlemek yerine görünür kılıyoruz.
+        free: total - counters[type * 4] - waiting,
+      };
+    });
   }
 
   const byRoomType = {};
-  for (const [roomTypeId, total] of totalByType) {
-    const perDay = {};
-
-    days.forEach((day, index) => {
-      let occupied = 0;
-      let outOfOrder = 0;
-      let unavailable = 0;
-
-      for (const roomId of unavailableRoomsByNight[index]) {
-        if (roomTypeOfRoom.get(roomId) !== roomTypeId) continue;
-        unavailable += 1;
-        if (occupiedRoomsByNight[index].has(roomId)) occupied += 1;
-        // Hem dolu hem arızalı bir oda tek kez düşülür ama iki sayaçta da görünür;
-        // ekranda "neden satılamıyor" sorusunun cevabı için ikisi de lazım.
-        if (outOfOrderRoomsByNight[index].has(roomId)) outOfOrder += 1;
-      }
-
-      let outOfService = 0;
-      for (const roomId of outOfServiceRoomsByNight[index]) {
-        if (roomTypeOfRoom.get(roomId) === roomTypeId) outOfService += 1;
-      }
-
-      const unassigned = unassignedByNight[index].get(roomTypeId) ?? 0;
-
-      perDay[day] = {
-        total,
-        occupied,
-        outOfOrder,
-        // Satılabilir sayılır ama atanamaz: son odalar bunlarsa ön büro uyarılmalı.
-        outOfService,
-        unassigned,
-        // Negatif kalabilir: overbooking'i gizlemek yerine görünür kılıyoruz.
-        free: total - unavailable - unassigned,
-      };
-    });
-
-    byRoomType[roomTypeId] = { total, days: perDay };
-  }
-
+  types.forEach((roomTypeId, type) => {
+    byRoomType[roomTypeId] = { total: totalByType.get(roomTypeId), days: byType[type] };
+  });
   return { days, byRoomType };
 }
 

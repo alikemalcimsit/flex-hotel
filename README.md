@@ -59,6 +59,9 @@ ister — testler tabloları temizler, geliştirme veritabanınızı vermeyin:
 
 ```bash
 DATABASE_URL=$TEST_DATABASE_URL npx prisma migrate deploy -w @hotelos/hotel-backend
+# Test veritabanını UTC dışı bir saat dilimine alın: ham SQL'in oturum saat
+# diliminden bağımsız olduğunu testler böylece doğrular (bkz. lib/sql-time.js).
+psql "$TEST_DATABASE_URL" -c "ALTER DATABASE hotelos_test SET timezone = 'Europe/Istanbul'"
 TEST_DATABASE_URL=postgresql://... npm run test:integration -w @hotelos/hotel-backend
 ```
 
@@ -115,4 +118,9 @@ tekrar kullanılamayan kodlar ve sessizce yanlış fiyat hesapları.
   hizmeti `PATCH /rooms/:id/housekeeping`.
 - **Canlı ekranlar socket'ten haber alır, veri almaz.** `lib/realtime.js`
   yalnızca "şu otelde şu değişti" yayınlar; panel kendi sorgusunu tazeler.
-  Socket'te henüz kimlik doğrulama yok, yük taşımayın.
+  Socket kimliği henüz istemcinin söylediği e-posta (`x-actor` gibi), yük taşımayın.
+- **Haber yalnızca ilgilenene gider.** Kanal haberi o ekranı açık tutan
+  panellere (`hotel:<id>:ch:<kanal>`, istemci `subscribe` ile katılır), zil
+  haberi muhatabına (`...:user:<id>` / `...:perm:<izin>`). Yeni bir canlı ekran
+  `useLiveChannel` ile abone olur; otelin tamamına `hotelRoom` üzerinden
+  yayın yapmayın.

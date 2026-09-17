@@ -560,6 +560,53 @@ describe('oda planı servisi (entegrasyon)', { skip }, () => {
       assert.equal(std.days[day(-2)].unassigned, 0);
     });
 
+    it('aynı misafir aynı anda iki odaya taşınırsa sahipsiz "dolu" oda kalmaz', async () => {
+      // Bugün giren misafir: taşımada kapanmış dilim yazılmaz, veritabanı kısıtı yarışı yakalamazdı.
+      const staying = await seedInHouse({ checkIn: 0 });
+
+      // Yarışı zorla: oda tipi kilidini tutan bir işlem varken iki taşıma başlar;
+      // ikisi de bekler, kilit bırakılınca sırayla ilerler.
+      let release;
+      const held = new Promise((resolve) => {
+        release = resolve;
+      });
+      let locked;
+      const lockTaken = new Promise((resolve) => {
+        locked = resolve;
+      });
+      const holder = prismaUnfiltered.$transaction(
+        async (tx) => {
+          await tx.$queryRaw`SELECT "id" FROM "RoomType" WHERE "id" = ${stdTypeId} FOR UPDATE`;
+          locked();
+          await held;
+        },
+        { timeout: 30_000 },
+      );
+      await lockTaken;
+      const moves = Promise.allSettled([
+        asUser(() => rooms.changeRoom(hotelId, staying.id, room['102'].id)),
+        asUser(() => rooms.changeRoom(hotelId, staying.id, room['103'].id)),
+      ]);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      release();
+      await holder;
+      const results = await moves;
+      assert.ok(results.some((result) => result.status === 'fulfilled'));
+
+      const final = await prismaUnfiltered.reservation.findUnique({ where: { id: staying.id } });
+      const occupancy = Object.fromEntries(
+        await Promise.all(['101', '102', '103'].map(async (number) => [number, (await roomRow(number)).occupancy])),
+      );
+      const finalNumber = ['102', '103'].find((number) => room[number].id === final.roomId);
+      assert.ok(finalNumber, 'misafir iki hedeften birinde');
+      for (const number of ['101', '102', '103']) {
+        assert.equal(occupancy[number], number === finalNumber ? 'OCCUPIED' : 'VACANT', `${number} odası`);
+      }
+      const unassigned = await prismaUnfiltered.eventLog.count({ where: { hotelId, name: 'room.unassigned' } });
+      const assigned = await prismaUnfiltered.eventLog.count({ where: { hotelId, name: 'room.assigned' } });
+      assert.equal(unassigned, assigned, 'her atamanın öncesindeki oda bırakıldı olarak duyuruldu');
+    });
+
     it('aday listesi geçmiş gecelere değil kalan gecelere bakar', async () => {
       const staying = await seedInHouse();
       await insertBlock({ roomId: room['103'].id, start: -3, end: -1 });
@@ -611,6 +658,44 @@ describe('oda planı servisi (entegrasyon)', { skip }, () => {
 
       const list = await rooms.listRooms(hotelId, { page: 1, pageSize: 10, floor: 0 });
       assert.deepEqual(list.items.map((entry) => entry.number), ['1', '2', '10']);
+    });
+  });
+
+  describe('otomatik atama ve personel', () => {
+    it('personel odayı elle verdiyse otomatik atama üzerine yazmaz', async () => {
+      const reservation = await seedReservation({ roomId: null, checkIn: 1, checkOut: 3 });
+      await asUser(() => rooms.changeRoom(hotelId, reservation.id, room['102'].id));
+
+      const result = await rooms.autoAssignRoom(hotelId, reservation.id);
+      assert.equal(result.assigned, false);
+      assert.equal(result.alreadyAssigned, true);
+      assert.equal(result.room.number, '102');
+
+      // Aday listesi okunduktan sonra elle atama yapılmışsa (yarış) kilitli kontrol yakalar.
+      await assert.rejects(
+        () => rooms.assignRoom(hotelId, reservation.id, room['101'].id, { assignedBy: 'auto', onlyIfUnassigned: true }),
+        (error) => error.code === 'ALREADY_ASSIGNED',
+      );
+      const after = await prismaUnfiltered.reservation.findUnique({ where: { id: reservation.id } });
+      assert.equal(after.roomId, room['102'].id);
+    });
+
+    it('eşzamanlı otomatik ve elle atamada rezervasyon tek odada kalır, olaylar tutarlıdır', async () => {
+      const reservation = await seedReservation({ roomId: null, checkIn: 1, checkOut: 3 });
+      await Promise.allSettled([
+        rooms.autoAssignRoom(hotelId, reservation.id),
+        asUser(() => rooms.changeRoom(hotelId, reservation.id, room['103'].id)),
+      ]);
+      const after = await prismaUnfiltered.reservation.findUnique({ where: { id: reservation.id } });
+      assert.equal(after.roomId, room['103'].id, 'personelin seçtiği oda korunur');
+      const audits = await prismaUnfiltered.auditLog.findMany({
+        where: { hotelId, entity: 'Reservation', entityId: reservation.id },
+        orderBy: { createdAt: 'asc' },
+      });
+      // Her denetim kaydının "önce"si bir öncekinin "sonra"sıdır (eski okumayla yazılmadı).
+      for (let index = 1; index < audits.length; index += 1) {
+        assert.equal(audits[index].before.roomId, audits[index - 1].after.roomId);
+      }
     });
   });
 

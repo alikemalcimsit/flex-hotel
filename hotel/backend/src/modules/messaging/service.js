@@ -14,8 +14,18 @@ import { hasAutoResponder, isChannelConnected } from '../../lib/channels.js';
 import { parseCursor } from '../../lib/cursor.js';
 import { ConflictError, NotFoundError, rethrowPrismaError, StaleWriteError, ValidationError } from '../../lib/errors.js';
 import { LIVE_SCOPES, liveVersion } from '../../lib/live-version.js';
-import { lockConversations } from '../../lib/locks.js';
+import { lockConversations, lockMessages } from '../../lib/locks.js';
 import { createReadCache } from '../../lib/read-cache.js';
+import { SQL_NOW } from '../../lib/sql-time.js';
+import {
+  containsText,
+  isFuzzyToken,
+  MATCH_NOTHING,
+  matchGuestIds,
+  matchReservationIdsByCode,
+  matchRoomIdsByNumber,
+  searchTokens,
+} from '../../lib/search.js';
 import { assertAssignableStaff, currentStaff, currentStaffCached } from '../../lib/staff.js';
 import { writeWithEvents } from '../../lib/write.js';
 import { getHotelSettings } from '../settings/service.js';
@@ -80,8 +90,17 @@ const listCache = createReadCache({ ttlMs: LIST_CACHE_TTL_MS, maxEntries: LIST_C
 
 const MINUTE_MS = 60_000;
 
-/** Aramada dikkate alınan en fazla kelime. */
-const MAX_SEARCH_TOKENS = 3;
+/** Aynı istemci kimliğiyle tekrar gönderimin tanındığı süre. */
+const CLIENT_RETRY_WINDOW_MS = 24 * 60 * MINUTE_MS;
+
+/**
+ * Oda numarasıyla aramada bakılan konaklamalar: içeridekiler ve yakında
+ * çıkmış olanlar ("204'teki misafir yazdı mı?").
+ */
+const ROOM_SEARCH_LOOKBACK_MS = 30 * 24 * 60 * MINUTE_MS;
+
+/** Oda numarasıyla bulunan en fazla konaklama. */
+const ROOM_SEARCH_STAY_LIMIT = 500;
 
 /** Telefonun son rakamları aynı olan en fazla bu kadar kart karşılaştırılır. */
 const PHONE_MATCH_CANDIDATES = 20;
@@ -185,11 +204,18 @@ async function matchGuest(tx, hotelId, { channel, externalId }, phoneCountryCode
   if (channel === 'EMAIL') {
     const email = normalizeEmail(externalId);
     if (!email) return null;
-    return tx.guest.findFirst({
-      where: { hotelId, email: { equals: email, mode: 'insensitive' } },
-      orderBy: { updatedAt: 'desc' },
-      select: { id: true },
-    });
+    // Kartta büyük harfle yazılmış adres de eşleşir. İfade
+    // `Guest_hotelId_email_lower_idx` ile birebir aynı (büyük/küçük harf
+    // duyarsız eşitlik index'siz tabloyu baştan sona tarıyordu).
+    const [row] = await tx.$queryRaw`
+      SELECT "id" FROM "Guest"
+      WHERE "hotelId" = ${hotelId}
+        AND "email" IS NOT NULL
+        AND "deletedAt" IS NULL
+        AND lower("email") = ${email}
+      ORDER BY "updatedAt" DESC
+      LIMIT 1`;
+    return row ? { id: row.id } : null;
   }
   if (channel === 'WHATSAPP' || channel === 'SMS') {
     const key = phoneMatchKey(externalId);
@@ -278,23 +304,50 @@ function viewWhere(view, staff) {
   }
 }
 
-/** @param {string | undefined} search */
-function searchWhere(search) {
-  const tokens = (search ?? '').split(/\s+/).filter(Boolean).slice(0, MAX_SEARCH_TOKENS);
+/**
+ * Gelen kutusu araması: her kelime konuşmanın adında, adresinde, son
+ * mesajında, bağlı misafirin adında, konaklamanın onay kodunda ya da oda
+ * numarasında geçmeli. İlişkiler önceden bulunur (bkz. `lib/search.js`).
+ *
+ * @param {string} hotelId
+ * @param {string | undefined} search
+ */
+async function searchWhere(hotelId, search) {
+  const tokens = searchTokens(search);
   if (tokens.length === 0) return {};
-  return {
-    AND: tokens.map((token) => ({
-      OR: [
-        { displayName: { contains: token, mode: 'insensitive' } },
-        { externalId: { contains: token, mode: 'insensitive' } },
-        { lastMessagePreview: { contains: token, mode: 'insensitive' } },
-        { guest: { firstName: { contains: token, mode: 'insensitive' } } },
-        { guest: { lastName: { contains: token, mode: 'insensitive' } } },
-        { reservation: { confirmationCode: { contains: token, mode: 'insensitive' } } },
-        { reservation: { room: { number: { equals: token } } } },
-      ],
-    })),
-  };
+  return { AND: await Promise.all(tokens.map((token) => searchTokenWhere(hotelId, token))) };
+}
+
+/** @param {string} hotelId @param {string} token */
+async function searchTokenWhere(hotelId, token) {
+  const or = [];
+  const roomIds = await matchRoomIdsByNumber(prisma, hotelId, token);
+  if (roomIds.length > 0) {
+    const stays = await prisma.reservation.findMany({
+      where: {
+        hotelId,
+        roomId: { in: roomIds },
+        checkOut: { gte: new Date(Date.now() - ROOM_SEARCH_LOOKBACK_MS) },
+      },
+      select: { id: true },
+      take: ROOM_SEARCH_STAY_LIMIT,
+    });
+    if (stays.length > 0) or.push({ reservationId: { in: stays.map((stay) => stay.id) } });
+  }
+  if (isFuzzyToken(token)) {
+    const [guestIds, reservationIds] = await Promise.all([
+      matchGuestIds(prisma, hotelId, token),
+      matchReservationIdsByCode(prisma, hotelId, token),
+    ]);
+    or.push(
+      { displayName: containsText(token) },
+      { externalId: containsText(token) },
+      { lastMessagePreview: containsText(token) },
+    );
+    if (guestIds.length > 0) or.push({ guestId: { in: guestIds } });
+    if (reservationIds.length > 0) or.push({ reservationId: { in: reservationIds } });
+  }
+  return or.length > 0 ? { OR: or } : MATCH_NOTHING;
 }
 
 /* ══════════════════ Gelen kutusu ══════════════════ */
@@ -327,12 +380,13 @@ export async function listConversations(hotelId, query) {
  * @param {{ id: string } | null} staff
  */
 async function queryConversations(hotelId, query, cursor, staff) {
+  const search = await searchWhere(hotelId, query.search);
   const rows = await prisma.conversation.findMany({
     where: {
       hotelId,
       ...viewWhere(query.view, staff),
       ...(query.channel ? { channel: query.channel } : {}),
-      AND: [searchWhere(query.search), cursor ? olderThan('lastMessageAt', cursor) : {}],
+      AND: [search, cursor ? olderThan('lastMessageAt', cursor) : {}],
     },
     include: CONVERSATION_LIST_INCLUDE,
     orderBy: [{ lastMessageAt: 'desc' }, { id: 'desc' }],
@@ -348,12 +402,33 @@ async function queryConversations(hotelId, query, cursor, staff) {
 }
 
 /**
+ * Açık konuşmaların kime atandığı: personel → sayı. Sürüm başına **tek**
+ * gruplu sorgu; 2500 panel her yeni mesajda rozetini tazelediğinde 2500 ayrı
+ * sayım yapılmaz.
+ *
+ * @param {string} hotelId
+ * @param {number} version
+ * @returns {Promise<Map<string, number>>}
+ */
+function assignedCounts(hotelId, version) {
+  return summaryCache.get(JSON.stringify(['inbox-assigned', hotelId, version]), async () => {
+    const rows = await prisma.conversation.groupBy({
+      by: ['assignedToId'],
+      where: { hotelId, status: 'OPEN', assignedToId: { not: null } },
+      _count: { _all: true },
+    });
+    return new Map(rows.map((row) => [row.assignedToId, row._count._all]));
+  });
+}
+
+/**
  * Yan menü rozeti ve gelen kutusu sekmelerinin sayıları.
  *
  * İki parçalı önbellek: otel geneli sayılar (sürüm + dakika anahtarlı —
- * "uzun süredir bekleyen" zamanla değişir) bütün personelde ortaktır; yalnızca
- * "bana atanan" kişiye özeldir ve zamanla değişmez. Böylece bir otelde 200
- * panel açıkken dakikada 200 değil, 1 hesaplama yapılır.
+ * "uzun süredir bekleyen" zamanla değişir) bütün personelde ortaktır; "bana
+ * atanan" da personel başına sayı tablosundan okunur (sürüm başına tek
+ * sorgu). Böylece bir otelde 2500 panel açıkken değişiklik başına 2500 değil,
+ * 2 hesaplama yapılır.
  *
  * @param {string} hotelId
  */
@@ -386,11 +461,7 @@ export async function getInboxSummary(hotelId) {
         oldestWaitingSince: iso(totals._min.awaitingReplySince),
       };
     }),
-    staff
-      ? summaryCache.get(JSON.stringify(['inbox-mine', hotelId, version, staff.id]), () =>
-          prisma.conversation.count({ where: { ...open, assignedToId: staff.id } }),
-        )
-      : 0,
+    staff ? assignedCounts(hotelId, version).then((counts) => counts.get(staff.id) ?? 0) : 0,
   ]);
 
   return {
@@ -564,8 +635,14 @@ export async function sendStaffMessage(hotelId, conversationId, input) {
     }
 
     if (input.clientMessageId) {
+      // Tekrar gönderim ekran açıkken olur; pencere, uzun konuşmada bütün
+      // geçmişin JSON'unu taramamak için (konuşma + zaman index'i).
       const duplicate = await tx.message.findFirst({
-        where: { conversationId, meta: { path: ['clientMessageId'], equals: input.clientMessageId } },
+        where: {
+          conversationId,
+          createdAt: { gte: new Date(Date.now() - CLIENT_RETRY_WINDOW_MS) },
+          meta: { path: ['clientMessageId'], equals: input.clientMessageId },
+        },
       });
       if (duplicate) return toMessageDto(duplicate);
     }
@@ -645,7 +722,7 @@ export async function receiveInboundMessage(hotelId, raw) {
       await tx.$executeRaw`
         INSERT INTO "Conversation" ("id", "hotelId", "channel", "externalId", "displayName", "mode", "updatedAt")
         VALUES (${randomUUID()}, ${hotelId}, ${input.channel}::"NotificationChannel", ${input.externalId},
-                ${input.displayName ?? null}, ${hasAutoResponder() ? 'AI' : 'MANUAL'}::"ConversationMode", now())
+                ${input.displayName ?? null}, ${hasAutoResponder() ? 'AI' : 'MANUAL'}::"ConversationMode", ${SQL_NOW})
         ON CONFLICT ("hotelId", "channel", "externalId") DO NOTHING`;
 
       const [locked] = await tx.$queryRaw`
@@ -756,8 +833,12 @@ export async function markMessageDelivery(hotelId, messageId, raw) {
 
   try {
     return await writeWithEvents(async (tx, stage) => {
+      // Kilit: aynı mesaj için eşzamanlı gelen bildirimler sırayla karar verir;
+      // "okundu" yazıldıktan sonra işlenen "gönderildi" durumu geri almaz.
+      if (!(await lockMessages(tx, hotelId, [messageId])).has(messageId)) {
+        throw new NotFoundError('Mesaj bulunamadı');
+      }
       const message = await tx.message.findFirst({ where: { id: messageId, hotelId } });
-      if (!message) throw new NotFoundError('Mesaj bulunamadı');
       if (message.direction !== 'OUT' || message.internal) {
         throw new ConflictError('Yalnızca misafire giden mesajın teslim durumu değişir.', 'NOT_OUTBOUND');
       }

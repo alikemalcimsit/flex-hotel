@@ -24,7 +24,7 @@ function markBusinessErrorsFinal(error) {
 class RoomWorker extends BaseWorker {
   /**
    * @param {{
-   *   autoAssignRoom: (hotelId: string, reservationId: string) => Promise<{ assigned: boolean, room?: { id: string, number: string }, reason?: string }>,
+   *   autoAssignRoom: (hotelId: string, reservationId: string) => Promise<{ assigned: boolean, alreadyAssigned?: boolean, room?: { id: string, number: string }, reason?: string }>,
    *   applySystemRoomState: (hotelId: string, roomId: string, state: { occupancy?: string, housekeepingStatus?: string }, reason: string) => Promise<unknown>,
    * }} service
    * @param {object} deps BaseWorker bağımlılıkları
@@ -51,6 +51,13 @@ class RoomWorker extends BaseWorker {
             throw markBusinessErrorsFinal(error);
           }
 
+          if (result.alreadyAssigned) {
+            // Aktör işe başlamadan personel odayı elle vermiş: iş zaten yapılmış.
+            return {
+              message: `Oda bu arada elle atanmış (${result.room?.number ?? '—'}), dokunulmadı`,
+              meta: { roomId: result.room?.id ?? null, roomNumber: result.room?.number ?? null },
+            };
+          }
           if (!result.assigned) {
             // Boş oda yokluğu geçici bir arıza değil; tekrar denemek yerine
             // doğrudan personelin önüne düşsün.

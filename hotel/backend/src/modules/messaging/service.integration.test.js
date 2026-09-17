@@ -297,6 +297,38 @@ describe('misafir mesajları ve istekler (entegrasyon)', { skip }, () => {
       assert.ok(row.deliveredAt);
     });
 
+    it('aynı anda gelen "okundu" ve "gönderildi" bildirimleri durumu geri almaz', async () => {
+      const reply = await sendReply();
+      // Mesajı kilitleyen bir işlem sürerken iki bildirim sıraya girer: önce "okundu", sonra "gönderildi".
+      let release;
+      const held = new Promise((resolve) => {
+        release = resolve;
+      });
+      let locked;
+      const lockTaken = new Promise((resolve) => {
+        locked = resolve;
+      });
+      const holder = db.$transaction(
+        async (tx) => {
+          await tx.$queryRaw`SELECT "id" FROM "Message" WHERE "id" = ${reply.id} FOR UPDATE`;
+          locked();
+          await held;
+        },
+        { timeout: 30_000 },
+      );
+      await lockTaken;
+      const read = messaging.markMessageDelivery(hotelId, reply.id, { delivery: 'READ' });
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      const sent = messaging.markMessageDelivery(hotelId, reply.id, { delivery: 'SENT' });
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      release();
+      await holder;
+      await Promise.all([read, sent]);
+
+      const row = await db.message.findUnique({ where: { id: reply.id } });
+      assert.equal(row.delivery, 'READ');
+    });
+
     it('iletilmiş mesaj sonradan "gönderilemedi" olmaz', async () => {
       const reply = await sendReply();
       await messaging.markMessageDelivery(hotelId, reply.id, { delivery: 'DELIVERED' });
@@ -493,6 +525,11 @@ describe('misafir mesajları ve istekler (entegrasyon)', { skip }, () => {
       assert.deepEqual(byName.items.map((row) => row.id), [conversationId]);
       const byRoom = await messaging.listConversations(hotelId, { view: 'OPEN', limit: 30, search: '101' });
       assert.deepEqual(byRoom.items.map((row) => row.id), [conversationId]);
+      const byCode = await messaging.listConversations(hotelId, { view: 'OPEN', limit: 30, search: stay.confirmationCode });
+      assert.deepEqual(byCode.items.map((row) => row.id), [conversationId]);
+      // İki harf metinde aranmaz (milyonlarca satırı tarardı); oda numarası değilse sonuç boş.
+      const short = await messaging.listConversations(hotelId, { view: 'OPEN', limit: 30, search: 'el' });
+      assert.deepEqual(short.items, []);
     });
 
     it('mesaj geçmişi yeniden eskiye imleçle gelir', async () => {
@@ -730,6 +767,49 @@ describe('misafir mesajları ve istekler (entegrasyon)', { skip }, () => {
       assert.equal(summary.overdue, 1);
       assert.equal(summary.mine, 1);
       assert.equal(summary.byCategory.AMENITY, 2);
+    });
+
+    it('oda numarası, misafir adı ve başlıkla aranır; silinmiş istek kategori sayısına girmez', async () => {
+      const guestRequest = await create({ category: 'AMENITY', title: 'Ekstra yastık', roomId: room['101'].id });
+      await create({ category: 'MAINTENANCE', title: 'Musluk', roomId: room['102'].id });
+      const search = (text) =>
+        asStaff(() => requests.listRequests(hotelId, { view: 'ALL', page: 1, pageSize: 25, search: text }));
+
+      assert.deepEqual((await search('101')).items.map((row) => row.id), [guestRequest.id], 'oda numarası (kısa)');
+      assert.deepEqual((await search('elif')).items.map((row) => row.id), [guestRequest.id], 'misafir adı');
+      assert.deepEqual((await search('yastık')).items.map((row) => row.id), [guestRequest.id], 'başlık');
+      assert.deepEqual((await search('zz')).items, [], 'kısa kelime metinde aranmaz');
+
+      await db.guestRequest.update({ where: { id: guestRequest.id }, data: { deletedAt: new Date() } });
+      const summary = await asStaff(() => requests.getRequestSummary(hotelId));
+      assert.equal(summary.byCategory.AMENITY, undefined);
+      assert.equal(summary.byCategory.MAINTENANCE, 1);
+    });
+
+    it('bitmiş işlerin sayımı üst sınırlıdır; açık işler tam sayılır', async () => {
+      const now = new Date();
+      await db.guestRequest.createMany({
+        data: Array.from({ length: requests.REQUEST_COUNT_CAP + 5 }, (_, index) => ({
+          hotelId,
+          category: 'AMENITY',
+          title: `Eski ${index}`,
+          status: 'DONE',
+          source: 'FRONT_DESK',
+          dueAt: now,
+          completedAt: new Date(now.getTime() - index * 1000),
+          completedBy: 'test',
+          createdBy: 'test',
+        })),
+      });
+      const done = await asStaff(() => requests.listRequests(hotelId, { view: 'DONE', page: 1, pageSize: 20 }));
+      assert.equal(done.meta.total, requests.REQUEST_COUNT_CAP);
+      assert.equal(done.meta.totalCapped, true);
+      assert.equal(done.items[0].title, 'Eski 0', 'yeni biten önce');
+
+      await create({ category: 'AMENITY', title: 'Açık', roomId: room['101'].id });
+      const active = await asStaff(() => requests.listRequests(hotelId, { view: 'ACTIVE', page: 1, pageSize: 20 }));
+      assert.equal(active.meta.total, 1);
+      assert.equal(active.meta.totalCapped, false);
     });
 
     it('önbellekli liste ve özet durum değişikliğini hemen yansıtır', async () => {

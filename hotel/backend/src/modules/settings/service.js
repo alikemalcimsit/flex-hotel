@@ -42,6 +42,12 @@ const ACTIVE_RESERVATION_STATUSES = Object.freeze(['PENDING', 'CONFIRMED', 'CHEC
 /** Hata mesajında örnek olarak gösterilecek en fazla kayıt sayısı. */
 const CONFLICT_SAMPLE_LIMIT = 5;
 
+/**
+ * Oda tipinin oda sayısı. İlişki sayımında soft-delete eklentisi devreye
+ * girmez: koşul yazılmazsa silinmiş odalar da sayılır.
+ */
+const ROOM_COUNT_INCLUDE = Object.freeze({ _count: { select: { rooms: { where: { deletedAt: null } } } } });
+
 /* ══════════════════ Dönüştürücüler ══════════════════ */
 
 /** @param {{ toString(): string }} value */
@@ -291,7 +297,7 @@ export async function listRoomTypes(hotelId, query) {
       where,
       orderBy: [{ code: 'asc' }],
       // Oda sayısı ilişkili tablodan tek sorguda geliyor (N+1 yok).
-      include: { _count: { select: { rooms: true } } },
+      include: ROOM_COUNT_INCLUDE,
       ...toSkipTake(query),
     }),
     prisma.roomType.count({ where }),
@@ -309,7 +315,7 @@ export async function createRoomType(hotelId, input) {
     return await writeWithEvents(async (tx, stage) => {
       const created = await tx.roomType.create({
         data: { hotelId, ...input, description: input.description || null },
-        include: { _count: { select: { rooms: true } } },
+        include: ROOM_COUNT_INCLUDE,
       });
       const dto = toRoomTypeDto(created);
 
@@ -394,7 +400,7 @@ export async function updateRoomType(hotelId, id, input) {
 
       const after = await tx.roomType.findFirst({
         where: { id },
-        include: { _count: { select: { rooms: true } } },
+        include: ROOM_COUNT_INCLUDE,
       });
       const dto = toRoomTypeDto(after);
 

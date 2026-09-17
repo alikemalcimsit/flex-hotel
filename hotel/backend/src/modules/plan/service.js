@@ -6,6 +6,7 @@ import { NotFoundError } from '../../lib/errors.js';
 import { LIVE_SCOPES, liveVersion } from '../../lib/live-version.js';
 import { buildPage } from '../../lib/pagination.js';
 import { createReadCache } from '../../lib/read-cache.js';
+import { containsText, isFuzzyToken, MATCH_NOTHING, matchGuestIds, searchTokens } from '../../lib/search.js';
 import { naturalRoomPage } from '../rooms/service.js';
 import { buildRoomSegments, planDays, summarizeDays } from './rules.js';
 
@@ -39,9 +40,6 @@ const PLAN_CACHE_TTL_MS = 15_000;
 
 /** Aynı anda tutulacak en fazla farklı görünüm (otel × pencere × filtre × sayfa). */
 const PLAN_CACHE_MAX_ENTRIES = 500;
-
-/** Aramada dikkate alınan en fazla kelime ("Ayşe Yılmaz" → 2). */
-const MAX_SEARCH_TOKENS = 3;
 
 const planCache = createReadCache({ ttlMs: PLAN_CACHE_TTL_MS, maxEntries: PLAN_CACHE_MAX_ENTRIES });
 
@@ -102,33 +100,47 @@ function conditionWhere(condition, businessDate) {
  * eşleşmesi yalnızca **pencereye düşen** konaklamalarda aranır — ızgarada
  * görünmeyecek bir konaklama için odayı listelemek kafa karıştırır.
  *
+ * Konaklamalar önce bulunur, oda sorgusu onların odalarıyla süzülür (ilişki
+ * filtresi büyük tabloyu baştan sona birleştiriyordu; bkz. `lib/search.js`).
+ * Üç harften kısa kelimeler yalnızca oda numarasında aranır.
+ *
+ * @param {string} hotelId
  * @param {string | undefined} search
  * @param {{ from: Date, to: Date }} window
  */
-function searchWhere(search, { from, to }) {
-  const tokens = (search ?? '').split(/\s+/).filter(Boolean).slice(0, MAX_SEARCH_TOKENS);
+async function searchWhere(hotelId, search, { from, to }) {
+  const tokens = searchTokens(search);
   if (tokens.length === 0) return {};
 
-  const stayMatches = {
-    deletedAt: null,
-    status: { in: [...PLAN_SEGMENT_STATUSES] },
-    checkIn: { lt: to },
-    checkOut: { gt: from },
-    AND: tokens.map((token) => ({
-      OR: [
-        { confirmationCode: { contains: token, mode: 'insensitive' } },
-        { guest: { firstName: { contains: token, mode: 'insensitive' } } },
-        { guest: { lastName: { contains: token, mode: 'insensitive' } } },
-      ],
-    })),
-  };
-
-  return {
-    OR: [
-      ...(tokens.length === 1 ? [{ number: { contains: tokens[0], mode: 'insensitive' } }] : []),
-      { reservations: { some: stayMatches } },
-    ],
-  };
+  const or = tokens.length === 1 ? [{ number: containsText(tokens[0]) }] : [];
+  const fuzzy = tokens.filter(isFuzzyToken);
+  if (fuzzy.length > 0) {
+    const tokenFilters = await Promise.all(
+      fuzzy.map(async (token) => {
+        const guestIds = await matchGuestIds(prisma, hotelId, token);
+        return {
+          OR: [
+            { confirmationCode: containsText(token) },
+            ...(guestIds.length > 0 ? [{ guestId: { in: guestIds } }] : []),
+          ],
+        };
+      }),
+    );
+    const stays = await prisma.reservation.findMany({
+      where: {
+        hotelId,
+        roomId: { not: null },
+        status: { in: [...PLAN_SEGMENT_STATUSES] },
+        checkIn: { lt: to },
+        checkOut: { gt: from },
+        AND: tokenFilters,
+      },
+      select: { roomId: true },
+    });
+    const roomIds = [...new Set(stays.map((stay) => stay.roomId))];
+    if (roomIds.length > 0) or.push({ id: { in: roomIds } });
+  }
+  return or.length > 0 ? { OR: or } : MATCH_NOTHING;
 }
 
 /** @param {{ guest?: { firstName: string, lastName: string } | null }} row */
@@ -271,7 +283,7 @@ async function computeRoomPlan(hotelId, query, businessDate) {
     ...(query.occupancy ? { occupancy: query.occupancy } : {}),
     ...(query.housekeepingStatus ? { housekeepingStatus: query.housekeepingStatus } : {}),
     ...(query.floor !== undefined ? { floor: query.floor } : {}),
-    AND: [conditionWhere(query.condition, businessDate), searchWhere(query.search, window)],
+    AND: [conditionWhere(query.condition, businessDate), await searchWhere(hotelId, query.search, window)],
   };
 
   const [{ ids, total }, summarySource] = await Promise.all([

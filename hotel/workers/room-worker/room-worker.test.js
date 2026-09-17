@@ -90,6 +90,20 @@ describe('yeni rezervasyon', () => {
     assert.match(calls.activity[0].message, /zaten atanmış/);
   });
 
+  it('aktör başlamadan personel odayı elle verdiyse görev açmaz', async () => {
+    const { worker, calls } = makeHarness({
+      service: {
+        autoAssignRoom: async () => ({ assigned: false, alreadyAssigned: true, room: { id: ROOM, number: '204' } }),
+      },
+    });
+    const { payload, envelope } = reservationCreated();
+
+    await worker.handle(payload, envelope);
+
+    assert.equal(calls.manualTasks.length, 0);
+    assert.match(calls.activity[0].message, /elle atanmış \(204\)/);
+  });
+
   it('boş oda yoksa tekrar denemeden manuel göreve düşer', async () => {
     let attempts = 0;
     const { worker, calls } = makeHarness({

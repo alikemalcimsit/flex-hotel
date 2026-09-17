@@ -7,11 +7,13 @@
  * işlemler sıraya girer; ikinci işlem, birincinin commit ettiği veriyi görerek
  * karar verir.
  *
- * **Kilit sırası kuralı (deadlock önlemi):** önce oda tipleri, sonra odalar;
- * her grup kendi içinde id sırasıyla. Bu dosyadaki fonksiyonlar id'leri
- * sıralayıp tek sorguda kilitler — çağıranlar yalnızca "önce tip, sonra oda"
- * sırasına uymalı. Modül 4 rezervasyon oluştururken `lockRoomTypes` çağırmalı;
- * aksi hâlde aynı anda açılan son iki rezervasyon envanteri aşabilir.
+ * **Kilit sırası kuralı (deadlock önlemi):** rezervasyon → oda tipi → oda →
+ * konuşma → mesaj → istek; her grup kendi içinde id sırasıyla. Bu dosyadaki
+ * fonksiyonlar id'leri sıralayıp tek sorguda kilitler — çağıranlar yalnızca
+ * gruplar arası sıraya uymalı (oda kilidini aldıktan sonra rezervasyon
+ * kilitlenmez). Modül 4 rezervasyon oluştururken `lockRoomTypes` çağırmalı;
+ * aksi hâlde aynı anda açılan son iki rezervasyon envanteri aşabilir. Modül 6
+ * giriş/çıkışta önce rezervasyonu, sonra odayı kilitlemeli.
  *
  * Soft-delete edilmiş satırlar kilitlenmez ve "bulunamadı" sayılır.
  */
@@ -34,6 +36,19 @@ async function lockRows(tx, table, hotelId, ids) {
     hotelId,
   );
   return new Set(rows.map((row) => row.id));
+}
+
+/**
+ * Rezervasyon satırı: odası değişen konaklama. Kilitlenmezse aynı misafiri
+ * aynı anda iki odaya taşıyan iki işlem (ya da otomatik atama ile personel)
+ * birbirinin eski okumasıyla çalışır; bir oda sahipsiz "dolu" kalır.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} reservationIds
+ */
+export function lockReservations(tx, hotelId, reservationIds) {
+  return lockRows(tx, 'Reservation', hotelId, reservationIds);
 }
 
 /**
@@ -64,6 +79,18 @@ export function lockRooms(tx, hotelId, roomIds) {
  */
 export function lockConversations(tx, hotelId, conversationIds) {
   return lockRows(tx, 'Conversation', hotelId, conversationIds);
+}
+
+/**
+ * Mesaj satırı: kanalın art arda gönderdiği teslim bildirimleri ("gönderildi",
+ * "iletildi", "okundu") aynı anda işlenince durum geri gitmesin.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} messageIds
+ */
+export function lockMessages(tx, hotelId, messageIds) {
+  return lockRows(tx, 'Message', hotelId, messageIds);
 }
 
 /**

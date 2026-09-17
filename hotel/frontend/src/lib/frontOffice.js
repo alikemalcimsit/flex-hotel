@@ -51,6 +51,12 @@ const SUMMARY_REFRESH_MS = 60_000;
 /** Personel listesi seyrek değişir (modül 2). */
 const ASSIGNEES_STALE_MS = 5 * 60_000;
 
+/**
+ * Yan menü rozetinin canlı tazelemesi arasındaki en kısa süre. Rozet her
+ * panelde açık; yoğun saatte her mesajda 2500 özet sorgusu gereksiz.
+ */
+const BADGE_MIN_REFRESH_MS = 10_000;
+
 export function useInboxSummary({ enabled = true } = {}) {
   return useQuery({
     queryKey: inboxKeys.summary,
@@ -105,12 +111,17 @@ export function useFrontOfficeBadges() {
 
   useLiveChannel(MESSAGING_CHANNEL, {
     enabled: canMessages,
+    minIntervalMs: BADGE_MIN_REFRESH_MS,
     queryKeys: [inboxKeys.summary],
     onChange: (payload) => {
       if (payload?.event === 'guest.message.received') playInboxChime();
     },
   });
-  useLiveChannel(REQUESTS_CHANNEL, { enabled: canRequests, queryKeys: [requestKeys.summary] });
+  useLiveChannel(REQUESTS_CHANNEL, {
+    enabled: canRequests,
+    minIntervalMs: BADGE_MIN_REFRESH_MS,
+    queryKeys: [requestKeys.summary],
+  });
 
   const inbox = useInboxSummary({ enabled: canMessages }).data;
   const requests = useRequestSummary({ enabled: canRequests }).data;

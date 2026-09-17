@@ -98,22 +98,32 @@ export async function stageEvent(tx, name, payload) {
  * Transactional outbox — 2. adım: commit sonrası dağıt ve yayınlandı olarak
  * işaretle.
  *
- * Dağıtım başarısız olsa bile `publishedAt` boş kalır; bu satırlar ileride
- * bir "outbox tarayıcı" ile yeniden denenebilir (modül 10/12 ile gelecek).
+ * İşaret, bütün olaylar dağıtıldıktan sonra tek sorguyla yazılır (istek
+ * başına olay kadar ayrı UPDATE değil). Süreç bu arada kapanırsa ya da
+ * işaret yazılamazsa `publishedAt` boş kalır; `lib/outbox.js` o olayları
+ * bekleme payından sonra yeniden dağıtır.
  *
  * @param {object[]} envelopes
  */
 export async function dispatchStaged(envelopes) {
+  if (envelopes.length === 0) return;
+  const dispatched = [];
   for (const envelope of envelopes) {
     try {
       await eventBus.dispatch(envelope);
-      await prismaUnfiltered.eventLog.update({
-        where: { id: envelope.id },
-        data: { publishedAt: new Date() },
-      });
+      dispatched.push(envelope.id);
     } catch (error) {
       logger.error({ err: error, event: envelope.name, id: envelope.id }, 'Event dağıtılamadı; publishedAt boş kaldı');
     }
+  }
+  if (dispatched.length === 0) return;
+  try {
+    await prismaUnfiltered.eventLog.updateMany({
+      where: { id: { in: dispatched }, publishedAt: null },
+      data: { publishedAt: new Date() },
+    });
+  } catch (error) {
+    logger.error({ err: error, events: dispatched.length }, 'Olaylar yayınlandı olarak işaretlenemedi');
   }
 }
 
