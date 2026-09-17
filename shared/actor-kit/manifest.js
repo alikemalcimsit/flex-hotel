@@ -38,6 +38,12 @@ export function defineActor(definition) {
   if (!name) throw new Error('Aktörün adı olmalı');
   if (!description) throw new Error(`"${name}" aktörünün açıklaması olmalı (yönetim panelinde gösterilecek)`);
 
+  for (const action of requiresApproval) {
+    if (typeof action !== 'string' || action.trim() === '') {
+      throw new Error(`"${name}" aktörünün onay gerektiren iş adı boş olamaz (requiresApproval)`);
+    }
+  }
+
   for (const eventName of [...subscribes, ...publishes]) {
     if (!isKnownEvent(eventName)) {
       throw new Error(

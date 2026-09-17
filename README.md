@@ -124,3 +124,8 @@ tekrar kullanılamayan kodlar ve sessizce yanlış fiyat hesapları.
   haberi muhatabına (`...:user:<id>` / `...:perm:<izin>`). Yeni bir canlı ekran
   `useLiveChannel` ile abone olur; otelin tamamına `hotelRoom` üzerinden
   yayın yapmayın.
+- **Onay gerektiren iş kendi kendine yapılmaz.** Aktör `ctx.requireApproval({ action,
+  … })` der (`action` bildirgedeki `requiresApproval`'da olmalı); servis
+  `modules/approvals/service.js → requestApproval(tx, stage, …)` çağırır. Onaylanan
+  olay bus'a **yeniden verilmez**; yalnızca isteyen aktöre `ctx.approval` ile döner
+  (diğer aktörler işi ikinci kez yapmasın). HTTP'den onay açan uç yoktur.

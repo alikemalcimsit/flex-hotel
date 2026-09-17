@@ -6,6 +6,7 @@ import { prismaUnfiltered } from '../db.js';
 import { manualTaskPermission } from '../modules/notifications/rules.js';
 import { enqueueTriggerNotifications } from '../modules/notifications/service.js';
 import { raiseStaffAlert } from '../modules/notifications/staff-alerts.js';
+import { requestApprovalStandalone } from '../modules/approvals/service.js';
 import { applySystemRoomState, autoAssignRoom } from '../modules/rooms/service.js';
 import { eventBus } from './events.js';
 import { writeWithEvents } from './write.js';
@@ -92,11 +93,21 @@ const deps = {
     });
   },
 
+  /**
+   * Aktör "personel karar versin" dedi (modül 11): onay isteği ve bekleyen iş
+   * aynı transaction'da açılır; yöneticinin ziline uyarı düşer. Aynı olay
+   * yeniden gelirse ikinci istek açılmaz.
+   */
+  requestApproval: (request) => requestApprovalStandalone(request),
+
   logger: {
     warn: (...args) => logger.warn(...args),
     error: (...args) => logger.error(...args),
   },
 };
+
+/** Onay kuyruğunun "aktör artık yok" yolu için (bkz. `modules/approvals/subscribers.js`). */
+export const createManualTaskForActor = (task) => deps.createManualTask(task);
 
 /**
  * Aktörleri kaydeder ve event bus'a bağlar.

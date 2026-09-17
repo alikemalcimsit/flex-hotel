@@ -416,6 +416,7 @@ export const STAFF_ALERT_KINDS = Object.freeze([
   'OVERDUE_REQUEST',
   'MANUAL_TASK',
   'NOTIFICATION_FAILED',
+  'APPROVAL_REQUESTED',
 ]);
 
 export const STAFF_ALERT_KIND_LABELS = Object.freeze({
@@ -424,6 +425,7 @@ export const STAFF_ALERT_KIND_LABELS = Object.freeze({
   OVERDUE_REQUEST: 'Geciken misafir isteği',
   MANUAL_TASK: 'Personele bırakılan iş',
   NOTIFICATION_FAILED: 'Misafire ulaşamayan bildirim',
+  APPROVAL_REQUESTED: 'Onay bekleyen iş',
 });
 
 export const STAFF_ALERT_SEVERITIES = Object.freeze(['INFO', 'WARNING', 'CRITICAL']);

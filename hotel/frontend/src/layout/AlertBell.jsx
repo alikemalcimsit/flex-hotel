@@ -19,6 +19,7 @@ const KIND_ICONS = Object.freeze({
   OVERDUE_REQUEST: 'clock',
   MANUAL_TASK: 'clipboard',
   NOTIFICATION_FAILED: 'alertCircle',
+  APPROVAL_REQUESTED: 'checkCheck',
 });
 
 const SEVERITY_TONES = Object.freeze({

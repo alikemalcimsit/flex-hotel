@@ -1,5 +1,5 @@
 import { forwardRef } from 'react';
-import { useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Icon } from '@hotelos/ui';
 import { AlertBell } from './AlertBell.jsx';
 import { findLocation } from './navigation.js';
@@ -24,6 +24,7 @@ const ICON_BUTTON =
  * @param {{
  *   user: { name?: string, email?: string } | null,
  *   roleLabel?: string,
+ *   approvals?: { count: number, urgent: boolean, label: string } | null,
  *   isSidebarCollapsed: boolean,
  *   isMobileNavOpen: boolean,
  *   onToggleSidebar: () => void,
@@ -31,8 +32,35 @@ const ICON_BUTTON =
  *   onLogout: () => void,
  * }} props
  */
+/**
+ * Bekleyen onay sayacı (modül 11). Yalnızca onayları görebilen kişiye ve
+ * bekleyen iş varsa görünür; süresi yaklaşan varsa kırmızı. Tıklayınca
+ * bekleyenler listesine gider. Sayı socket haberiyle güncellenir
+ * (`useApprovalBadge`).
+ *
+ * @param {{ approvals: { count: number, urgent: boolean, label: string } | null }} props
+ */
+function ApprovalCounter({ approvals }) {
+  if (!approvals || approvals.count <= 0) return null;
+  const tone = approvals.urgent
+    ? 'border-sec/40 bg-danger-soft text-sec-strong hover:bg-danger-soft/80'
+    : 'border-warning-ink/30 bg-warning-soft text-warning-ink hover:bg-warning-soft/80';
+  return (
+    <Link
+      to="/onaylar/bekleyen"
+      title={approvals.label}
+      aria-label={approvals.label}
+      className={`inline-flex h-[42px] shrink-0 items-center gap-2 rounded-control border px-3 text-sm font-bold shadow-soft transition duration-200 ${tone}`}
+    >
+      <Icon name="checkCheck" className="size-[18px]" />
+      <span>{approvals.count}</span>
+      <span className="hidden sm:inline">onay</span>
+    </Link>
+  );
+}
+
 export const Topbar = forwardRef(function Topbar(
-  { user, roleLabel, isSidebarCollapsed, isMobileNavOpen, onToggleSidebar, onOpenMobileNav, onLogout },
+  { user, roleLabel, approvals = null, isSidebarCollapsed, isMobileNavOpen, onToggleSidebar, onOpenMobileNav, onLogout },
   menuButtonRef,
 ) {
   const { pathname } = useLocation();
@@ -91,6 +119,7 @@ export const Topbar = forwardRef(function Topbar(
       </div>
 
       <div className="flex shrink-0 items-center gap-3">
+        <ApprovalCounter approvals={approvals} />
         <AlertBell />
         {fullscreen.isSupported && (
           <button

@@ -638,7 +638,8 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 > - **Modül 2:** zil ve "şu anki personel" geçici olarak `x-actor` e-postasıyla;
 >   socket el sıkışmasındaki `auth.actor` da aynı e-posta (kişi/izin odaları buna
 >   göre kuruluyor, JWT gelince kaynağı değişecek; `registerSocketHandlers`).
->   Rol → izin eşlemesi backend `lib/permissions.js`'te geçici (`permissionsForRole`).
+>   Rol → izin eşlemesi backend `lib/permissions.js`'te geçici (`permissionsForRole`);
+>   modül 11'in `approvals.view` / `approvals.decide` izinleri de orada (şimdilik yalnızca `ADMIN`).
 > - **Modül 11 / 12:** aktörün bıraktığı işler (`ManualTask`) zile düşüyor; modülden
 >   izne eşleme `notifications/rules.js → manualTaskPermission`.
 > - **Modül 22:** misafir kartına kanal bazında "bildirim istemiyor" seçeneği
@@ -677,13 +678,96 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 11. Onay kuyruğu — arkadaşın
 **Gün sonu:** Para iadesi, büyük ödeme, toplu fiyat değişimi gibi işler personelin önüne düşüyor; onaylayınca sistem kaldığı yerden devam ediyor.
-- [ ] Backend: Approval CRUD + `grant` / `deny` API'leri
-- [ ] Backend: `approval.granted` yayınlanınca PendingAction'daki event tekrar bus'a verilir
-- [ ] Backend: süre dolan onaylar EXPIRED olur (zamanlayıcı)
-- [ ] Ekran: Bekleyen onaylar listesi (tip, özet, isteyen aktör, tutar, süre)
-- [ ] Ekran: Onay detayı (veri, gerekçe) + Onayla / Reddet + not
-- [ ] Ekran: Geçmiş onaylar
-- [ ] Frontend: yeni onay gelince üst barda sayaç + socket bildirimi
+- [x] Backend: Approval CRUD + `grant` / `deny` API'leri
+- [x] Backend: `approval.granted` yayınlanınca PendingAction'daki event tekrar bus'a verilir — **isteyen aktöre** verilir (bkz. not: bus'a yeniden vermek diğer aktörlere işi ikinci kez yaptırırdı)
+- [x] Backend: süre dolan onaylar EXPIRED olur (zamanlayıcı)
+- [x] Ekran: Bekleyen onaylar listesi (tip, özet, isteyen aktör, tutar, süre)
+- [x] Ekran: Onay detayı (veri, gerekçe) + Onayla / Reddet + not
+- [x] Ekran: Geçmiş onaylar
+- [x] Frontend: yeni onay gelince üst barda sayaç + socket bildirimi
+- [ ] Onaya iş götüren ilk gerçek akış — **modül 15 / 17 / 31 bekleniyor**; altyapı, aktör tabanı ve ekran hazır
+
+> **📌 Modül 11 tamamlandı (17 Eylül 2026 — Ahmet). İsteyen tarafı bilinçli olarak boş.**
+>
+> **Kuyruk var, isteyen yok.** Para iadesi (17), büyük ödeme (17), toplu fiyat
+> değişimi (31) henüz yazılmadı; bugün üretimde onay açan bir akış yok. Altyapı
+> gerçek bir aktörle (test aktörü) uçtan uca doğrulandı: onay iste → zil → onayla →
+> aktör aynı olayla devam eder. Sahte istek üreten hiçbir şey yok. Devir sözleşmesi aşağıda.
+>
+> **Veri** (migration `20260920090000_approval_queue`):
+> - `Approval`: tür (`APPROVAL_TYPES`: iade, büyük ödeme, toplu fiyat, diğer), özet,
+>   gerekçe, `data` (isteyenin serbest verisi; ekranda gösterilir, yorumlanmaz),
+>   `amount`/`currency`, isteyen aktör ve iş adı (`actorName`, `action`), `requestedBy`,
+>   karar (`decidedBy`, `decidedAt`, `note`), ilgili kayıt, `expiresAt`.
+> - `PendingAction`: onaylanınca devam edecek aktör işi — olayın zarfı olduğu gibi;
+>   `(actorName, eventId)` tekil (aynı olay yeniden gelse de ikinci istek açılmaz),
+>   `resumedAt` üstlenme işareti (haber tekrar gelse de devam bir kez).
+> - `StaffAlertKind.APPROVAL_REQUESTED`: zile "onay bekliyor" / "süresi doldu".
+>
+> **Olaylar:** `approval.requested` / `granted` / `denied` / `expired` (yalnızca kimlik ve
+> tür; özet ve tutar socket'e çıkmaz). Canlı yayın kanalı `approvals.changed`.
+>
+> **API:** `/approvals` (imleçli; `view=PENDING` eskiden yeniye, `view=HISTORY` yeni
+> karar önce; tür / karar / arama süzgeci), `/approvals/summary` (bekleyen, süresi
+> yaklaşan, en eski), `/approvals/:id`, `POST /:id/grant` (not isteğe bağlı),
+> `POST /:id/deny` (gerekçe zorunlu). Görüntüleme `approvals.view`, karar
+> `approvals.decide`. **HTTP'den onay açılmaz**; onay aktörden ya da servisten açılır.
+>
+> **Aktör tarafı (`shared/actor-kit`):** işleyici `ctx.requireApproval({ action, type,
+> summary, data, amount, expiresInMs })` der. Taban sınıf bunu hata gibi değil sinyal
+> gibi ele alır: yeniden denemez, manuel göreve düşürmez, olayı işlenmiş saymaz;
+> `deps.requestApproval` ile onay + bekleyen iş açar. `action` bildirgedeki
+> `requiresApproval` listesinde olmalı (modül 12 paneli oradan okur); değilse
+> programlama hatası sayılır, iş manuel göreve düşer. Onay verilince aynı işleyici
+> aynı olayla, `ctx.approval` dolu olarak çağrılır (aktör bu arada kapatılmış olsa da:
+> onaylanmış işi bir daha sormak olmaz). Ret / süre dolumu olayı o aktör için
+> `ProcessedEvent`'e yazar; bir daha ele alınmaz. Aktör kayıttan kalkmışsa iş manuel
+> göreve düşer (`Onay kuyruğu` modülü).
+>
+> **Neden devam bus'a değil aktöre gider:** onaylanan olay bus'a yeniden verilseydi
+> aynı olayı dinleyen diğer aktörler de (yeni kimlikli olayı tanımadan) işi ikinci kez
+> yapardı — rezervasyon onayı misafire iki kez giderdi. Devam yalnızca isteyen aktörün
+> işleyicisine, aynı olay kimliğiyle, zincir (`correlationId`) korunarak yapılır;
+> aktör olarak onaylayan kişi yazılır ("kim yetkilendirdi").
+>
+> **Kurallar:**
+> - Karar satır kilidiyle: aynı anda iki yönetici karar veremez; ikinci "zaten karara
+>   bağlanmış" (409 `NOT_PENDING`) alır. Süresi geçmiş onaya karar verilemez; o anda
+>   düşürülür (ayrı transaction'da: 409 ile biten karar transaction'ı düşürmeyi geri alırdı).
+> - Süre: isteyen vermezse bir gün (`APPROVAL_DEFAULT_TTL_MS`), `expiresInMs: null` süresiz,
+>   en çok 30 gün. Tarayıcı dakikada bir `FOR UPDATE SKIP LOCKED` ile düşürür; süresi
+>   dolan iş zile "yapılmadı" uyarısı düşürür.
+> - Denetim izi: açılış ve karar `AuditLog`'a (karar veren kişiyle); aktör tarafı
+>   `ActivityLog`'a ("onaya gönderildi", "iade yapıldı", "onay reddedildi").
+> - Onay isteği tek şemadan doğrulanır (`approvalRequestSchema`, contracts): tür bilinmeli,
+>   tutar iki ondalıklı metin, para birimi 3 harf.
+>
+> **Ekranlar:** `/onaylar/bekleyen` (özet kutuları, en uzun bekleyen üstte, akan kalan süre,
+> satırdan tek tıkla onayla / reddet, detay + karar aynı pencerede, adreste `?onay=`),
+> `/onaylar/gecmis` (karar süzgeci). Üst barda bekleyen sayacı (süresi yaklaşan varsa
+> kırmızı), yan menüde rozet, zilde uyarı, karar yetkisi olana kısa bildirim.
+>
+> **2500 panel için:** özet sürüm + dakika anahtarlı önbellekte (`/health` →
+> `approvalCache`); sayaç canlı haberle en çok 10 sn'de bir tazelenir; liste imleçli
+> (`(hotelId, status, createdAt, id)` / `(hotelId, status, decidedAt, id)` index'leri);
+> süre dolumu için kısmi index; özet araması trigram.
+>
+> **Sınırlar (bilinçli):** rol matrisi geçici — yalnızca `ADMIN` görür ve karar verir
+> (modül 2 gerçek matrisi getirince `MANAGER` eklenir); onaylanan servis işinin (aktör
+> olmayan) devamı isteyen modülün kendi `approval.granted` dinleyicisidir.
+>
+> **Devir sözleşmesi:**
+> - **Modül 15 / 17 (folyo, ödeme, iade):** servis içinden
+>   `requestApproval(tx, stage, { hotelId, type: 'REFUND' | 'LARGE_PAYMENT', summary, amount,
+>   currency, data, entityType, entityId })` (`modules/approvals/service.js`); `approval.granted`
+>   / `denied` olayını dinleyip `approvalId` ile kendi işini bitirir. `Payment.approvalId`
+>   hazır. Eşik (ör. nakit sınırı) modül 1 ayarlarına eklenir.
+> - **Modül 31 (toplu fiyat değişimi):** aynı yol, tür `BULK_PRICE_CHANGE`.
+> - **Modül 12 (aktör paneli):** bildirgedeki `requiresApproval` "onay gerektiren
+>   aksiyonlar" kartıdır; `ManualTask.module = 'Onay kuyruğu'` kayıtları aktörü kayıttan
+>   kalkmış onaylardır.
+> - **Modül 13 (günlük durum):** "bekleyen işler" kutusu `/approvals/summary`'den.
+> - **Modül 2:** `approvals.view` / `approvals.decide` izinleri; zil ve sayaç bu izne göre.
 
 ### 12. Aktör yönetim paneli — Ali Kemal
 **Gün sonu:** Admin, aktörleri tek ekrandan açıp kapatıyor; kapalı aktörün işleri "manuel görevler"de listeleniyor; LLM agent'ların token harcaması görünüyor.
@@ -725,7 +809,13 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 > `actorRegistry.list()` yönetim paneline hazır: her aktörün adı, açıklaması,
 > dinlediği ve yayınladığı event'ler manifest'te beyan edilmiş durumda.
 > Sende kalan: `GET /actors` + enable/disable API'si, `ManualTask` listeleme
-> ekranı, LLM bütçe kartı ve onay akışı (Approval/PendingAction — modül 11).
+> ekranı, LLM bütçe kartı.
+>
+> **Ek (17 Eylül 2026 — modül 11):** onay akışı geldi. Bildirgedeki `requiresApproval`
+> artık gerçek: aktör `ctx.requireApproval({ action, ... })` dediğinde `action` bu listede
+> olmalı; panelin "onay gerektiren aksiyonlar" kartı buradan okunur. Onaylanmış iş,
+> aktör **kapalı olsa da** yapılır (onay bir kez verilmiştir). `ManualTask.module =
+> 'Onay kuyruğu'` olan görevler, aktörü kayıttan kalkmış onaylardır.
 
 ### 13. Günlük durum ekranı — arkadaşın
 **Gün sonu:** Müdür sabah tek ekrana bakıp günü anlıyor: doluluk, gelecek/gidecek, gelir, bekleyen işler.

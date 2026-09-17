@@ -94,6 +94,7 @@ describe('registerRealtimeBridge', () => {
       'roomId',
       'userId',
       'alertId',
+      'approvalId',
       'spreadMs',
     ].sort());
   });
@@ -258,6 +259,27 @@ describe('registerRealtimeBridge', () => {
     assert.equal(io.emitted[0].channel, realtime.MESSAGING_CHANNEL);
     assert.equal(io.emitted[0].payload.conversationId, conversationId);
     assert.equal(JSON.stringify(io.emitted[0].payload).includes('WHATSAPP'), false);
+  });
+
+  it('onay olayı onay kanalına düşer; özet ve tutar taşımaz', async () => {
+    const io = fakeIo();
+    realtime.registerRealtimeBridge(io);
+
+    await eventBus.dispatch(
+      eventBus.createEnvelope('approval.requested', {
+        hotelId: HOTEL_ID,
+        approvalId: '99999999-9999-4999-8999-999999999999',
+        type: 'REFUND',
+        actorName: 'refund-worker',
+        expiresAt: new Date(),
+      }),
+    );
+
+    assert.equal(io.emitted.length, 1);
+    assert.equal(io.emitted[0].channel, realtime.APPROVALS_CHANNEL);
+    assert.equal(io.emitted[0].room, `hotel:${HOTEL_ID}:ch:${realtime.APPROVALS_CHANNEL}`);
+    assert.equal(io.emitted[0].payload.approvalId, '99999999-9999-4999-8999-999999999999');
+    assert.equal(JSON.stringify(io.emitted[0].payload).includes('REFUND'), false);
   });
 
   it('istek olayı istek kanalına düşer', async () => {

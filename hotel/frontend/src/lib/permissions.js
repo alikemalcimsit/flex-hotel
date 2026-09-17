@@ -21,6 +21,8 @@ export const PERMISSIONS = Object.freeze({
   REQUESTS_MANAGE: 'requests.manage',
   NOTIFICATIONS_VIEW: 'notifications.view',
   NOTIFICATIONS_MANAGE: 'notifications.manage',
+  APPROVALS_VIEW: 'approvals.view',
+  APPROVALS_DECIDE: 'approvals.decide',
 });
 
 export const ROLE_PERMISSIONS = Object.freeze({

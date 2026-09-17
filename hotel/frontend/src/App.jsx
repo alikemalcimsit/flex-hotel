@@ -45,6 +45,9 @@ const NotificationChannelsTab = lazy(() =>
 const GuestRequestsPage = lazy(() =>
   import('./pages/requests/GuestRequestsPage.jsx').then((m) => ({ default: m.GuestRequestsPage })),
 );
+const ApprovalsPage = lazy(() => import('./pages/approvals/ApprovalsPage.jsx').then((m) => ({ default: m.ApprovalsPage })));
+const ApprovalsPendingTab = lazy(() => import('./pages/approvals/PendingTab.jsx').then((m) => ({ default: m.PendingTab })));
+const ApprovalsHistoryTab = lazy(() => import('./pages/approvals/HistoryTab.jsx').then((m) => ({ default: m.HistoryTab })));
 
 /** Giriş yapılmamışsa login'e yönlendirir. */
 function RequireAuth({ children }) {
@@ -113,6 +116,18 @@ export default function App() {
               <Route path="liste" element={<RoomListTab />} />
               <Route path="musaitlik" element={<AvailabilityTab />} />
               <Route path="atama" element={<AssignmentTab />} />
+            </Route>
+            <Route
+              path="onaylar"
+              element={
+                <RequirePermission permission={PERMISSIONS.APPROVALS_VIEW}>
+                  <ApprovalsPage />
+                </RequirePermission>
+              }
+            >
+              <Route index element={<Navigate to="/onaylar/bekleyen" replace />} />
+              <Route path="bekleyen" element={<ApprovalsPendingTab />} />
+              <Route path="gecmis" element={<ApprovalsHistoryTab />} />
             </Route>
             <Route
               path="bildirimler"

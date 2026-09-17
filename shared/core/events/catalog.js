@@ -29,6 +29,15 @@ const isoDate = z
   .transform((value) => (value instanceof Date ? value.toISOString() : value))
   .refine((value) => !Number.isNaN(new Date(value).getTime()), { message: 'geçersiz tarih' });
 
+/** Onay olaylarının ortak gövdesi (modül 11). */
+const approvalEvent = hotelScoped.extend({
+  approvalId: z.string().uuid(),
+  /** Sözleşmedeki onay türü (`APPROVAL_TYPES`). */
+  type: z.string().min(1),
+  /** İsteyen aktör; kişi ya da servis istediyse `null`. */
+  actorName: z.string().nullable(),
+});
+
 export const EVENT_CATALOG = Object.freeze({
   'settings.hotel.updated': hotelScoped.extend({
     /** Değişen alan adları — dinleyen taraf neyin değiştiğine göre karar verebilsin. */
@@ -254,10 +263,33 @@ export const EVENT_CATALOG = Object.freeze({
    */
   'staff.alert.raised': hotelScoped.extend({
     alertId: z.string().uuid(),
-    kind: z.enum(['GUEST_MESSAGE', 'URGENT_REQUEST', 'OVERDUE_REQUEST', 'MANUAL_TASK', 'NOTIFICATION_FAILED']),
+    kind: z.enum([
+      'GUEST_MESSAGE',
+      'URGENT_REQUEST',
+      'OVERDUE_REQUEST',
+      'MANUAL_TASK',
+      'NOTIFICATION_FAILED',
+      'APPROVAL_REQUESTED',
+    ]),
     userId: z.string().uuid().nullable(),
     permission: z.string().nullable(),
   }),
+
+  /* ── Onay kuyruğu (modül 11) ── */
+
+  /**
+   * Bir iş personelin onayına düştü. Gövde yalnızca kimlik ve tür taşır;
+   * özet ve veri ekranda HTTP ile okunur (socket'e içerik çıkmaz).
+   */
+  'approval.requested': approvalEvent.extend({
+    /** Süreli onayın son anı; süresiz ise `null`. */
+    expiresAt: isoDate.nullable(),
+  }),
+  /** Onaylandı: `PendingAction` varsa isteyen aktör kaldığı yerden devam eder. */
+  'approval.granted': approvalEvent.extend({ decidedBy: z.string().min(1) }),
+  'approval.denied': approvalEvent.extend({ decidedBy: z.string().min(1) }),
+  /** Süresi kimse karar vermeden doldu; iş yapılmadı. */
+  'approval.expired': approvalEvent,
 });
 
 /** @typedef {keyof typeof EVENT_CATALOG} EventName */
@@ -346,3 +378,11 @@ export const NOTIFICATIONS_CHANGED_EVENTS = Object.freeze([
 
 /** Zil (canlı yayın: `staff.alerts`). */
 export const STAFF_ALERT_EVENTS = Object.freeze(['staff.alert.raised']);
+
+/** Onay kuyruğunu etkileyen event'ler (canlı yayın: `approvals.changed`). */
+export const APPROVAL_EVENTS = Object.freeze([
+  'approval.requested',
+  'approval.granted',
+  'approval.denied',
+  'approval.expired',
+]);

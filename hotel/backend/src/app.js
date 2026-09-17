@@ -20,6 +20,9 @@ import {
   resolveJwtSecret,
   resolveTrustProxy,
 } from './lib/http-security.js';
+import { approvalRoutes } from './modules/approvals/routes.js';
+import { approvalCacheStats } from './modules/approvals/service.js';
+import { registerApprovalSubscribers, setApprovalSubscriberLogger } from './modules/approvals/subscribers.js';
 import { guestRequestRoutes } from './modules/guest-requests/routes.js';
 import { requestCacheStats } from './modules/guest-requests/service.js';
 import { messagingRoutes } from './modules/messaging/routes.js';
@@ -105,6 +108,8 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   registerCoreSubscribers();
   registerActors();
   registerNotificationSubscribers();
+  setApprovalSubscriberLogger(app.log);
+  registerApprovalSubscribers();
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
@@ -210,6 +215,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
         planCache: planCacheStats(),
         messagingCache: messagingCacheStats(),
         requestCache: requestCacheStats(),
+        approvalCache: approvalCacheStats(),
       },
     };
   });
@@ -221,6 +227,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   await app.register(guestRequestRoutes, { prefix: '/guest-requests' });
   await app.register(notificationRoutes, { prefix: '/notifications' });
   await app.register(staffAlertRoutes, { prefix: '/staff-alerts' });
+  await app.register(approvalRoutes, { prefix: '/approvals' });
 
   app.addHook('onClose', async () => {
     await disconnectDb();

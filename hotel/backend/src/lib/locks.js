@@ -101,3 +101,15 @@ export function lockMessages(tx, hotelId, messageIds) {
 export function lockGuestRequests(tx, hotelId, requestIds) {
   return lockRows(tx, 'GuestRequest', hotelId, requestIds);
 }
+
+/**
+ * Onay satırı: aynı anda iki karar verilemez; süre dolumu taraması karar
+ * verilmekte olan satırı atlar (`SKIP LOCKED`).
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} approvalIds
+ */
+export function lockApprovals(tx, hotelId, approvalIds) {
+  return lockRows(tx, 'Approval', hotelId, approvalIds);
+}

@@ -1,7 +1,7 @@
-// BaseActor / BaseWorker, manifest, registry.
+// BaseActor / BaseWorker, manifest, registry, onay akışı.
 //
-// Onay akışı (Approval, PendingAction) ve LLM agent tabanı (BaseLlmAgent)
-// henüz yok — sırasıyla modül 11 ve modül 8'de gelecek.
+// LLM agent tabanı (BaseLlmAgent) henüz yok — modül 8'de gelecek.
+export { ApprovalRequired, isApprovalRequired, requireApproval } from './approval.js';
 export { BaseWorker } from './base-worker.js';
 export { defineActor } from './manifest.js';
 export { ActorRegistry, actorRegistry } from './registry.js';

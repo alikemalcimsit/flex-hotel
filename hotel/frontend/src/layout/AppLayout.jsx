@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { useApprovalBadge } from '../lib/approvals.js';
 import { useFrontOfficeBadges } from '../lib/frontOffice.js';
 import { useHotelSettings } from '../lib/useHotel.js';
 import { useAuthStore } from '../store/auth.js';
@@ -36,8 +37,10 @@ export function AppLayout() {
   const drawerFirstLinkRef = useRef(null);
 
   const hotelQuery = useHotelSettings();
-  const badges = useFrontOfficeBadges();
-  const waitingCount = badges.messages?.count ?? 0;
+  const frontOfficeBadges = useFrontOfficeBadges();
+  const approvals = useApprovalBadge();
+  const badges = { ...frontOfficeBadges, approvals };
+  const waitingCount = frontOfficeBadges.messages?.count ?? 0;
 
   // Panel başka sekmedeyken de "misafir yazdı" görülsün: sekme başlığında sayı.
   useEffect(() => {
@@ -125,6 +128,7 @@ export function AppLayout() {
           ref={menuButtonRef}
           user={user}
           roleLabel={ROLE_LABELS[user?.role]}
+          approvals={approvals}
           isSidebarCollapsed={isSidebarCollapsed}
           isMobileNavOpen={isDrawerOpen}
           onToggleSidebar={toggleSidebar}

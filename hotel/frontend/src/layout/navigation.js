@@ -53,6 +53,17 @@ export const NAV_SECTIONS = Object.freeze([
     title: 'Yönetim',
     items: [
       {
+        label: 'Onaylar',
+        to: '/onaylar',
+        icon: 'checkCheck',
+        badge: 'approvals',
+        permission: PERMISSIONS.APPROVALS_VIEW,
+        children: [
+          { label: 'Bekleyen', to: '/onaylar/bekleyen', icon: 'clock' },
+          { label: 'Geçmiş', to: '/onaylar/gecmis', icon: 'list' },
+        ],
+      },
+      {
         label: 'Bildirimler',
         to: '/bildirimler',
         icon: 'bell',

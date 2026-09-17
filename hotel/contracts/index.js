@@ -134,4 +134,5 @@ export {
 } from './settings.js';
 export { utcToZonedWallTime, zonedWallTimeToUtc } from './zoned-time.js';
 export * from './notifications.js';
+export * from './approvals.js';
 export { displayPhone, internationalPhone } from './phone.js';

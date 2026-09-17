@@ -1,5 +1,6 @@
 export { InMemoryEventBus } from './bus/event-bus.js';
 export {
+  APPROVAL_EVENTS,
   EVENT_CATALOG,
   INVENTORY_CHANGED_EVENTS,
   LIVE_VIEW_EVENTS,

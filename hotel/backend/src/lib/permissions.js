@@ -39,6 +39,11 @@ export const PERMISSIONS = Object.freeze({
   NOTIFICATIONS_VIEW: 'notifications.view',
   /** Şablonlar, kanal ayarları (SMTP / SMS), tekrar gönderme ve iptal. */
   NOTIFICATIONS_MANAGE: 'notifications.manage',
+
+  /** Onay kuyruğunu görmek (bekleyen ve geçmiş). */
+  APPROVALS_VIEW: 'approvals.view',
+  /** Onaylamak / reddetmek: para iadesi, büyük ödeme, toplu fiyat değişimi. Yönetim işi. */
+  APPROVALS_DECIDE: 'approvals.decide',
 });
 
 /**

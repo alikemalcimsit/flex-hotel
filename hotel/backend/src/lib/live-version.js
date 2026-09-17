@@ -1,4 +1,5 @@
 import {
+  APPROVAL_EVENTS,
   LIVE_VIEW_EVENTS,
   MESSAGING_CHANGED_EVENTS,
   REQUESTS_CHANGED_EVENTS,
@@ -22,6 +23,7 @@ export const LIVE_SCOPES = Object.freeze({
   INVENTORY: 'inventory',
   MESSAGING: 'messaging',
   REQUESTS: 'requests',
+  APPROVALS: 'approvals',
 });
 
 const SCOPE_EVENTS = Object.freeze({
@@ -29,6 +31,7 @@ const SCOPE_EVENTS = Object.freeze({
   [LIVE_SCOPES.INVENTORY]: [...LIVE_VIEW_EVENTS, ...SETTINGS_CHANGED_EVENTS],
   [LIVE_SCOPES.MESSAGING]: [...MESSAGING_CHANGED_EVENTS, ...REQUESTS_CHANGED_EVENTS, ...LIVE_VIEW_EVENTS],
   [LIVE_SCOPES.REQUESTS]: [...REQUESTS_CHANGED_EVENTS, ...LIVE_VIEW_EVENTS],
+  [LIVE_SCOPES.APPROVALS]: [...APPROVAL_EVENTS],
 });
 
 /** @type {Map<string, number>} `${scope}:${hotelId}` → sürüm */

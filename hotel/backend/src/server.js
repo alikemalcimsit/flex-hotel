@@ -7,6 +7,7 @@ import { permissionsForRole } from './lib/permissions.js';
 import { registerRealtimeBridge, registerSocketHandlers, stopRealtimeBridge } from './lib/realtime.js';
 import { findActiveStaffByEmail } from './lib/staff.js';
 import { resolveHotelId } from './lib/tenant.js';
+import { startApprovalJobs } from './modules/approvals/jobs.js';
 import { startNotificationJobs } from './modules/notifications/jobs.js';
 import { closeProviders } from './modules/notifications/providers/index.js';
 
@@ -43,12 +44,14 @@ app.decorate('io', io);
 // (testler ve betikler `buildApp` ile açıp kapatır, arka plan işi başlatmaz).
 const stopNotificationJobs = startNotificationJobs(app.log);
 const stopMaintenanceJobs = startMaintenanceJobs(app.log);
+const stopApprovalJobs = startApprovalJobs(app.log);
 
 // Açık socket bağlantıları kapatılmazsa HTTP sunucusu kapanmayı bekler ve
 // süreç yöneticisi (systemd) onu zorla öldürene kadar asılı kalır.
 app.addHook('onClose', async () => {
   stopNotificationJobs();
   stopMaintenanceJobs();
+  stopApprovalJobs();
   closeProviders();
   stopRealtimeBridge();
   await new Promise((resolve) => {
