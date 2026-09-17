@@ -4,5 +4,12 @@
   "private": true,
   "type": "module",
   "main": "index.js",
-  "description": "Event bus, event kataloğu (zod), ortak yardımcılar"
+  "description": "Event bus, event kataloğu (zod), correlation bağlamı, para aritmetiği",
+  "scripts": {
+    "test": "node --test \"**/*.test.js\""
+  },
+  "dependencies": {
+    "decimal.js": "^10.6.0",
+    "zod": "^4.5.4"
+  }
 }

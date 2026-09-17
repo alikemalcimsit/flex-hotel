@@ -1,58 +1,75 @@
-import Fastify from 'fastify';
-import cors from '@fastify/cors';
-import jwt from '@fastify/jwt';
 import { Server as SocketServer } from 'socket.io';
-import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
-import { checkDb } from './db.js';
-
-const PORT = Number(process.env.PORT ?? 3000);
-const JWT_SECRET = process.env.JWT_SECRET ?? 'dev-secret-degistir';
+import { buildApp } from './app.js';
+import { prismaUnfiltered } from './db.js';
+import { originChecker } from './lib/http-security.js';
+import { startMaintenanceJobs } from './lib/maintenance-jobs.js';
+import { permissionsForRole } from './lib/permissions.js';
+import { registerRealtimeBridge, registerSocketHandlers, stopRealtimeBridge } from './lib/realtime.js';
+import { findActiveStaffByEmail } from './lib/staff.js';
+import { resolveHotelId } from './lib/tenant.js';
+import { startApprovalJobs } from './modules/approvals/jobs.js';
+import { startNotificationJobs } from './modules/notifications/jobs.js';
+import { closeProviders } from './modules/notifications/providers/index.js';
 
 /**
- * Fastify uygulamasını kurar. Modüller sırası gelince buraya register edilir.
- * @returns {import('fastify').FastifyInstance}
+ * Sunucu önyüklemesi. Uygulamanın kendisi `app.js`'te — testler oradan
+ * `buildApp()` çağırıp port açmadan istek atabilsin diye ayrı duruyor.
  */
-export function buildApp() {
-  const app = Fastify({ logger: true });
 
-  app.setValidatorCompiler(validatorCompiler);
-  app.setSerializerCompiler(serializerCompiler);
+const PORT = Number(process.env.PORT ?? 3000);
 
-  app.register(cors, { origin: true });
-  app.register(jwt, { secret: JWT_SECRET });
+/**
+ * Dinlenecek adres. Varsayılan yalnızca bu makine: üretimde nginx aynı
+ * makineden bağlanır, geliştirmede panel de localhost'tan. `0.0.0.0` iken
+ * kimlik doğrulaması henüz olmayan API yerel ağdaki herkese açık kalıyordu.
+ * Konteyner gibi dışarıdan erişim gereken kurulumlarda `HOST=0.0.0.0` verilir.
+ */
+const HOST = process.env.HOST ?? '127.0.0.1';
 
-  // Tüm hatalar aynı zarfla döner
-  app.setErrorHandler((error, _request, reply) => {
-    app.log.error(error);
-    const status = error.statusCode ?? 500;
-    reply.status(status).send({ success: false, error: error.message ?? 'Sunucu hatası' });
-  });
+const app = await buildApp();
 
-  app.setNotFoundHandler((_request, reply) => {
-    reply.status(404).send({ success: false, error: 'Bulunamadı' });
-  });
+// socket.io aynı HTTP sunucusuna bağlanır.
+const io = new SocketServer(app.server, { cors: { origin: originChecker(app.allowedOrigins) } });
 
-  app.get('/health', async () => {
-    const db = await checkDb();
-    return { success: true, data: { status: 'ok', db } };
-  });
-
-  // TODO: modüller buraya: app.register(reservationRoutes, { prefix: '/reservations' })
-
-  return app;
-}
-
-const app = buildApp();
-
-// socket.io aynı HTTP sunucusuna bağlanır; şimdilik sadece "hello" gönderir
-const io = new SocketServer(app.server, { cors: { origin: true } });
-io.on('connection', (socket) => {
-  socket.emit('hello', { message: 'HotelOS socket bağlı' });
+registerSocketHandlers(io, {
+  resolveHotelId,
+  findStaff: (hotelId, email) => findActiveStaffByEmail(prismaUnfiltered, hotelId, email),
+  permissionsForRole,
+  logger: app.log,
 });
+registerRealtimeBridge(io, app.log);
 app.decorate('io', io);
 
+// Bildirim göndericisi ve zamanlanmış işler yalnızca sunucu sürecinde çalışır
+// (testler ve betikler `buildApp` ile açıp kapatır, arka plan işi başlatmaz).
+const stopNotificationJobs = startNotificationJobs(app.log);
+const stopMaintenanceJobs = startMaintenanceJobs(app.log);
+const stopApprovalJobs = startApprovalJobs(app.log);
+
+// Açık socket bağlantıları kapatılmazsa HTTP sunucusu kapanmayı bekler ve
+// süreç yöneticisi (systemd) onu zorla öldürene kadar asılı kalır.
+app.addHook('onClose', async () => {
+  stopNotificationJobs();
+  stopMaintenanceJobs();
+  stopApprovalJobs();
+  closeProviders();
+  stopRealtimeBridge();
+  await new Promise((resolve) => {
+    io.close(() => resolve());
+  });
+});
+
+// Kapanışta açık bağlantılar ve veritabanı havuzu düzgün bırakılır.
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.once(signal, async () => {
+    app.log.info(`${signal} alındı, kapanılıyor...`);
+    await app.close();
+    process.exit(0);
+  });
+}
+
 try {
-  await app.listen({ port: PORT, host: '0.0.0.0' });
+  await app.listen({ port: PORT, host: HOST });
 } catch (error) {
   app.log.error(error);
   process.exit(1);

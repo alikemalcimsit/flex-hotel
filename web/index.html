@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!--
+      Sayfaya göre değişen etiketler (başlık, açıklama, canonical, OG/Twitter,
+      Person şeması) build sırasında buraya yazılır: scripts/prerender.mjs.
+      Her adres kendi başlığını alır; hepsinin aynı başlığı paylaşması
+      arama motorunda en sık yapılan hatalardan biri.
+    -->
+    <!--app-head-->
+
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
+    <meta name="author" content="FlexAI" />
+    <meta name="theme-color" content="#101010" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="FlexAI" />
+    <meta property="og:locale" content="tr_TR" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="FlexAI — yapay zekâ destekli iş yazılımları" />
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <!--
+      Sitenin yazı ailesi Montserrat; dosyası sitenin kendisinde duruyor
+      (src/index.css). Latin dosyası önden yükleniyor ki ilk boyamada yedek
+      fonttan sıçrama olmasın.
+    -->
+    <link
+      rel="preload"
+      href="/fonts/montserrat-latin-wght-normal.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin="anonymous"
+    />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Space Grotesk yalnızca logo ve "Flex" kilidi için (300 ve 700). -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!--
+      Hero'daki marka kilidindeki sektör adlarının tipografisi (bkz.
+      src/data/sectors.js). Bu aileler sayfanın başka hiçbir yerinde
+      kullanılmıyor; `text=` ile YALNIZCA o kelimelerde geçen harfler
+      indiriliyor, böylece beş aile birkaç kilobayta iniyor. Yeni bir sektör
+      eklenirse kullandığı harfler bu listeye de eklenmeli.
+    -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800&family=Inter:wght@200&family=Lora:wght@600&family=Quicksand:wght@400&family=Work+Sans:wght@500&text=ACDFHLRSacdegilmnopty&display=swap"
+      rel="stylesheet"
+    />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://flexai.tr/#organization",
+            "name": "FlexAI",
+            "url": "https://flexai.tr/",
+            "logo": "https://flexai.tr/favicon.svg",
+            "description": "Yapay zekâ destekli, sektöre özel iş yazılımları geliştiren yazılım şirketi.",
+            "email": "iletisim@flexai.tr",
+            "areaServed": "TR",
+            "founder": [
+              { "@type": "Person", "name": "Ahmet Yusuf Demir" },
+              { "@type": "Person", "name": "Ali Kemal Cimşit" }
+            ],
+            "knowsAbout": [
+              "Yapay zekâ",
+              "Otel yönetim yazılımı",
+              "Otonom aktör ağları",
+              "İş süreçleri otomasyonu"
+            ]
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://flexai.tr/#website",
+            "url": "https://flexai.tr/",
+            "name": "FlexAI",
+            "inLanguage": "tr-TR",
+            "publisher": { "@id": "https://flexai.tr/#organization" }
+          },
+          {
+            "@type": "SoftwareApplication",
+            "@id": "https://flexai.tr/#flexhotel",
+            "name": "FlexHotel",
+            "applicationCategory": "BusinessApplication",
+            "applicationSubCategory": "Otel Yönetim Sistemi",
+            "operatingSystem": "Web",
+            "inLanguage": "tr-TR",
+            "url": "https://hotel.flexai.tr",
+            "description": "Ön büro, rezervasyon, kat hizmetleri, F&B, muhasebe, kanal yönetimi ve KBS bildirimini tek platformda toplayan modüler otel yönetim sistemi.",
+            "publisher": { "@id": "https://flexai.tr/#organization" },
+            "featureList": [
+              "Ön büro ve online check-in",
+              "Rezervasyon, grup ve acente yönetimi",
+              "Kat hizmetleri ve oda bakımı",
+              "F&B, QR menü ve oda servisi",
+              "Muhasebe, folio ve gece denetimi",
+              "Kanal yönetimi ve açık API",
+              "KBS bildirimi ve kimlik OCR",
+              "Raporlama, ADR ve RevPAR"
+            ]
+          }
+        ]
+      }
+    </script>
+  </head>
+  <body>
+    <!--
+      JS varsa işaretle. Açılış animasyonları yalnızca .js altında gizlenir —
+      script çalışmazsa (veya hata verirse) içerik görünür kalır.
+    -->
+    <script>
+      document.documentElement.classList.add('js')
+    </script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

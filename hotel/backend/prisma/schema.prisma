@@ -18,13 +18,25 @@ enum UserRole {
   FNB
 }
 
-enum RoomStatus {
-  AVAILABLE
+/// Doluluk — yalnızca giriş/çıkış akışı değiştirir, elle atanmaz.
+enum RoomOccupancy {
+  VACANT
   OCCUPIED
+}
+
+/// Kat hizmeti durumu — dolulukten bağımsız (dolu oda da kirli olabilir).
+enum HousekeepingStatus {
   DIRTY
   CLEANING
-  BLOCKED
-  MAINTENANCE
+  CLEAN
+  INSPECTED
+}
+
+/// Tarihli arıza kaydının etkisi.
+/// OUT_OF_ORDER: envanterden düşer (satılamaz). OUT_OF_SERVICE: satışta kalır ama atanmaz.
+enum RoomBlockType {
+  OUT_OF_ORDER
+  OUT_OF_SERVICE
 }
 
 enum ReservationStatus {
@@ -118,15 +130,120 @@ enum NotificationChannel {
   PUSH
 }
 
+/// Misafir bildiriminin yolculuğu (modül 9). Bkz. contracts `NOTIFICATION_STATUSES`.
 enum NotificationStatus {
   PENDING
+  SENDING
   SENT
+  DELIVERED
   FAILED
+  CANCELLED
+}
+
+/// Bildirimin kaynağı: şablonlu olaylar ve kanal testi.
+enum NotificationSource {
+  RESERVATION_CONFIRMED
+  ROOM_ASSIGNED
+  CHECKED_IN
+  CHECKED_OUT
+  CHANNEL_TEST
+}
+
+/// Şablonu olan olaylar.
+enum NotificationTrigger {
+  RESERVATION_CONFIRMED
+  ROOM_ASSIGNED
+  CHECKED_IN
+  CHECKED_OUT
+}
+
+/// Personel uyarısı türleri (üst bardaki zil).
+enum StaffAlertKind {
+  GUEST_MESSAGE
+  URGENT_REQUEST
+  OVERDUE_REQUEST
+  MANUAL_TASK
+  NOTIFICATION_FAILED
+  APPROVAL_REQUESTED
+}
+
+enum StaffAlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
 }
 
 enum MessageDirection {
   IN
   OUT
+}
+
+/// Konuşmanın iş durumu: açık (ilgilenilecek) ya da kapalı (çözüldü).
+enum ConversationStatus {
+  OPEN
+  CLOSED
+}
+
+/// Konuşmaya kim cevap veriyor: AI asistanı (modül 8) ya da personel.
+/// "Manuele al" = MANUAL; asistan bu konuşmaya karışmaz.
+enum ConversationMode {
+  AI
+  MANUAL
+}
+
+/// Mesajı kim yazdı. AI cevapları ekranda ayrıca etiketlenir.
+enum MessageAuthor {
+  GUEST
+  STAFF
+  AI
+  SYSTEM
+}
+
+/// Mesajın kanaldaki yolculuğu. Gelen mesaj RECEIVED doğar; giden mesaj
+/// PENDING doğar ve kanal (modül 8) gönderince SENT/DELIVERED/READ ya da FAILED olur.
+enum MessageDelivery {
+  RECEIVED
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+/// Misafir isteğinin türü — kimin işi olduğunu ve varsayılan önceliği belirler.
+enum GuestRequestCategory {
+  HOUSEKEEPING
+  AMENITY
+  MAINTENANCE
+  ROOM_SERVICE
+  WAKE_UP
+  TRANSPORT
+  INFORMATION
+  COMPLAINT
+  OTHER
+}
+
+enum GuestRequestPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum GuestRequestStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+/// İsteğin nereden geldiği (rapor ve SLA analizi için).
+enum GuestRequestSource {
+  CONVERSATION
+  PHONE
+  FRONT_DESK
+  STAFF
+  AI
 }
 
 enum LogLevel {
@@ -139,48 +256,64 @@ enum LogLevel {
 // ───────────── SİSTEM ─────────────
 
 model Hotel {
-  id        String    @id @default(uuid())
-  name      String
-  code      String    @unique
-  timezone  String    @default("Europe/Istanbul")
-  currency  String    @default("TRY")
-  address   String?
-  phone     String?
-  email     String?
-  settings  Json      @default("{}")
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  id                           String    @id @default(uuid())
+  name                         String
+  code                         String    @unique
+  timezone                     String    @default("Europe/Istanbul")
+  currency                     String    @default("TRY")
+  /// Ülke kodu yazılmamış telefonların yorumlandığı kod (Türkiye: 90). Misafiri
+  /// WhatsApp numarasından bulurken kullanılır (modül 7).
+  phoneCountryCode             String    @default("90")
+  address                      String?
+  phone                        String?
+  email                        String?
+  logoUrl                      String?
+  checkInTime                  String    @default("14:00")
+  checkOutTime                 String    @default("12:00")
+  defaultBoardType             BoardType @default(BB)
+  cancellationPolicyDays       Int       @default(0)
+  cancellationPolicyPenaltyPct Decimal   @default(0) @db.Decimal(5, 2)
+  settings                     Json      @default("{}")
+  createdAt                    DateTime  @default(now())
+  updatedAt                    DateTime  @updatedAt
+  deletedAt                    DateTime?
 
-  users              User[]
-  refreshTokens      RefreshToken[]
-  eventLogs          EventLog[]
-  processedEvents    ProcessedEvent[]
-  actorSettings      ActorSetting[]
-  activityLogs       ActivityLog[]
-  approvals          Approval[]
-  pendingActions     PendingAction[]
-  manualTasks        ManualTask[]
-  llmUsages          LlmUsage[]
-  notifications      Notification[]
-  roomTypes          RoomType[]
-  rooms              Room[]
-  guests             Guest[]
-  reservations       Reservation[]
-  reservationGuests  ReservationGuest[]
-  ratePlans          RatePlan[]
-  seasons            Season[]
-  taxes              Tax[]
-  conversations      Conversation[]
-  messages           Message[]
-  folios             Folio[]
-  folioItems         FolioItem[]
-  invoices           Invoice[]
-  payments           Payment[]
-  nightAudits        NightAudit[]
-  housekeepingTasks  HousekeepingTask[]
-  maintenanceTickets MaintenanceTicket[]
-  lostItems          LostItem[]
+  users                 User[]
+  refreshTokens         RefreshToken[]
+  eventLogs             EventLog[]
+  processedEvents       ProcessedEvent[]
+  actorSettings         ActorSetting[]
+  activityLogs          ActivityLog[]
+  auditLogs             AuditLog[]
+  approvals             Approval[]
+  pendingActions        PendingAction[]
+  manualTasks           ManualTask[]
+  llmUsages             LlmUsage[]
+  notifications         Notification[]
+  notificationTemplates NotificationTemplate[]
+  notificationChannels  NotificationChannelConfig[]
+  staffAlerts           StaffAlert[]
+  roomTypes             RoomType[]
+  rooms                 Room[]
+  roomBlocks            RoomBlock[]
+  roomStaySegments      RoomStaySegment[]
+  guests                Guest[]
+  reservations          Reservation[]
+  reservationGuests     ReservationGuest[]
+  ratePlans             RatePlan[]
+  seasons               Season[]
+  taxes                 Tax[]
+  conversations         Conversation[]
+  messages              Message[]
+  guestRequests         GuestRequest[]
+  folios                Folio[]
+  folioItems            FolioItem[]
+  invoices              Invoice[]
+  payments              Payment[]
+  nightAudits           NightAudit[]
+  housekeepingTasks     HousekeepingTask[]
+  maintenanceTickets    MaintenanceTicket[]
+  lostItems             LostItem[]
 }
 
 model User {
@@ -197,6 +330,12 @@ model User {
 
   hotel         Hotel          @relation(fields: [hotelId], references: [id])
   refreshTokens RefreshToken[]
+
+  assignedConversations Conversation[]   @relation("ConversationAssignee")
+  assignedRequests      GuestRequest[]   @relation("GuestRequestAssignee")
+  staffAlerts           StaffAlert[]
+  staffAlertReads       StaffAlertRead[]
+  staffAlertState       StaffAlertState?
 }
 
 model RefreshToken {
@@ -230,6 +369,7 @@ model EventLog {
   deletedAt     DateTime?
 
   hotel Hotel @relation(fields: [hotelId], references: [id])
+  // Dağıtılmamış olaylar: kısmi index `EventLog_unpublished_idx` (migration'da).
 
   @@index([name])
   @@index([correlationId])
@@ -247,6 +387,8 @@ model ProcessedEvent {
   hotel Hotel @relation(fields: [hotelId], references: [id])
 
   @@unique([actorName, eventId])
+  // Saklama süresi temizliği (bkz. lib/maintenance-jobs.js).
+  @@index([createdAt])
 }
 
 model ActorSetting {
@@ -263,6 +405,31 @@ model ActorSetting {
   hotel Hotel @relation(fields: [hotelId], references: [id])
 
   @@unique([hotelId, actorName])
+}
+
+/// Kullanıcı denetim izi: hangi kaydı kim, ne zaman, neyi neye çevirerek değiştirdi.
+/// ActivityLog aktör/event odaklıdır; bu tablo insan odaklıdır (modül 10'un
+/// "kullanıcı audit listesi" ekranı bunu okuyacak).
+model AuditLog {
+  id            String    @id @default(uuid())
+  hotelId       String
+  entity        String
+  entityId      String
+  action        String
+  actor         String
+  before        Json?
+  after         Json?
+  changedFields String[]  @default([])
+  correlationId String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+
+  @@index([hotelId, entity, entityId])
+  @@index([hotelId, createdAt])
+  @@index([correlationId])
 }
 
 model ActivityLog {
@@ -287,17 +454,29 @@ model ActivityLog {
   @@index([createdAt])
 }
 
+/// Onay kuyruğu (modül 11): personelin karar vermesi gereken iş.
+/// `data` isteyenin verdiği serbest yapı (ekranda gösterilir, yorumlanmaz);
+/// `amount`/`currency` listede "tutar" sütunu için ayrı tutulur.
 model Approval {
   id          String         @id @default(uuid())
   hotelId     String
   type        String
   summary     String
+  reason      String?
   data        Json           @default("{}")
+  amount      Decimal?       @db.Decimal(12, 2)
+  currency    String?
   status      ApprovalStatus @default(PENDING)
+  /// İsteyen aktörün adı; kişi ya da servis istediyse boş.
+  actorName   String?
+  /// Aktör bildirgesindeki onay gerektiren iş adı (`requiresApproval`).
+  action      String?
   requestedBy String
   decidedBy   String?
   decidedAt   DateTime?
   note        String?
+  entityType  String?
+  entityId    String?
   expiresAt   DateTime?
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
@@ -306,20 +485,35 @@ model Approval {
   hotel          Hotel           @relation(fields: [hotelId], references: [id])
   pendingActions PendingAction[]
   payments       Payment[]
+
+  // Bekleyenler (eskiden yeniye) ve geçmiş (yeni karar önce), imleçli.
+  @@index([hotelId, status, createdAt, id])
+  @@index([hotelId, status, decidedAt, id])
+  // Süre dolumu taraması: kısmi index `Approval_pending_expiry_idx` (migration'da).
+  // Özet araması (trigram).
+  @@index([summary(ops: raw("gin_trgm_ops"))], map: "Approval_summary_trgm_idx", type: Gin)
 }
 
+/// Onay verilince kaldığı yerden devam edecek aktör işi: olayın zarfı
+/// olduğu gibi saklanır. Aynı olay için ikinci istek açılmaz (`actorName`,
+/// `eventId` tekil); devam bir kez yapılır (`resumedAt`).
 model PendingAction {
   id          String    @id @default(uuid())
   hotelId     String
   actorName   String
   approvalId  String
+  eventId     String
   resumeEvent Json
+  resumedAt   DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
   hotel    Hotel    @relation(fields: [hotelId], references: [id])
   approval Approval @relation(fields: [approvalId], references: [id])
+
+  @@unique([actorName, eventId])
+  @@index([approvalId])
 }
 
 model ManualTask {
@@ -358,22 +552,181 @@ model LlmUsage {
   @@index([actorName, date])
 }
 
+/// Misafire giden bildirim (modül 9) — aynı zamanda gönderim kuyruğu (outbox).
+///
+/// Metin kuyruğa yazılırken şablondan üretilip dondurulur: şablon sonradan
+/// değişse de geçmiş, misafire gerçekte ne gittiğini gösterir.
 model Notification {
-  id         String              @id @default(uuid())
-  hotelId    String
-  channel    NotificationChannel
-  to         String
-  template   String
-  params     Json                @default("{}")
-  status     NotificationStatus  @default(PENDING)
-  providerId String?
-  error      String?
-  sentAt     DateTime?
-  createdAt  DateTime            @default(now())
-  updatedAt  DateTime            @updatedAt
-  deletedAt  DateTime?
+  id                String              @id @default(uuid())
+  hotelId           String
+  channel           NotificationChannel
+  source            NotificationSource
+  language          String              @default("tr")
+  /// E-posta adresi ya da uluslararası telefon (yalnızca rakam).
+  recipient         String
+  recipientName     String?
+  subject           String?
+  body              String
+  /// Şablon değişkenlerinin gönderim anındaki değerleri (denetim için).
+  params            Json                @default("{}")
+  status            NotificationStatus  @default(PENDING)
+  attempts          Int                 @default(0)
+  /// `PENDING` iken bir sonraki deneme zamanı (sessiz saat ve yeniden deneme).
+  nextAttemptAt     DateTime?
+  /// `SENDING` iken göndericinin üstlendiği an; takılı kalanı bulmak için.
+  lockedAt          DateTime?
+  provider          String?
+  providerMessageId String?
+  errorCode         String?
+  error             String?
+  sentAt            DateTime?
+  deliveredAt       DateTime?
+  failedAt          DateTime?
+  cancelledAt       DateTime?
+  cancelReason      String?
+  templateId        String?
+  guestId           String?
+  reservationId     String?
+  resendOfId        String?
+  /// Aynı olay için ikinci bildirim açılmasın (ör. aynı oda ataması iki kez işlendi).
+  dedupeKey         String?
+  createdBy         String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  deletedAt         DateTime?
+
+  hotel       Hotel                 @relation(fields: [hotelId], references: [id])
+  template    NotificationTemplate? @relation(fields: [templateId], references: [id])
+  guest       Guest?                @relation(fields: [guestId], references: [id])
+  reservation Reservation?          @relation(fields: [reservationId], references: [id])
+  resendOf    Notification?         @relation("NotificationResend", fields: [resendOfId], references: [id])
+  resends     Notification[]        @relation("NotificationResend")
+
+  // Geçmiş ekranı: en yeni önce, imleçle.
+  @@index([hotelId, createdAt, id])
+  @@index([hotelId, status, createdAt])
+  @@index([hotelId, channel, createdAt])
+  // Gönderici: zamanı gelmiş bekleyenler (bütün oteller).
+  @@index([status, nextAttemptAt])
+  // Teslim raporu eşleştirmesi. Rapor bekleyen SMS'ler için kısmi index
+  // `Notification_sms_report_idx` migration'da.
+  @@index([provider, providerMessageId])
+  @@index([reservationId])
+  @@index([guestId])
+  // Detaydaki tekrar gönderimler.
+  @@index([resendOfId])
+  // Arama (trigram).
+  @@index([recipient(ops: raw("gin_trgm_ops"))], map: "Notification_recipient_trgm_idx", type: Gin)
+  @@index([recipientName(ops: raw("gin_trgm_ops"))], map: "Notification_recipientName_trgm_idx", type: Gin)
+  @@index([subject(ops: raw("gin_trgm_ops"))], map: "Notification_subject_trgm_idx", type: Gin)
+}
+
+/// Bildirim şablonu: olay × kanal × dil başına bir tane (modül 9).
+model NotificationTemplate {
+  id        String              @id @default(uuid())
+  hotelId   String
+  key       NotificationTrigger
+  channel   NotificationChannel
+  language  String
+  subject   String?
+  body      String
+  isActive  Boolean             @default(true)
+  updatedBy String?
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  deletedAt DateTime?
+
+  hotel         Hotel          @relation(fields: [hotelId], references: [id])
+  notifications Notification[]
+
+  @@index([hotelId, key])
+}
+
+/// Kanal ayarı (SMTP, SMS sağlayıcısı, WhatsApp) — otel × kanal başına bir tane.
+///
+/// Parola ve API anahtarı `secret` alanında **şifreli** durur (AES-256-GCM,
+/// anahtar sunucu ortamında); API hiçbir zaman geri döndürmez.
+model NotificationChannelConfig {
+  id               String              @id @default(uuid())
+  hotelId          String
+  channel          NotificationChannel
+  enabled          Boolean             @default(false)
+  /// Gizli olmayan ayarlar (sunucu, port, gönderen, başlık, sessiz saatler).
+  settings         Json                @default("{}")
+  secret           String?
+  secretUpdatedAt  DateTime?
+  lastTestAt       DateTime?
+  lastTestOk       Boolean?
+  lastTestError    String?
+  lastFailureAt    DateTime?
+  lastFailureError String?
+  updatedBy        String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  deletedAt        DateTime?
 
   hotel Hotel @relation(fields: [hotelId], references: [id])
+}
+
+/// Personel uyarısı (üst bardaki zil).
+///
+/// Soft-delete yok: uyarı bir iş kaydı değil, `STAFF_ALERT_RETENTION_DAYS`
+/// sonra kalıcı silinir. Kime gideceği ya bir kişi (`userId`) ya da bir izin
+/// (`permission`, o izne sahip herkes) — 2500 kişiye satır çoğaltılmaz.
+model StaffAlert {
+  id         String             @id @default(uuid())
+  hotelId    String
+  kind       StaffAlertKind
+  severity   StaffAlertSeverity @default(INFO)
+  title      String
+  body       String?
+  link       String?
+  userId     String?
+  permission String?
+  entityType String?
+  entityId   String?
+  /// Aynı konu için tek uyarı (aynı konuşmadan gelen yeni mesaj eskisini öne alır).
+  dedupeKey  String?
+  /// Uyarının en son tetiklendiği an (birleşen uyarıda güncellenir).
+  occurredAt DateTime           @default(now())
+  /// Birleşen tetiklenme sayısı ("3 yeni mesaj").
+  count      Int                @default(1)
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  hotel Hotel            @relation(fields: [hotelId], references: [id])
+  user  User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reads StaffAlertRead[]
+
+  @@index([hotelId, occurredAt, id])
+  // Zil: kişiye özel uyarılar en yeniden. İzne gidenler için kısmi index
+  // `StaffAlert_permission_feed_idx` (userId boş) migration'da.
+  @@index([hotelId, userId, occurredAt, id])
+  @@index([occurredAt])
+}
+
+/// Kişinin okuduğu uyarı.
+model StaffAlertRead {
+  alertId String
+  userId  String
+  readAt  DateTime @default(now())
+
+  alert StaffAlert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([alertId, userId])
+  @@index([userId])
+}
+
+/// Kişinin zil durumu: son bakış (rozet bundan sonrasını sayar) ve susturduğu türler.
+model StaffAlertState {
+  userId     String           @id
+  hotelId    String
+  lastSeenAt DateTime?
+  mutedKinds StaffAlertKind[] @default([])
+  updatedAt  DateTime         @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 // ───────────── ÖN BÜRO ─────────────
@@ -397,29 +750,76 @@ model RoomType {
   reservations Reservation[]
   ratePlans    RatePlan[]
 
-  @@unique([hotelId, code])
+  // Benzersizlik kısmi (partial) unique index ile veritabanında tanımlı:
+  // `RoomType_hotelId_code_active_key ... WHERE "deletedAt" IS NULL`.
+  // Prisma kısmi index'i ifade edemediği için burada `@@unique` yok —
+  // olsaydı silinmiş bir oda tipinin kodu asla tekrar kullanılamazdı.
+  @@index([hotelId, code])
+  @@index([hotelId, deletedAt])
 }
 
+/// Oda durumu üç bağımsız bilgidir: `occupancy` (boş/dolu), `housekeepingStatus`
+/// (kirli/temiz...) ve tarihli arıza kaydı (`RoomBlock`). "Arızalı" bir kolon
+/// değildir; o günü kapsayan bloktan okunur — böylece ileri tarihli arıza kaydı
+/// günü gelince zamanlayıcı gerekmeden etkin olur ve bitince kendiliğinden kalkar.
 model Room {
-  id         String     @id @default(uuid())
-  hotelId    String
-  number     String
-  floor      Int        @default(1)
-  roomTypeId String
-  status     RoomStatus @default(AVAILABLE)
-  notes      String?
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
-  deletedAt  DateTime?
+  id                 String             @id @default(uuid())
+  hotelId            String
+  number             String
+  floor              Int                @default(1)
+  roomTypeId         String
+  occupancy          RoomOccupancy      @default(VACANT)
+  housekeepingStatus HousekeepingStatus @default(CLEAN)
+  notes              String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  deletedAt          DateTime?
 
   hotel              Hotel               @relation(fields: [hotelId], references: [id])
   roomType           RoomType            @relation(fields: [roomTypeId], references: [id])
   reservations       Reservation[]
+  blocks             RoomBlock[]
+  staySegments       RoomStaySegment[]
+  guestRequests      GuestRequest[]
   housekeepingTasks  HousekeepingTask[]
   maintenanceTickets MaintenanceTicket[]
   lostItems          LostItem[]
 
-  @@unique([hotelId, number])
+  // Oda numarası benzersizliği de kısmi index ile (bkz. RoomType açıklaması):
+  // silinen 101 numaralı oda sonradan tekrar açılabilmeli.
+  @@index([hotelId, number])
+  @@index([hotelId, deletedAt])
+  // Oda listesi ve kat hizmetleri ekranının filtreleri ("3. kattaki kirli odalar").
+  @@index([hotelId, housekeepingStatus])
+  @@index([hotelId, occupancy])
+}
+
+/// Tarihli arıza kaydı: odanın belirli günlerde arızalı ya da hizmet dışı olması.
+///
+/// Tarihler UTC gün başıdır (veritabanı kısıtıyla zorunlu). `endDate` boşsa blok
+/// süresizdir. Geçmiş kayıt değiştirilmez: süren blok "bitirilir" (bitişi bugüne
+/// çekilir), başlamamış blok iptal edilir (soft-delete).
+///
+/// Rezervasyonla çakışması veritabanı tetikleyicisiyle engellenir
+/// (`Reservation_room_blocked`, `RoomBlock_has_reservations`).
+model RoomBlock {
+  id        String        @id @default(uuid())
+  hotelId   String
+  roomId    String
+  type      RoomBlockType @default(OUT_OF_ORDER)
+  startDate DateTime
+  endDate   DateTime?
+  reason    String
+  createdBy String
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  deletedAt DateTime?
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+  room  Room  @relation(fields: [roomId], references: [id])
+
+  @@index([hotelId, roomId, startDate, endDate])
+  @@index([hotelId, deletedAt])
 }
 
 model Guest {
@@ -443,11 +843,17 @@ model Guest {
   reservations      Reservation[]
   reservationGuests ReservationGuest[]
   conversations     Conversation[]
+  guestRequests     GuestRequest[]
   folios            Folio[]
   lostItems         LostItem[]
+  notifications     Notification[]
 
   @@index([phone])
   @@index([email])
+  // Ada göre arama (trigram). E-posta eşleştirmesi için ifade index'i
+  // `Guest_hotelId_email_lower_idx` (lower(email)) migration'da.
+  @@index([firstName(ops: raw("gin_trgm_ops"))], map: "Guest_firstName_trgm_idx", type: Gin)
+  @@index([lastName(ops: raw("gin_trgm_ops"))], map: "Guest_lastName_trgm_idx", type: Gin)
 }
 
 model Reservation {
@@ -470,6 +876,10 @@ model Reservation {
   groupId          String?
   notes            String?
   confirmationCode String            @unique
+  /// İçerideki misafir oda değiştirdiyse, `roomId` odasında kalmaya başladığı
+  /// gece (gün başı). Boşsa konaklamanın tamamı `roomId` odasındadır. Önceki
+  /// odalardaki geceler `RoomStaySegment`'te durur.
+  roomSince        DateTime?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   deletedAt        DateTime?
@@ -480,9 +890,57 @@ model Reservation {
   room              Room?              @relation(fields: [roomId], references: [id])
   reservationGuests ReservationGuest[]
   folios            Folio[]
+  roomSegments      RoomStaySegment[]
+  conversations     Conversation[]
+  guestRequests     GuestRequest[]
+  notifications     Notification[]
 
-  @@index([checkIn, checkOut])
-  @@index([status])
+  // Müsaitlik sorgusunun sıcak yolu: "şu otelde, şu oda tipinde, şu tarihlerde
+  // envanteri tüketen rezervasyonlar". Dolu bir otelde saniyede onlarca kez çalışır.
+  @@index([hotelId, roomTypeId, status, checkIn, checkOut])
+  // Belirli bir odanın takvimi (oda planı ekranı, atama kontrolü).
+  @@index([hotelId, roomId, checkIn, checkOut])
+  // Pencere sorguları (oda planı özeti, müsaitlik): çıkışı pencereden sonra olanlar.
+  @@index([hotelId, checkOut, checkIn])
+  // Misafirin konaklamaları.
+  @@index([hotelId, guestId, checkIn])
+  // Onay koduyla arama (trigram).
+  @@index([confirmationCode(ops: raw("gin_trgm_ops"))], map: "Reservation_confirmationCode_trgm_idx", type: Gin)
+}
+
+/// Bir konaklamanın **kapanmış** oda dilimi: misafir içerideyken oda
+/// değiştirdiğinde eski odada geçirdiği geceler `[startDate, endDate)`.
+///
+/// Rezervasyonun tek bir `roomId`'si var; bu tablo olmadan oda değişikliği
+/// geçmişi yeniden yazıyordu (misafir geçmiş gecelerde de yeni odada
+/// görünüyordu). Açık dilim rezervasyonun kendisidir:
+/// `[coalesce(roomSince, checkIn), checkOut)` → `roomId`.
+///
+/// Yalnızca eklenir; düzeltme soft-delete ile yapılır. Gece kapanışı (modül 18),
+/// faturalama (modül 16) ve kat hizmeti "o gece hangi odadaydı" sorusunu buradan
+/// cevaplar.
+model RoomStaySegment {
+  id            String    @id @default(uuid())
+  hotelId       String
+  reservationId String
+  roomId        String
+  startDate     DateTime
+  endDate       DateTime
+  /// Taşımayı yapan (denetim izindeki aktör).
+  movedBy       String
+  /// Taşıma sebebi ("klima arızası", "misafir talebi").
+  reason        String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  hotel       Hotel       @relation(fields: [hotelId], references: [id])
+  reservation Reservation @relation(fields: [reservationId], references: [id])
+  room        Room        @relation(fields: [roomId], references: [id])
+
+  // Oda planı ve müsaitlik: "bu odada bu tarihlerde kim vardı".
+  @@index([hotelId, roomId, startDate, endDate])
+  @@index([reservationId])
 }
 
 model ReservationGuest {
@@ -533,6 +991,10 @@ model Season {
   deletedAt  DateTime?
 
   hotel Hotel @relation(fields: [hotelId], references: [id])
+
+  // Fiyat hesabı her rezervasyonda "şu tarihe düşen sezon" sorgusu atar; sıcak yol budur.
+  @@index([hotelId, startDate, endDate])
+  @@index([hotelId, deletedAt])
 }
 
 model Tax {
@@ -548,26 +1010,66 @@ model Tax {
 
   hotel      Hotel       @relation(fields: [hotelId], references: [id])
   folioItems FolioItem[]
+
+  @@index([hotelId, deletedAt])
 }
 
+/// Misafirle bir kanal üzerindeki konuşma (WhatsApp numarası, web chat oturumu).
+///
+/// Liste ekranı her satır için mesaj saymasın diye son mesaj özeti ve
+/// okunmamış sayacı burada tutulur; mesaj yazan her işlem aynı transaction'da
+/// günceller.
 model Conversation {
-  id            String              @id @default(uuid())
-  hotelId       String
-  channel       NotificationChannel
-  externalId    String
-  guestId       String?
-  summary       String?
-  lastMessageAt DateTime            @default(now())
-  status        String              @default("open")
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
-  deletedAt     DateTime?
+  id                 String              @id @default(uuid())
+  hotelId            String
+  channel            NotificationChannel
+  /// Kanaldaki karşı taraf: telefon numarası, web chat oturum kimliği.
+  externalId         String
+  /// Kanalın bildirdiği görünen ad (misafir kaydıyla eşleşmemişse ekranda bu görünür).
+  displayName        String?
+  guestId            String?
+  reservationId      String?
+  summary            String?
+  status             ConversationStatus  @default(OPEN)
+  mode               ConversationMode    @default(MANUAL)
+  assignedToId       String?
+  unreadCount        Int                 @default(0)
+  /// Yönetim sürümü: durum, mod, atama ya da konaklama değişince artar.
+  /// Yeni mesaj `updatedAt`'i değiştirir ama bunu değiştirmez — yoğun gelen
+  /// kutusunda personel "ata" derken misafirin yazması çakışma sayılmasın.
+  stateVersion       Int                 @default(0)
+  lastMessageAt      DateTime            @default(now())
+  lastMessagePreview String?
+  lastMessageAuthor  MessageAuthor?
+  /// Misafirin cevapsız bekleyen ilk mesajının zamanı; personel/AI cevap
+  /// verince boşalır. "12 dakikadır cevap bekliyor" buradan hesaplanır.
+  awaitingReplySince DateTime?
+  lastReadAt         DateTime?
+  closedAt           DateTime?
+  closedBy           String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  deletedAt          DateTime?
 
-  hotel    Hotel     @relation(fields: [hotelId], references: [id])
-  guest    Guest?    @relation(fields: [guestId], references: [id])
-  messages Message[]
+  hotel       Hotel          @relation(fields: [hotelId], references: [id])
+  guest       Guest?         @relation(fields: [guestId], references: [id])
+  reservation Reservation?   @relation(fields: [reservationId], references: [id])
+  assignedTo  User?          @relation("ConversationAssignee", fields: [assignedToId], references: [id])
+  messages    Message[]
+  requests    GuestRequest[]
 
   @@unique([hotelId, channel, externalId])
+  // Gelen kutusu: "açık konuşmalar, en son mesaj önce".
+  @@index([hotelId, status, lastMessageAt])
+  // "Tümü" görünümü.
+  @@index([hotelId, lastMessageAt, id])
+  @@index([hotelId, assignedToId, status])
+  @@index([hotelId, guestId])
+  @@index([hotelId, reservationId])
+  // Arama (trigram).
+  @@index([displayName(ops: raw("gin_trgm_ops"))], map: "Conversation_displayName_trgm_idx", type: Gin)
+  @@index([externalId(ops: raw("gin_trgm_ops"))], map: "Conversation_externalId_trgm_idx", type: Gin)
+  @@index([lastMessagePreview(ops: raw("gin_trgm_ops"))], map: "Conversation_lastMessagePreview_trgm_idx", type: Gin)
 }
 
 model Message {
@@ -575,15 +1077,90 @@ model Message {
   hotelId        String
   conversationId String
   direction      MessageDirection
+  author         MessageAuthor    @default(GUEST)
   text           String
   actorName      String?
+  /// Yalnızca personelin gördüğü iç not; misafire gönderilmez.
+  internal       Boolean          @default(false)
+  delivery       MessageDelivery  @default(RECEIVED)
+  /// Kanalın mesaj kimliği. Aynı webhook iki kez gelirse mesaj iki kez yazılmaz
+  /// (kısmi unique index, bkz. migration).
+  externalId     String?
+  failureReason  String?
+  sentAt         DateTime?
+  deliveredAt    DateTime?
   meta           Json             @default("{}")
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
   deletedAt      DateTime?
 
-  hotel        Hotel        @relation(fields: [hotelId], references: [id])
-  conversation Conversation @relation(fields: [conversationId], references: [id])
+  hotel        Hotel          @relation(fields: [hotelId], references: [id])
+  conversation Conversation   @relation(fields: [conversationId], references: [id])
+  requests     GuestRequest[]
+
+  // Konuşma geçmişi imleçle sayfalanır: (createdAt, id) sırası.
+  @@index([conversationId, createdAt, id])
+  // Kanal kuyruğu: gönderim bekleyen giden mesajlar.
+  @@index([hotelId, delivery])
+}
+
+/// Misafir isteği: havlu, oda servisi, uyandırma, arıza bildirimi, şikâyet.
+///
+/// Konuşmadan, telefondan ya da resepsiyondan doğabilir. `dueAt` hizmet
+/// süresi hedefidir (SLA): önceliğe göre sunucuda hesaplanır, geçerse istek
+/// "gecikmiş" sayılır. Uyandırma gibi zamanlı isteklerde `scheduledFor` asıl
+/// zamandır.
+model GuestRequest {
+  id               String               @id @default(uuid())
+  hotelId          String
+  reservationId    String?
+  guestId          String?
+  roomId           String?
+  conversationId   String?
+  messageId        String?
+  category         GuestRequestCategory
+  title            String
+  description      String?
+  priority         GuestRequestPriority @default(NORMAL)
+  status           GuestRequestStatus   @default(OPEN)
+  source           GuestRequestSource   @default(FRONT_DESK)
+  dueAt            DateTime
+  scheduledFor     DateTime?
+  assignedToId     String?
+  createdBy        String
+  startedAt        DateTime?
+  completedAt      DateTime?
+  completedBy      String?
+  resolutionNote   String?
+  cancelledReason  String?
+  /// Gecikme uyarısının gönderildiği an; hedef süre değişince sıfırlanır (modül 9).
+  overdueAlertedAt DateTime?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  deletedAt        DateTime?
+
+  hotel        Hotel         @relation(fields: [hotelId], references: [id])
+  reservation  Reservation?  @relation(fields: [reservationId], references: [id])
+  guest        Guest?        @relation(fields: [guestId], references: [id])
+  room         Room?         @relation(fields: [roomId], references: [id])
+  conversation Conversation? @relation(fields: [conversationId], references: [id])
+  message      Message?      @relation(fields: [messageId], references: [id])
+  assignedTo   User?         @relation("GuestRequestAssignee", fields: [assignedToId], references: [id])
+
+  // İş listesi: "açık istekler, süresi en yakın önce".
+  @@index([hotelId, status, dueAt])
+  // Bitmiş işler: tamamlanan, iptal ve tümü görünümleri.
+  @@index([hotelId, status, completedAt, id])
+  @@index([hotelId, status, updatedAt, id])
+  @@index([hotelId, createdAt, id])
+  @@index([hotelId, assignedToId, status])
+  @@index([hotelId, roomId, status])
+  @@index([hotelId, guestId])
+  @@index([reservationId])
+  @@index([conversationId])
+  // Arama (trigram).
+  @@index([title(ops: raw("gin_trgm_ops"))], map: "GuestRequest_title_trgm_idx", type: Gin)
+  @@index([description(ops: raw("gin_trgm_ops"))], map: "GuestRequest_description_trgm_idx", type: Gin)
 }
 
 // ───────────── FOLYO / ÖDEME ─────────────

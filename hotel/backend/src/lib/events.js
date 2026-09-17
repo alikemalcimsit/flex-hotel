@@ -1,0 +1,167 @@
+import { InMemoryEventBus, SETTINGS_CHANGED_EVENTS } from '@hotelos/core';
+import { prismaUnfiltered } from '../db.js';
+import { invalidateHotelSettings } from './cache.js';
+
+/**
+ * Uygulamanın event bus'ı ve kalıcılığı.
+ *
+ * `shared/core` altyapıdan bağımsız kalsın diye Prisma'yı bilmiyor; buraya
+ * kadar gelen bağlantı noktası burası.
+ *
+ * Bus, sunucu kurulmadan önce import edilebildiği için logger sonradan
+ * takılıyor (`setEventLogger`). Öncesinde yayınlanan bir event'in log'u
+ * kaybolmasın diye başlangıçta konsola düşen bir yedek var.
+ */
+
+let logger = {
+  info: (...args) => console.info(...args),
+  warn: (...args) => console.warn(...args),
+  error: (...args) => console.error(...args),
+};
+
+/** @param {{ info: Function, warn: Function, error: Function }} next */
+export function setEventLogger(next) {
+  logger = next;
+}
+
+const proxyLogger = {
+  info: (...args) => logger.info(...args),
+  warn: (...args) => logger.warn(...args),
+  error: (...args) => logger.error(...args),
+};
+
+export const eventBus = new InMemoryEventBus({
+  logger: proxyLogger,
+  persist: async (envelope) => {
+    const hotelId = envelope.payload?.hotelId;
+    if (!hotelId) {
+      throw new Error(`"${envelope.name}" event'i hotelId içermiyor; EventLog'a yazılamaz.`);
+    }
+
+    // Soft-delete extension'ı atlanıyor: event log'u ham, dokunulmamış kalmalı.
+    await prismaUnfiltered.eventLog.create({
+      data: {
+        id: envelope.id,
+        hotelId,
+        name: envelope.name,
+        version: envelope.version,
+        payload: envelope.payload,
+        correlationId: envelope.correlationId,
+        causationId: envelope.causationId ?? null,
+        hop: envelope.hop,
+        actor: envelope.actor,
+        occurredAt: envelope.occurredAt,
+        publishedAt: new Date(),
+      },
+    });
+  },
+});
+
+/**
+ * Transactional outbox — 1. adım: event'i iş verisiyle **aynı transaction'da**
+ * kaydet, ama henüz dağıtma.
+ *
+ * Neden: event'i transaction dışında yayınlarsak iki kötü ihtimal var —
+ * transaction geri alınırsa "olmayan bir değişikliğin event'i" kalır, ya da
+ * event yazılamazsa "izi olmayan bir değişiklik" olur. Aynı transaction'a
+ * yazmak ikisini de imkânsız kılıyor. Dinleyiciler commit sonrası çalışır,
+ * çünkü commit'ten önce çalışsalardı henüz görünmeyen veriyi okurlardı.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} name
+ * @param {object} payload
+ * @returns {Promise<object>} dağıtılmayı bekleyen zarf
+ */
+export async function stageEvent(tx, name, payload) {
+  const envelope = eventBus.createEnvelope(name, payload);
+
+  await tx.eventLog.create({
+    data: {
+      id: envelope.id,
+      hotelId: envelope.payload.hotelId,
+      name: envelope.name,
+      version: envelope.version,
+      payload: envelope.payload,
+      correlationId: envelope.correlationId,
+      causationId: envelope.causationId ?? null,
+      hop: envelope.hop,
+      actor: envelope.actor,
+      occurredAt: envelope.occurredAt,
+      publishedAt: null,
+    },
+  });
+
+  return envelope;
+}
+
+/**
+ * Transactional outbox — 2. adım: commit sonrası dağıt ve yayınlandı olarak
+ * işaretle.
+ *
+ * İşaret, bütün olaylar dağıtıldıktan sonra tek sorguyla yazılır (istek
+ * başına olay kadar ayrı UPDATE değil). Süreç bu arada kapanırsa ya da
+ * işaret yazılamazsa `publishedAt` boş kalır; `lib/outbox.js` o olayları
+ * bekleme payından sonra yeniden dağıtır.
+ *
+ * @param {object[]} envelopes
+ */
+export async function dispatchStaged(envelopes) {
+  if (envelopes.length === 0) return;
+  const dispatched = [];
+  for (const envelope of envelopes) {
+    try {
+      await eventBus.dispatch(envelope);
+      dispatched.push(envelope.id);
+    } catch (error) {
+      logger.error({ err: error, event: envelope.name, id: envelope.id }, 'Event dağıtılamadı; publishedAt boş kaldı');
+    }
+  }
+  if (dispatched.length === 0) return;
+  try {
+    await prismaUnfiltered.eventLog.updateMany({
+      where: { id: { in: dispatched }, publishedAt: null },
+      data: { publishedAt: new Date() },
+    });
+  } catch (error) {
+    logger.error({ err: error, events: dispatched.length }, 'Olaylar yayınlandı olarak işaretlenemedi');
+  }
+}
+
+/**
+ * Cache geçersiz kılma artık event üzerinden.
+ *
+ * Neden doğrudan çağrı değil: yazma işlemi "cache'i de temizle" sorumluluğunu
+ * taşımamalı. Bugün tek dinleyici bu; yarın çok örnekli (multi-instance)
+ * kuruluma geçildiğinde aynı event kuyruğa taşınıp diğer örneklerin cache'ini
+ * de temizleyecek — servis kodunda tek satır değişmeden.
+ */
+/** @type {Array<() => void>} */
+let coreUnsubscribers = [];
+
+/**
+ * Çekirdek dinleyicileri kurar.
+ *
+ * İdempotent olması şart: `buildApp()` birden fazla kez çağrılabiliyor
+ * (testler, gelecekte çok kiracılı kurulum). Eski abonelikler kaldırılmazsa
+ * aynı event iki dinleyiciye gider — cache iki kez temizlenir (zararsız) ama
+ * aynı desendeki aktörler işi iki kez yapar (zararlı).
+ *
+ * Bu dosya yüklendiği anda da bir kez çağrılır (en altta): "yazma cache'i
+ * temizler" garantisi sunucunun nasıl başlatıldığına bağlı olmamalı. Servisi
+ * sunucu dışında kullanan bir betik ya da test, aksi hâlde 5 dakika boyunca
+ * silinmiş oda tipini fiyat hesabında görürdü.
+ */
+export function registerCoreSubscribers() {
+  for (const unsubscribe of coreUnsubscribers) unsubscribe();
+
+  // Oda envanteri ve müsaitlik cache'lenmiyor: oda satırı artık kat hizmeti
+  // durumu gibi dakikada değişen bilgi taşıyor, bayat bir kopya "temiz"
+  // görünen kirli odaya misafir yollar. Yalnızca nadiren değişen ayarlar tutulur.
+  coreUnsubscribers = [
+    eventBus.subscribeMany(SETTINGS_CHANGED_EVENTS, 'settings-cache', (payload) => {
+      invalidateHotelSettings(payload.hotelId);
+    }),
+  ];
+}
+
+registerCoreSubscribers();

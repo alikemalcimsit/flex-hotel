@@ -5,7 +5,11 @@
   "type": "module",
   "main": "index.js",
   "description": "BaseActor / BaseWorker / BaseLlmAgent, manifest, registry, approval, activity log",
+  "scripts": {
+    "test": "node --test \"*.test.js\""
+  },
   "dependencies": {
+    "@hotelos/core": "*",
     "@langchain/anthropic": "^1.5.9",
     "@langchain/core": "^1.2.9",
     "@langchain/langgraph": "^1.4.14",

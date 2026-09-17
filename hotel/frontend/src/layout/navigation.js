@@ -1,0 +1,172 @@
+import { PERMISSIONS, ROLE_PERMISSIONS } from '../lib/permissions.js';
+
+/**
+ * Menü yapısı — tek kaynak.
+ *
+ * Yan menü, üst bardaki konum satırı ve bölüm sayfalarındaki sekmeler
+ * (Odalar, Ayarlar) aynı listeden beslenir; bir alt sayfa eklenince üç yer
+ * ayrı ayrı güncellenmez.
+ *
+ * `roles` dolu olan girdiler yalnızca o rollere, `permission` taşıyanlar
+ * yalnızca o izne sahip rollere gösterilir (alt sayfalar da kendi izniyle
+ * süzülür). `badge` yan menüde sayı rozeti
+ * gösterilecek maddeyi işaretler (bkz. `lib/frontOffice.js`).
+ * Not: bu görsel bir kısıt; gerçek yetki kontrolü sunucuda.
+ */
+export const NAV_SECTIONS = Object.freeze([
+  {
+    title: 'Genel',
+    items: [{ label: 'Panel', to: '/', icon: 'dashboard', end: true }],
+  },
+  {
+    title: 'Ön büro',
+    // Odalar ön büro işi: resepsiyon ve kat hizmetleri de görmeli, yalnızca admin değil.
+    items: [
+      { label: 'Oda planı', to: '/oda-plani', icon: 'calendar' },
+      {
+        label: 'Mesajlar',
+        to: '/mesajlar',
+        icon: 'message',
+        badge: 'messages',
+        permission: PERMISSIONS.MESSAGES_VIEW,
+      },
+      {
+        label: 'İstekler',
+        to: '/istekler',
+        icon: 'clipboard',
+        badge: 'requests',
+        permission: PERMISSIONS.REQUESTS_VIEW,
+      },
+      {
+        label: 'Odalar',
+        to: '/odalar',
+        icon: 'bed',
+        children: [
+          { label: 'Oda listesi', to: '/odalar/liste', icon: 'list' },
+          { label: 'Müsaitlik', to: '/odalar/musaitlik', icon: 'calendar' },
+          { label: 'Oda atama', to: '/odalar/atama', icon: 'key' },
+        ],
+      },
+    ],
+  },
+  {
+    title: 'Yönetim',
+    items: [
+      {
+        label: 'Onaylar',
+        to: '/onaylar',
+        icon: 'checkCheck',
+        badge: 'approvals',
+        permission: PERMISSIONS.APPROVALS_VIEW,
+        children: [
+          { label: 'Bekleyen', to: '/onaylar/bekleyen', icon: 'clock' },
+          { label: 'Geçmiş', to: '/onaylar/gecmis', icon: 'list' },
+        ],
+      },
+      {
+        label: 'Bildirimler',
+        to: '/bildirimler',
+        icon: 'bell',
+        permission: PERMISSIONS.NOTIFICATIONS_VIEW,
+        children: [
+          { label: 'Gönderim geçmişi', to: '/bildirimler/gecmis', icon: 'clock' },
+          {
+            label: 'Şablonlar',
+            to: '/bildirimler/sablonlar',
+            icon: 'fileText',
+            permission: PERMISSIONS.NOTIFICATIONS_MANAGE,
+          },
+          {
+            label: 'Kanallar',
+            to: '/bildirimler/kanallar',
+            icon: 'send',
+            permission: PERMISSIONS.NOTIFICATIONS_MANAGE,
+          },
+        ],
+      },
+      {
+        label: 'Ayarlar',
+        to: '/ayarlar',
+        icon: 'settings',
+        roles: ['ADMIN'],
+        children: [
+          { label: 'Otel bilgileri', to: '/ayarlar/otel', icon: 'building' },
+          { label: 'Oda tipleri', to: '/ayarlar/oda-tipleri', icon: 'layers' },
+          { label: 'Vergiler', to: '/ayarlar/vergiler', icon: 'percent' },
+          { label: 'Sezonlar', to: '/ayarlar/sezonlar', icon: 'sun' },
+          { label: 'Genel parametreler', to: '/ayarlar/genel', icon: 'sliders' },
+        ],
+      },
+    ],
+  },
+]);
+
+/**
+ * Sahte oturumdaki rol kodlarının ekrandaki adı. Modül 2 gerçek rolleri
+ * getirdiğinde bu liste oradan beslenecek.
+ */
+export const ROLE_LABELS = Object.freeze({
+  ADMIN: 'Yönetici',
+  FRONT_DESK: 'Resepsiyon',
+});
+
+/**
+ * Role göre görünür bölümler; içi boşalan bölüm hiç çizilmez.
+ * @param {string | undefined} role
+ */
+export function visibleSections(role) {
+  const allowed = allowedFor(role);
+  return NAV_SECTIONS.map((section) => ({
+    ...section,
+    items: section.items
+      .filter(allowed)
+      .map((item) => (item.children ? { ...item, children: item.children.filter(allowed) } : item)),
+  })).filter((section) => section.items.length > 0);
+}
+
+/** @param {string | undefined} role */
+function allowedFor(role) {
+  const granted = ROLE_PERMISSIONS[role] ?? [];
+  return (entry) =>
+    (!entry.roles || entry.roles.includes(role)) && (!entry.permission || granted.includes(entry.permission));
+}
+
+/**
+ * Bir bölümün alt sayfaları (sekmeler için). Rol verilirse yalnızca o rolün
+ * görebildikleri.
+ * @param {string} to
+ * @param {string} [role]
+ */
+export function childrenOf(to, role) {
+  for (const section of NAV_SECTIONS) {
+    const item = section.items.find((entry) => entry.to === to);
+    if (!item) continue;
+    const children = item.children ?? [];
+    return role === undefined ? children : children.filter(allowedFor(role));
+  }
+  return [];
+}
+
+/** @param {string} pathname @param {string} to */
+function isUnder(pathname, to) {
+  return pathname === to || pathname.startsWith(`${to}/`);
+}
+
+/**
+ * Adrese karşılık gelen bölüm, menü maddesi ve varsa alt sayfa — konum satırı
+ * için. Kök (`/`) yalnızca tam eşleşir, yoksa her adresin sahibi olurdu.
+ *
+ * @param {string} pathname
+ * @returns {{ section: string, item: object, child: object | null } | null}
+ */
+export function findLocation(pathname) {
+  for (const section of NAV_SECTIONS) {
+    for (const item of section.items) {
+      const matches = item.end ? pathname === item.to : isUnder(pathname, item.to);
+      if (!matches) continue;
+      const child = (item.children ?? []).find((entry) => isUnder(pathname, entry.to)) ?? null;
+      return { section: section.title, item, child };
+    }
+  }
+  return null;
+}

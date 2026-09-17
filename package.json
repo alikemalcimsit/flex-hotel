@@ -14,6 +14,7 @@
     "dev:backend": "npm run dev -w @hotelos/hotel-backend",
     "dev:frontend": "npm run dev -w @hotelos/hotel-frontend",
     "build": "npm run build -w @hotelos/hotel-frontend",
+    "test": "npm run test --workspaces --if-present",
     "db:generate": "npm run db:generate -w @hotelos/hotel-backend",
     "db:migrate": "npm run db:migrate -w @hotelos/hotel-backend",
     "db:seed": "npm run db:seed -w @hotelos/hotel-backend",
