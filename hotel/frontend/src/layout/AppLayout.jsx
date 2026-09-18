@@ -27,6 +27,7 @@ const DOCUMENT_TITLE = 'FlexHotel';
  */
 export function AppLayout() {
   const user = useAuthStore((s) => s.user);
+  const permissions = useAuthStore((s) => s.permissions);
   const logout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -107,6 +108,7 @@ export function AppLayout() {
         <Sidebar
           ref={drawerFirstLinkRef}
           role={user?.role}
+          permissions={permissions}
           hotel={hotelQuery.data}
           badges={badges}
           isCollapsed={isCollapsed}

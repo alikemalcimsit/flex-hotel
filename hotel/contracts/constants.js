@@ -112,6 +112,7 @@ export const RESERVATION_STATUSES = Object.freeze([
   'CHECKED_OUT',
   'CANCELLED',
   'NO_SHOW',
+  'WAITLISTED',
 ]);
 
 export const RESERVATION_STATUS_LABELS = Object.freeze({
@@ -121,7 +122,34 @@ export const RESERVATION_STATUS_LABELS = Object.freeze({
   CHECKED_OUT: 'Çıkış yaptı',
   CANCELLED: 'İptal',
   NO_SHOW: 'Gelmedi',
+  WAITLISTED: 'Bekleyen listede',
 });
+
+/** Rezervasyon kaynağı (Prisma `ReservationSource` ile birebir). */
+export const RESERVATION_SOURCES = Object.freeze([
+  'UI',
+  'WEBCHAT',
+  'WHATSAPP',
+  'EMAIL',
+  'WIDGET',
+  'OTA',
+  'AGENCY',
+  'PHONE',
+]);
+
+export const RESERVATION_SOURCE_LABELS = Object.freeze({
+  UI: 'Resepsiyon',
+  WEBCHAT: 'Web sohbet',
+  WHATSAPP: 'WhatsApp',
+  EMAIL: 'E-posta',
+  WIDGET: 'Web widget',
+  OTA: 'OTA',
+  AGENCY: 'Acente',
+  PHONE: 'Telefon',
+});
+
+/** Envanteri tüketen durumlar (WAITLISTED tüketmez — bekleyen listede yer tutmaz). */
+export const RESERVATION_INVENTORY_STATUSES = Object.freeze(['PENDING', 'CONFIRMED', 'CHECKED_IN']);
 
 /**
  * Envanteri tüketen rezervasyon durumları: oda planında bar çizilir, müsaitlik

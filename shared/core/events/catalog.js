@@ -129,6 +129,60 @@ export const EVENT_CATALOG = Object.freeze({
     roomId: z.string().uuid().nullable().default(null),
   }),
 
+  /* Async kanallardan (chat, OTA — modül 8/32/33) gelen rezervasyon talebi.
+     reservation-worker doğrular, açar (`reservation.created`) ya da reddeder
+     (`reservation.rejected`). Modül 4'te henüz yayınlayan yok; sözleşme hazır. */
+  'reservation.requested': hotelScoped.extend({
+    requestId: z.string().uuid().nullable().default(null),
+    source: z.string().default('WEBCHAT'),
+    roomTypeId: z.string().uuid(),
+    checkIn: isoDate,
+    checkOut: isoDate,
+    adults: z.number().int().min(1).default(1),
+    children: z.number().int().min(0).default(0),
+    boardType: z.string().default('BB'),
+    guest: z.object({
+      name: z.string().min(1),
+      phone: z.string().nullable().default(null),
+      email: z.string().nullable().default(null),
+    }),
+  }),
+
+  'reservation.rejected': hotelScoped.extend({
+    requestId: z.string().uuid().nullable().default(null),
+    reason: z.string(),
+  }),
+
+  'reservation.updated': hotelScoped.extend({
+    reservationId: z.string().uuid(),
+    roomTypeId: z.string().uuid(),
+    checkIn: isoDate,
+    checkOut: isoDate,
+    roomId: z.string().uuid().nullable().default(null),
+  }),
+
+  'reservation.cancelled': hotelScoped.extend({
+    reservationId: z.string().uuid(),
+    roomTypeId: z.string().uuid(),
+    checkIn: isoDate,
+    checkOut: isoDate,
+  }),
+
+  'reservation.no_show': hotelScoped.extend({
+    reservationId: z.string().uuid(),
+    roomTypeId: z.string().uuid(),
+    checkIn: isoDate,
+    checkOut: isoDate,
+  }),
+
+  /** Bekleyen listeye alındı — envanter tüketmez, yalnızca liste tazelenir. */
+  'reservation.waitlisted': hotelScoped.extend({
+    reservationId: z.string().uuid(),
+    roomTypeId: z.string().uuid(),
+    checkIn: isoDate,
+    checkOut: isoDate,
+  }),
+
   'guest.checked_in': hotelScoped.extend({
     reservationId: z.string().uuid(),
     roomId: z.string().uuid(),
@@ -341,6 +395,9 @@ export const INVENTORY_CHANGED_EVENTS = Object.freeze([
   'room.blocked',
   'room.unblocked',
   'reservation.created',
+  'reservation.updated',
+  'reservation.cancelled',
+  'reservation.no_show',
   'guest.checked_in',
   'guest.checked_out',
 ]);
@@ -360,6 +417,15 @@ export const MESSAGING_CHANGED_EVENTS = Object.freeze([
   'guest.message.delivery',
   'conversation.updated',
   'conversation.read',
+]);
+
+/** Rezervasyon listesini etkileyen event'ler (canlı yayın: `reservations.changed`). */
+export const RESERVATIONS_CHANGED_EVENTS = Object.freeze([
+  'reservation.created',
+  'reservation.updated',
+  'reservation.cancelled',
+  'reservation.no_show',
+  'reservation.waitlisted',
 ]);
 
 /** İstek listesini etkileyen event'ler (canlı yayın: `requests.changed`). */

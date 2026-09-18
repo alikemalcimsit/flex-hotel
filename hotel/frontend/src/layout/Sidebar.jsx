@@ -34,10 +34,10 @@ const LINK_ACTIVE = 'bg-white text-ink';
  * }} props
  */
 export const Sidebar = forwardRef(function Sidebar(
-  { role, hotel, badges = {}, isCollapsed, onNavigate, onClose, showClose = false },
+  { role, permissions, hotel, badges = {}, isCollapsed, onNavigate, onClose, showClose = false },
   firstLinkRef,
 ) {
-  const sections = visibleSections(role);
+  const sections = visibleSections(role, permissions);
   const badgeFor = (item) => (item.badge ? badges[item.badge] ?? null : null);
 
   return (

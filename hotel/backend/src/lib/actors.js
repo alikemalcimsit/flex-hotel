@@ -1,12 +1,14 @@
 import { actorRegistry } from '@hotelos/actor-kit';
 import { NOTIFICATION_CHANNEL_LABELS, NOTIFICATION_SOURCE_LABELS, NOTIFICATION_TRIGGER_EVENTS } from '@hotelos/hotel-contracts';
 import { createNotificationWorker, NOTIFICATION_WORKER_NAME } from '@hotelos/notification-worker';
+import { createReservationWorker } from '@hotelos/reservation-worker';
 import { createRoomWorker } from '@hotelos/room-worker';
 import { prismaUnfiltered } from '../db.js';
 import { manualTaskPermission } from '../modules/notifications/rules.js';
 import { enqueueTriggerNotifications } from '../modules/notifications/service.js';
 import { raiseStaffAlert } from '../modules/notifications/staff-alerts.js';
 import { requestApprovalStandalone } from '../modules/approvals/service.js';
+import { requestReservation } from '../modules/reservations/service.js';
 import { applySystemRoomState, autoAssignRoom } from '../modules/rooms/service.js';
 import { eventBus } from './events.js';
 import { writeWithEvents } from './write.js';
@@ -129,6 +131,9 @@ const NOTIFICATION_TRIGGERS = Object.freeze(
 export function registerActors() {
   if (!actorRegistry.get('room-worker')) {
     actorRegistry.register(createRoomWorker({ autoAssignRoom, applySystemRoomState }, deps));
+  }
+  if (!actorRegistry.get('reservation-worker')) {
+    actorRegistry.register(createReservationWorker({ requestReservation }, deps));
   }
   if (!actorRegistry.get(NOTIFICATION_WORKER_NAME)) {
     actorRegistry.register(

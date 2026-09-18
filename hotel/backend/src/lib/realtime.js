@@ -4,6 +4,7 @@ import {
   MESSAGING_CHANGED_EVENTS,
   NOTIFICATIONS_CHANGED_EVENTS,
   REQUESTS_CHANGED_EVENTS,
+  RESERVATIONS_CHANGED_EVENTS,
   STAFF_ALERT_EVENTS,
 } from '@hotelos/core';
 import { eventBus } from './events.js';
@@ -47,6 +48,9 @@ export const MESSAGING_CHANNEL = 'messaging.changed';
 /** Misafir istekleri kanalı. */
 export const REQUESTS_CHANNEL = 'requests.changed';
 
+/** Rezervasyon listesi kanalı. */
+export const RESERVATIONS_CHANNEL = 'reservations.changed';
+
 /** Bildirim geçmişi kanalı. */
 export const NOTIFICATIONS_CHANNEL = 'notifications.changed';
 
@@ -67,6 +71,7 @@ const CHANNEL_EVENTS = Object.freeze({
   [INVENTORY_CHANNEL]: LIVE_VIEW_EVENTS,
   [MESSAGING_CHANNEL]: MESSAGING_CHANGED_EVENTS,
   [REQUESTS_CHANNEL]: REQUESTS_CHANGED_EVENTS,
+  [RESERVATIONS_CHANNEL]: RESERVATIONS_CHANGED_EVENTS,
   [NOTIFICATIONS_CHANNEL]: NOTIFICATIONS_CHANGED_EVENTS,
   [STAFF_ALERTS_CHANNEL]: STAFF_ALERT_EVENTS,
   [APPROVALS_CHANNEL]: APPROVAL_EVENTS,

@@ -1,18 +1,17 @@
 import { prisma } from '../db.js';
 import { cache } from './cache.js';
-import { AppError } from './errors.js';
+import { AppError, UnauthorizedError } from './errors.js';
 
 /**
- * ⚠️ GEÇİCİ (STOPGAP) — otel bağlamı token'dan değil ortam değişkeninden geliyor.
+ * Otel bağlamı (`request.hotelId`).
  *
- * Şema en baştan multi-tenant (her tabloda `hotelId`). Gerçek çözüm: kullanıcı
- * giriş yapınca JWT içindeki `hotelId` bağlam olur (modül 2), zincir yönetimi
- * ise modül 63'te üst bardan otel seçtirir. O ikisi gelene kadar tek demo otel
- * `HOTEL_CODE` ile çözülüyor.
+ * Korumalı route'larda `hotelId` giriş yapan kullanıcının JWT'sinden gelir
+ * (`app.js` onRequest hook'u `request.auth`'a koyar). Zincir yönetimi (modül 63)
+ * üst bardan otel seçtirdiğinde de kaynak yine token olacak.
  *
- * Önemli: bu geçicilik `hotelId`'nin sorgularda *kullanılmasını* etkilemiyor.
- * Servis katmanı her zaman hotelId ile filtreliyor — sadece bu kimliğin nereden
- * geldiği değişecek, tek satırda.
+ * `resolveHotelId()` (aşağıda, `HOTEL_CODE` ile) yalnızca token'ın olmadığı
+ * bağlamlarda kalır: seed betiği ve socket el sıkışması (kimlik henüz orada
+ * doğrulanmıyor — realtime katmanının bilinen sınırı).
  */
 
 const HOTEL_CODE = process.env.HOTEL_CODE ?? 'DEMO';
@@ -43,9 +42,12 @@ export async function resolveHotelId() {
 }
 
 /**
- * `request.hotelId` alanını dolduran preHandler.
+ * `request.hotelId` alanını giriş yapan kullanıcının token'ından dolduran
+ * preHandler. Kimlik yoksa 401 — korumalı route'a token'sız gelinmiştir.
  * @param {import('fastify').FastifyRequest} request
  */
 export async function withHotelContext(request) {
-  request.hotelId = await resolveHotelId();
+  const hotelId = request.auth?.hotelId;
+  if (!hotelId) throw new UnauthorizedError();
+  request.hotelId = hotelId;
 }

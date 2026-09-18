@@ -2,13 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Icon, Input } from '@hotelos/ui';
 import { Logo } from '../components/Logo.jsx';
+import { apiPost } from '../lib/api.js';
 import { useAuthStore } from '../store/auth.js';
-
-// TODO: modül 2'de gerçek /auth/login API'sine bağlanacak
-const FAKE_USERS = {
-  'admin@hotel.local': { password: 'admin123', name: 'Admin', role: 'ADMIN' },
-  'resepsiyon@hotel.local': { password: '123456', name: 'Resepsiyon', role: 'FRONT_DESK' },
-};
 
 /** Tanıtım panelinde sayılan başlıklar — yalnızca bugün panelde gerçekten olan bölümler. */
 const HIGHLIGHTS = [
@@ -22,18 +17,24 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [error, setError] = useState('');
-  const login = useAuthStore((s) => s.login);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const setSession = useAuthStore((s) => s.setSession);
   const navigate = useNavigate();
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
-    const found = FAKE_USERS[email.trim().toLowerCase()];
-    if (!found || found.password !== password) {
-      setError('E-posta veya şifre hatalı');
-      return;
+    if (isSubmitting) return;
+    setError('');
+    setIsSubmitting(true);
+    try {
+      const session = await apiPost('/auth/login', { email: email.trim().toLowerCase(), password });
+      setSession(session);
+      navigate('/');
+    } catch (submitError) {
+      setError(submitError.message ?? 'Giriş yapılamadı');
+    } finally {
+      setIsSubmitting(false);
     }
-    login({ email: email.trim().toLowerCase(), name: found.name, role: found.role });
-    navigate('/');
   }
 
   return (
@@ -113,8 +114,13 @@ export function LoginPage() {
                   </button>
                 }
               />
-              <Button type="submit" icon="arrowRight" className="mt-2 w-full flex-row-reverse">
-                Giriş yap
+              <Button
+                type="submit"
+                icon="arrowRight"
+                disabled={isSubmitting}
+                className="mt-2 w-full flex-row-reverse"
+              >
+                {isSubmitting ? 'Giriş yapılıyor…' : 'Giriş yap'}
               </Button>
             </form>
           </div>

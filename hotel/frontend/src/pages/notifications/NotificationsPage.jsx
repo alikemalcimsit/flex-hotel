@@ -10,7 +10,8 @@ import { useAuthStore } from '../../store/auth.js';
  */
 export function NotificationsPage() {
   const role = useAuthStore((state) => state.user?.role);
-  const tabs = childrenOf('/bildirimler', role);
+  const permissions = useAuthStore((state) => state.permissions);
+  const tabs = childrenOf('/bildirimler', role, permissions);
 
   return (
     <div className="flex flex-col gap-7">

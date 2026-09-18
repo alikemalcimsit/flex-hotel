@@ -9,7 +9,8 @@ import { useAuthStore } from '../../store/auth.js';
  */
 export function ApprovalsPage() {
   const role = useAuthStore((state) => state.user?.role);
-  const tabs = childrenOf('/onaylar', role);
+  const permissions = useAuthStore((state) => state.permissions);
+  const tabs = childrenOf('/onaylar', role, permissions);
 
   return (
     <div className="flex flex-col gap-7">

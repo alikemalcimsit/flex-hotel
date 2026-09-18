@@ -29,6 +29,10 @@ const RoomTypesTab = lazy(() => import('./pages/settings/RoomTypesTab.jsx').then
 const TaxesTab = lazy(() => import('./pages/settings/TaxesTab.jsx').then((m) => ({ default: m.TaxesTab })));
 const SeasonsTab = lazy(() => import('./pages/settings/SeasonsTab.jsx').then((m) => ({ default: m.SeasonsTab })));
 const GeneralTab = lazy(() => import('./pages/settings/GeneralTab.jsx').then((m) => ({ default: m.GeneralTab })));
+const UsersTab = lazy(() => import('./pages/settings/UsersTab.jsx').then((m) => ({ default: m.UsersTab })));
+const RolePermissionsTab = lazy(() =>
+  import('./pages/settings/RolePermissionsTab.jsx').then((m) => ({ default: m.RolePermissionsTab })),
+);
 const MessagesPage = lazy(() => import('./pages/messages/MessagesPage.jsx').then((m) => ({ default: m.MessagesPage })));
 const NotificationsPage = lazy(() =>
   import('./pages/notifications/NotificationsPage.jsx').then((m) => ({ default: m.NotificationsPage })),
@@ -44,6 +48,15 @@ const NotificationChannelsTab = lazy(() =>
 );
 const GuestRequestsPage = lazy(() =>
   import('./pages/requests/GuestRequestsPage.jsx').then((m) => ({ default: m.GuestRequestsPage })),
+);
+const ReservationsPage = lazy(() =>
+  import('./pages/reservations/ReservationsPage.jsx').then((m) => ({ default: m.ReservationsPage })),
+);
+const ReservationListTab = lazy(() =>
+  import('./pages/reservations/ReservationListTab.jsx').then((m) => ({ default: m.ReservationListTab })),
+);
+const ReservationWaitingTab = lazy(() =>
+  import('./pages/reservations/ReservationWaitingTab.jsx').then((m) => ({ default: m.ReservationWaitingTab })),
 );
 const ApprovalsPage = lazy(() => import('./pages/approvals/ApprovalsPage.jsx').then((m) => ({ default: m.ApprovalsPage })));
 const ApprovalsPendingTab = lazy(() => import('./pages/approvals/PendingTab.jsx').then((m) => ({ default: m.PendingTab })));
@@ -111,6 +124,18 @@ export default function App() {
                 </RequirePermission>
               }
             />
+            <Route
+              path="rezervasyonlar"
+              element={
+                <RequirePermission permission={PERMISSIONS.RESERVATIONS_VIEW}>
+                  <ReservationsPage />
+                </RequirePermission>
+              }
+            >
+              <Route index element={<Navigate to="/rezervasyonlar/liste" replace />} />
+              <Route path="liste" element={<ReservationListTab />} />
+              <Route path="bekleyen" element={<ReservationWaitingTab />} />
+            </Route>
             <Route path="odalar" element={<RoomsPage />}>
               <Route index element={<Navigate to="/odalar/liste" replace />} />
               <Route path="liste" element={<RoomListTab />} />
@@ -170,6 +195,22 @@ export default function App() {
               <Route path="vergiler" element={<TaxesTab />} />
               <Route path="sezonlar" element={<SeasonsTab />} />
               <Route path="genel" element={<GeneralTab />} />
+              <Route
+                path="kullanicilar"
+                element={
+                  <RequirePermission permission={PERMISSIONS.USERS_VIEW}>
+                    <UsersTab />
+                  </RequirePermission>
+                }
+              />
+              <Route
+                path="roller"
+                element={
+                  <RequirePermission permission={PERMISSIONS.ROLES_MANAGE}>
+                    <RolePermissionsTab />
+                  </RequirePermission>
+                }
+              />
             </Route>
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

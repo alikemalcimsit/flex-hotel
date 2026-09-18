@@ -1,4 +1,4 @@
-import { PERMISSIONS, ROLE_PERMISSIONS } from '../lib/permissions.js';
+import { PERMISSIONS, ROLE_LABELS } from '@hotelos/hotel-contracts';
 
 /**
  * Menü yapısı — tek kaynak.
@@ -8,9 +8,9 @@ import { PERMISSIONS, ROLE_PERMISSIONS } from '../lib/permissions.js';
  * ayrı ayrı güncellenmez.
  *
  * `roles` dolu olan girdiler yalnızca o rollere, `permission` taşıyanlar
- * yalnızca o izne sahip rollere gösterilir (alt sayfalar da kendi izniyle
- * süzülür). `badge` yan menüde sayı rozeti
- * gösterilecek maddeyi işaretler (bkz. `lib/frontOffice.js`).
+ * yalnızca o izne sahip kullanıcılara gösterilir (alt sayfalar da kendi izniyle
+ * süzülür). İzinler giriş yapan kullanıcının oturumundan gelir (modül 2).
+ * `badge` yan menüde sayı rozeti gösterilecek maddeyi işaretler.
  * Not: bu görsel bir kısıt; gerçek yetki kontrolü sunucuda.
  */
 export const NAV_SECTIONS = Object.freeze([
@@ -23,6 +23,16 @@ export const NAV_SECTIONS = Object.freeze([
     // Odalar ön büro işi: resepsiyon ve kat hizmetleri de görmeli, yalnızca admin değil.
     items: [
       { label: 'Oda planı', to: '/oda-plani', icon: 'calendar' },
+      {
+        label: 'Rezervasyonlar',
+        to: '/rezervasyonlar',
+        icon: 'clipboard',
+        permission: PERMISSIONS.RESERVATIONS_VIEW,
+        children: [
+          { label: 'Liste', to: '/rezervasyonlar/liste', icon: 'list' },
+          { label: 'Bekleyenler', to: '/rezervasyonlar/bekleyen', icon: 'clock' },
+        ],
+      },
       {
         label: 'Mesajlar',
         to: '/mesajlar',
@@ -95,27 +105,34 @@ export const NAV_SECTIONS = Object.freeze([
           { label: 'Vergiler', to: '/ayarlar/vergiler', icon: 'percent' },
           { label: 'Sezonlar', to: '/ayarlar/sezonlar', icon: 'sun' },
           { label: 'Genel parametreler', to: '/ayarlar/genel', icon: 'sliders' },
+          { label: 'Kullanıcılar', to: '/ayarlar/kullanicilar', icon: 'user', permission: PERMISSIONS.USERS_VIEW },
+          { label: 'Roller & İzinler', to: '/ayarlar/roller', icon: 'lock', permission: PERMISSIONS.ROLES_MANAGE },
         ],
       },
     ],
   },
 ]);
 
-/**
- * Sahte oturumdaki rol kodlarının ekrandaki adı. Modül 2 gerçek rolleri
- * getirdiğinde bu liste oradan beslenecek.
- */
-export const ROLE_LABELS = Object.freeze({
-  ADMIN: 'Yönetici',
-  FRONT_DESK: 'Resepsiyon',
-});
+export { ROLE_LABELS };
 
 /**
- * Role göre görünür bölümler; içi boşalan bölüm hiç çizilmez.
+ * Bir menü girdisi bu rol + izinlerle görünür mü?
  * @param {string | undefined} role
+ * @param {readonly string[]} granted Giriş yapan kullanıcının etkin izinleri
  */
-export function visibleSections(role) {
-  const allowed = allowedFor(role);
+function allowedFor(role, granted) {
+  const set = granted ?? [];
+  return (entry) =>
+    (!entry.roles || entry.roles.includes(role)) && (!entry.permission || set.includes(entry.permission));
+}
+
+/**
+ * Rol + izinlere göre görünür bölümler; içi boşalan bölüm hiç çizilmez.
+ * @param {string | undefined} role
+ * @param {readonly string[]} [granted]
+ */
+export function visibleSections(role, granted) {
+  const allowed = allowedFor(role, granted);
   return NAV_SECTIONS.map((section) => ({
     ...section,
     items: section.items
@@ -124,25 +141,19 @@ export function visibleSections(role) {
   })).filter((section) => section.items.length > 0);
 }
 
-/** @param {string | undefined} role */
-function allowedFor(role) {
-  const granted = ROLE_PERMISSIONS[role] ?? [];
-  return (entry) =>
-    (!entry.roles || entry.roles.includes(role)) && (!entry.permission || granted.includes(entry.permission));
-}
-
 /**
- * Bir bölümün alt sayfaları (sekmeler için). Rol verilirse yalnızca o rolün
- * görebildikleri.
+ * Bir bölümün alt sayfaları (sekmeler için). Rol verilirse yalnızca o rol +
+ * izinlerin görebildikleri; rol verilmezse hepsi.
  * @param {string} to
  * @param {string} [role]
+ * @param {readonly string[]} [granted]
  */
-export function childrenOf(to, role) {
+export function childrenOf(to, role, granted) {
   for (const section of NAV_SECTIONS) {
     const item = section.items.find((entry) => entry.to === to);
     if (!item) continue;
     const children = item.children ?? [];
-    return role === undefined ? children : children.filter(allowedFor(role));
+    return role === undefined ? children : children.filter(allowedFor(role, granted));
   }
   return [];
 }

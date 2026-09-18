@@ -34,7 +34,7 @@ const MAX_ACTOR_LENGTH = 120;
  * kontrolde sessizce engelleniyordu.
  */
 export const CORS_METHODS = Object.freeze(['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE']);
-export const CORS_ALLOWED_HEADERS = Object.freeze(['Content-Type', 'x-actor', 'x-correlation-id']);
+export const CORS_ALLOWED_HEADERS = Object.freeze(['Content-Type', 'Authorization', 'x-actor', 'x-correlation-id']);
 
 const isProduction = () => process.env.NODE_ENV === 'production';
 
