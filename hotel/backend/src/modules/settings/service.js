@@ -73,6 +73,7 @@ function toHotelDto(row) {
     defaultBoardType: row.defaultBoardType,
     cancellationPolicyDays: row.cancellationPolicyDays,
     cancellationPolicyPenaltyPct: decimalToString(row.cancellationPolicyPenaltyPct),
+    overbookingPolicy: row.overbookingPolicy,
     updatedAt: row.updatedAt.toISOString(),
   };
 }
@@ -248,6 +249,7 @@ export async function updateGeneralSettings(hotelId, input) {
           cancellationPolicyDays: data.cancellationPolicyDays,
           cancellationPolicyPenaltyPct: data.cancellationPolicyPenaltyPct,
           phoneCountryCode: data.phoneCountryCode,
+          overbookingPolicy: data.overbookingPolicy,
         },
         'Otel kaydı bulunamadı',
       );

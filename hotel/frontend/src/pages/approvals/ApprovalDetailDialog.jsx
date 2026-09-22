@@ -203,11 +203,11 @@ export function ApprovalDetailDialog({ approvalId, canDecide, timeZone, initialM
             {item.note && <Field label="Karar notu">{item.note}</Field>}
           </dl>
 
-          {Object.keys(item.data ?? {}).length > 0 && (
+          {visibleData(item.data).length > 0 && (
             <section aria-label="İsteğin verisi" className="rounded-item border border-line bg-canvas p-3">
               <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-muted">İsteğin verisi</h4>
               <dl className="grid grid-cols-1 gap-y-1 text-sm sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-                {Object.entries(item.data).map(([key, value]) => (
+                {visibleData(item.data).map(([key, value]) => (
                   <div key={key} className="contents">
                     <dt className="truncate text-ink-muted">{key}</dt>
                     <dd className="break-words font-mono text-xs text-ink">{describeValue(value)}</dd>
@@ -249,6 +249,15 @@ function Field({ label, children }) {
       <dd className="text-ink">{children}</dd>
     </div>
   );
+}
+
+/**
+ * İsteyenin ekranda gösterilecek verisi. Anahtarı "_" ile başlayanlar iç
+ * veridir (ör. onaylanınca yeniden işlenecek ham istek) ve gösterilmez.
+ * @param {Record<string, unknown> | null | undefined} data
+ */
+function visibleData(data) {
+  return Object.entries(data ?? {}).filter(([key]) => !key.startsWith('_'));
 }
 
 /** @param {unknown} value */

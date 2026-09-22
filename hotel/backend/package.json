@@ -26,6 +26,7 @@
     "@hotelos/core": "*",
     "@hotelos/hotel-contracts": "*",
     "@hotelos/notification-worker": "*",
+    "@hotelos/reservation-worker": "*",
     "@hotelos/room-worker": "*",
     "@prisma/client": "^6.19.3",
     "bcryptjs": "^3.0.3",

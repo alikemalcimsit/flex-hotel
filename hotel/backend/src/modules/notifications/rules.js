@@ -27,6 +27,9 @@ const ARRIVING_STATUSES = new Set(['PENDING', 'CONFIRMED']);
 export function triggerSkipReason(trigger, reservation, businessDate) {
   switch (trigger) {
     case 'RESERVATION_CONFIRMED':
+      // Opsiyonlu rezervasyon kesin değildir; onay bildirimi onaylanınca gider
+      // (`reservation.confirmed`).
+      if (reservation.status === 'PENDING') return 'Opsiyonlu rezervasyon; onaylanınca gönderilir';
       return NO_CONFIRMATION_STATUSES.has(reservation.status) ? `Rezervasyon durumu uygun değil (${reservation.status})` : null;
     case 'ROOM_ASSIGNED':
       if (reservation.status === 'CHECKED_IN') return null;
@@ -141,6 +144,8 @@ export function guestOptedOut(preferences, channel) {
 const MANUAL_TASK_PERMISSIONS = Object.freeze({
   'Oda atama': 'rooms.operate',
   'Bildirim merkezi': 'notifications.manage',
+  Rezervasyon: 'reservations.manage',
+  'Onay kuyruğu': 'approvals.decide',
 });
 
 export const MANUAL_TASK_FALLBACK_PERMISSION = 'settings.manage';

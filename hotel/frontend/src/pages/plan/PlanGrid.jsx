@@ -107,7 +107,11 @@ function summaryTitle(date, stats) {
  *   onDropOnRoom: (room: object) => void,
  *   onHoverRoom: (roomId: string | null) => void,
  *   onSelectReservation: (reservationId: string) => void,
+ *   onCreateReservation?: (room: object, date: string) => void,
  * }} props
+ *
+ * `onCreateReservation` verilirse (rezervasyon açma yetkisi) bugünden itibaren
+ * boş hücreler tıklanabilir: o odaya o gün girişli yeni rezervasyon formu açılır.
  */
 export function PlanGrid({
   window: planWindow,
@@ -122,12 +126,13 @@ export function PlanGrid({
   onDropOnRoom,
   onHoverRoom,
   onSelectReservation,
+  onCreateReservation,
 }) {
   const { dates, today } = planWindow;
   const template = `${ROOM_COLUMN_PX}px repeat(${dates.length}, minmax(${MIN_CELL_PX}px, 1fr))`;
   const summaryByDate = useMemo(() => new Map(summary.map((entry) => [entry.date, entry])), [summary]);
   const days = useMemo(
-    () => dates.map((date) => ({ date, ...dayLabel(date), isToday: date === today })),
+    () => dates.map((date) => ({ date, ...dayLabel(date), isToday: date === today, isPast: date < today })),
     [dates, today],
   );
   const tokens = useMemo(
@@ -216,6 +221,7 @@ export function PlanGrid({
               onDropOnRoom={onDropOnRoom}
               onHoverRoom={onHoverRoom}
               onSelectReservation={onSelectReservation}
+              onCreateReservation={onCreateReservation}
             />
           );
         })}
@@ -238,6 +244,7 @@ const RoomRow = memo(function RoomRow({
   onDropOnRoom,
   onHoverRoom,
   onSelectReservation,
+  onCreateReservation,
 }) {
   return (
     <div
@@ -298,15 +305,27 @@ const RoomRow = memo(function RoomRow({
       </div>
 
       {/* Zemin hücreleri: hafta sonu tonu, bugün çizgisi, boş satırda bırakma alanı */}
-      {days.map((day, index) => (
-        <div
-          key={day.date}
-          style={{ gridColumn: index + 2, gridRow: 1 }}
-          className={`h-12 border-l border-line/60 ${day.isWeekend ? 'bg-info-soft/30' : ''} ${
-            day.isToday ? 'shadow-[inset_2px_0_0_var(--color-sec)]' : ''
-          }`}
-        />
-      ))}
+      {days.map((day, index) => {
+        const tone = `h-12 border-l border-line/60 ${day.isWeekend ? 'bg-info-soft/30' : ''} ${
+          day.isToday ? 'shadow-[inset_2px_0_0_var(--color-sec)]' : ''
+        }`;
+        // Rezervasyon çubukları ve arıza kayıtları hücrenin üstünde durur;
+        // tıklama yalnızca gerçekten boş kalan yere düşer.
+        if (!onCreateReservation || day.isPast) {
+          return <div key={day.date} style={{ gridColumn: index + 2, gridRow: 1 }} className={tone} />;
+        }
+        return (
+          <button
+            key={day.date}
+            type="button"
+            style={{ gridColumn: index + 2, gridRow: 1 }}
+            className={`${tone} cursor-cell transition-colors hover:bg-info-soft/60 focus-visible:bg-info-soft/60 focus-visible:outline-none`}
+            aria-label={`${room.number} numaralı odaya ${day.date} girişli rezervasyon aç`}
+            title="Bu odaya bu gün girişli rezervasyon aç"
+            onClick={() => onCreateReservation(room, day.date)}
+          />
+        );
+      })}
 
       {/* Arıza kayıtları rezervasyonların altında kalır. */}
       {room.blocks.map((block) => (

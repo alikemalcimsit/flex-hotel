@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { BOARD_TYPE_LABELS, RESERVATION_STATUS_LABELS } from '@hotelos/hotel-contracts';
 import { Alert, Badge, Button, Icon, Spinner } from '@hotelos/ui';
@@ -45,6 +46,13 @@ export function ReservationDrawer({ reservationId, canOperate, onClose, onChange
           <Button variant="outline" onClick={onClose}>
             Kapat
           </Button>
+          {detail && (
+            <Link to={`/rezervasyonlar/${detail.id}`}>
+              <Button variant="outline" icon="bookOpen">
+                Rezervasyon sayfası
+              </Button>
+            </Link>
+          )}
           {detail && canOperate && detail.actions.canUnassign && (
             <Button variant="dangerSoft" icon="close" onClick={() => onUnassign(detail)}>
               Oda atamasını kaldır

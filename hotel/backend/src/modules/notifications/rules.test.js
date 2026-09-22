@@ -36,7 +36,9 @@ describe('tetikleyici kuralları', () => {
   it('iptal edilmiş ya da gelmemiş rezervasyona bildirim gitmez', () => {
     assert.ok(triggerSkipReason('RESERVATION_CONFIRMED', stay({ status: 'CANCELLED' }), today));
     assert.ok(triggerSkipReason('ROOM_ASSIGNED', stay({ status: 'NO_SHOW' }), today));
-    assert.equal(triggerSkipReason('RESERVATION_CONFIRMED', stay({ status: 'PENDING' }), today), null);
+    // Opsiyonlu rezervasyona onay bildirimi gitmez; onaylanınca (`reservation.confirmed`) gider.
+    assert.match(triggerSkipReason('RESERVATION_CONFIRMED', stay({ status: 'PENDING' }), today), /Opsiyonlu/);
+    assert.equal(triggerSkipReason('RESERVATION_CONFIRMED', stay({ status: 'CONFIRMED' }), today), null);
   });
 
   it('giriş ve çıkış bildirimi ancak durum gerçekten değiştiyse gider', () => {

@@ -4,6 +4,7 @@ import {
   MESSAGING_CHANGED_EVENTS,
   NOTIFICATIONS_CHANGED_EVENTS,
   REQUESTS_CHANGED_EVENTS,
+  RESERVATIONS_CHANGED_EVENTS,
   STAFF_ALERT_EVENTS,
 } from '@hotelos/core';
 import { eventBus } from './events.js';
@@ -59,6 +60,9 @@ export const STAFF_ALERTS_CHANNEL = 'staff.alerts';
 /** Onay kuyruğu kanalı (üst bar sayacı ve onay listesi). */
 export const APPROVALS_CHANNEL = 'approvals.changed';
 
+/** Rezervasyon listesi, detayı ve bekleme listesi kanalı. */
+export const RESERVATIONS_CHANNEL = 'reservations.changed';
+
 /**
  * Kanal → o kanala haber düşüren event'ler. Ekran yalnızca ilgilendiği kanalı
  * dinler; gelen kutusu açık olmayan panel envanter haberleriyle uğraşmaz.
@@ -70,6 +74,7 @@ const CHANNEL_EVENTS = Object.freeze({
   [NOTIFICATIONS_CHANNEL]: NOTIFICATIONS_CHANGED_EVENTS,
   [STAFF_ALERTS_CHANNEL]: STAFF_ALERT_EVENTS,
   [APPROVALS_CHANNEL]: APPROVAL_EVENTS,
+  [RESERVATIONS_CHANNEL]: RESERVATIONS_CHANGED_EVENTS,
 });
 
 /** @param {string} hotelId */
@@ -168,6 +173,7 @@ export function registerRealtimeBridge(io, logger = console) {
         requestId: payload.requestId ?? null,
         notificationId: payload.notificationId ?? null,
         approvalId: payload.approvalId ?? null,
+        waitlistId: payload.waitlistId ?? null,
         // Zil: uyarı kimliği, türü ve kime gittiği (içerik yok).
         alertId: payload.alertId ?? null,
         kind: payload.kind ?? null,

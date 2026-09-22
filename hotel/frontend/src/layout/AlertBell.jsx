@@ -20,6 +20,8 @@ const KIND_ICONS = Object.freeze({
   MANUAL_TASK: 'clipboard',
   NOTIFICATION_FAILED: 'alertCircle',
   APPROVAL_REQUESTED: 'checkCheck',
+  APPROVAL_DECIDED: 'checkCircle',
+  WAITLIST_AVAILABLE: 'bookOpen',
 });
 
 const SEVERITY_TONES = Object.freeze({

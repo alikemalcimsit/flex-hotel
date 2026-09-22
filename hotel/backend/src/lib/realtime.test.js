@@ -95,6 +95,7 @@ describe('registerRealtimeBridge', () => {
       'userId',
       'alertId',
       'approvalId',
+      'waitlistId',
       'spreadMs',
     ].sort());
   });
@@ -203,7 +204,10 @@ describe('registerRealtimeBridge', () => {
       }),
     );
 
-    assert.equal(io.emitted.length, 1);
+    // Oda ataması hem oda planını hem rezervasyon listesini ilgilendirir: her
+    // kanala bir kez düşer, hiçbir kanala iki kez düşmez.
+    const channels = io.emitted.map((row) => row.channel).sort();
+    assert.deepEqual(channels, [realtime.INVENTORY_CHANNEL, realtime.RESERVATIONS_CHANNEL].sort());
   });
 
   it('köprü söküldükten sonra yayın durur', async () => {

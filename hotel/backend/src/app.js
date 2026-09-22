@@ -24,6 +24,9 @@ import { approvalRoutes } from './modules/approvals/routes.js';
 import { approvalCacheStats } from './modules/approvals/service.js';
 import { registerApprovalSubscribers, setApprovalSubscriberLogger } from './modules/approvals/subscribers.js';
 import { guestRequestRoutes } from './modules/guest-requests/routes.js';
+import { reservationRoutes } from './modules/reservations/routes.js';
+import { reservationCacheStats } from './modules/reservations/service.js';
+import { registerReservationSubscribers, setReservationSubscriberLogger } from './modules/reservations/subscribers.js';
 import { requestCacheStats } from './modules/guest-requests/service.js';
 import { messagingRoutes } from './modules/messaging/routes.js';
 import { messagingCacheStats } from './modules/messaging/service.js';
@@ -110,6 +113,8 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   registerNotificationSubscribers();
   setApprovalSubscriberLogger(app.log);
   registerApprovalSubscribers();
+  setReservationSubscriberLogger(app.log);
+  registerReservationSubscribers();
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
@@ -216,12 +221,14 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
         messagingCache: messagingCacheStats(),
         requestCache: requestCacheStats(),
         approvalCache: approvalCacheStats(),
+        reservationCache: reservationCacheStats(),
       },
     };
   });
 
   await app.register(settingsRoutes, { prefix: '/settings' });
   await app.register(roomsRoutes, { prefix: '/rooms' });
+  await app.register(reservationRoutes, { prefix: '/reservations' });
   await app.register(planRoutes, { prefix: '/plan' });
   await app.register(messagingRoutes, { prefix: '/messaging' });
   await app.register(guestRequestRoutes, { prefix: '/guest-requests' });

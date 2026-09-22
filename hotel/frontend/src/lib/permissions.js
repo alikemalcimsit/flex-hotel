@@ -23,6 +23,9 @@ export const PERMISSIONS = Object.freeze({
   NOTIFICATIONS_MANAGE: 'notifications.manage',
   APPROVALS_VIEW: 'approvals.view',
   APPROVALS_DECIDE: 'approvals.decide',
+  RESERVATIONS_VIEW: 'reservations.view',
+  RESERVATIONS_MANAGE: 'reservations.manage',
+  RESERVATIONS_PRICE_OVERRIDE: 'reservations.price_override',
 });
 
 export const ROLE_PERMISSIONS = Object.freeze({
@@ -31,7 +34,10 @@ export const ROLE_PERMISSIONS = Object.freeze({
   // (oda ekleme, arıza kaydı) yönetim değiştirir. Misafirle yazışma ve
   // istek takibi ön büronun asıl işidir. Misafire giden bildirimlerin
   // geçmişini görür ("onay e-postası gitti mi?"); şablon ve kanal ayarı yönetimde.
+  // Rezervasyon açar, düzenler, iptal eder; elle fiyat yönetimde.
   FRONT_DESK: [
+    PERMISSIONS.RESERVATIONS_VIEW,
+    PERMISSIONS.RESERVATIONS_MANAGE,
     PERMISSIONS.ROOMS_VIEW,
     PERMISSIONS.ROOMS_OPERATE,
     PERMISSIONS.MESSAGES_VIEW,

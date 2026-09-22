@@ -248,17 +248,103 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 4. Rezervasyon yönetimi — Ali Kemal
 **Gün sonu:** Resepsiyon elle rezervasyon açıyor, düzenliyor, iptal ediyor; sistem müsaitlik ve fiyatı kendi hesaplıyor; grup rezervasyon ve bekleyen liste çalışıyor.
-- [ ] Backend: `createReservation` servisi (müsaitlik kontrolü, fiyat hesabı: taban fiyat × sezon çarpanı × gece, onay kodu üretimi)
-- [ ] Backend: `updateReservation`, `cancelReservation`, `markNoShow` servisleri
-- [ ] Backend: overbooking kuralı (kapasite aşımında reddet veya onaya gönder)
-- [ ] Backend: Guest oluştur/eşleştir (telefon/e-posta ile mevcut misafiri bul)
-- [ ] Backend: listeleme API'si (filtre: tarih aralığı, durum, kaynak, misafir adı)
-- [ ] Ekran: Rezervasyon listesi (tablo, filtre, durum rozeti)
-- [ ] Ekran: Yeni rezervasyon formu (misafir ara/yeni, tarih, kişi, oda tipi, pansiyon, fiyat önizleme, not)
-- [ ] Ekran: Rezervasyon detayı (bilgiler, durum geçmişi, iptal butonu, folyo linki)
-- [ ] Ekran: Grup rezervasyon (tek formda birden fazla oda satırı)
-- [ ] Ekran: Bekleyen liste (yer yoksa "listeye al", yer açılınca uyarı)
-- [ ] Aktör: reservation-worker paketi (`reservation.requested` → servis → `reservation.created` / `reservation.rejected`)
+- [x] Backend: `createReservation` servisi (müsaitlik kontrolü, fiyat hesabı: taban fiyat × sezon çarpanı × gece, onay kodu üretimi)
+- [x] Backend: `updateReservation`, `cancelReservation`, `markNoShow` servisleri (+ `confirmReservation`, `reinstateReservation`, grup iptali)
+- [x] Backend: overbooking kuralı (kapasite aşımında reddet veya onaya gönder) — otel ayarı, onay modül 11 kuyruğunda
+- [x] Backend: Guest oluştur/eşleştir (telefon/e-posta ile mevcut misafiri bul)
+- [x] Backend: listeleme API'si (filtre: tarih aralığı, durum, kaynak, misafir adı)
+- [x] Ekran: Rezervasyon listesi (tablo, filtre, durum rozeti)
+- [x] Ekran: Yeni rezervasyon formu (misafir ara/yeni, tarih, kişi, oda tipi, pansiyon, fiyat önizleme, not)
+- [x] Ekran: Rezervasyon detayı (bilgiler, durum geçmişi, iptal butonu)
+- [ ] Ekran: Rezervasyon detayında folyo linki — **modül 15 (folyo) bekleniyor**; iptal / gelmedi ücreti rezervasyonda kayıtlı
+- [x] Ekran: Grup rezervasyon (tek formda birden fazla oda satırı)
+- [x] Ekran: Bekleyen liste (yer yoksa "listeye al", yer açılınca uyarı)
+- [x] Aktör: reservation-worker paketi (`reservation.requested` → servis → `reservation.created` / `reservation.rejected`)
+
+> **📌 Modül 4 tamamlandı (22 Eylül 2026 — Ahmet, Ali Kemal adına geçici).** Modül 13
+> (günlük durum) gerçek rezervasyon verisi olmadan yazılamadığı için Ali'nin modülü
+> bu dalda yapıldı. Folyo bağlantısı bilinçli olarak boş (modül 15).
+>
+> **Veri** (migration `20260922090000_reservation_management`):
+> - `Reservation`: fiyat kaynağı (`priceMode` sistem/elle + `priceNote` gerekçe; elle fiyat
+>   gerekçesiz yazılamaz — kısıt), `createdBy`, `confirmedAt`, iptal (`cancelledAt/By`,
+>   `cancelReason`, `cancellationFee`), gelmedi (`noShowAt`, `noShowFee`). `requestId` artık
+>   **tekrar gönderim anahtarı** (otel başına tekil, kısmi index). Kişi ≥ 1 yetişkin, fiyat ≥ 0 kısıtları.
+> - `ReservationNight`: gece gece fiyat (taban, çarpan, sezon adı). **Gelir raporları (13, 23) ve
+>   folyo (15) geceyi buradan okur.** Eski rezervasyonların geceleri migration'da toplamdan eşit
+>   bölünerek aktarıldı (son gece kuruş farkını alır).
+> - `ReservationGroup` (ad, kod), `WaitlistEntry` (misafir iletişimi, tip, tarih, kişi, durum:
+>   yer bekliyor / yer açıldı / çevrildi / vazgeçildi / tarihi geçti).
+> - `Hotel.overbookingPolicy` (REJECT / APPROVAL; Ayarlar → Genel parametreler).
+> - Zil: `APPROVAL_DECIDED` (istediğim kapasite onayının sonucu), `WAITLIST_AVAILABLE`.
+>
+> **Olaylar:** `reservation.updated` / `confirmed` / `cancelled` / `no_show` / `reinstated`
+> (envanter listelerinde; oda planı ve müsaitlik önbelleği tazelenir), `reservation.requested` /
+> `rejected` (kanal), `waitlist.changed`. Canlı yayın kanalı `reservations.changed`.
+> `reservation.created` gövdesine `groupId` eklendi.
+>
+> **API** (`/reservations`): liste (görünüm: tümü, bugün gelecek, bugün gidecek, içeride, gelecek,
+> opsiyonlu; durum, kaynak, tip, grup, tarih aralığı, arama: ad / onay kodu / telefon / oda no;
+> sayfalı, sayım 2000'de kesilir), `POST /quote` (tip başına boş oda + fiyat + vergi + iptal koşulu),
+> `GET /guests?q=`, `POST /` (201 açıldı, 200 aynı istek, 202 onaya gitti), `POST /groups`,
+> `POST /groups/:id/cancel`, `GET /:id`, `GET /:id/history`, `PATCH /:id`, `POST /:id/confirm`,
+> `/cancel`, `/no-show`, `/reinstate`; bekleme listesi `GET/POST /waitlist`, `GET /waitlist/:id`,
+> `POST /waitlist/:id/close`. İzinler `reservations.view` / `reservations.manage`; elle fiyat
+> `reservations.price_override` (personelin rolünden denetlenir, ön büroda yok).
+>
+> **Kurallar:**
+> - **Envanter kilidi:** açma, grup, tarih/tip düzenleme ve geri alma → oda tipi kilidi, sonra aynı
+>   transaction'da müsaitlik. Kural modül 3'ünkü: değişiklik **yeni** overbooking yaratmamalı. Son
+>   odaya aynı anda gelen iki istekten biri `NO_AVAILABILITY` alır (test edildi).
+> - **Tekrar gönderim:** form bir istek kimliği üretir; aynı kimlikle ikinci gönderim (eşzamanlı
+>   dahil) ikinci rezervasyon ve ikinci misafir kartı açmaz. Kontrol kilidin arkasında.
+> - **Fiyat:** gece = oda tipinin taban fiyatı × o gecenin sezon çarpanı (kuruşa yuvarlanır; toplam =
+>   gecelerin toplamı). Oda başına; pansiyon/kişi farkı modül 28. Düzenlemede anlaşılan geceler
+>   anlaşılan fiyatında kalır, eklenen geceler güncel fiyatla; tip değişirse tümü yeni tipin fiyatıyla.
+>   Elle fiyatlı rezervasyonun konaklaması değişirse sunucu karar ister (`PRICE_DECISION_REQUIRED`).
+>   Vergi dökümü (dahil / hariç, yalnız "Oda" kalemi) bilgi amaçlı; tahsilat folyoda.
+> - **Misafir:** telefon (otelin ülke koduyla, mesajlaşmanın kuralı) ya da e-posta eşleşir ve ad soyad
+>   aynıysa var olan kart; ad farklıysa personele sorulur (`GUEST_MATCH` + adaylar). Kanal isteği
+>   soramayacağı için yeni kart açar. Telefon `+90…` biçiminde saklanır.
+> - **Durumlar:** işlem kuralı tek yerde (`reservationActionError`, contracts): opsiyonlu → onayla;
+>   bekleyen/onaylı → iptal; giriş günü gelmiş bekleyen/onaylı → gelmedi; iptal/gelmedi → çıkışı
+>   geçmediyse geri al (yer denetlenir; eski oda doluysa atama kalkar). İçerideki misafirde giriş ve tip
+>   kilitli; çıkış uzatılır/kısaltılır (odası doluysa reddedilir, oda planından taşıyın).
+> - **Ücretler:** iptal = politika süresi içindeyse toplam × ceza oranı (`X gün öncesine kadar
+>   ücretsiz`); gelmedi = ilk gece. Personel gerekçeyle vazgeçebilir (denetim izinde politika ücreti).
+> - **Oda ataması:** düzenlemede atanmış oda yeni hâle uymuyorsa (tip, dolu, arızalı, kişi) atama
+>   kaldırılır (`room.unassigned`); oda planından açılan rezervasyon odasıyla açılır.
+> - **Overbooking politikası "onaya gönder":** yer yoksa istek modül 11 kuyruğuna (`OVERBOOKING`)
+>   gider; onaylanınca aynı istek kimliğiyle kapasite aşılarak açılır (aktör: onaylayan, açan:
+>   isteyen), isteyenin ziline sonuç düşer. Düzenleme/geri alma ve kanal istekleri onaya gitmez.
+> - **Bekleme listesi:** envanteri artırabilen her olaydan sonra otel başına birleştirilmiş tarama
+>   (2 sn), ayrıca 5 dakikada bir güvenlik taraması; yer açılınca "yer açıldı" + zil, dolunca geri
+>   döner, girişi geçen kapanır. Rezervasyona çevrilince kapanır.
+> - **Opsiyonlu rezervasyona onay bildirimi gitmez;** onaylanınca (`reservation.confirmed`) gider.
+>
+> **Ekranlar:** `/rezervasyonlar/liste`, `/rezervasyonlar/yeni` (tek oda / grup, canlı müsaitlik ve
+> fiyat, elle fiyat yetkiliye, misafir eşleşme sorusu, yer yoksa tek tıkla bekleme listesi; adresten
+> ön doldurma `?giris=&cikis=&tip=&oda=` ve `?bekleme=`), `/rezervasyonlar/:id` (geceler, vergi,
+> iptal koşulu, grup üyeleri, geçmiş, işlemler), `/rezervasyonlar/bekleme-listesi`. Oda planında boş
+> hücreye tıklamak o odayla yeni rezervasyon açar; plan çekmecesinden rezervasyon sayfasına bağlantı.
+>
+> **2500 kişi için:** liste index'leri (`hotelId, checkIn, id` / `createdAt, id` / `status, checkIn,
+> id` / `groupId`), sayım üst sınırı, aramasız liste sürüm anahtarlı önbellekte (`/health` →
+> `reservationCache`), önizleme envanter sürümüyle önbellekli takvimden, misafir araması trigram /
+> ifade index'leriyle (3 harften kısa ad aranmaz), bekleme listesi taraması pencere başına tek envanter
+> okuması. Test: kurallar 25 + sözleşme 17 + aktör 6 birim, 30 entegrasyon (eşzamanlı son oda, tekrar
+> gönderim, grup bütünlüğü, eşleştirme, fiyat koruma, ücretler, geri alma, onay akışı, bekleme listesi,
+> liste/arama, kanal isteği).
+>
+> **Devir:**
+> - **Modül 6 (check-in/out):** `guest.checked_in` / `guest.checked_out` yayınla; durum kuralını
+>   `reservationActionError`'a ekle; içerideki misafirin çıkış değişikliği hazır (`updateReservation`).
+> - **Modül 8 (kanal):** `reservation.requested` yayınla (istek kimliğiyle); cevap `reservation.created`
+>   ya da gerekçeli `reservation.rejected`.
+> - **Modül 13 / 23 (gelir, ADR):** `ReservationNight` (otel + gün index'li).
+> - **Modül 15 (folyo):** iptal / gelmedi ücreti rezervasyonda; geceler oda gelirinin kalemleri.
+> - **Modül 22 (CRM):** misafir kartı düzenleme burada yok (rezervasyondan yalnızca açılır).
+> - **Modül 28 (pansiyon/paket):** fiyat şu an oda başına; pansiyon farkı eklenecek yer `priceStay`.
 
 > **⚠️ Modül 3'ten devir notu (16 Eylül 2026 — Ahmet):** oda envanteri tarafı
 > rezervasyonun güvenli açılabilmesi için hazır; senin tarafında dikkat edilecekler:
@@ -308,7 +394,7 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 - [x] Ekran: Oda bekleyen rezervasyonlar şeridi (ızgarada görünmeyen talep) + otomatik ata
 - [x] Frontend: socket ile canlı güncelleme; bağlantı kopunca "canlı değil" rozeti ve periyodik tazeleme
 - [x] Sürükle-bırak ile **oda** değiştirme (içerideki misafir dahil, onaylı)
-- [ ] Ekran: Boş hücreye tıkla → o oda ve tarihle yeni rezervasyon formu — **modül 4 bekleniyor**
+- [x] Ekran: Boş hücreye tıkla → o oda ve tarihle yeni rezervasyon formu — modül 4 ile açıldı
 - [ ] Sürükle-bırak ile **tarih** değiştirme — modül 4'ün `updateReservation`'ı gelince
 
 > **📌 Modül 5 tamamlandı (16 Eylül 2026 — Ahmet). Diğer modüller için:**

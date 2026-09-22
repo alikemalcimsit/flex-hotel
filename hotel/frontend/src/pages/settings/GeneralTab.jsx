@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { DEFAULT_PHONE_COUNTRY_CODE, generalSettingsSchema } from '@hotelos/hotel-contracts';
+import {
+  DEFAULT_PHONE_COUNTRY_CODE,
+  OVERBOOKING_POLICIES,
+  OVERBOOKING_POLICY_LABELS,
+  generalSettingsSchema,
+} from '@hotelos/hotel-contracts';
 import { Alert, Card, Input, Select } from '@hotelos/ui';
 import { FormActions } from '../../components/FormActions.jsx';
 import { QueryFallback } from '../../components/QueryFallback.jsx';
@@ -18,6 +23,7 @@ export function GeneralTab() {
     cancellationPolicyDays: '0',
     cancellationPolicyPenaltyPct: '0',
     phoneCountryCode: DEFAULT_PHONE_COUNTRY_CODE,
+    overbookingPolicy: 'REJECT',
   });
   const [errors, setErrors] = useState({});
 
@@ -31,6 +37,7 @@ export function GeneralTab() {
       cancellationPolicyDays: String(hotel.cancellationPolicyDays ?? 0),
       cancellationPolicyPenaltyPct: hotel.cancellationPolicyPenaltyPct ?? '0',
       phoneCountryCode: hotel.phoneCountryCode ?? DEFAULT_PHONE_COUNTRY_CODE,
+      overbookingPolicy: hotel.overbookingPolicy ?? 'REJECT',
     });
     setErrors({});
   }, [hotel]);
@@ -146,6 +153,26 @@ export function GeneralTab() {
           WhatsApp mesajı geldiğinde misafir kartı bu kodla bulunur: +{form.phoneCountryCode.replace(/^\+/, '') || '…'} 532 111
           00 01 numarasından yazan misafir, kartında "0532 111 00 01" yazılıysa tanınır. Başka ülkeden misafirlerin
           numarasını kartta + ile yazın.
+        </Alert>
+      </Card>
+
+      <Card
+        title="Kapasite aşımı (overbooking)"
+        description="Bir oda tipinde yer kalmadığında yeni rezervasyon ne olsun? Kanaldan (WhatsApp, OTA) gelen istekler her zaman reddedilir."
+      >
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Select
+            label="Politika"
+            name="overbookingPolicy"
+            value={form.overbookingPolicy}
+            onChange={setField('overbookingPolicy')}
+            options={OVERBOOKING_POLICIES.map((value) => ({ value, label: OVERBOOKING_POLICY_LABELS[value] }))}
+            error={errors.overbookingPolicy}
+          />
+        </div>
+        <Alert tone="info" className="mt-5">
+          "Onaya gönder" seçilirse resepsiyonun açmak istediği rezervasyon Onaylar ekranına düşer; yönetici onaylarsa
+          kapasite aşılarak açılır, reddederse açılmaz. Tarih değişikliği ve iptal geri alma her durumda yer ister.
         </Alert>
       </Card>
 

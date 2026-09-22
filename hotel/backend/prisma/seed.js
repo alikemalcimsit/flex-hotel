@@ -1,5 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { eachNight } from '@hotelos/core';
+import { distributeTotal } from '../src/modules/reservations/rules.js';
 
 const prisma = new PrismaClient();
 
@@ -215,8 +217,24 @@ async function main() {
         totalPrice,
         boardType: 'BB',
         confirmationCode: p.code,
+        createdBy: 'seed',
+        confirmedAt: p.status === 'PENDING' ? null : checkIn,
       },
     });
+
+    // Gece gece fiyat (modül 4): gelir raporları ve rezervasyon detayı buradan okur.
+    if ((await prisma.reservationNight.count({ where: { reservationId: reservation.id } })) === 0) {
+      await prisma.reservationNight.createMany({
+        data: distributeTotal(String(totalPrice), eachNight(checkIn, checkOut)).map((night) => ({
+          hotelId,
+          reservationId: reservation.id,
+          date: new Date(`${night.date}T00:00:00.000Z`),
+          amount: night.amount,
+          baseRate: String(roomType.basePrice),
+          multiplier: '1',
+        })),
+      });
+    }
 
     if (p.status === 'CHECKED_IN' || p.status === 'CHECKED_OUT') {
       const hasFolio = await prisma.folio.findFirst({ where: { reservationId: reservation.id } });

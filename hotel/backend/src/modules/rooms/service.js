@@ -1616,6 +1616,70 @@ async function assignLockedReservation(tx, stage, hotelId, reservation, roomId, 
 }
 
 /**
+ * Çağıranın transaction'ında odayı verir (modül 4: oda planından "bu odaya
+ * rezervasyon aç"). Rezervasyon aynı transaction'da yeni açıldığı için ayrıca
+ * kilitlenmez (henüz kimse göremez); oda tipi ve oda kilidi, uygunluk ve
+ * overbooking denetimleri `assignRoom` ile aynıdır.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {(name: string, payload: object) => Promise<void>} stage
+ * @param {string} hotelId
+ * @param {string} reservationId
+ * @param {string} roomId
+ * @param {{ businessDate: Date, assignedBy?: 'manual' | 'auto', reason?: string | null }} options
+ */
+export async function assignRoomInTransaction(tx, stage, hotelId, reservationId, roomId, { businessDate, assignedBy = 'manual', reason = null }) {
+  const reservation = await loadAssignableReservation(tx, hotelId, reservationId);
+  assertAssignable(reservation, businessDate);
+  return assignLockedReservation(tx, stage, hotelId, reservation, roomId, { assignedBy, reason });
+}
+
+/**
+ * Atanmış oda, rezervasyonun **yeni** hâline (tarih, tip, kişi) uyuyor mu?
+ * Uymuyorsa sebebi (`ConflictError`: `ROOM_NOT_FREE`, `CAPACITY_EXCEEDED`,
+ * `WOULD_OVERBOOK`) döner; fırlatmaz — çağıran atamayı kaldırmakla hata
+ * vermek arasında karar verir (modül 4 düzenleme, iptal geri alma).
+ *
+ * Denetim yazmadan **önce** yapılmalı: yazma sırasında veritabanı çifte
+ * rezervasyonu reddeder ve transaction kullanılamaz hâle gelir. Rezervasyon
+ * satırı veritabanında eski hâliyle durur; kontrol onu yeni hâliyle yerleştirir.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string} roomId
+ * @param {{ id: string, roomTypeId: string, checkIn: Date, checkOut: Date, roomSince: Date | null, status: string, adults: number, children: number }} reservation yeni hâl
+ * @param {{ stayFrom?: Date }} [options] içerideki misafirde kalan gecelerin ilki
+ * @returns {Promise<ConflictError | null>}
+ */
+export async function roomConflictForStay(tx, hotelId, roomId, reservation, { stayFrom } = {}) {
+  const room = await tx.room.findFirst({
+    where: { id: roomId, hotelId },
+    include: { roomType: { select: { code: true, capacityAdults: true, capacityChildren: true } } },
+  });
+  if (!room) return new ConflictError('Atanmış oda artık yok', 'ROOM_NOT_FREE');
+  // Aynı tipte oda: yerleştirmenin envanter etkisi sıfırdır, kapasite zaten
+  // tipin kapasitesidir; yine de kişi sayısı değişmiş olabilir.
+  if (!fitsCapacity(reservation, room.roomType)) {
+    return new ConflictError(
+      `${room.number} numaralı oda en fazla ${room.roomType.capacityAdults} yetişkin, ${room.roomType.capacityChildren} çocuk alır.`,
+      'CAPACITY_EXCEEDED',
+    );
+  }
+  try {
+    await assertRoomUsableForStay(tx, hotelId, {
+      room,
+      reservation,
+      actionLabel: `Misafiri ${room.number} numaralı odada tutmak`,
+      stayFrom,
+    });
+    return null;
+  } catch (error) {
+    if (error instanceof ConflictError) return error;
+    throw error;
+  }
+}
+
+/**
  * @param {string} hotelId
  * @param {string} reservationId
  */

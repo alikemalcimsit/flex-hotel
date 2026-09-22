@@ -3,6 +3,7 @@ import {
   LIVE_VIEW_EVENTS,
   MESSAGING_CHANGED_EVENTS,
   REQUESTS_CHANGED_EVENTS,
+  RESERVATIONS_CHANGED_EVENTS,
   SETTINGS_CHANGED_EVENTS,
 } from '@hotelos/core';
 import { eventBus } from './events.js';
@@ -24,6 +25,7 @@ export const LIVE_SCOPES = Object.freeze({
   MESSAGING: 'messaging',
   REQUESTS: 'requests',
   APPROVALS: 'approvals',
+  RESERVATIONS: 'reservations',
 });
 
 const SCOPE_EVENTS = Object.freeze({
@@ -32,6 +34,8 @@ const SCOPE_EVENTS = Object.freeze({
   [LIVE_SCOPES.MESSAGING]: [...MESSAGING_CHANGED_EVENTS, ...REQUESTS_CHANGED_EVENTS, ...LIVE_VIEW_EVENTS],
   [LIVE_SCOPES.REQUESTS]: [...REQUESTS_CHANGED_EVENTS, ...LIVE_VIEW_EVENTS],
   [LIVE_SCOPES.APPROVALS]: [...APPROVAL_EVENTS],
+  // Liste oda numarası ve oda tipi adı da gösterir.
+  [LIVE_SCOPES.RESERVATIONS]: [...RESERVATIONS_CHANGED_EVENTS, ...LIVE_VIEW_EVENTS, ...SETTINGS_CHANGED_EVENTS],
 });
 
 /** @type {Map<string, number>} `${scope}:${hotelId}` → sürüm */

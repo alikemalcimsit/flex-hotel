@@ -40,6 +40,13 @@ export const PERMISSIONS = Object.freeze({
   /** Şablonlar, kanal ayarları (SMTP / SMS), tekrar gönderme ve iptal. */
   NOTIFICATIONS_MANAGE: 'notifications.manage',
 
+  /** Rezervasyon listesi, detayı, bekleme listesi — görüntüleme. */
+  RESERVATIONS_VIEW: 'reservations.view',
+  /** Rezervasyon açmak, düzenlemek, iptal / gelmedi, bekleme listesi. Ön büro. */
+  RESERVATIONS_MANAGE: 'reservations.manage',
+  /** Sistem fiyatı yerine toplamı elle girmek (gerekçeyle). Yönetim işi. */
+  RESERVATIONS_PRICE_OVERRIDE: 'reservations.price_override',
+
   /** Onay kuyruğunu görmek (bekleyen ve geçmiş). */
   APPROVALS_VIEW: 'approvals.view',
   /** Onaylamak / reddetmek: para iadesi, büyük ödeme, toplu fiyat değişimi. Yönetim işi. */
@@ -57,6 +64,8 @@ export const PERMISSIONS = Object.freeze({
 const ROLE_PERMISSIONS = Object.freeze({
   ADMIN: Object.freeze(Object.values(PERMISSIONS)),
   FRONT_DESK: Object.freeze([
+    PERMISSIONS.RESERVATIONS_VIEW,
+    PERMISSIONS.RESERVATIONS_MANAGE,
     PERMISSIONS.ROOMS_VIEW,
     PERMISSIONS.ROOMS_OPERATE,
     PERMISSIONS.MESSAGES_VIEW,

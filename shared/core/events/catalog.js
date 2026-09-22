@@ -29,6 +29,14 @@ const isoDate = z
   .transform((value) => (value instanceof Date ? value.toISOString() : value))
   .refine((value) => !Number.isNaN(new Date(value).getTime()), { message: 'geçersiz tarih' });
 
+/** Rezervasyon olaylarının ortak gövdesi (modül 4): kimlik ve envanter etkisi. */
+const reservationStay = hotelScoped.extend({
+  reservationId: z.string().uuid(),
+  roomTypeId: z.string().uuid(),
+  checkIn: isoDate,
+  checkOut: isoDate,
+});
+
 /** Onay olaylarının ortak gövdesi (modül 11). */
 const approvalEvent = hotelScoped.extend({
   approvalId: z.string().uuid(),
@@ -115,18 +123,61 @@ export const EVENT_CATALOG = Object.freeze({
     mode: z.enum(['CANCELLED', 'ENDED']),
   }),
 
-  /* ── Modül 4 ve 6'nın yayınlayacağı event'ler ──
-     Henüz yayıncıları yok (Ali Kemal'de) ama room-worker bunları dinliyor.
-     Sözleşmeyi şimdiden yazmak, iki taraf buluştuğunda uyuşmazlık çıkmasını
-     engelliyor — event kataloğunun asıl varlık sebebi bu. */
+  /* ── Rezervasyon (modül 4) ── */
 
-  'reservation.created': hotelScoped.extend({
-    reservationId: z.string().uuid(),
+  'reservation.created': reservationStay.extend({
+    /** Rezervasyon oluşturulurken oda zaten atandıysa aktör tekrar atamaz. */
+    roomId: z.string().uuid().nullable().default(null),
+    /** Grup rezervasyonunun parçasıysa grup kimliği. */
+    groupId: z.string().uuid().nullable().default(null),
+  }),
+  /** Tarih, oda tipi, kişi, pansiyon, fiyat ya da not değişti. */
+  'reservation.updated': reservationStay.extend({
+    changedFields: z.array(z.string()).default([]),
+  }),
+  /** Opsiyonlu (bekleyen) rezervasyon kesinleşti. */
+  'reservation.confirmed': hotelScoped.extend({ reservationId: z.string().uuid() }),
+  /** İptal: envanter serbest kalır (bekleme listesi taranır). */
+  'reservation.cancelled': reservationStay,
+  /** Misafir gelmedi: envanter serbest kalır. */
+  'reservation.no_show': reservationStay,
+  /** İptal / gelmedi geri alındı: envanter yeniden tüketilir. */
+  'reservation.reinstated': reservationStay,
+  /**
+   * Kanaldan (WhatsApp, web chat, e-posta, OTA) gelen rezervasyon isteği.
+   * reservation-worker işler: `reservation.created` ya da `reservation.rejected`.
+   * `requestId` isteği yapanın kimliğidir; aynı kimlikle ikinci rezervasyon açılmaz.
+   */
+  'reservation.requested': hotelScoped.extend({
+    requestId: z.string().min(1).max(100),
+    source: z.enum(['WEBCHAT', 'WHATSAPP', 'EMAIL', 'WIDGET', 'OTA', 'AGENCY', 'PHONE']),
+    guest: z.object({
+      firstName: z.string().min(1).max(100),
+      lastName: z.string().min(1).max(100),
+      phone: z.string().max(40).nullable().default(null),
+      email: z.string().max(200).nullable().default(null),
+      nationality: z.string().max(2).nullable().default(null),
+    }),
     roomTypeId: z.string().uuid(),
     checkIn: isoDate,
     checkOut: isoDate,
-    /** Rezervasyon oluşturulurken oda zaten atandıysa aktör tekrar atamaz. */
-    roomId: z.string().uuid().nullable().default(null),
+    adults: z.number().int().min(1).max(20),
+    children: z.number().int().min(0).max(20).default(0),
+    boardType: z.enum(['RO', 'BB', 'HB', 'FB', 'AI', 'UAI']).nullable().default(null),
+    notes: z.string().max(2000).nullable().default(null),
+    /** Kanal isteği varsayılan olarak opsiyonludur: personel onaylar. */
+    status: z.enum(['PENDING', 'CONFIRMED']).default('PENDING'),
+  }),
+  /** Kanal isteği karşılanamadı (yer yok, kapasite, geçersiz tarih). */
+  'reservation.rejected': hotelScoped.extend({
+    requestId: z.string().min(1).max(100),
+    code: z.string().min(1),
+    reason: z.string().min(1),
+  }),
+  /** Bekleme listesi kaydı açıldı, yer açıldı / doldu, çevrildi ya da kapandı. */
+  'waitlist.changed': hotelScoped.extend({
+    waitlistId: z.string().uuid(),
+    status: z.enum(['WAITING', 'AVAILABLE', 'CONVERTED', 'CANCELLED', 'EXPIRED']),
   }),
 
   'guest.checked_in': hotelScoped.extend({
@@ -270,6 +321,8 @@ export const EVENT_CATALOG = Object.freeze({
       'MANUAL_TASK',
       'NOTIFICATION_FAILED',
       'APPROVAL_REQUESTED',
+      'APPROVAL_DECIDED',
+      'WAITLIST_AVAILABLE',
     ]),
     userId: z.string().uuid().nullable(),
     permission: z.string().nullable(),
@@ -341,7 +394,26 @@ export const INVENTORY_CHANGED_EVENTS = Object.freeze([
   'room.blocked',
   'room.unblocked',
   'reservation.created',
+  'reservation.updated',
+  'reservation.cancelled',
+  'reservation.no_show',
+  'reservation.reinstated',
   'guest.checked_in',
+  'guest.checked_out',
+]);
+
+/**
+ * Envanteri **artırabilen** değişiklikler: bekleme listesi bunlardan sonra
+ * taranır (yer açıldı mı). Tarih değişikliği ve oda tipi düzenlemesi iki
+ * yöne de gidebildiği için listede.
+ */
+export const INVENTORY_RELEASING_EVENTS = Object.freeze([
+  'inventory.room.created',
+  'inventory.room.updated',
+  'room.unblocked',
+  'reservation.updated',
+  'reservation.cancelled',
+  'reservation.no_show',
   'guest.checked_out',
 ]);
 
@@ -351,7 +423,24 @@ export const INVENTORY_CHANGED_EVENTS = Object.freeze([
  * ekranların okuma önbelleği bu listeyi kullanır — ikisi ayrışırsa ekran ya
  * haber alır ama eski cevabı görür ya da hiç haber almaz.
  */
-export const LIVE_VIEW_EVENTS = Object.freeze([...new Set([...INVENTORY_CHANGED_EVENTS, 'room.status.changed'])]);
+export const LIVE_VIEW_EVENTS = Object.freeze([
+  ...new Set([...INVENTORY_CHANGED_EVENTS, 'room.status.changed', 'reservation.confirmed']),
+]);
+
+/** Rezervasyon listesi ve detayını etkileyen event'ler (canlı yayın: `reservations.changed`). */
+export const RESERVATIONS_CHANGED_EVENTS = Object.freeze([
+  'reservation.created',
+  'reservation.updated',
+  'reservation.confirmed',
+  'reservation.cancelled',
+  'reservation.no_show',
+  'reservation.reinstated',
+  'room.assigned',
+  'room.unassigned',
+  'guest.checked_in',
+  'guest.checked_out',
+  'waitlist.changed',
+]);
 
 /** Gelen kutusunu etkileyen event'ler (canlı yayın: `messaging.changed`). */
 export const MESSAGING_CHANGED_EVENTS = Object.freeze([

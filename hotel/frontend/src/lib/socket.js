@@ -42,6 +42,7 @@ export const REQUESTS_CHANNEL = 'requests.changed';
 export const NOTIFICATIONS_CHANNEL = 'notifications.changed';
 export const STAFF_ALERTS_CHANNEL = 'staff.alerts';
 export const APPROVALS_CHANNEL = 'approvals.changed';
+export const RESERVATIONS_CHANNEL = 'reservations.changed';
 
 /**
  * Kanal aboneliği sayacı. Aynı kanalı birden fazla bileşen dinleyebilir

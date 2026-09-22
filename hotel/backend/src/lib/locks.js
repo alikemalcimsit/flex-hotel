@@ -113,3 +113,15 @@ export function lockGuestRequests(tx, hotelId, requestIds) {
 export function lockApprovals(tx, hotelId, approvalIds) {
   return lockRows(tx, 'Approval', hotelId, approvalIds);
 }
+
+/**
+ * Bekleme listesi kaydı: rezervasyona çevirme, kapatma ve tarama aynı kaydı
+ * aynı anda değiştirmesin.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} waitlistIds
+ */
+export function lockWaitlistEntries(tx, hotelId, waitlistIds) {
+  return lockRows(tx, 'WaitlistEntry', hotelId, waitlistIds);
+}
