@@ -66,9 +66,6 @@ export {
   ROOM_OCCUPANCY_LABELS,
   TAX_APPLIES_TO,
   TAX_APPLIES_TO_LABELS,
-  RESERVATION_SOURCES,
-  RESERVATION_SOURCE_LABELS,
-  RESERVATION_INVENTORY_STATUSES,
 } from './constants.js';
 export {
   assignRoomSchema,
@@ -138,6 +135,7 @@ export {
 export { utcToZonedWallTime, zonedWallTimeToUtc } from './zoned-time.js';
 export * from './notifications.js';
 export * from './approvals.js';
+export * from './reservations.js';
 export { displayPhone, internationalPhone } from './phone.js';
 export {
   DEFAULT_ROLE_PERMISSIONS,
@@ -158,13 +156,3 @@ export {
   userInputSchema,
 } from './users.js';
 export { matrixUpdateSchema } from './roles.js';
-export {
-  cancelReservationSchema,
-  groupReservationSchema,
-  guestInputSchema,
-  quoteQuerySchema,
-  reservationInputSchema,
-  reservationListQuerySchema,
-  updateReservationSchema,
-  waitingListInputSchema,
-} from './reservations.js';

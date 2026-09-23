@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { addDaysIso } from '../../lib/reservations.js';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   HOUSEKEEPING_STATUS_LABELS,
@@ -121,7 +122,10 @@ function changeRoomMessage(data) {
 
 export function RoomPlanPage() {
   const queryClient = useQueryClient();
-  const canOperate = useCan()(PERMISSIONS.ROOMS_OPERATE);
+  const can = useCan();
+  const canOperate = can(PERMISSIONS.ROOMS_OPERATE);
+  const canCreateReservation = can(PERMISSIONS.RESERVATIONS_MANAGE);
+  const navigate = useNavigate();
   const { today } = useHotelToday();
   const { options: roomTypeOptions } = useRoomTypes();
 
@@ -452,6 +456,14 @@ export function RoomPlanPage() {
             onHoverRoom={setDropTargetId}
             onDropOnRoom={handleDrop}
             onSelectReservation={setDetailId}
+            onCreateReservation={
+              canCreateReservation
+                ? (room, date) =>
+                    navigate(
+                      `/rezervasyonlar/yeni?oda=${room.id}&tip=${room.roomTypeId}&giris=${date}&cikis=${addDaysIso(date, 1)}`,
+                    )
+                : undefined
+            }
           />
 
           <div className="flex flex-wrap items-center justify-between gap-4">

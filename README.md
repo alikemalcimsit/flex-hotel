@@ -124,6 +124,10 @@ tekrar kullanılamayan kodlar ve sessizce yanlış fiyat hesapları.
   haberi muhatabına (`...:user:<id>` / `...:perm:<izin>`). Yeni bir canlı ekran
   `useLiveChannel` ile abone olur; otelin tamamına `hotelRoom` üzerinden
   yayın yapmayın.
+- **Rezervasyon yazmaları envanter kilidiyle.** `modules/reservations/service.js`: oda tipi kilidi →
+  aynı transaction'da müsaitlik → yaz. Rezervasyonu doğrudan `tx.reservation.create/update` ile
+  yazmayın; fiyat gece gece (`ReservationNight`), denetim izi ve olaylar birlikte yazılır. Tekrar
+  gönderim anahtarı `requestId`; durum kuralı `reservationActionError` (contracts).
 - **Onay gerektiren iş kendi kendine yapılmaz.** Aktör `ctx.requireApproval({ action,
   … })` der (`action` bildirgedeki `requiresApproval`'da olmalı); servis
   `modules/approvals/service.js → requestApproval(tx, stage, …)` çağırır. Onaylanan

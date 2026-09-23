@@ -11,6 +11,12 @@ import { writeWithEvents } from '../../lib/write.js';
  * koddaki varsayılanlara (`DEFAULT_ROLE_PERMISSIONS`) düşülür. Matris kaydedilince
  * tüm roller için satır yazılır ve DB kaynak olur.
  *
+ * Matris kaydedildiğinde katalogda olan izinler `Hotel.permissionCatalog`'a
+ * yazılır. Sonradan eklenen bir izin (yeni modül) o listede yoktur; onun için
+ * rolün varsayılanı geçerlidir. Böylece yeni modülün izni, matrisi daha önce
+ * kaydetmiş otelde herkese kapalı kalmaz; yöneticinin bilerek kaldırdığı izin
+ * de geri gelmez (o izin listededir, satırı yoktur).
+ *
  * ADMIN hiçbir zaman satır tutmaz: çözüm her zaman ADMIN'e tüm izinleri verir —
  * matris ekranından yanlışlıkla yönetici kilitlenmesin.
  */
@@ -31,10 +37,10 @@ const VALID_PERMISSIONS = new Set(PERMISSION_VALUES);
  * @returns {Promise<Record<string, string[]>>}
  */
 async function loadGrants(hotelId) {
-  const rows = await prisma.rolePermission.findMany({
-    where: { hotelId },
-    select: { role: true, permission: true },
-  });
+  const [rows, hotel] = await Promise.all([
+    prisma.rolePermission.findMany({ where: { hotelId }, select: { role: true, permission: true } }),
+    prisma.hotel.findUnique({ where: { id: hotelId }, select: { permissionCatalog: true } }),
+  ]);
 
   /** @type {Record<string, string[]>} */
   const map = {};
@@ -50,6 +56,14 @@ async function loadGrants(hotelId) {
   for (const { role, permission } of rows) {
     if (role === ADMIN_ROLE || !VALID_PERMISSIONS.has(permission)) continue;
     (map[role] ??= []).push(permission);
+  }
+
+  // Matris kaydedildikten sonra kataloğa eklenen izinler: rolün varsayılanı.
+  const decided = new Set(hotel?.permissionCatalog ?? []);
+  for (const role of Object.keys(map)) {
+    for (const permission of defaultPermissionsForRole(role)) {
+      if (!decided.has(permission) && !map[role].includes(permission)) map[role].push(permission);
+    }
   }
   return map;
 }
@@ -116,6 +130,10 @@ export async function setMatrix(hotelId, { grants }) {
       }
     }
     if (rows.length > 0) await tx.rolePermission.createMany({ data: rows });
+    // Bu kayıtla karar verilmiş izinler (sonradan eklenenler varsayılana düşer).
+    // Ham SQL: otel kartının `updatedAt`'i değişmesin — ayarlar ekranındaki
+    // sürüm denetimi matris kaydı yüzünden "başkası değiştirdi" demesin.
+    await tx.$executeRaw`UPDATE "Hotel" SET "permissionCatalog" = ${[...PERMISSION_VALUES]}::text[] WHERE "id" = ${hotelId}`;
 
     await recordAudit(tx, {
       hotelId,

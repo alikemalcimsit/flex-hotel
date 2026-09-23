@@ -98,16 +98,21 @@ export const NOTIFICATION_SOURCE_LABELS = Object.freeze({
 });
 
 export const NOTIFICATION_TRIGGER_HINTS = Object.freeze({
-  RESERVATION_CONFIRMED: 'Rezervasyon oluşturulunca gönderilir.',
+  RESERVATION_CONFIRMED:
+    'Rezervasyon kesin olarak açılınca ya da opsiyonlu rezervasyon onaylanınca gönderilir (opsiyonluya gönderilmez).',
   ROOM_ASSIGNED:
     'Oda giriş günü ya da misafir içerideyken atanınca (oda değişikliği dahil) gönderilir. Günler önceden yapılan atamada gönderilmez; oda son ana kadar değişebilir.',
   CHECKED_IN: 'Misafir giriş yapınca gönderilir.',
   CHECKED_OUT: 'Misafir çıkış yapınca gönderilir.',
 });
 
-/** Tetikleyiciyi yayınlayan event (dinleyen: notification-worker). */
+/**
+ * Tetikleyiciyi yayınlayan event(ler) (dinleyen: notification-worker). Bir
+ * tetikleyiciyi birden çok event açabilir; aynı rezervasyona ikinci kez
+ * gönderilmez (tekilleştirme anahtarı).
+ */
 export const NOTIFICATION_TRIGGER_EVENTS = Object.freeze({
-  RESERVATION_CONFIRMED: 'reservation.created',
+  RESERVATION_CONFIRMED: Object.freeze(['reservation.created', 'reservation.confirmed']),
   ROOM_ASSIGNED: 'room.assigned',
   CHECKED_IN: 'guest.checked_in',
   CHECKED_OUT: 'guest.checked_out',
@@ -417,6 +422,8 @@ export const STAFF_ALERT_KINDS = Object.freeze([
   'MANUAL_TASK',
   'NOTIFICATION_FAILED',
   'APPROVAL_REQUESTED',
+  'APPROVAL_DECIDED',
+  'WAITLIST_AVAILABLE',
 ]);
 
 export const STAFF_ALERT_KIND_LABELS = Object.freeze({
@@ -426,6 +433,8 @@ export const STAFF_ALERT_KIND_LABELS = Object.freeze({
   MANUAL_TASK: 'Personele bırakılan iş',
   NOTIFICATION_FAILED: 'Misafire ulaşamayan bildirim',
   APPROVAL_REQUESTED: 'Onay bekleyen iş',
+  APPROVAL_DECIDED: 'İstediğim onayın sonucu',
+  WAITLIST_AVAILABLE: 'Bekleme listesinde yer açıldı',
 });
 
 export const STAFF_ALERT_SEVERITIES = Object.freeze(['INFO', 'WARNING', 'CRITICAL']);

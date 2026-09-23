@@ -186,6 +186,19 @@ const CONSTRAINT_RULES = Object.freeze({
   },
   GuestRequest_cancel_has_reason: { code: 'CONSTRAINT', message: 'İptal edilen isteğin sebebi yazılmalı.' },
   GuestRequest_wake_up_scheduled: { code: 'CONSTRAINT', message: 'Uyandırma isteğinin saati olmalı.' },
+
+  Reservation_party_valid: { code: 'CONSTRAINT', message: 'Rezervasyonda en az 1 yetişkin olmalı; çocuk sayısı eksi olamaz.' },
+  Reservation_price_valid: { code: 'CONSTRAINT', message: 'Rezervasyon fiyatı eksi olamaz.' },
+  Reservation_fees_valid: { code: 'CONSTRAINT', message: 'İptal / gelmedi ücreti eksi olamaz.' },
+  Reservation_manual_price_has_note: { code: 'CONSTRAINT', message: 'Elle girilen fiyatın gerekçesi yazılmalı.' },
+  Reservation_hotelId_requestId_key: {
+    code: 'DUPLICATE_REQUEST',
+    message: 'Bu istek zaten işlendi; aynı rezervasyon ikinci kez açılmaz.',
+  },
+  ReservationNight_day_precision: { code: 'CONSTRAINT', message: 'Gece fiyatı gün hassasiyetinde olmalı.' },
+  ReservationNight_amount_valid: { code: 'CONSTRAINT', message: 'Gece fiyatı eksi olamaz.' },
+  WaitlistEntry_date_order: { code: 'CONSTRAINT', message: 'Çıkış tarihi girişten en az bir gece sonra olmalı.' },
+  WaitlistEntry_party_valid: { code: 'CONSTRAINT', message: 'En az 1 yetişkin olmalı; çocuk sayısı eksi olamaz.' },
 });
 
 /**

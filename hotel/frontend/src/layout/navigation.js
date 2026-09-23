@@ -22,17 +22,23 @@ export const NAV_SECTIONS = Object.freeze([
     title: 'Ön büro',
     // Odalar ön büro işi: resepsiyon ve kat hizmetleri de görmeli, yalnızca admin değil.
     items: [
-      { label: 'Oda planı', to: '/oda-plani', icon: 'calendar' },
       {
         label: 'Rezervasyonlar',
         to: '/rezervasyonlar',
-        icon: 'clipboard',
+        icon: 'bookOpen',
         permission: PERMISSIONS.RESERVATIONS_VIEW,
         children: [
           { label: 'Liste', to: '/rezervasyonlar/liste', icon: 'list' },
-          { label: 'Bekleyenler', to: '/rezervasyonlar/bekleyen', icon: 'clock' },
+          {
+            label: 'Yeni rezervasyon',
+            to: '/rezervasyonlar/yeni',
+            icon: 'plus',
+            permission: PERMISSIONS.RESERVATIONS_MANAGE,
+          },
+          { label: 'Bekleme listesi', to: '/rezervasyonlar/bekleme-listesi', icon: 'clock' },
         ],
       },
+      { label: 'Oda planı', to: '/oda-plani', icon: 'calendar' },
       {
         label: 'Mesajlar',
         to: '/mesajlar',

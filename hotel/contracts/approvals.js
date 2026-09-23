@@ -19,12 +19,13 @@ const DAY_MS = 24 * HOUR_MS;
  * Onay türleri. Yeni bir modül onaya iş götürecekse türünü buraya ekler;
  * ekran türe göre süzer ve etiketler. `OTHER` serbest.
  */
-export const APPROVAL_TYPES = Object.freeze(['REFUND', 'LARGE_PAYMENT', 'BULK_PRICE_CHANGE', 'OTHER']);
+export const APPROVAL_TYPES = Object.freeze(['REFUND', 'LARGE_PAYMENT', 'BULK_PRICE_CHANGE', 'OVERBOOKING', 'OTHER']);
 
 export const APPROVAL_TYPE_LABELS = Object.freeze({
   REFUND: 'Para iadesi',
   LARGE_PAYMENT: 'Büyük ödeme',
   BULK_PRICE_CHANGE: 'Toplu fiyat değişimi',
+  OVERBOOKING: 'Kapasite aşımı (overbooking)',
   OTHER: 'Diğer',
 });
 

@@ -153,6 +153,87 @@ describe('RBAC (entegrasyon)', { skip }, () => {
     assert.equal(allowed.statusCode, 200);
   });
 
+  it('matris kaydından sonra kataloğa eklenen izin rolün varsayılanına düşer; kaldırılan izin geri gelmez', async () => {
+    const { cache } = await import('../../lib/cache.js');
+    const passwordHash = await bcrypt.hash(PASSWORD, 4);
+    await prismaUnfiltered.user.create({ data: { hotelId, email: 'mudur@test.local', name: 'Müdür', role: 'MANAGER', passwordHash } });
+
+    // Yönetici matrisi kaydeder: müdürden oda envanteri yönetimini bilerek kaldırır.
+    const saved = await app.inject({
+      method: 'PUT',
+      url: '/roles/permissions',
+      headers: bearer(await asToken('admin@test.local')),
+      payload: {
+        grants: [
+          { role: 'MANAGER', permissions: ['rooms.view', 'reservations.view', 'reservations.manage'] },
+          { role: 'FRONT_DESK', permissions: ['rooms.view', 'reservations.view', 'reservations.manage'] },
+        ],
+      },
+    });
+    assert.equal(saved.statusCode, 200);
+
+    // Matris, fiyat izni kataloğa girmeden önce kaydedilmiş gibi: o izin karar verilmemiş sayılır.
+    await prismaUnfiltered.$executeRaw`UPDATE "Hotel" SET "permissionCatalog" = array_remove("permissionCatalog", 'reservations.price_override') WHERE "id" = ${hotelId}`;
+    cache.invalidatePrefix(`roles:${hotelId}:`);
+
+    const manager = (await login('mudur@test.local')).json().data.permissions;
+    assert.ok(manager.includes('reservations.price_override'), 'yeni izin müdürün varsayılanından gelmeli');
+    assert.ok(!manager.includes('rooms.manage'), 'yöneticinin kaldırdığı izin geri gelmemeli');
+    const desk = (await login('resepsiyon@test.local')).json().data.permissions;
+    assert.ok(!desk.includes('reservations.price_override'), 'ön büronun varsayılanında yok');
+
+    // Matris yeniden kaydedilince izin artık karar verilmiş: gönderilmediyse kapalı.
+    await app.inject({
+      method: 'PUT',
+      url: '/roles/permissions',
+      headers: bearer(await asToken('admin@test.local')),
+      payload: { grants: [{ role: 'MANAGER', permissions: ['reservations.view'] }] },
+    });
+    assert.ok(!(await login('mudur@test.local')).json().data.permissions.includes('reservations.price_override'));
+  });
+
+  it('matris kaydı otel kartının sürümünü değiştirmez (ayarlar ekranı "başkası değiştirdi" demez)', async () => {
+    const before = await prismaUnfiltered.hotel.findUnique({ where: { id: hotelId }, select: { updatedAt: true } });
+    await app.inject({
+      method: 'PUT',
+      url: '/roles/permissions',
+      headers: bearer(await asToken('admin@test.local')),
+      payload: { grants: [{ role: 'FRONT_DESK', permissions: ['reservations.view'] }] },
+    });
+    const after = await prismaUnfiltered.hotel.findUnique({ where: { id: hotelId }, select: { updatedAt: true, permissionCatalog: true } });
+    assert.equal(after.updatedAt.getTime(), before.updatedAt.getTime());
+    assert.ok(after.permissionCatalog.includes('reservations.price_override'));
+  });
+
+  it('elle fiyat ek izin ister: ön büro 403, izni olan açar', async () => {
+    const roomType = await prismaUnfiltered.roomType.create({
+      data: { hotelId, code: 'STD', name: 'Standart', basePrice: '1000', capacityAdults: 2, capacityChildren: 1 },
+    });
+    await prismaUnfiltered.room.create({ data: { hotelId, number: '101', roomTypeId: roomType.id } });
+    const inDays = (days) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+    const body = () => ({
+      guest: { firstName: 'Ayşe', lastName: 'Yılmaz', phone: '+905321110001' },
+      roomTypeId: roomType.id,
+      adults: 2,
+      boardType: 'BB',
+      checkIn: inDays(10),
+      checkOut: inDays(12),
+      requestId: randomUUID(),
+      manualTotal: '1500',
+      priceNote: 'kurumsal anlaşma',
+    });
+
+    const denied = await app.inject({ method: 'POST', url: '/reservations', headers: bearer(await asToken('resepsiyon@test.local')), payload: body() });
+    assert.equal(denied.statusCode, 403);
+    assert.equal(denied.json().code, 'FORBIDDEN');
+    assert.equal(await prismaUnfiltered.reservation.count({ where: { hotelId } }), 0);
+
+    const allowed = await app.inject({ method: 'POST', url: '/reservations', headers: bearer(await asToken('admin@test.local')), payload: body() });
+    assert.equal(allowed.statusCode, 201);
+    assert.equal(allowed.json().data.reservation.priceMode, 'MANUAL');
+    assert.equal(allowed.json().data.reservation.totalPrice, '1500.00');
+  });
+
   it('refresh rotation: kullanılan token bir daha çalışmaz', async () => {
     const { refreshToken } = (await login('admin@test.local')).json().data;
     const first = await app.inject({ method: 'POST', url: '/auth/refresh', payload: { refreshToken } });

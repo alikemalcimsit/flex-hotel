@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "main": "index.js",
+  "description": "Kanaldan (WhatsApp, web chat, e-posta, OTA) gelen rezervasyon isteklerini işleyen aktör",
   "scripts": {
     "test": "node --test \"*.test.js\""
   },

@@ -55,8 +55,12 @@ const ReservationsPage = lazy(() =>
 const ReservationListTab = lazy(() =>
   import('./pages/reservations/ReservationListTab.jsx').then((m) => ({ default: m.ReservationListTab })),
 );
-const ReservationWaitingTab = lazy(() =>
-  import('./pages/reservations/ReservationWaitingTab.jsx').then((m) => ({ default: m.ReservationWaitingTab })),
+const NewReservationTab = lazy(() =>
+  import('./pages/reservations/NewReservationTab.jsx').then((m) => ({ default: m.NewReservationTab })),
+);
+const WaitlistTab = lazy(() => import('./pages/reservations/WaitlistTab.jsx').then((m) => ({ default: m.WaitlistTab })));
+const ReservationDetailPage = lazy(() =>
+  import('./pages/reservations/ReservationDetailPage.jsx').then((m) => ({ default: m.ReservationDetailPage })),
 );
 const ApprovalsPage = lazy(() => import('./pages/approvals/ApprovalsPage.jsx').then((m) => ({ default: m.ApprovalsPage })));
 const ApprovalsPendingTab = lazy(() => import('./pages/approvals/PendingTab.jsx').then((m) => ({ default: m.PendingTab })));
@@ -106,6 +110,27 @@ export default function App() {
             }
           >
             <Route index element={<HomePage />} />
+            <Route
+              path="rezervasyonlar"
+              element={
+                <RequirePermission permission={PERMISSIONS.RESERVATIONS_VIEW}>
+                  <ReservationsPage />
+                </RequirePermission>
+              }
+            >
+              <Route index element={<Navigate to="/rezervasyonlar/liste" replace />} />
+              <Route path="liste" element={<ReservationListTab />} />
+              <Route
+                path="yeni"
+                element={
+                  <RequirePermission permission={PERMISSIONS.RESERVATIONS_MANAGE}>
+                    <NewReservationTab />
+                  </RequirePermission>
+                }
+              />
+              <Route path="bekleme-listesi" element={<WaitlistTab />} />
+              <Route path=":reservationId" element={<ReservationDetailPage />} />
+            </Route>
             <Route path="oda-plani" element={<RoomPlanPage />} />
             {/* Konuşma adreste: yenileyince açık kalır, bağlantı paylaşılabilir. */}
             <Route
@@ -124,18 +149,6 @@ export default function App() {
                 </RequirePermission>
               }
             />
-            <Route
-              path="rezervasyonlar"
-              element={
-                <RequirePermission permission={PERMISSIONS.RESERVATIONS_VIEW}>
-                  <ReservationsPage />
-                </RequirePermission>
-              }
-            >
-              <Route index element={<Navigate to="/rezervasyonlar/liste" replace />} />
-              <Route path="liste" element={<ReservationListTab />} />
-              <Route path="bekleyen" element={<ReservationWaitingTab />} />
-            </Route>
             <Route path="odalar" element={<RoomsPage />}>
               <Route index element={<Navigate to="/odalar/liste" replace />} />
               <Route path="liste" element={<RoomListTab />} />

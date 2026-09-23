@@ -1,6 +1,7 @@
 import { z } from './locale.js';
 import { BOARD_TYPES, TAX_APPLIES_TO } from './constants.js';
 import { decimalField, dateField, EMAIL_PATTERN, expectedUpdatedAt, isHttpUrl, queryBoolean, TIME_PATTERN } from './fields.js';
+import { OVERBOOKING_POLICIES } from './reservations.js';
 
 /**
  * Ayarlar modülünün girdi sözleşmeleri.
@@ -86,6 +87,8 @@ const generalSettingsBase = z.object({
     .min(0, 'Gün sayısı negatif olamaz')
     .max(365, 'Gün sayısı 365\'ten büyük olamaz'),
   cancellationPolicyPenaltyPct: decimalField({ scale: 2, min: 0, max: 100, label: 'Ceza oranı' }),
+  // İsteğe bağlı: gönderilmezse değişmez. Yer yokken rezervasyon reddedilir ya da onaya gider.
+  overbookingPolicy: z.enum(OVERBOOKING_POLICIES, { error: 'Geçersiz overbooking politikası' }).optional(),
   // İsteğe bağlı: gönderilmezse değişmez. Başta "+" yazılabilir.
   phoneCountryCode: z
     .string({ error: 'Ülke kodu metin olmalı' })

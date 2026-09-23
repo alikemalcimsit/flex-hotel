@@ -56,3 +56,17 @@ export function requirePermission(permission) {
     }
   };
 }
+
+/**
+ * Gövdeye bağlı yetki (ör. rezervasyonda elle fiyat): route'un izni yetmez,
+ * istek belirli bir şey isterse ek izin gerekir. `request.auth`'taki etkin
+ * izinlerden okunur — `requirePermission` ile aynı kaynak.
+ *
+ * @param {import('fastify').FastifyRequest} request
+ * @param {string} permission `PERMISSIONS` içinden bir değer
+ * @param {string} [message] kullanıcıya gösterilecek sebep
+ */
+export function assertRequestPermission(request, permission, message) {
+  if (!request.auth) throw new UnauthorizedError();
+  if (!request.auth.permissions.includes(permission)) throw new ForbiddenError(message, { permission });
+}

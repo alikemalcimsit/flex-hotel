@@ -4,9 +4,9 @@ import { STAFF_ALERT_BADGE_CAP, STAFF_ALERT_RETENTION_DAYS } from '@hotelos/hote
 import { prisma, prismaUnfiltered } from '../../db.js';
 import { encodeCursor, parseCursor } from '../../lib/cursor.js';
 import { NotFoundError } from '../../lib/errors.js';
-import { permissionsForRole } from '../../lib/permissions.js';
 import { SQL_NOW, sqlTimestamp } from '../../lib/sql-time.js';
 import { currentStaffCached } from '../../lib/staff.js';
+import { resolveEffectivePermissions } from '../roles/service.js';
 
 /**
  * Personel uyarıları — üst bardaki zil (modül 9).
@@ -147,8 +147,9 @@ export async function raiseStaffAlert(tx, stage, alert) {
 /* ══════════════════ Kişinin zili ══════════════════ */
 
 /**
- * İsteği yapan personel ve zil durumu. Personel kaydı bulunamazsa `null`
- * (geçici kimlik: `x-actor`, bkz. `lib/staff.js`).
+ * İsteği yapan personel ve zil durumu. Personel kaydı bulunamazsa `null`.
+ * İzinler otelin rol matrisinden (modül 2) gelir: matriste izni kaldırılan rol
+ * o izne giden uyarıları da artık görmez.
  * @param {string} hotelId
  */
 async function viewer(hotelId) {
@@ -160,7 +161,7 @@ async function viewer(hotelId) {
   });
   return {
     id: staff.id,
-    permissions: [...permissionsForRole(staff.role)],
+    permissions: await resolveEffectivePermissions(hotelId, staff.role),
     lastSeenAt: state?.lastSeenAt ?? null,
     mutedKinds: state?.mutedKinds ?? [],
   };

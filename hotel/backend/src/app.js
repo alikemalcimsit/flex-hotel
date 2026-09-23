@@ -28,6 +28,9 @@ import { roleRoutes } from './modules/roles/routes.js';
 import { resolveEffectivePermissions } from './modules/roles/service.js';
 import { userRoutes } from './modules/users/routes.js';
 import { guestRequestRoutes } from './modules/guest-requests/routes.js';
+import { reservationRoutes } from './modules/reservations/routes.js';
+import { reservationCacheStats } from './modules/reservations/service.js';
+import { registerReservationSubscribers, setReservationSubscriberLogger } from './modules/reservations/subscribers.js';
 import { requestCacheStats } from './modules/guest-requests/service.js';
 import { messagingRoutes } from './modules/messaging/routes.js';
 import { messagingCacheStats } from './modules/messaging/service.js';
@@ -35,7 +38,6 @@ import { notificationRoutes, staffAlertRoutes } from './modules/notifications/ro
 import { registerNotificationSubscribers } from './modules/notifications/subscribers.js';
 import { planRoutes } from './modules/plan/routes.js';
 import { planCacheStats } from './modules/plan/service.js';
-import { reservationRoutes } from './modules/reservations/routes.js';
 import { roomsRoutes } from './modules/rooms/routes.js';
 import { settingsRoutes } from './modules/settings/routes.js';
 
@@ -115,6 +117,8 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   registerNotificationSubscribers();
   setApprovalSubscriberLogger(app.log);
   registerApprovalSubscribers();
+  setReservationSubscriberLogger(app.log);
+  registerReservationSubscribers();
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
@@ -241,6 +245,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
         messagingCache: messagingCacheStats(),
         requestCache: requestCacheStats(),
         approvalCache: approvalCacheStats(),
+        reservationCache: reservationCacheStats(),
       },
     };
   });
@@ -248,9 +253,9 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   await app.register(authRoutes, { prefix: '/auth' });
   await app.register(userRoutes, { prefix: '/users' });
   await app.register(roleRoutes, { prefix: '/roles' });
-  await app.register(reservationRoutes, { prefix: '/reservations' });
   await app.register(settingsRoutes, { prefix: '/settings' });
   await app.register(roomsRoutes, { prefix: '/rooms' });
+  await app.register(reservationRoutes, { prefix: '/reservations' });
   await app.register(planRoutes, { prefix: '/plan' });
   await app.register(messagingRoutes, { prefix: '/messaging' });
   await app.register(guestRequestRoutes, { prefix: '/guest-requests' });
