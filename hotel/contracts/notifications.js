@@ -424,6 +424,7 @@ export const STAFF_ALERT_KINDS = Object.freeze([
   'APPROVAL_REQUESTED',
   'APPROVAL_DECIDED',
   'WAITLIST_AVAILABLE',
+  'CHECKOUT_OPEN_BALANCE',
 ]);
 
 export const STAFF_ALERT_KIND_LABELS = Object.freeze({
@@ -435,6 +436,7 @@ export const STAFF_ALERT_KIND_LABELS = Object.freeze({
   APPROVAL_REQUESTED: 'Onay bekleyen iş',
   APPROVAL_DECIDED: 'İstediğim onayın sonucu',
   WAITLIST_AVAILABLE: 'Bekleme listesinde yer açıldı',
+  CHECKOUT_OPEN_BALANCE: 'Bakiyesi kapanmadan çıkış',
 });
 
 export const STAFF_ALERT_SEVERITIES = Object.freeze(['INFO', 'WARNING', 'CRITICAL']);

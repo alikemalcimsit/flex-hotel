@@ -172,6 +172,8 @@ enum StaffAlertKind {
   APPROVAL_REQUESTED
   APPROVAL_DECIDED
   WAITLIST_AVAILABLE
+  /// Bakiyesi kapanmadan çıkış yapıldı (modül 6): tahsilatı takip edecek yönetime.
+  CHECKOUT_OPEN_BALANCE
 }
 
 /// Rezervasyon fiyatının kaynağı (modül 4): sistem hesabı ya da yetkili
@@ -188,6 +190,36 @@ enum OverbookingPolicy {
 }
 
 /// Bekleme listesi kaydının yolculuğu (modül 4).
+/// Erken giriş / geç çıkış ücretinin hesaplanışı (modül 6).
+/// FIXED: sabit tutar. PERCENT_OF_NIGHT: ilgili gecenin fiyatının yüzdesi.
+enum StayFeeMode {
+  NONE
+  FIXED
+  PERCENT_OF_NIGHT
+}
+
+/// Girişte kimliği zorunlu olanlar: yalnız rezervasyon sahibi ya da bütün yetişkinler.
+enum IdentityPolicy {
+  PRIMARY_GUEST
+  ALL_ADULTS
+}
+
+/// Misafirin kimlik belgesi (Kimlik Bildirim Sistemi'ne giden bilgi).
+enum IdDocumentType {
+  NATIONAL_ID
+  PASSPORT
+  OTHER
+}
+
+/// Girişte alınan teminat. Tahsilat değil: nakit teminatın kasaya girişi ve
+/// kart provizyonunun kapanışı ödeme modülünde (17).
+enum DepositMethod {
+  NONE
+  CASH
+  CARD_PREAUTH
+  TRANSFER
+}
+
 enum WaitlistStatus {
   WAITING
   AVAILABLE
@@ -308,6 +340,13 @@ model Hotel {
   /// kataloğa eklenen izin burada yoktur: o izinde rollerin koddaki varsayılanı
   /// geçerli olur (yeni modülün izni, matrisi kaydetmiş otelde kimseye kapalı kalmasın).
   permissionCatalog            String[]  @default([])
+  /// Erken giriş (giriş saatinden önce) ve geç çıkış (çıkış saatinden sonra)
+  /// ücreti. Değer: FIXED ise tutar, PERCENT_OF_NIGHT ise yüzde (modül 6).
+  earlyCheckInFeeMode          StayFeeMode @default(NONE)
+  earlyCheckInFeeValue         Decimal     @default(0) @db.Decimal(12, 2)
+  lateCheckOutFeeMode          StayFeeMode @default(NONE)
+  lateCheckOutFeeValue         Decimal     @default(0) @db.Decimal(12, 2)
+  checkInIdentityPolicy        IdentityPolicy @default(PRIMARY_GUEST)
   settings                     Json      @default("{}")
   createdAt                    DateTime  @default(now())
   updatedAt                    DateTime  @updatedAt
@@ -889,6 +928,8 @@ model Guest {
   phone       String?
   email       String?
   nationality String?
+  /// Kimlik belgesinin türü; `idNumber` onun numarası (girişte zorunlu, modül 6).
+  idType      IdDocumentType?
   idNumber    String?
   birthDate   DateTime?
   notes       String?
@@ -910,6 +951,8 @@ model Guest {
 
   @@index([phone])
   @@index([email])
+  // Girişte refakatçiyi belgesinden tanıma (aynı kişiye ikinci kart açılmasın).
+  @@index([hotelId, idNumber])
   // Ada göre arama (trigram). E-posta eşleştirmesi için ifade index'i
   // `Guest_hotelId_email_lower_idx` (lower(email)) migration'da.
   @@index([firstName(ops: raw("gin_trgm_ops"))], map: "Guest_firstName_trgm_idx", type: Gin)
@@ -953,6 +996,24 @@ model Reservation {
   cancellationFee  Decimal?          @db.Decimal(12, 2)
   noShowAt         DateTime?
   noShowFee        Decimal?          @db.Decimal(12, 2)
+  /// Giriş / çıkış (modül 6). İçerideyse `checkedInAt`, çıkmışsa ikisi de dolu (kısıt).
+  checkedInAt      DateTime?
+  checkedInBy      String?
+  checkedOutAt     DateTime?
+  checkedOutBy     String?
+  /// Erken giriş / geç çıkış ücreti (politikadan; personel uygulamayabilir). Folyoya
+  /// kalem olarak işlenmesi folyo modülünde (15), olay gövdesinden.
+  earlyCheckInFee  Decimal?          @db.Decimal(12, 2)
+  lateCheckOutFee  Decimal?          @db.Decimal(12, 2)
+  vehiclePlate     String?
+  /// Girişte alınan teminat (tahsilat değil; bkz. `DepositMethod`).
+  depositMethod    DepositMethod?
+  depositAmount    Decimal?          @db.Decimal(12, 2)
+  /// Provizyon / dekont numarası. Kart numarası yazılamaz (sözleşmede reddedilir).
+  depositReference String?
+  /// Bakiyesi kapanmadan yapılan çıkış: o anki açık tutar ve yetkilinin gerekçesi.
+  checkoutOpenBalance Decimal?       @db.Decimal(12, 2)
+  openBalanceReason   String?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   deletedAt        DateTime?
@@ -989,6 +1050,11 @@ model Reservation {
   @@index([hotelId, createdAt, id])
   @@index([hotelId, status, checkIn, id])
   @@index([hotelId, groupId])
+  // Ön büro (modül 6): gidecekler (içeride, çıkışı bugün ya da geçmiş) ve
+  // "bugün giriş / çıkış yapanlar".
+  @@index([hotelId, status, checkOut, id])
+  @@index([hotelId, checkedInAt])
+  @@index([hotelId, checkedOutAt])
 }
 
 /// Grup rezervasyonu (modül 4): tek formda açılan birden fazla oda. Odalar
@@ -1350,6 +1416,9 @@ model Folio {
   items       FolioItem[]
   invoices    Invoice[]
   payments    Payment[]
+
+  // Çıkışta konaklamanın bakiyesi (modül 6) ve folyo listesi.
+  @@index([hotelId, reservationId])
 }
 
 model FolioItem {
@@ -1371,6 +1440,8 @@ model FolioItem {
   hotel Hotel @relation(fields: [hotelId], references: [id])
   folio Folio @relation(fields: [folioId], references: [id])
   tax   Tax?  @relation(fields: [taxId], references: [id])
+
+  @@index([folioId])
 }
 
 model Invoice {
@@ -1411,6 +1482,8 @@ model Payment {
   hotel    Hotel     @relation(fields: [hotelId], references: [id])
   folio    Folio     @relation(fields: [folioId], references: [id])
   approval Approval? @relation(fields: [approvalId], references: [id])
+
+  @@index([folioId])
 }
 
 model NightAudit {

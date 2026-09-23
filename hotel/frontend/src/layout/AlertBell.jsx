@@ -22,6 +22,7 @@ const KIND_ICONS = Object.freeze({
   APPROVAL_REQUESTED: 'checkCheck',
   APPROVAL_DECIDED: 'checkCircle',
   WAITLIST_AVAILABLE: 'bookOpen',
+  CHECKOUT_OPEN_BALANCE: 'alertTriangle',
 });
 
 const SEVERITY_TONES = Object.freeze({

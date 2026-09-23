@@ -12,6 +12,8 @@ import { formatDateTime } from '../../lib/timeFormat.js';
 import { useHotelToday } from '../../lib/useHotel.js';
 import { useLiveChannel } from '../../lib/useLiveChannel.js';
 import { toastError, toastSuccess } from '../../store/toast.js';
+import { CheckInDialog } from '../front-desk/CheckInDialog.jsx';
+import { CheckOutDialog } from '../front-desk/CheckOutDialog.jsx';
 import { CancelReservationDialog } from './CancelReservationDialog.jsx';
 import { EditReservationDialog } from './EditReservationDialog.jsx';
 import { NoShowDialog } from './NoShowDialog.jsx';
@@ -35,6 +37,16 @@ const FIELD_LABELS = Object.freeze({
   cancellationFee: 'İptal ücreti',
   noShowFee: 'Gelmedi ücreti',
   roomNumber: 'Oda',
+  checkedInAt: 'Giriş zamanı',
+  checkedOutAt: 'Çıkış zamanı',
+  earlyCheckInFee: 'Erken giriş ücreti',
+  lateCheckOutFee: 'Geç çıkış ücreti',
+  vehiclePlate: 'Araç plakası',
+  depositMethod: 'Teminat',
+  depositAmount: 'Teminat tutarı',
+  depositReference: 'Teminat referansı',
+  checkoutOpenBalance: 'Bakiyeyle çıkış tutarı',
+  openBalanceReason: 'Bakiyeyle çıkış gerekçesi',
 });
 
 /**
@@ -49,8 +61,9 @@ export function ReservationDetailPage() {
   const queryClient = useQueryClient();
   const can = useCan();
   const canManage = can(PERMISSIONS.RESERVATIONS_MANAGE);
+  const canStay = can(PERMISSIONS.STAYS_MANAGE);
   const { timeZone } = useHotelToday();
-  /** `edit` | `cancel` | `cancelGroup` | `noShow` | `confirm` | `reinstate` */
+  /** `edit` | `cancel` | `cancelGroup` | `noShow` | `confirm` | `reinstate` | `checkIn` | `checkOut` */
   const [dialog, setDialog] = useState(null);
 
   useLiveChannel(RESERVATIONS_CHANNEL, {
@@ -120,7 +133,10 @@ export function ReservationDetailPage() {
     );
   }
 
-  const actions = new Set(canManage ? detail.actions : []);
+  // Giriş / çıkış ayrı izin (ön büro, modül 6); diğerleri rezervasyon yönetimi.
+  const actions = new Set(
+    detail.actions.filter((action) => (['checkIn', 'checkOut'].includes(action) ? canStay : canManage)),
+  );
   const currency = detail.currency;
   const closed = ['CANCELLED', 'NO_SHOW'].includes(detail.status);
 
@@ -140,6 +156,8 @@ export function ReservationDetailPage() {
           </span>
         </div>
         <div className="flex flex-wrap gap-2">
+          {actions.has('checkIn') && <Button icon="key" onClick={() => setDialog('checkIn')}>Giriş yap</Button>}
+          {actions.has('checkOut') && <Button icon="logout" onClick={() => setDialog('checkOut')}>Çıkış yap</Button>}
           {actions.has('confirm') && <Button icon="check" onClick={() => setDialog('confirm')}>Onayla</Button>}
           {actions.has('edit') && <Button variant="outline" icon="pencil" onClick={() => setDialog('edit')}>Düzenle</Button>}
           {actions.has('noShow') && <Button variant="outline" icon="alertCircle" onClick={() => setDialog('noShow')}>Gelmedi</Button>}
@@ -161,6 +179,19 @@ export function ReservationDetailPage() {
             </>
           )}{' '}
           Ücretin tahsilatı folyo ve ödeme modülünde yapılır.
+        </Alert>
+      )}
+
+      {detail.checkedInAt && (
+        <Alert tone={detail.status === 'CHECKED_OUT' ? 'info' : 'success'} title={detail.status === 'CHECKED_OUT' ? 'Çıkış yaptı' : 'Misafir içeride'}>
+          Giriş: {formatDateTime(detail.checkedInAt, timeZone)} · {detail.checkedInBy}
+          {detail.earlyCheckInFee ? ` · erken giriş ücreti ${formatMoney(detail.earlyCheckInFee, currency)}` : ''}
+          {detail.checkedOutAt ? `. Çıkış: ${formatDateTime(detail.checkedOutAt, timeZone)} · ${detail.checkedOutBy}` : ''}
+          {detail.lateCheckOutFee ? ` · geç çıkış ücreti ${formatMoney(detail.lateCheckOutFee, currency)}` : ''}
+          {detail.checkoutOpenBalance
+            ? `. Bakiyeyle çıkış: ${formatMoney(detail.checkoutOpenBalance, currency)} (${detail.openBalanceReason})`
+            : ''}
+          .
         </Alert>
       )}
 
@@ -297,6 +328,26 @@ export function ReservationDetailPage() {
             setDialog(null);
           }}
           onError={onActionError}
+        />
+      )}
+      {dialog === 'checkIn' && (
+        <CheckInDialog
+          reservationId={reservationId}
+          onClose={() => setDialog(null)}
+          onDone={(updated) => {
+            queryClient.setQueryData(reservationKeys.detail(reservationId), updated);
+            refresh();
+          }}
+        />
+      )}
+      {dialog === 'checkOut' && (
+        <CheckOutDialog
+          reservationId={reservationId}
+          onClose={() => setDialog(null)}
+          onDone={(updated) => {
+            queryClient.setQueryData(reservationKeys.detail(reservationId), updated);
+            refresh();
+          }}
         />
       )}
       {dialog === 'noShow' && (

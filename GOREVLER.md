@@ -485,13 +485,70 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 6. Check-in / Check-out — Ali Kemal
 **Gün sonu:** Misafir gelince tek tıkla giriş, giderken tek tıkla çıkış yapılıyor; oda durumu ve folyo otomatik değişiyor.
-- [ ] Backend: `checkIn(reservationId)` servisi (oda atanmış mı, kimlik bilgisi var mı kontrolü → CHECKED_IN → `guest.checked_in`)
-- [ ] Backend: `checkOut(reservationId)` servisi (folyo bakiyesi 0 mı kontrolü → CHECKED_OUT → `guest.checked_out`)
-- [ ] Backend: erken giriş / geç çıkış ücreti parametresi
-- [ ] Ekran: Bugün gelecekler listesi (rezervasyon, oda, durum) + "Check-in" butonu → kısa form (kimlik no, uyruk, plaka, kart/depozito)
+- [x] Backend: `checkIn(reservationId)` servisi (oda atanmış mı, kimlik bilgisi var mı kontrolü → CHECKED_IN → `guest.checked_in`)
+- [x] Backend: `checkOut(reservationId)` servisi (folyo bakiyesi 0 mı kontrolü → CHECKED_OUT → `guest.checked_out`)
+- [x] Backend: erken giriş / geç çıkış ücreti parametresi
+- [x] Ekran: Bugün gelecekler listesi (rezervasyon, oda, durum) + "Check-in" butonu → kısa form (kimlik no, uyruk, plaka, kart/depozito)
 - [ ] Ekran: Bugün gidecekler listesi + "Check-out" butonu → bakiye gösterimi, bakiye varsa ödeme ekranına yönlendir
-- [ ] Ekran: Konaklayanlar listesi (şu an içeride kim var)
+      — liste, çıkış ve bakiye gösterimi hazır; **"ödeme ekranına yönlendir" modül 17'yi bekliyor** (ekran yok)
+- [x] Ekran: Konaklayanlar listesi (şu an içeride kim var)
 - [x] Aktör: room-worker'a `guest.checked_in` → dolu, `guest.checked_out` → boş + kirli kuralları — **modül 3'te yapıldı**
+
+> **📌 Modül 6 tamamlandı (23 Eylül 2026 — Ahmet, Ali Kemal adına geçici).** Modül 13
+> (günlük durum) gerçek giriş-çıkış verisi olmadan yazılamadığı için bu dalda yapıldı.
+> Ödeme ekranına yönlendirme bilinçli olarak boş (modül 17; ekran yok).
+>
+> **Veri** (migration `20260923120000_front_desk`):
+> - `Reservation`: `checkedInAt/By`, `checkedOutAt/By` (içerideki kaydın giriş, çıkmışın iki
+>   zamanı da **zorunlu** — kısıt), `earlyCheckInFee`, `lateCheckOutFee`, `vehiclePlate`, teminat
+>   (`depositMethod` NONE/CASH/CARD_PREAUTH/TRANSFER, `depositAmount`, `depositReference`),
+>   bakiyeyle çıkış (`checkoutOpenBalance` + zorunlu `openBalanceReason`).
+> - `Guest.idType` (kimlik kartı / pasaport / diğer) + `(hotelId, idNumber)` index'i.
+> - `Hotel`: `earlyCheckInFeeMode/Value`, `lateCheckOutFeeMode/Value` (yok / sabit / gecenin yüzdesi),
+>   `checkInIdentityPolicy` (yalnız sahibi / bütün yetişkinler). Ayarlar → Genel parametreler.
+> - Folyo tablolarına index: `Folio(hotelId, reservationId)`, `FolioItem(folioId)`, `Payment(folioId)`.
+> - Zil: `CHECKOUT_OPEN_BALANCE` (`stays.checkout_open_balance` iznine).
+> - **Testlerde / seed'de `CHECKED_IN` yazan herkes `checkedInAt` da yazmalı** (kısıt).
+>
+> **Olaylar:** `guest.checked_in` (+ `guestId`, `roomTypeId`, tarihler, `earlyCheckInFee`, `deposit`),
+> `guest.checked_out` (+ `lateCheckOutFee`, `earlyDeparture`, `openBalance`), yeni
+> `guest.check_in_reverted` / `guest.check_out_reverted` (room-worker doluluğu düzeltir).
+> Bildirim merkezi (9) giriş/çıkış bildirimlerini kendiliğinden gönderir.
+>
+> **API** (`/front-desk`): `GET /summary`, `GET /arrivals?view=EXPECTED|CHECKED_IN`,
+> `GET /departures?view=EXPECTED|CHECKED_OUT`, `GET /in-house?sort=`, `GET|POST /stays/:id/check-in`,
+> `GET|POST /stays/:id/check-out`, `POST /stays/:id/check-in/revert`, `POST /stays/:id/check-out/revert`.
+> İzinler: `stays.view` (liste; kat hizmetleri ve muhasebe de görür), `stays.manage` (giriş/çıkış,
+> önizleme — kimliğin tamamını döndürür), `stays.checkout_open_balance` (yönetim).
+>
+> **Kurallar:**
+> - **Giriş:** giriş günü gelmiş, çıkış günü gelmemiş (geç gelen ertesi gün de girer). Oda
+>   verilmemişse aynı işlemde verilir. Odada önceki misafir hâlâ içerideyse, oda arızalıysa ya da
+>   bu gecelerde başkasınaysa giriş olmaz; kirliyse personel onaylar. Aynı konaklamaya aynı anda iki
+>   giriş: biri olur (kilit + sürüm; test edildi).
+> - **Kimlik (KBS):** sahibinin belgesi zorunlu; TC kimlik no sağlamalı, pasaport biçimli. Politika
+>   "bütün yetişkinler" ise refakatçi yetişkinlerin de. Refakatçi belgesinden tanınır (aynı kişiye
+>   ikinci kart açılmaz); belge başka adla kayıtlıysa personele söylenir. Kimlik numarası listede ve
+>   denetim izinde **maskeli** (KVKK). Teminat referansına / nota kart numarası yazılamaz (PCI).
+> - **Ücret:** otelin saatine göre (sunucunun değil). Erken giriş: giriş günü, giriş saatinden önce;
+>   ilk gecenin fiyatı üzerinden. Geç çıkış: çıkış günü, çıkış saatinden sonra; son gece üzerinden.
+>   İstemci gördüğü tutarı gönderir, sunucu farklı hesaplarsa (saat geçti) yazmaz (`FEE_CHANGED`).
+>   Personel ücreti uygulamayabilir (denetim izinde politika tutarıyla).
+> - **Erken ayrılış:** bugünden sonraki geceler bırakılır — envantere döner, fiyattan düşer (personel
+>   onayıyla; `EARLY_DEPARTURE`). Çıkış günü geçmişse (unutulmuş çıkış) tarih değişmez, ücret yok.
+> - **Bakiye:** `bakiye = Σ(kalem × adet) − Σ(ödeme × kur)`; silinmiş kalem/ödeme ve aktarılmış folyo
+>   sayılmaz; denormalize `Folio.balance`'a güvenilmez (`front-desk/folio.js`). Açıksa çıkış olmaz
+>   (`BALANCE_DUE`); yetkili gerekçeyle bakiyeyle çıkar, zile uyarı düşer. **Folyo yoksa bakiye
+>   bilinmiyor** sayılır (sıfır değil) ve ekran bunu söyler.
+> - **Geri alma:** yalnızca aynı gün. Giriş, folyoda hareket varsa geri alınmaz. Çıkış, oda bu arada
+>   başka misafire girişle verildiyse geri alınmaz; erken ayrılışta bırakılan geceler geri gelmez.
+>
+> **Modül 15'e (folyo) not:** billing-worker `guest.checked_in` ile folyoyu açsın; `earlyCheckInFee`,
+> `guest.checked_out`taki `lateCheckOutFee` ve `deposit` kalem/ödeme olarak işlensin. Çıkış bakiye
+> denetimi folyo tablolarını zaten okuyor — folyo yazıldığı gün bir şey değiştirmeden çalışır.
+> **Modül 17'ye (ödeme) not:** çıkış ekranındaki "bakiye var" uyarısına ödeme ekranı bağlantısı eklenir.
+> **Modül 13'e not:** `GET /front-desk/summary` gelecek / gidecek / içeride / gecikmiş sayılarını verir;
+> kısa listeler için `/front-desk/arrivals` ve `/front-desk/departures` (sayfa `/on-buro`).
 
 > **Modül 3'ten not (16 Eylül 2026 — Ahmet):** oda tarafı hazır, sen yalnızca
 > event'i yayınla. `guest.checked_in` / `guest.checked_out` gövdesinde `hotelId`

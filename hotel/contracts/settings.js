@@ -2,6 +2,7 @@ import { z } from './locale.js';
 import { BOARD_TYPES, TAX_APPLIES_TO } from './constants.js';
 import { decimalField, dateField, EMAIL_PATTERN, expectedUpdatedAt, isHttpUrl, queryBoolean, TIME_PATTERN } from './fields.js';
 import { OVERBOOKING_POLICIES } from './reservations.js';
+import { IDENTITY_POLICIES, STAY_FEE_MODES, stayFeePolicyError } from './front-desk.js';
 
 /**
  * Ayarlar modülünün girdi sözleşmeleri.
@@ -89,6 +90,12 @@ const generalSettingsBase = z.object({
   cancellationPolicyPenaltyPct: decimalField({ scale: 2, min: 0, max: 100, label: 'Ceza oranı' }),
   // İsteğe bağlı: gönderilmezse değişmez. Yer yokken rezervasyon reddedilir ya da onaya gider.
   overbookingPolicy: z.enum(OVERBOOKING_POLICIES, { error: 'Geçersiz overbooking politikası' }).optional(),
+  // İsteğe bağlı (modül 6): erken giriş / geç çıkış ücreti ve girişte kimliği istenenler.
+  earlyCheckInFeeMode: z.enum(STAY_FEE_MODES, { error: 'Geçersiz ücret türü' }).optional(),
+  earlyCheckInFeeValue: decimalField({ scale: 2, min: 0, max: 1_000_000, label: 'Erken giriş ücreti' }).optional(),
+  lateCheckOutFeeMode: z.enum(STAY_FEE_MODES, { error: 'Geçersiz ücret türü' }).optional(),
+  lateCheckOutFeeValue: decimalField({ scale: 2, min: 0, max: 1_000_000, label: 'Geç çıkış ücreti' }).optional(),
+  checkInIdentityPolicy: z.enum(IDENTITY_POLICIES, { error: 'Geçersiz kimlik politikası' }).optional(),
   // İsteğe bağlı: gönderilmezse değişmez. Başta "+" yazılabilir.
   phoneCountryCode: z
     .string({ error: 'Ülke kodu metin olmalı' })
@@ -122,11 +129,29 @@ function refineCancellationPolicy(value, ctx) {
   }
 }
 
-export const generalSettingsSchema = generalSettingsBase.superRefine(refineCancellationPolicy);
+/**
+ * Erken giriş / geç çıkış: "ücret yok" dışında değer pozitif, yüzde 100'ü geçmez.
+ * @param {{ earlyCheckInFeeMode?: string, earlyCheckInFeeValue?: string, lateCheckOutFeeMode?: string, lateCheckOutFeeValue?: string }} value
+ * @param {import('zod').RefinementCtx} ctx
+ */
+function refineStayFees(value, ctx) {
+  const early = stayFeePolicyError({ mode: value.earlyCheckInFeeMode, value: value.earlyCheckInFeeValue });
+  if (early) ctx.addIssue({ code: 'custom', path: ['earlyCheckInFeeValue'], message: early });
+  const late = stayFeePolicyError({ mode: value.lateCheckOutFeeMode, value: value.lateCheckOutFeeValue });
+  if (late) ctx.addIssue({ code: 'custom', path: ['lateCheckOutFeeValue'], message: late });
+}
+
+/** @param {any} value @param {import('zod').RefinementCtx} ctx */
+function refineGeneralSettings(value, ctx) {
+  refineCancellationPolicy(value, ctx);
+  refineStayFees(value, ctx);
+}
+
+export const generalSettingsSchema = generalSettingsBase.superRefine(refineGeneralSettings);
 
 export const updateGeneralSettingsSchema = generalSettingsBase
   .extend({ expectedUpdatedAt })
-  .superRefine(refineCancellationPolicy);
+  .superRefine(refineGeneralSettings);
 
 /* ─────────────── Oda tipleri ─────────────── */
 

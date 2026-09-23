@@ -87,6 +87,7 @@ describe('misafir mesajları ve istekler (entegrasyon)', { skip }, () => {
         checkIn: dayDate(-1),
         checkOut: dayDate(2),
         status: 'CHECKED_IN',
+        checkedInAt: new Date(),
         totalPrice: '3000',
         confirmationCode: `M-${randomUUID().slice(0, 8)}`,
       },

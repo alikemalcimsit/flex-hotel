@@ -2,8 +2,12 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   DEFAULT_PHONE_COUNTRY_CODE,
+  IDENTITY_POLICIES,
+  IDENTITY_POLICY_LABELS,
   OVERBOOKING_POLICIES,
   OVERBOOKING_POLICY_LABELS,
+  STAY_FEE_MODES,
+  STAY_FEE_MODE_LABELS,
   generalSettingsSchema,
 } from '@hotelos/hotel-contracts';
 import { Alert, Card, Input, Select } from '@hotelos/ui';
@@ -15,6 +19,18 @@ import { validateWith } from '../../lib/validate.js';
 import { toastError, toastSuccess } from '../../store/toast.js';
 
 const BOARD_OPTIONS = Object.entries(BOARD_TYPE_LABELS).map(([value, label]) => ({ value, label }));
+const FEE_MODE_OPTIONS = STAY_FEE_MODES.map((value) => ({ value, label: STAY_FEE_MODE_LABELS[value] }));
+const IDENTITY_OPTIONS = IDENTITY_POLICIES.map((value) => ({ value, label: IDENTITY_POLICY_LABELS[value] }));
+
+/**
+ * Ücret politikasının cümlesi ("Giriş saatinden önce: ilk gecenin %50'si").
+ * @param {string} mode @param {string} value @param {string} when @param {string} night @param {string} currency
+ */
+function feeSummary(mode, value, when, night, currency) {
+  if (mode === 'FIXED') return `${when}: ${value || '…'} ${currency}.`;
+  if (mode === 'PERCENT_OF_NIGHT') return `${when}: ${night} fiyatının yüzde ${(value || '…').replace('.', ',')} kadarı.`;
+  return `${when}: ücret yok.`;
+}
 
 export function GeneralTab() {
   const queryClient = useQueryClient();
@@ -24,6 +40,11 @@ export function GeneralTab() {
     cancellationPolicyPenaltyPct: '0',
     phoneCountryCode: DEFAULT_PHONE_COUNTRY_CODE,
     overbookingPolicy: 'REJECT',
+    earlyCheckInFeeMode: 'NONE',
+    earlyCheckInFeeValue: '0',
+    lateCheckOutFeeMode: 'NONE',
+    lateCheckOutFeeValue: '0',
+    checkInIdentityPolicy: 'PRIMARY_GUEST',
   });
   const [errors, setErrors] = useState({});
 
@@ -38,6 +59,11 @@ export function GeneralTab() {
       cancellationPolicyPenaltyPct: hotel.cancellationPolicyPenaltyPct ?? '0',
       phoneCountryCode: hotel.phoneCountryCode ?? DEFAULT_PHONE_COUNTRY_CODE,
       overbookingPolicy: hotel.overbookingPolicy ?? 'REJECT',
+      earlyCheckInFeeMode: hotel.earlyCheckInFeeMode ?? 'NONE',
+      earlyCheckInFeeValue: hotel.earlyCheckInFeeValue ?? '0',
+      lateCheckOutFeeMode: hotel.lateCheckOutFeeMode ?? 'NONE',
+      lateCheckOutFeeValue: hotel.lateCheckOutFeeValue ?? '0',
+      checkInIdentityPolicy: hotel.checkInIdentityPolicy ?? 'PRIMARY_GUEST',
     });
     setErrors({});
   }, [hotel]);
@@ -173,6 +199,66 @@ export function GeneralTab() {
         <Alert tone="info" className="mt-5">
           "Onaya gönder" seçilirse resepsiyonun açmak istediği rezervasyon Onaylar ekranına düşer; yönetici onaylarsa
           kapasite aşılarak açılır, reddederse açılmaz. Tarih değişikliği ve iptal geri alma her durumda yer ister.
+        </Alert>
+      </Card>
+
+      <Card
+        title="Giriş / çıkış"
+        description={`Giriş saati ${hotel.checkInTime}, çıkış saati ${hotel.checkOutTime} (Otel bilgileri sekmesinden). Saatler otelin saat dilimine göredir.`}
+      >
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Select
+            label="Erken giriş ücreti"
+            name="earlyCheckInFeeMode"
+            value={form.earlyCheckInFeeMode}
+            onChange={setField('earlyCheckInFeeMode')}
+            options={FEE_MODE_OPTIONS}
+            error={errors.earlyCheckInFeeMode}
+          />
+          {form.earlyCheckInFeeMode !== 'NONE' && (
+            <Input
+              label={form.earlyCheckInFeeMode === 'FIXED' ? `Tutar (${hotel.currency})` : 'Yüzde (%)'}
+              name="earlyCheckInFeeValue"
+              inputMode="decimal"
+              value={form.earlyCheckInFeeValue}
+              onChange={setField('earlyCheckInFeeValue')}
+              error={errors.earlyCheckInFeeValue}
+              placeholder={form.earlyCheckInFeeMode === 'FIXED' ? '500' : '50'}
+            />
+          )}
+          <Select
+            label="Geç çıkış ücreti"
+            name="lateCheckOutFeeMode"
+            value={form.lateCheckOutFeeMode}
+            onChange={setField('lateCheckOutFeeMode')}
+            options={FEE_MODE_OPTIONS}
+            error={errors.lateCheckOutFeeMode}
+          />
+          {form.lateCheckOutFeeMode !== 'NONE' && (
+            <Input
+              label={form.lateCheckOutFeeMode === 'FIXED' ? `Tutar (${hotel.currency})` : 'Yüzde (%)'}
+              name="lateCheckOutFeeValue"
+              inputMode="decimal"
+              value={form.lateCheckOutFeeValue}
+              onChange={setField('lateCheckOutFeeValue')}
+              error={errors.lateCheckOutFeeValue}
+              placeholder={form.lateCheckOutFeeMode === 'FIXED' ? '500' : '50'}
+            />
+          )}
+          <Select
+            label="Girişte kimliği istenenler"
+            name="checkInIdentityPolicy"
+            value={form.checkInIdentityPolicy}
+            onChange={setField('checkInIdentityPolicy')}
+            options={IDENTITY_OPTIONS}
+            error={errors.checkInIdentityPolicy}
+          />
+        </div>
+        <Alert tone="info" title="Özet" className="mt-5">
+          {feeSummary(form.earlyCheckInFeeMode, form.earlyCheckInFeeValue, `${hotel.checkInTime} öncesi giriş`, 'giriş gecesinin', hotel.currency)}{' '}
+          {feeSummary(form.lateCheckOutFeeMode, form.lateCheckOutFeeValue, `${hotel.checkOutTime} sonrası çıkış`, 'son gecenin', hotel.currency)}{' '}
+          Resepsiyon ücreti gerekçesiyle uygulamayabilir (denetim izine yazılır). Kimlik bilgisi Kimlik Bildirim
+          Sistemi'ne gider; {form.checkInIdentityPolicy === 'ALL_ADULTS' ? 'bütün yetişkinlerin' : 'en az rezervasyon sahibinin'} belgesi girilmeden giriş yapılmaz.
         </Alert>
       </Card>
 

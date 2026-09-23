@@ -28,6 +28,8 @@ import { roleRoutes } from './modules/roles/routes.js';
 import { resolveEffectivePermissions } from './modules/roles/service.js';
 import { userRoutes } from './modules/users/routes.js';
 import { guestRequestRoutes } from './modules/guest-requests/routes.js';
+import { frontDeskRoutes } from './modules/front-desk/routes.js';
+import { frontDeskCacheStats } from './modules/front-desk/service.js';
 import { reservationRoutes } from './modules/reservations/routes.js';
 import { reservationCacheStats } from './modules/reservations/service.js';
 import { registerReservationSubscribers, setReservationSubscriberLogger } from './modules/reservations/subscribers.js';
@@ -246,6 +248,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
         requestCache: requestCacheStats(),
         approvalCache: approvalCacheStats(),
         reservationCache: reservationCacheStats(),
+        frontDeskCache: frontDeskCacheStats(),
       },
     };
   });
@@ -256,6 +259,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   await app.register(settingsRoutes, { prefix: '/settings' });
   await app.register(roomsRoutes, { prefix: '/rooms' });
   await app.register(reservationRoutes, { prefix: '/reservations' });
+  await app.register(frontDeskRoutes, { prefix: '/front-desk' });
   await app.register(planRoutes, { prefix: '/plan' });
   await app.register(messagingRoutes, { prefix: '/messaging' });
   await app.register(guestRequestRoutes, { prefix: '/guest-requests' });

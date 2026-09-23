@@ -180,14 +180,47 @@ export const EVENT_CATALOG = Object.freeze({
     status: z.enum(['WAITING', 'AVAILABLE', 'CONVERTED', 'CANCELLED', 'EXPIRED']),
   }),
 
-  'guest.checked_in': hotelScoped.extend({
-    reservationId: z.string().uuid(),
+  /* ── Giriş / çıkış (modül 6) ──
+     room-worker odanın doluluğunu bunlardan yazar (doluluğun tek yazıcısı);
+     notification-worker hoş geldin / teşekkür bildirimini gönderir; folyo
+     aktörü (modül 15) folyoyu açar, ücretleri kalem olarak işler ve çıkışta
+     bakiyeyi denetler. Tutarlar "1234.50" biçiminde metin; ücret yoksa null. */
+  'guest.checked_in': reservationStay.extend({
     roomId: z.string().uuid(),
+    guestId: z.string().uuid(),
+    /** Erken giriş ücreti (politikadan; personel uygulamadıysa null). */
+    earlyCheckInFee: z.string().nullable().default(null),
+    /** Girişte alınan teminat (tahsilat değil; kasaya girişi ödeme modülünde). */
+    deposit: z
+      .object({
+        method: z.enum(['CASH', 'CARD_PREAUTH', 'TRANSFER']),
+        amount: z.string(),
+        reference: z.string().nullable().default(null),
+      })
+      .nullable()
+      .default(null),
   }),
 
-  'guest.checked_out': hotelScoped.extend({
-    reservationId: z.string().uuid(),
+  'guest.checked_out': reservationStay.extend({
     roomId: z.string().uuid(),
+    guestId: z.string().uuid(),
+    lateCheckOutFee: z.string().nullable().default(null),
+    /** Çıkış tarihinden önce ayrıldı: `checkOut` kısaltılmış tarihtir, kalan geceler bırakıldı. */
+    earlyDeparture: z.boolean().default(false),
+    /** Bakiyesi kapanmadan çıkış yapıldıysa o anki açık tutar (yetkili onayıyla). */
+    openBalance: z.string().nullable().default(null),
+  }),
+
+  /** Yanlışlıkla yapılan giriş geri alındı (aynı gün): oda yeniden boş. */
+  'guest.check_in_reverted': reservationStay.extend({
+    roomId: z.string().uuid(),
+    reason: z.string().min(1),
+  }),
+
+  /** Yanlışlıkla yapılan çıkış geri alındı (aynı gün): misafir yine içeride, oda dolu. */
+  'guest.check_out_reverted': reservationStay.extend({
+    roomId: z.string().uuid(),
+    reason: z.string().min(1),
   }),
 
   /* ── Misafir mesajları ve istekleri (modül 7) ──
@@ -323,6 +356,7 @@ export const EVENT_CATALOG = Object.freeze({
       'APPROVAL_REQUESTED',
       'APPROVAL_DECIDED',
       'WAITLIST_AVAILABLE',
+      'CHECKOUT_OPEN_BALANCE',
     ]),
     userId: z.string().uuid().nullable(),
     permission: z.string().nullable(),
@@ -400,6 +434,8 @@ export const INVENTORY_CHANGED_EVENTS = Object.freeze([
   'reservation.reinstated',
   'guest.checked_in',
   'guest.checked_out',
+  'guest.check_in_reverted',
+  'guest.check_out_reverted',
 ]);
 
 /**
@@ -439,6 +475,8 @@ export const RESERVATIONS_CHANGED_EVENTS = Object.freeze([
   'room.unassigned',
   'guest.checked_in',
   'guest.checked_out',
+  'guest.check_in_reverted',
+  'guest.check_out_reverted',
   'waitlist.changed',
 ]);
 

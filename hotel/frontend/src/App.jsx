@@ -62,6 +62,10 @@ const WaitlistTab = lazy(() => import('./pages/reservations/WaitlistTab.jsx').th
 const ReservationDetailPage = lazy(() =>
   import('./pages/reservations/ReservationDetailPage.jsx').then((m) => ({ default: m.ReservationDetailPage })),
 );
+const FrontDeskPage = lazy(() => import('./pages/front-desk/FrontDeskPage.jsx').then((m) => ({ default: m.FrontDeskPage })));
+const ArrivalsTab = lazy(() => import('./pages/front-desk/ArrivalsTab.jsx').then((m) => ({ default: m.ArrivalsTab })));
+const DeparturesTab = lazy(() => import('./pages/front-desk/DeparturesTab.jsx').then((m) => ({ default: m.DeparturesTab })));
+const InHouseTab = lazy(() => import('./pages/front-desk/InHouseTab.jsx').then((m) => ({ default: m.InHouseTab })));
 const ApprovalsPage = lazy(() => import('./pages/approvals/ApprovalsPage.jsx').then((m) => ({ default: m.ApprovalsPage })));
 const ApprovalsPendingTab = lazy(() => import('./pages/approvals/PendingTab.jsx').then((m) => ({ default: m.PendingTab })));
 const ApprovalsHistoryTab = lazy(() => import('./pages/approvals/HistoryTab.jsx').then((m) => ({ default: m.HistoryTab })));
@@ -130,6 +134,19 @@ export default function App() {
               />
               <Route path="bekleme-listesi" element={<WaitlistTab />} />
               <Route path=":reservationId" element={<ReservationDetailPage />} />
+            </Route>
+            <Route
+              path="on-buro"
+              element={
+                <RequirePermission permission={PERMISSIONS.STAYS_VIEW}>
+                  <FrontDeskPage />
+                </RequirePermission>
+              }
+            >
+              <Route index element={<Navigate to="/on-buro/gelecekler" replace />} />
+              <Route path="gelecekler" element={<ArrivalsTab />} />
+              <Route path="gidecekler" element={<DeparturesTab />} />
+              <Route path="konaklayanlar" element={<InHouseTab />} />
             </Route>
             <Route path="oda-plani" element={<RoomPlanPage />} />
             {/* Konuşma adreste: yenileyince açık kalır, bağlantı paylaşılabilir. */}

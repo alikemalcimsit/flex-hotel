@@ -136,6 +136,7 @@ export { utcToZonedWallTime, zonedWallTimeToUtc } from './zoned-time.js';
 export * from './notifications.js';
 export * from './approvals.js';
 export * from './reservations.js';
+export * from './front-desk.js';
 export { displayPhone, internationalPhone } from './phone.js';
 export {
   DEFAULT_ROLE_PERMISSIONS,

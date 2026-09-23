@@ -26,6 +26,13 @@ export const PERMISSIONS = Object.freeze({
   /** Sistem fiyatı yerine toplamı elle girmek (gerekçeyle). Yönetim işi. */
   RESERVATIONS_PRICE_OVERRIDE: 'reservations.price_override',
 
+  /** Ön büro listeleri (gelecekler, gidecekler, konaklayanlar) — görüntüleme. */
+  STAYS_VIEW: 'stays.view',
+  /** Check-in / check-out ve aynı gün geri alma. */
+  STAYS_MANAGE: 'stays.manage',
+  /** Folyo bakiyesi kapanmadan çıkışa izin vermek (gerekçeyle). Yönetim işi. */
+  STAYS_OPEN_BALANCE: 'stays.checkout_open_balance',
+
   MESSAGES_VIEW: 'messages.view',
   MESSAGES_REPLY: 'messages.reply',
   REQUESTS_VIEW: 'requests.view',
@@ -58,6 +65,9 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.RESERVATIONS_VIEW]: 'Rezervasyonları görüntüle',
   [PERMISSIONS.RESERVATIONS_MANAGE]: 'Rezervasyonları yönet',
   [PERMISSIONS.RESERVATIONS_PRICE_OVERRIDE]: 'Fiyatı elle belirle',
+  [PERMISSIONS.STAYS_VIEW]: 'Giriş / çıkış listelerini görüntüle',
+  [PERMISSIONS.STAYS_MANAGE]: 'Giriş / çıkış yap',
+  [PERMISSIONS.STAYS_OPEN_BALANCE]: 'Bakiyesi kapanmadan çıkışa izin ver',
   [PERMISSIONS.MESSAGES_VIEW]: 'Mesajları görüntüle',
   [PERMISSIONS.MESSAGES_REPLY]: 'Mesaj yaz / yönet',
   [PERMISSIONS.REQUESTS_VIEW]: 'İstekleri görüntüle',
@@ -86,6 +96,11 @@ export const PERMISSION_GROUPS = Object.freeze([
     key: 'reservations',
     label: 'Rezervasyonlar',
     permissions: [PERMISSIONS.RESERVATIONS_VIEW, PERMISSIONS.RESERVATIONS_MANAGE, PERMISSIONS.RESERVATIONS_PRICE_OVERRIDE],
+  },
+  {
+    key: 'stays',
+    label: 'Giriş / çıkış',
+    permissions: [PERMISSIONS.STAYS_VIEW, PERMISSIONS.STAYS_MANAGE, PERMISSIONS.STAYS_OPEN_BALANCE],
   },
   {
     key: 'guest',
@@ -140,6 +155,9 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.RESERVATIONS_VIEW,
     PERMISSIONS.RESERVATIONS_MANAGE,
     PERMISSIONS.RESERVATIONS_PRICE_OVERRIDE,
+    PERMISSIONS.STAYS_VIEW,
+    PERMISSIONS.STAYS_MANAGE,
+    PERMISSIONS.STAYS_OPEN_BALANCE,
     PERMISSIONS.MESSAGES_VIEW,
     PERMISSIONS.MESSAGES_REPLY,
     PERMISSIONS.REQUESTS_VIEW,
@@ -155,6 +173,8 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.ROOMS_OPERATE,
     PERMISSIONS.RESERVATIONS_VIEW,
     PERMISSIONS.RESERVATIONS_MANAGE,
+    PERMISSIONS.STAYS_VIEW,
+    PERMISSIONS.STAYS_MANAGE,
     PERMISSIONS.MESSAGES_VIEW,
     PERMISSIONS.MESSAGES_REPLY,
     PERMISSIONS.REQUESTS_VIEW,
@@ -164,12 +184,15 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
   HOUSEKEEPING: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,
     PERMISSIONS.ROOMS_OPERATE,
+    // Gidecekler listesi: hangi oda bugün boşalacak (temizlik sırası).
+    PERMISSIONS.STAYS_VIEW,
     PERMISSIONS.REQUESTS_VIEW,
     PERMISSIONS.REQUESTS_MANAGE,
   ]),
   ACCOUNTING: Object.freeze([
     PERMISSIONS.SETTINGS_VIEW,
     PERMISSIONS.ROOMS_VIEW,
+    PERMISSIONS.STAYS_VIEW,
     PERMISSIONS.NOTIFICATIONS_VIEW,
     PERMISSIONS.APPROVALS_VIEW,
   ]),

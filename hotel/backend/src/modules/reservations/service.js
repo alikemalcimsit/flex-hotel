@@ -123,6 +123,14 @@ const RESERVATION_SELECT = Object.freeze({
   cancellationFee: true,
   noShowAt: true,
   noShowFee: true,
+  checkedInAt: true,
+  checkedInBy: true,
+  checkedOutAt: true,
+  checkedOutBy: true,
+  earlyCheckInFee: true,
+  lateCheckOutFee: true,
+  checkoutOpenBalance: true,
+  openBalanceReason: true,
   createdAt: true,
   updatedAt: true,
   guest: { select: { id: true, firstName: true, lastName: true, phone: true, email: true, nationality: true } },
@@ -1220,10 +1228,27 @@ async function listWhere(hotelId, query, businessDate, hotel) {
   if (query.from) and.push({ checkOut: { gt: query.from } });
   if (query.to) and.push({ checkIn: { lt: addDays(query.to, 1) } });
 
-  for (const token of listSearchTokens(query.search)) {
-    and.push(await tokenWhere(hotelId, token, hotel));
-  }
+  and.push(...(await reservationSearchConditions(hotelId, query.search, hotel)));
   return { hotelId, ...(and.length ? { AND: and } : {}) };
+}
+
+/**
+ * Serbest arama → rezervasyon koşulları (her kelime ayrı koşul, hepsi
+ * sağlanmalı): onay kodu, misafir adı, telefon ya da oda numarası. Ön büro
+ * listeleri (modül 6) aynı aramayı kullanır.
+ *
+ * @param {string} hotelId
+ * @param {string | undefined} search
+ * @param {{ phoneCountryCode: string }} [hotel]
+ * @returns {Promise<object[]>} Prisma `AND` öğeleri
+ */
+export async function reservationSearchConditions(hotelId, search, hotel) {
+  const tokens = listSearchTokens(search);
+  if (tokens.length === 0) return [];
+  const settings = hotel ?? (await getHotelSettings(hotelId));
+  const conditions = [];
+  for (const token of tokens) conditions.push(await tokenWhere(hotelId, token, settings));
+  return conditions;
 }
 
 /**
@@ -1324,6 +1349,14 @@ export async function getReservation(hotelId, reservationId) {
     cancellationFee: money(row.cancellationFee),
     noShowAt: iso(row.noShowAt),
     noShowFee: money(row.noShowFee),
+    checkedInAt: iso(row.checkedInAt),
+    checkedInBy: row.checkedInBy,
+    checkedOutAt: iso(row.checkedOutAt),
+    checkedOutBy: row.checkedOutBy,
+    earlyCheckInFee: money(row.earlyCheckInFee),
+    lateCheckOutFee: money(row.lateCheckOutFee),
+    checkoutOpenBalance: money(row.checkoutOpenBalance),
+    openBalanceReason: row.openBalanceReason,
     nightlyRates,
     taxes: roomTaxBreakdown(money(row.totalPrice), taxes),
     businessDate: toIsoDay(businessDate),

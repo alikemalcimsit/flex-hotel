@@ -390,7 +390,7 @@ describe('rezervasyon yönetimi (entegrasyon)', { skip }, () => {
 
     it('içerideki misafir: giriş tarihi değişmez; odası doluysa uzatma reddedilir', async () => {
       const { reservation } = await create({ checkIn: new Date(day(0)), checkOut: new Date(day(2)), roomId: rooms.s1.id });
-      await db.reservation.update({ where: { id: reservation.id }, data: { status: 'CHECKED_IN' } });
+      await db.reservation.update({ where: { id: reservation.id }, data: { status: 'CHECKED_IN', checkedInAt: new Date() } });
       const fresh = await service.getReservation(hotelId, reservation.id);
       await assert.rejects(
         as(DESK, () => service.updateReservation(hotelId, reservation.id, { expectedUpdatedAt: new Date(fresh.updatedAt), checkIn: new Date(day(1)) })),
@@ -718,7 +718,7 @@ describe('rezervasyon yönetimi (entegrasyon)', { skip }, () => {
       const { reservation } = await create({ status: 'PENDING', checkIn: new Date(day(0)), checkOut: new Date(day(1)) });
       const detail = await service.getReservation(hotelId, reservation.id);
       assert.deepEqual(detail.actions, contracts.allowedReservationActions(detail, detail.businessDate));
-      assert.deepEqual(detail.actions.sort(), ['cancel', 'confirm', 'edit', 'noShow'].sort());
+      assert.deepEqual(detail.actions.sort(), ['cancel', 'checkIn', 'confirm', 'edit', 'noShow'].sort());
       assert.equal(detail.cancellationPreview.penaltyApplies, true);
       assert.equal(detail.noShowPreview.fee, '1000.00');
     });
