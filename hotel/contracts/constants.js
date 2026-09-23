@@ -104,7 +104,10 @@ export const ROOM_ASSIGNMENT_KIND_LABELS = Object.freeze({
   DOWNGRADE: 'Alt sınıf',
 });
 
-/** Rezervasyon durumları (Prisma `ReservationStatus` ile birebir). */
+/**
+ * Rezervasyon durumları (Prisma `ReservationStatus` ile birebir; Prisma'daki eski
+ * `WAITLISTED` değeri hariç — kullanılmıyor, bkz. schema.prisma).
+ */
 export const RESERVATION_STATUSES = Object.freeze([
   'PENDING',
   'CONFIRMED',

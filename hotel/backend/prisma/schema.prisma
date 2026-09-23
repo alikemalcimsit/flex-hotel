@@ -46,6 +46,11 @@ enum ReservationStatus {
   CHECKED_OUT
   CANCELLED
   NO_SHOW
+  // KULLANILMIYOR (eski). Bekleme listesinin ilk tasarımında talep rezervasyon
+  // satırı olarak tutuluyordu; bekleme listesi artık ayrı tablo (WaitlistEntry).
+  // PostgreSQL enum değeri silinemediği için burada duruyor; eski satırlar
+  // 20260923090000_waitlisted_to_entries migration'ında taşındı. Yeni kod yazmaz.
+  WAITLISTED
 }
 
 enum ReservationSource {
@@ -299,6 +304,10 @@ model Hotel {
   cancellationPolicyPenaltyPct Decimal   @default(0) @db.Decimal(5, 2)
   /// Kapasite aşımında rezervasyon reddedilir ya da yönetici onayına gider.
   overbookingPolicy            OverbookingPolicy @default(REJECT)
+  /// Rol matrisi (modül 2) kaydedildiğinde katalogda olan izinler. Sonradan
+  /// kataloğa eklenen izin burada yoktur: o izinde rollerin koddaki varsayılanı
+  /// geçerli olur (yeni modülün izni, matrisi kaydetmiş otelde kimseye kapalı kalmasın).
+  permissionCatalog            String[]  @default([])
   settings                     Json      @default("{}")
   createdAt                    DateTime  @default(now())
   updatedAt                    DateTime  @updatedAt
@@ -306,6 +315,7 @@ model Hotel {
 
   users                 User[]
   refreshTokens         RefreshToken[]
+  rolePermissions       RolePermission[]
   eventLogs             EventLog[]
   processedEvents       ProcessedEvent[]
   actorSettings         ActorSetting[]
@@ -379,6 +389,23 @@ model RefreshToken {
 
   hotel Hotel @relation(fields: [hotelId], references: [id])
   user  User  @relation(fields: [userId], references: [id])
+}
+
+/// Rol → izin matrisi (modül 2 — RBAC). Bir otelin hiç satırı yoksa çözüm koddaki
+/// varsayılanlara düşer; matris kaydedilince tüm roller için satır yazılır ve DB
+/// kaynak olur. ADMIN satır tutmaz — kod her zaman ADMIN'e tüm izinleri verir.
+model RolePermission {
+  id         String   @id @default(uuid())
+  hotelId    String
+  role       UserRole
+  permission String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+
+  @@unique([hotelId, role, permission])
+  @@index([hotelId, role])
 }
 
 model EventLog {

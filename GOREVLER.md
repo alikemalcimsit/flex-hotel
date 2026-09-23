@@ -265,6 +265,18 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 > (günlük durum) gerçek rezervasyon verisi olmadan yazılamadığı için Ali'nin modülü
 > bu dalda yapıldı. Folyo bağlantısı bilinçli olarak boş (modül 15).
 >
+> **Birleştirme (23 Eylül 2026):** main'e aynı modülün paralel bir sürümü de gelmişti (Ali).
+> İki sürüm gerçek veritabanında aynı 11 senaryoyla sınandı (çift gönderim, son oda yarışı,
+> aynı telefonda farklı kişi, telefon yazım farkı, fiyat değişince düzenleme, erken "gelmedi",
+> geçmişe tarih, kanal isteğinin tekrar teslimi, atanmış odayla uzatma, bayat ekrandan iptal,
+> 2500 misafir / 20 bin rezervasyonda liste-arama süresi); bu sürüm kaldı. Ali'nin modül 2'si
+> (giriş, kullanıcılar, rol matrisi) olduğu gibi alındı; rezervasyon izinleri ona bağlandı.
+> O sürümün `WAITLISTED` durumu şemada kaldı (enum değeri silinemez) ama yazılmıyor; kalan
+> satırlar `20260923090000_waitlisted_to_entries` ile bekleme listesine taşınır.
+> Rol matrisine `Hotel.permissionCatalog` eklendi (`20260923090100_role_permission_catalog`):
+> matris kaydedildikten sonra kataloğa giren izin rolün varsayılanına düşer — yeni modülün izni
+> matrisi kaydetmiş otelde herkese kapalı kalmaz, yöneticinin kaldırdığı izin geri gelmez.
+>
 > **Veri** (migration `20260922090000_reservation_management`):
 > - `Reservation`: fiyat kaynağı (`priceMode` sistem/elle + `priceNote` gerekçe; elle fiyat
 >   gerekçesiz yazılamaz — kısıt), `createdBy`, `confirmedAt`, iptal (`cancelledAt/By`,
@@ -290,7 +302,8 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 > `POST /groups/:id/cancel`, `GET /:id`, `GET /:id/history`, `PATCH /:id`, `POST /:id/confirm`,
 > `/cancel`, `/no-show`, `/reinstate`; bekleme listesi `GET/POST /waitlist`, `GET /waitlist/:id`,
 > `POST /waitlist/:id/close`. İzinler `reservations.view` / `reservations.manage`; elle fiyat
-> `reservations.price_override` (personelin rolünden denetlenir, ön büroda yok).
+> `reservations.price_override` (gövdeye bağlı: handler'da `assertRequestPermission` ile oturumdaki
+> etkin izinlerden denetlenir; varsayılanda yönetici ve müdürde var, ön büroda yok).
 >
 > **Kurallar:**
 > - **Envanter kilidi:** açma, grup, tarih/tip düzenleme ve geri alma → oda tipi kilidi, sonra aynı

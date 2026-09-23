@@ -37,6 +37,7 @@ const SHORTCUT_HINTS = {
 
 export function HomePage() {
   const user = useAuthStore((s) => s.user);
+  const permissions = useAuthStore((s) => s.permissions);
   const health = useQuery({
     queryKey: ['health'],
     queryFn: () => api('/health'),
@@ -99,7 +100,7 @@ export function HomePage() {
     },
   ];
 
-  const shortcutGroups = visibleSections(user?.role)
+  const shortcutGroups = visibleSections(user?.role, permissions)
     .flatMap((section) => section.items)
     .filter((item) => item.children?.length);
 

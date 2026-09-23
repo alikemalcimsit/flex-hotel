@@ -137,3 +137,22 @@ export * from './notifications.js';
 export * from './approvals.js';
 export * from './reservations.js';
 export { displayPhone, internationalPhone } from './phone.js';
+export {
+  DEFAULT_ROLE_PERMISSIONS,
+  PERMISSIONS,
+  PERMISSION_GROUPS,
+  PERMISSION_LABELS,
+  PERMISSION_VALUES,
+  ROLES,
+  ROLE_LABELS,
+  defaultPermissionsForRole,
+} from './permissions.js';
+export { loginSchema, refreshSchema } from './auth.js';
+export {
+  MAX_PASSWORD_LENGTH,
+  MIN_PASSWORD_LENGTH,
+  resetPasswordSchema,
+  updateUserSchema,
+  userInputSchema,
+} from './users.js';
+export { matrixUpdateSchema } from './roles.js';

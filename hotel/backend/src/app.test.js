@@ -149,8 +149,13 @@ describe('girdi doğrulama', () => {
 
 describe('iç hata sızıntısı', () => {
   it('veritabanı hatasında iç detay dönmez', async () => {
-    // Veritabanı yok; bu istek servis katmanında patlayacak.
-    const response = await app.inject({ method: 'GET', url: '/settings/room-types' });
+    // Veritabanı yok; bu istek servis katmanında patlayacak. Giriş ucu herkese
+    // açık (auth öncesi), o yüzden 401'e değil gerçek DB hatasına düşer.
+    const response = await app.inject({
+      method: 'POST',
+      url: '/auth/login',
+      payload: { email: 'kimse@hotel.local', password: 'gecersiz' },
+    });
     const body = response.json();
 
     assert.equal(response.statusCode, 500);

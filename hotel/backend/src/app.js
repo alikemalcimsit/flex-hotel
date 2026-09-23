@@ -23,6 +23,10 @@ import {
 import { approvalRoutes } from './modules/approvals/routes.js';
 import { approvalCacheStats } from './modules/approvals/service.js';
 import { registerApprovalSubscribers, setApprovalSubscriberLogger } from './modules/approvals/subscribers.js';
+import { authRoutes } from './modules/auth/routes.js';
+import { roleRoutes } from './modules/roles/routes.js';
+import { resolveEffectivePermissions } from './modules/roles/service.js';
+import { userRoutes } from './modules/users/routes.js';
 import { guestRequestRoutes } from './modules/guest-requests/routes.js';
 import { reservationRoutes } from './modules/reservations/routes.js';
 import { reservationCacheStats } from './modules/reservations/service.js';
@@ -149,19 +153,39 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   });
 
   /**
-   * Her isteğe bir correlationId bağlanır ve async bağlam kurulur.
+   * Her isteğe bir correlationId bağlanır, kimlik çözülür ve async bağlam kurulur.
+   *
+   * Bearer token varsa doğrulanır: geçerliyse `request.auth`
+   * (`{ userId, email, hotelId, role, permissions }`) dolar ve `actor` kullanıcının
+   * e-postası olur. Token yoksa/geçersizse istek anonim kalır (throw etmeyiz —
+   * `/auth/login`, `/auth/refresh` ve `/health` herkese açık olmalı); korumalı
+   * route'ları `withHotelContext`/`requirePermission` preHandler'ları 401/403 yapar.
    *
    * Bundan sonra servis katmanındaki audit kaydı ve yayınlanan event'ler bu
-   * kimliği kendiliğinden taşır — kimsenin elle geçirmesi gerekmez. Modül 10'un
-   * "zinciri tek tıkla gör" ekranı bunun üstüne kurulacak.
-   *
-   * ⚠️ `actor` şu an istemcinin gönderdiği başlıktan geliyor ve doğrulanmıyor
-   * (modül 2 / RBAC bekleniyor). Gerçek giriş gelince JWT'den okunacak.
+   * kimliği kendiliğinden taşır (modül 10 zincir ekranı bunun üstüne kurulacak).
    */
   app.addHook('onRequest', async (request, reply) => {
     const correlationId = String(request.id);
-    enterContext({ correlationId, actor: actorFrom(request.headers['x-actor']) });
     reply.header('x-correlation-id', correlationId);
+
+    let actor;
+    try {
+      const payload = await request.jwtVerify();
+      request.auth = {
+        userId: payload.userId,
+        email: payload.email,
+        hotelId: payload.hotelId,
+        role: payload.role,
+        permissions: await resolveEffectivePermissions(payload.hotelId, payload.role),
+      };
+      actor = payload.email;
+    } catch {
+      request.auth = null;
+      // Geriye dönük: token gelene kadar denetim izi boş kalmasın diye başlık.
+      actor = actorFrom(request.headers['x-actor']);
+    }
+
+    enterContext({ correlationId, actor });
   });
 
   /**
@@ -226,6 +250,9 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
     };
   });
 
+  await app.register(authRoutes, { prefix: '/auth' });
+  await app.register(userRoutes, { prefix: '/users' });
+  await app.register(roleRoutes, { prefix: '/roles' });
   await app.register(settingsRoutes, { prefix: '/settings' });
   await app.register(roomsRoutes, { prefix: '/rooms' });
   await app.register(reservationRoutes, { prefix: '/reservations' });

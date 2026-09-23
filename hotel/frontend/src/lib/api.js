@@ -1,3 +1,5 @@
+import { useAuthStore } from '../store/auth.js';
+
 export const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
 /**
@@ -23,25 +25,12 @@ export class ApiError extends Error {
 }
 
 /**
- * Backend'e istek atar, `{ success, data, error }` zarfını açar.
- * @param {string} path
- * @param {RequestInit} [options]
+ * Giriş yapmış kullanıcının erişim token'ı. Sunucu kimliği ve otel bağlamını
+ * buradan okur (modül 2 — RBAC); artık `x-actor` başlığı gönderilmez.
  */
-/**
- * Denetim izine yazılacak kullanıcı.
- *
- * ⚠️ GEÇİCİ: sunucu bu başlığı doğrulamıyor, çünkü gerçek giriş henüz yok
- * (modül 2 / RBAC). Audit kaydının "kim" sütunu boş kalmasın diye gönderiliyor;
- * RBAC gelince sunucu bunu JWT'den okuyacak ve başlık kaldırılacak.
- */
-function actorHeader() {
-  try {
-    const raw = localStorage.getItem('hotelos.auth');
-    const user = raw ? JSON.parse(raw) : null;
-    return user?.email ? { 'x-actor': user.email } : {};
-  } catch {
-    return {};
-  }
+function authHeader() {
+  const token = useAuthStore.getState().accessToken;
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 /**
@@ -50,21 +39,64 @@ function actorHeader() {
  */
 const REQUEST_TIMEOUT_MS = 20_000;
 
+/**
+ * Erişim token'ı 401 aldığında tek seferlik yenileme. Eşzamanlı 401'ler tek
+ * yenileme isteğini paylaşır (token storm olmasın).
+ * @type {Promise<boolean> | null}
+ */
+let refreshPromise = null;
+
+async function refreshAccessToken() {
+  const { refreshToken } = useAuthStore.getState();
+  if (!refreshToken) return false;
+
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      try {
+        const response = await fetch(`${API_URL}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken }),
+        });
+        const body = await response.json().catch(() => null);
+        if (!response.ok || !body?.success) return false;
+        useAuthStore.getState().setSession(body.data);
+        return true;
+      } catch {
+        return false;
+      } finally {
+        refreshPromise = null;
+      }
+    })();
+  }
+  return refreshPromise;
+}
+
+/**
+ * Backend'e istek atar, `{ success, data, error }` zarfını açar.
+ *
+ * 401 alınırsa (erişim token'ı süresi doldu) bir kez `/auth/refresh` denenir ve
+ * istek tekrarlanır; yenileme de başarısızsa oturum kapatılır — `RequireAuth`
+ * kullanıcıyı giriş ekranına düşürür.
+ *
+ * @param {string} path
+ * @param {RequestInit & { _noAuthRetry?: boolean }} [options]
+ */
 export async function api(path, options = {}) {
   let response;
   const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
-  const { headers: extraHeaders, ...rest } = options;
+  const { headers: extraHeaders, _noAuthRetry, ...rest } = options;
 
   try {
     response = await fetch(`${API_URL}${path}`, {
       signal: timeout,
       ...rest,
       // Başlıklar en son birleştirilir: `options.headers` verilseydi eskiden
-      // bütün başlıkları (x-actor dahil) sessizce eziyordu. İçerik tipi yalnızca
-      // gövde varken gönderilir.
+      // bütün başlıkları (Authorization dahil) sessizce eziyordu. İçerik tipi
+      // yalnızca gövde varken gönderilir.
       headers: {
         ...(rest.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-        ...actorHeader(),
+        ...authHeader(),
         ...(extraHeaders ?? {}),
       },
     });
@@ -74,6 +106,15 @@ export async function api(path, options = {}) {
     }
     // Ağ hatası: sunucu kapalı, DNS yok, CORS engeli.
     throw new ApiError('Sunucuya ulaşılamıyor. Backend çalışıyor mu?', { code: 'NETWORK' });
+  }
+
+  // Token süresi dolmuş: bir kez yenile ve isteği tekrarla. `/auth/*` uçları
+  // (login/refresh/logout) bu döngünün dışında — 401'leri gerçek hatadır.
+  if (response.status === 401 && !_noAuthRetry && !path.startsWith('/auth/')) {
+    const refreshed = await refreshAccessToken();
+    if (refreshed) return api(path, { ...options, _noAuthRetry: true });
+    useAuthStore.getState().logout();
+    throw new ApiError('Oturumunuz sona erdi, lütfen tekrar giriş yapın.', { code: 'UNAUTHORIZED', status: 401 });
   }
 
   const body = await response.json().catch(() => null);

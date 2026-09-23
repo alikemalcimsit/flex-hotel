@@ -27,6 +27,23 @@ export class NotFoundError extends AppError {
   }
 }
 
+/**
+ * Kimlik doğrulanamadı: token yok, geçersiz ya da süresi dolmuş; e-posta/şifre
+ * hatalı. Frontend bu kodu görünce oturumu temizleyip giriş ekranına döner.
+ */
+export class UnauthorizedError extends AppError {
+  constructor(message = 'Oturum açmanız gerekiyor', details) {
+    super(message, { statusCode: 401, code: 'UNAUTHORIZED', details });
+  }
+}
+
+/** Kimlik var ama bu işlem için yetki yok (rolün izni yetmiyor). */
+export class ForbiddenError extends AppError {
+  constructor(message = 'Bu işlem için yetkiniz yok', details) {
+    super(message, { statusCode: 403, code: 'FORBIDDEN', details });
+  }
+}
+
 /** İş kuralı ihlali: benzersizlik çakışması, çakışan sezon, kullanımdaki kayıt. */
 export class ConflictError extends AppError {
   constructor(message, code = 'CONFLICT', details) {

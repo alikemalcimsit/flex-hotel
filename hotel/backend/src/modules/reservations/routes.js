@@ -17,8 +17,7 @@ import {
   waitlistListQuerySchema,
   waitlistParamSchema,
 } from '@hotelos/hotel-contracts';
-import { assertActorPermission } from '../../lib/actor-permissions.js';
-import { PERMISSIONS, requirePermission } from '../../lib/permissions.js';
+import { PERMISSIONS, assertRequestPermission, requirePermission } from '../../lib/permissions.js';
 import { withHotelContext } from '../../lib/tenant.js';
 import { getHotelSettings } from '../settings/service.js';
 import { searchGuests } from './guests.js';
@@ -30,8 +29,8 @@ import * as waitlist from './waitlist.js';
  *
  * Görüntüleme `reservations.view`; açma, düzenleme, iptal, gelmedi ve bekleme
  * listesi `reservations.manage`. Elle fiyat ayrıca `reservations.price_override`
- * ister ve gövdeye bağlı olduğu için personelin rolünden denetlenir
- * (`assertActorPermission`).
+ * ister; gövdeye bağlı olduğu için handler içinde denetlenir
+ * (`assertRequestPermission`).
  *
  * Açma cevabının durum kodu sonucu söyler: `201` açıldı, `200` aynı istek
  * daha önce açılmıştı, `202` yer yok ve yönetici onayına gönderildi.
@@ -51,8 +50,8 @@ export async function reservationRoutes(app) {
   const manage = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.RESERVATIONS_MANAGE)] };
 
   /** @param {import('fastify').FastifyRequest} request */
-  const priceOverride = async (request) => {
-    await assertActorPermission(request.hotelId, PERMISSIONS.RESERVATIONS_PRICE_OVERRIDE, PRICE_OVERRIDE_DENIED);
+  const priceOverride = (request) => {
+    assertRequestPermission(request, PERMISSIONS.RESERVATIONS_PRICE_OVERRIDE, PRICE_OVERRIDE_DENIED);
     return true;
   };
 
@@ -103,7 +102,7 @@ export async function reservationRoutes(app) {
   /* ── Açma ── */
 
   app.post('/', { ...manage, schema: { body: createReservationSchema } }, async (request, reply) => {
-    const canOverridePrice = request.body.manualTotal != null ? await priceOverride(request) : false;
+    const canOverridePrice = request.body.manualTotal != null ? priceOverride(request) : false;
     const result = await service.createReservation(request.hotelId, request.body, { canOverridePrice });
     reply.status(OUTCOME_STATUS[result.outcome] ?? 200);
     return { success: true, data: result };
@@ -144,7 +143,7 @@ export async function reservationRoutes(app) {
     '/:reservationId',
     { ...manage, schema: { params: reservationParamSchema, body: updateReservationSchema } },
     async (request) => {
-      const canOverridePrice = request.body.price?.mode === 'MANUAL' ? await priceOverride(request) : false;
+      const canOverridePrice = request.body.price?.mode === 'MANUAL' ? priceOverride(request) : false;
       return {
         success: true,
         data: await service.updateReservation(request.hotelId, request.params.reservationId, request.body, { canOverridePrice }),
