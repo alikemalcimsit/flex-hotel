@@ -20,6 +20,7 @@ import {
   resolveJwtSecret,
   resolveTrustProxy,
 } from './lib/http-security.js';
+import { activityRoutes, auditRoutes } from './modules/activity/routes.js';
 import { approvalRoutes } from './modules/approvals/routes.js';
 import { approvalCacheStats } from './modules/approvals/service.js';
 import { registerApprovalSubscribers, setApprovalSubscriberLogger } from './modules/approvals/subscribers.js';
@@ -172,7 +173,13 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
     const correlationId = String(request.id);
     reply.header('x-correlation-id', correlationId);
 
-    let actor;
+    // Bağlam **ilk `await`ten önce** kurulur: `enterWith` ile `await`ten sonra
+    // kurulan bağlam route işleyicisine geçmiyordu — HTTP'den yapılan her
+    // değişikliğin denetim izinde kişi "system", zincir kimliği rastgele
+    // görünüyordu (modül 10 zincir ekranı bunu yakaladı). Kimlik doğrulanınca
+    // aynı bağlam nesnesinde güncellenir.
+    const context = enterContext({ correlationId, actor: actorFrom(request.headers['x-actor']) });
+
     try {
       const payload = await request.jwtVerify();
       request.auth = {
@@ -182,14 +189,11 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
         role: payload.role,
         permissions: await resolveEffectivePermissions(payload.hotelId, payload.role),
       };
-      actor = payload.email;
+      context.actor = payload.email;
     } catch {
+      // Token yok ya da geçersiz: bağlamda başlıktaki kimlik kalır (geriye dönük).
       request.auth = null;
-      // Geriye dönük: token gelene kadar denetim izi boş kalmasın diye başlık.
-      actor = actorFrom(request.headers['x-actor']);
     }
-
-    enterContext({ correlationId, actor });
   });
 
   /**
@@ -275,6 +279,8 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   await app.register(notificationRoutes, { prefix: '/notifications' });
   await app.register(staffAlertRoutes, { prefix: '/staff-alerts' });
   await app.register(approvalRoutes, { prefix: '/approvals' });
+  await app.register(activityRoutes, { prefix: '/activity' });
+  await app.register(auditRoutes, { prefix: '/audit' });
   await app.register(conciergeRoutes, { prefix: '/ai' });
   await app.register(messagingChannelRoutes, { prefix: '/messaging-channels' });
   await app.register(webhookRoutes, { prefix: '/webhooks' });
