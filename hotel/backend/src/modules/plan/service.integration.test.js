@@ -80,6 +80,12 @@ describe('oda planı servisi (entegrasyon)', { skip }, () => {
   const dayDate = (offset) => core.addDays(core.calendarDateInTimeZone(HOTEL_TIME_ZONE), offset);
   const day = (offset) => core.toIsoDay(dayDate(offset));
 
+  /** Durum içeride / çıkmış ise giriş-çıkış zamanları. */
+  const stayTimes = (status) => ({
+    ...(['CHECKED_IN', 'CHECKED_OUT'].includes(status) ? { checkedInAt: new Date(), checkedInBy: 'test' } : {}),
+    ...(status === 'CHECKED_OUT' ? { checkedOutAt: new Date(), checkedOutBy: 'test' } : {}),
+  });
+
   async function seedReservation({
     roomTypeId = stdTypeId,
     roomId = null,
@@ -106,6 +112,8 @@ describe('oda planı servisi (entegrasyon)', { skip }, () => {
         children,
         totalPrice: '3000',
         confirmationCode: `P-${randomUUID().slice(0, 8)}`,
+        // İçerideki kaydın giriş, çıkmış kaydın iki zamanı da olur (kısıt; modül 6).
+        ...stayTimes(status),
       },
     });
   }

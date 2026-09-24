@@ -1,12 +1,14 @@
 import {
   APPROVAL_EVENTS,
   LIVE_VIEW_EVENTS,
+  MANUAL_TASK_EVENTS,
   MESSAGING_CHANGED_EVENTS,
   NOTIFICATIONS_CHANGED_EVENTS,
   REQUESTS_CHANGED_EVENTS,
   RESERVATIONS_CHANGED_EVENTS,
   STAFF_ALERT_EVENTS,
 } from '@hotelos/core';
+import { onActivity } from './activity-stream.js';
 import { eventBus } from './events.js';
 
 /**
@@ -63,6 +65,18 @@ export const APPROVALS_CHANNEL = 'approvals.changed';
 /** Rezervasyon listesi, detayı ve bekleme listesi kanalı. */
 export const RESERVATIONS_CHANNEL = 'reservations.changed';
 
+/** Manuel görev listesi ve yan menü rozeti kanalı (modül 12). */
+export const MANUAL_TASKS_CHANNEL = 'manual-tasks.changed';
+
+/** Aktör paneli kanalı: bir yönetici aktörü açıp kapatınca diğer açık paneller tazelenir. */
+export const ACTORS_CHANNEL = 'actors.changed';
+
+/**
+ * Aktivite akışı kanalı (modül 10). Olaydan değil aktivite satırından beslenir
+ * (bkz. `registerActivityBridge`); yalnızca akış ekranı açık paneller abone olur.
+ */
+export const ACTIVITY_CHANNEL = 'activity.changed';
+
 /**
  * Kanal → o kanala haber düşüren event'ler. Ekran yalnızca ilgilendiği kanalı
  * dinler; gelen kutusu açık olmayan panel envanter haberleriyle uğraşmaz.
@@ -75,6 +89,8 @@ const CHANNEL_EVENTS = Object.freeze({
   [STAFF_ALERTS_CHANNEL]: STAFF_ALERT_EVENTS,
   [APPROVALS_CHANNEL]: APPROVAL_EVENTS,
   [RESERVATIONS_CHANNEL]: RESERVATIONS_CHANGED_EVENTS,
+  [MANUAL_TASKS_CHANNEL]: MANUAL_TASK_EVENTS,
+  [ACTORS_CHANNEL]: ['actor.setting.changed'],
 });
 
 /** @param {string} hotelId */
@@ -101,9 +117,10 @@ export const userRoom = (hotelId, userId) => `hotel:${hotelId}:user:${userId}`;
 export const permissionRoom = (hotelId, permission) => `hotel:${hotelId}:perm:${permission}`;
 
 /** İstemcinin abone olabileceği kanallar (zil kimlikten gelir, abonelikle değil). */
-export const SUBSCRIBABLE_CHANNELS = Object.freeze(
-  Object.keys(CHANNEL_EVENTS).filter((channel) => channel !== STAFF_ALERTS_CHANNEL),
-);
+export const SUBSCRIBABLE_CHANNELS = Object.freeze([
+  ...Object.keys(CHANNEL_EVENTS).filter((channel) => channel !== STAFF_ALERTS_CHANNEL),
+  ACTIVITY_CHANNEL,
+]);
 
 /**
  * Yayılma süresi. Aynı haber 2500 panele aynı milisaniyede düşer; hepsi
@@ -174,6 +191,8 @@ export function registerRealtimeBridge(io, logger = console) {
         notificationId: payload.notificationId ?? null,
         approvalId: payload.approvalId ?? null,
         waitlistId: payload.waitlistId ?? null,
+        taskId: payload.taskId ?? null,
+        actorName: payload.actorName ?? null,
         // Zil: uyarı kimliği, türü ve kime gittiği (içerik yok).
         alertId: payload.alertId ?? null,
         kind: payload.kind ?? null,
@@ -189,6 +208,68 @@ export function registerRealtimeBridge(io, logger = console) {
   );
 
   return stopRealtimeBridge;
+}
+
+/** Aktivite haberlerinin toplanıp gönderildiği aralık. */
+export const ACTIVITY_FLUSH_MS = 500;
+/** Tek haberdeki en fazla satır kimliği; fazlasında panel listeyi baştan yükler. */
+export const ACTIVITY_SIGNAL_MAX_IDS = 200;
+
+/**
+ * Aktivite satırı → akış kanalı.
+ *
+ * Yoğun otelde saniyede onlarca satır yazılır; her biri için ayrı socket
+ * mesajı panelin tarayıcısını ve ağı yorar. Haberler otel başına
+ * `ACTIVITY_FLUSH_MS` boyunca toplanır, tek mesajda gider: yeni satırların
+ * **kimlikleri** ve seviye sayıları (içerik yok — socket kimliği henüz
+ * doğrulanmıyor; panel satırları yetkili HTTP isteğiyle çeker). Kimlik
+ * sınırı aşılırsa `overflow`: panel listeyi baştan yükler. Kimse akışı
+ * izlemiyorsa (oda boş) toplama bile yapılmaz.
+ *
+ * @param {any} io
+ * @param {{ flushMs?: number }} [options]
+ * @returns {() => void} köprüyü söker
+ */
+export function registerActivityBridge(io, { flushMs = ACTIVITY_FLUSH_MS } = {}) {
+  /** @type {Map<string, { ids: string[], count: number, warnings: number, errors: number }>} */
+  const pending = new Map();
+  let timer = null;
+
+  const flush = () => {
+    timer = null;
+    for (const [hotelId, batch] of pending) {
+      io.to(channelRoom(hotelId, ACTIVITY_CHANNEL)).emit(ACTIVITY_CHANNEL, {
+        ids: batch.ids,
+        count: batch.count,
+        warnings: batch.warnings,
+        errors: batch.errors,
+        overflow: batch.count > batch.ids.length,
+      });
+    }
+    pending.clear();
+  };
+
+  const stop = onActivity((signal) => {
+    const room = channelRoom(signal.hotelId, ACTIVITY_CHANNEL);
+    if (!io.sockets?.adapter?.rooms?.get(room)?.size) return;
+    const batch = pending.get(signal.hotelId) ?? { ids: [], count: 0, warnings: 0, errors: 0 };
+    batch.count += 1;
+    if (batch.ids.length < ACTIVITY_SIGNAL_MAX_IDS) batch.ids.push(signal.id);
+    if (signal.level === 'WARN') batch.warnings += 1;
+    if (signal.level === 'ERROR') batch.errors += 1;
+    pending.set(signal.hotelId, batch);
+    if (!timer) {
+      timer = setTimeout(flush, flushMs);
+      timer.unref?.();
+    }
+  });
+
+  return () => {
+    stop();
+    if (timer) clearTimeout(timer);
+    timer = null;
+    pending.clear();
+  };
 }
 
 /** Testler ve kapanış için: köprüyü söker. */

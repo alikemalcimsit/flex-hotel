@@ -123,6 +123,14 @@ const RESERVATION_SELECT = Object.freeze({
   cancellationFee: true,
   noShowAt: true,
   noShowFee: true,
+  checkedInAt: true,
+  checkedInBy: true,
+  checkedOutAt: true,
+  checkedOutBy: true,
+  earlyCheckInFee: true,
+  lateCheckOutFee: true,
+  checkoutOpenBalance: true,
+  openBalanceReason: true,
   createdAt: true,
   updatedAt: true,
   guest: { select: { id: true, firstName: true, lastName: true, phone: true, email: true, nationality: true } },
@@ -511,7 +519,13 @@ async function insertReservations(tx, stage, { hotelId, hotel, input, guest, roo
     });
     await writeNights(tx, hotelId, row.id, priced.nights);
     await recordAudit(tx, { hotelId, entity: 'Reservation', entityId: row.id, action: 'CREATE', after: snapshot(row) });
-    await stage('reservation.created', { ...stayPayload(row), roomId: room.roomId ?? null, groupId: groupId ?? null });
+    await stage('reservation.created', {
+      ...stayPayload(row),
+      roomId: room.roomId ?? null,
+      groupId: groupId ?? null,
+      source: row.source,
+      requestId: row.requestId ?? null,
+    });
     ids.push(row.id);
   }
   return ids;
@@ -1220,10 +1234,27 @@ async function listWhere(hotelId, query, businessDate, hotel) {
   if (query.from) and.push({ checkOut: { gt: query.from } });
   if (query.to) and.push({ checkIn: { lt: addDays(query.to, 1) } });
 
-  for (const token of listSearchTokens(query.search)) {
-    and.push(await tokenWhere(hotelId, token, hotel));
-  }
+  and.push(...(await reservationSearchConditions(hotelId, query.search, hotel)));
   return { hotelId, ...(and.length ? { AND: and } : {}) };
+}
+
+/**
+ * Serbest arama → rezervasyon koşulları (her kelime ayrı koşul, hepsi
+ * sağlanmalı): onay kodu, misafir adı, telefon ya da oda numarası. Ön büro
+ * listeleri (modül 6) aynı aramayı kullanır.
+ *
+ * @param {string} hotelId
+ * @param {string | undefined} search
+ * @param {{ phoneCountryCode: string }} [hotel]
+ * @returns {Promise<object[]>} Prisma `AND` öğeleri
+ */
+export async function reservationSearchConditions(hotelId, search, hotel) {
+  const tokens = listSearchTokens(search);
+  if (tokens.length === 0) return [];
+  const settings = hotel ?? (await getHotelSettings(hotelId));
+  const conditions = [];
+  for (const token of tokens) conditions.push(await tokenWhere(hotelId, token, settings));
+  return conditions;
 }
 
 /**
@@ -1324,6 +1355,14 @@ export async function getReservation(hotelId, reservationId) {
     cancellationFee: money(row.cancellationFee),
     noShowAt: iso(row.noShowAt),
     noShowFee: money(row.noShowFee),
+    checkedInAt: iso(row.checkedInAt),
+    checkedInBy: row.checkedInBy,
+    checkedOutAt: iso(row.checkedOutAt),
+    checkedOutBy: row.checkedOutBy,
+    earlyCheckInFee: money(row.earlyCheckInFee),
+    lateCheckOutFee: money(row.lateCheckOutFee),
+    checkoutOpenBalance: money(row.checkoutOpenBalance),
+    openBalanceReason: row.openBalanceReason,
     nightlyRates,
     taxes: roomTaxBreakdown(money(row.totalPrice), taxes),
     businessDate: toIsoDay(businessDate),
@@ -1487,15 +1526,19 @@ export async function quoteReservation(hotelId, input) {
  */
 export async function createFromChannelRequest(payload) {
   const { hotelId } = payload;
+  // Kanal misafiri tanıyorsa (konuşma bir karta bağlı) o kart; yoksa yeni kart.
+  const knownGuestId = payload.guestId ?? null;
   const input = {
-    guestId: null,
-    guest: {
-      firstName: payload.guest.firstName,
-      lastName: payload.guest.lastName,
-      phone: payload.guest.phone,
-      email: payload.guest.email,
-      nationality: payload.guest.nationality,
-    },
+    guestId: knownGuestId,
+    guest: knownGuestId
+      ? null
+      : {
+          firstName: payload.guest.firstName,
+          lastName: payload.guest.lastName,
+          phone: payload.guest.phone,
+          email: payload.guest.email,
+          nationality: payload.guest.nationality,
+        },
     forceNewGuest: true,
     roomTypeId: payload.roomTypeId,
     adults: payload.adults,
@@ -1520,7 +1563,7 @@ export async function createFromChannelRequest(payload) {
   try {
     const hotel = await getHotelSettings(hotelId);
     input.boardType = payload.boardType ?? hotel.defaultBoardType;
-    if (!input.guest.phone && !input.guest.email) return reject('VALIDATION', 'Misafirin telefonu ya da e-postası yok');
+    if (!knownGuestId && !input.guest.phone && !input.guest.email) return reject('VALIDATION', 'Misafirin telefonu ya da e-postası yok');
     if (toUtcDayStart(input.checkOut) <= toUtcDayStart(input.checkIn)) return reject('VALIDATION', 'Çıkış tarihi girişten sonra olmalı');
     // Kanal isteği politikadan bağımsız onaya gitmez: kapasite aşımı misafire
     // söz vermektir; kanaldan gelen istek yalnızca yer varsa açılır.

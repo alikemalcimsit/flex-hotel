@@ -58,6 +58,8 @@ describe('manifest', () => {
       'reservation.created',
       'guest.checked_in',
       'guest.checked_out',
+      'guest.check_in_reverted',
+      'guest.check_out_reverted',
     ]);
     assert.ok(roomWorkerManifest.publishes.includes('room.assigned'));
   });
@@ -217,5 +219,48 @@ describe('misafir giriş-çıkışı', () => {
 
     assert.equal(calls.manualTasks[0].title, 'Oda "boş · kirli" olarak işaretlenecek');
     assert.equal(calls.activity[0].level, 'ERROR');
+  });
+});
+
+describe('geri alınan giriş-çıkış', () => {
+  it('giriş geri alınınca oda boş olur; kat hizmeti durumuna dokunulmaz; sebep denetim izine gider', async () => {
+    const { worker, calls } = makeHarness();
+
+    await worker.handle(
+      { hotelId: HOTEL, reservationId: RESERVATION, roomId: ROOM, reason: 'Yanlış odaya giriş' },
+      { id: 'evt-5', name: 'guest.check_in_reverted', correlationId: 'z', hop: 1 },
+    );
+
+    assert.deepEqual(calls.states, [
+      { hotelId: HOTEL, roomId: ROOM, state: { occupancy: 'VACANT' }, reason: 'Giriş geri alındı: Yanlış odaya giriş' },
+    ]);
+  });
+
+  it('çıkış geri alınınca oda yeniden dolu olur; çıkıştaki "kirli" kalır', async () => {
+    const { worker, calls } = makeHarness();
+
+    await worker.handle(
+      { hotelId: HOTEL, reservationId: RESERVATION, roomId: ROOM, reason: 'Misafir henüz çıkmamış' },
+      { id: 'evt-6', name: 'guest.check_out_reverted', correlationId: 'z', hop: 1 },
+    );
+
+    assert.deepEqual(calls.states[0].state, { occupancy: 'OCCUPIED' });
+  });
+
+  it('başarısız olursa okunur manuel görev düşer', async () => {
+    const { worker, calls } = makeHarness({
+      service: {
+        applySystemRoomState: async () => {
+          throw new Error('oda bulunamadı');
+        },
+      },
+    });
+
+    await worker.handle(
+      { hotelId: HOTEL, reservationId: RESERVATION, roomId: ROOM, reason: 'x' },
+      { id: 'evt-7', name: 'guest.check_out_reverted', correlationId: 'z', hop: 1 },
+    );
+
+    assert.equal(calls.manualTasks[0].title, 'Çıkış geri alındı: oda "dolu" olarak işaretlenecek');
   });
 });

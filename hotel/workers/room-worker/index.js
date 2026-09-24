@@ -100,6 +100,43 @@ class RoomWorker extends BaseWorker {
           }
           return { message: 'Oda boş ve kirli olarak işaretlendi' };
         },
+
+        /**
+         * Yanlış giriş geri alındı: misafir odaya hiç yerleşmemiş sayılır, oda
+         * yine boş. Kat hizmeti durumuna dokunulmaz (oda girişten önce neyse o).
+         */
+        'guest.check_in_reverted': async (payload) => {
+          try {
+            await service.applySystemRoomState(
+              payload.hotelId,
+              payload.roomId,
+              { occupancy: 'VACANT' },
+              `Giriş geri alındı: ${payload.reason}`,
+            );
+          } catch (error) {
+            throw markBusinessErrorsFinal(error);
+          }
+          return { message: 'Oda yeniden boş olarak işaretlendi' };
+        },
+
+        /**
+         * Yanlış çıkış geri alındı: misafir hâlâ odada. Oda yine dolu; çıkışta
+         * "kirli" yapılan kat hizmeti durumu olduğu gibi kalır (dolu oda da
+         * kirli olabilir, temizliği kat hizmetleri işaretler).
+         */
+        'guest.check_out_reverted': async (payload) => {
+          try {
+            await service.applySystemRoomState(
+              payload.hotelId,
+              payload.roomId,
+              { occupancy: 'OCCUPIED' },
+              `Çıkış geri alındı: ${payload.reason}`,
+            );
+          } catch (error) {
+            throw markBusinessErrorsFinal(error);
+          }
+          return { message: 'Oda yeniden dolu olarak işaretlendi' };
+        },
       },
       deps,
     );
@@ -119,6 +156,10 @@ class RoomWorker extends BaseWorker {
         return 'Oda "dolu" olarak işaretlenecek';
       case 'guest.checked_out':
         return 'Oda "boş · kirli" olarak işaretlenecek';
+      case 'guest.check_in_reverted':
+        return 'Giriş geri alındı: oda "boş" olarak işaretlenecek';
+      case 'guest.check_out_reverted':
+        return 'Çıkış geri alındı: oda "dolu" olarak işaretlenecek';
       default:
         return super.describeFallback(eventName, payload);
     }

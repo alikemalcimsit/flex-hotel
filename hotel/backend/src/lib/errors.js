@@ -191,6 +191,34 @@ const CONSTRAINT_RULES = Object.freeze({
   Reservation_price_valid: { code: 'CONSTRAINT', message: 'Rezervasyon fiyatı eksi olamaz.' },
   Reservation_fees_valid: { code: 'CONSTRAINT', message: 'İptal / gelmedi ücreti eksi olamaz.' },
   Reservation_manual_price_has_note: { code: 'CONSTRAINT', message: 'Elle girilen fiyatın gerekçesi yazılmalı.' },
+  Reservation_stay_times_valid: {
+    code: 'CONSTRAINT',
+    message: 'İçerideki misafirin giriş, çıkmış misafirin giriş ve çıkış zamanı kayıtlı olmalı.',
+  },
+  Reservation_stay_fees_valid: { code: 'CONSTRAINT', message: 'Erken giriş / geç çıkış ücreti eksi olamaz.' },
+  Reservation_deposit_valid: {
+    code: 'CONSTRAINT',
+    message: 'Teminat türü seçildiyse tutarı sıfırdan büyük olmalı; teminat yoksa tutar girilmez.',
+  },
+  Reservation_open_balance_has_reason: {
+    code: 'CONSTRAINT',
+    message: 'Bakiyesi kapanmadan yapılan çıkışın gerekçesi yazılmalı.',
+  },
+  MessagingChannel_externalAccountId_key: {
+    code: 'DUPLICATE',
+    message: 'Bu WhatsApp telefon numarası kimliği başka bir otele bağlı.',
+  },
+  MessagingChannel_publicKey_key: { code: 'DUPLICATE', message: 'Balon anahtarı çakıştı; tekrar deneyin.' },
+  MessagingChannel_whatsapp_complete: {
+    code: 'CONSTRAINT',
+    message: 'WhatsApp kanalını açmak için telefon numarası kimliği ve anahtarlar gerekli.',
+  },
+  AiSettings_models_when_enabled: { code: 'CONSTRAINT', message: 'AI açıkken iki model de seçilmeli.' },
+  AiSettings_budget_valid: { code: 'CONSTRAINT', message: 'Günlük AI bütçesi eksi olamaz.' },
+  Hotel_stay_fees_valid: {
+    code: 'CONSTRAINT',
+    message: 'Erken giriş / geç çıkış ücreti eksi olamaz; yüzde seçildiyse 100 değerini geçemez.',
+  },
   Reservation_hotelId_requestId_key: {
     code: 'DUPLICATE_REQUEST',
     message: 'Bu istek zaten işlendi; aynı rezervasyon ikinci kez açılmaz.',

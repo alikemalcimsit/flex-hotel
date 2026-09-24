@@ -26,14 +26,14 @@ describe('reservationActionError / allowedReservationActions', () => {
     assert.match(reservationActionError('noShow', stay('PENDING'), TODAY), /Giriş günü gelmeden/);
   });
 
-  it('onaylı ve giriş günü: gelmedi işaretlenebilir; onaylanmaz', () => {
+  it('onaylı ve giriş günü: giriş yapılır, gelmedi işaretlenebilir; onaylanmaz', () => {
     const arriving = stay('CONFIRMED', TODAY, '2026-10-12');
-    assert.deepEqual(allowedReservationActions(arriving, TODAY).sort(), ['cancel', 'edit', 'noShow'].sort());
+    assert.deepEqual(allowedReservationActions(arriving, TODAY).sort(), ['cancel', 'checkIn', 'edit', 'noShow'].sort());
     assert.match(reservationActionError('confirm', arriving, TODAY), /Yalnızca opsiyonlu/);
   });
 
-  it('içerideki misafir: yalnızca düzenleme (iptal değil, çıkış)', () => {
-    assert.deepEqual(allowedReservationActions(stay('CHECKED_IN', '2026-10-08', '2026-10-12'), TODAY), ['edit']);
+  it('içerideki misafir: düzenleme ve çıkış (iptal değil)', () => {
+    assert.deepEqual(allowedReservationActions(stay('CHECKED_IN', '2026-10-08', '2026-10-12'), TODAY).sort(), ['checkOut', 'edit']);
     assert.match(reservationActionError('cancel', stay('CHECKED_IN'), TODAY), /çıkış işlemi/);
   });
 
@@ -45,6 +45,19 @@ describe('reservationActionError / allowedReservationActions', () => {
 
   it('çıkış yapmış: hiçbir işlem', () => {
     assert.deepEqual(allowedReservationActions(stay('CHECKED_OUT', '2026-10-01', '2026-10-05'), TODAY), []);
+  });
+
+  it('giriş: gelecek tarihliye yapılmaz (önce tarih öne çekilir); geç gelen ertesi gün girebilir; bitmiş konaklamaya yapılmaz', () => {
+    assert.match(reservationActionError('checkIn', stay('CONFIRMED'), TODAY), /Giriş günü gelmedi/);
+    assert.equal(reservationActionError('checkIn', stay('PENDING', '2026-10-09', '2026-10-12'), TODAY), null);
+    assert.match(reservationActionError('checkIn', stay('CONFIRMED', '2026-10-08', TODAY), TODAY), /tarihleri geçmiş/);
+    assert.match(reservationActionError('checkIn', stay('CHECKED_IN'), TODAY), /zaten giriş/);
+    assert.match(reservationActionError('checkIn', stay('CANCELLED', TODAY, '2026-10-12'), TODAY), /gelmesi beklenen/);
+  });
+
+  it('çıkış yalnızca içerideki misafire', () => {
+    assert.equal(reservationActionError('checkOut', stay('CHECKED_IN', '2026-10-08', '2026-10-09'), TODAY), null);
+    assert.match(reservationActionError('checkOut', stay('CONFIRMED', TODAY, '2026-10-12'), TODAY), /içerideki misafir/);
   });
 
   it('tarih Date ya da metin olarak gelebilir', () => {

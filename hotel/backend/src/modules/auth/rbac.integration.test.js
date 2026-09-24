@@ -234,6 +234,59 @@ describe('RBAC (entegrasyon)', { skip }, () => {
     assert.equal(allowed.json().data.reservation.totalPrice, '1500.00');
   });
 
+  it('ön büro izinleri: kat hizmetleri gidecekleri görür ama giriş yapamaz; ön büro bakiyeyle çıkış yapamaz', async () => {
+    const passwordHash = await bcrypt.hash(PASSWORD, 4);
+    await prismaUnfiltered.user.create({ data: { hotelId, email: 'kat@test.local', name: 'Kat', role: 'HOUSEKEEPING', passwordHash } });
+    const housekeeping = bearer(await asToken('kat@test.local'));
+    const desk = bearer(await asToken('resepsiyon@test.local'));
+    const stay = randomUUID();
+    const version = new Date().toISOString();
+    const identity = { idType: 'NATIONAL_ID', idNumber: '10000000146', nationality: 'TR' };
+
+    const departures = await app.inject({ method: 'GET', url: '/front-desk/departures', headers: housekeeping });
+    assert.equal(departures.statusCode, 200);
+    assert.ok(Array.isArray(departures.json().data.items));
+    const checkIn = await app.inject({
+      method: 'POST',
+      url: `/front-desk/stays/${stay}/check-in`,
+      headers: housekeeping,
+      payload: { expectedUpdatedAt: version, guest: identity },
+    });
+    assert.equal(checkIn.statusCode, 403);
+    // Giriş önizlemesi kimliğin tamamını döndürür: görüntüleme izni yetmez.
+    assert.equal((await app.inject({ method: 'GET', url: `/front-desk/stays/${stay}/check-in`, headers: housekeeping })).statusCode, 403);
+
+    // Ön büro girişe yetkili (kayıt yok → 404, izin geçti).
+    assert.equal((await app.inject({ method: 'GET', url: `/front-desk/stays/${stay}/check-in`, headers: desk })).statusCode, 404);
+    const openBalance = await app.inject({
+      method: 'POST',
+      url: `/front-desk/stays/${stay}/check-out`,
+      headers: desk,
+      payload: { expectedUpdatedAt: version, allowOpenBalance: true, openBalanceReason: 'Şirket ödeyecek' },
+    });
+    assert.equal(openBalance.statusCode, 403);
+    assert.equal(openBalance.json().code, 'FORBIDDEN');
+    // Bakiyesiz çıkış ön büroya açık (kayıt yok → 404).
+    const plain = await app.inject({ method: 'POST', url: `/front-desk/stays/${stay}/check-out`, headers: desk, payload: { expectedUpdatedAt: version } });
+    assert.equal(plain.statusCode, 404);
+
+    // Girişte oda seçmek oda atamasıdır: matriste atama izni kaldırılan ön büro seçemez.
+    await app.inject({
+      method: 'PUT',
+      url: '/roles/permissions',
+      headers: bearer(await asToken('admin@test.local')),
+      payload: { grants: [{ role: 'FRONT_DESK', permissions: ['stays.view', 'stays.manage', 'rooms.view'] }] },
+    });
+    const withRoom = await app.inject({
+      method: 'POST',
+      url: `/front-desk/stays/${stay}/check-in`,
+      headers: bearer(await asToken('resepsiyon@test.local')),
+      payload: { expectedUpdatedAt: version, guest: identity, roomId: randomUUID() },
+    });
+    assert.equal(withRoom.statusCode, 403);
+    assert.match(withRoom.json().error, /Oda atama yetkiniz yok/);
+  });
+
   it('refresh rotation: kullanılan token bir daha çalışmaz', async () => {
     const { refreshToken } = (await login('admin@test.local')).json().data;
     const first = await app.inject({ method: 'POST', url: '/auth/refresh', payload: { refreshToken } });

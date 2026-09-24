@@ -43,6 +43,12 @@ export const RESERVATIONS_CHANNEL = 'reservations.changed';
 export const NOTIFICATIONS_CHANNEL = 'notifications.changed';
 export const STAFF_ALERTS_CHANNEL = 'staff.alerts';
 export const APPROVALS_CHANNEL = 'approvals.changed';
+/** Aktivite akışı (modül 10): yeni satırların kimlikleri, içerik değil. */
+export const ACTIVITY_CHANNEL = 'activity.changed';
+/** Manuel görevler ve rozeti (modül 12). */
+export const MANUAL_TASKS_CHANNEL = 'manual-tasks.changed';
+/** Aktör paneli (modül 12): biri aktörü açıp kapatınca. */
+export const ACTORS_CHANNEL = 'actors.changed';
 
 /**
  * Kanal aboneliği sayacı. Aynı kanalı birden fazla bileşen dinleyebilir

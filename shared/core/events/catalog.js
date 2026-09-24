@@ -130,6 +130,13 @@ export const EVENT_CATALOG = Object.freeze({
     roomId: z.string().uuid().nullable().default(null),
     /** Grup rezervasyonunun parçasıysa grup kimliği. */
     groupId: z.string().uuid().nullable().default(null),
+    /**
+     * Rezervasyonun kaynağı ve isteğin kimliği (modül 8): concierge yalnızca
+     * kanal isteğinden (WhatsApp / web chat) açılanlarla ilgilenir; sohbete
+     * yazacağı onay kodunu isteğe bu kimlikle bağlar.
+     */
+    source: z.string().min(1).max(30).nullable().default(null),
+    requestId: z.string().min(1).max(100).nullable().default(null),
   }),
   /** Tarih, oda tipi, kişi, pansiyon, fiyat ya da not değişti. */
   'reservation.updated': reservationStay.extend({
@@ -167,6 +174,11 @@ export const EVENT_CATALOG = Object.freeze({
     notes: z.string().max(2000).nullable().default(null),
     /** Kanal isteği varsayılan olarak opsiyonludur: personel onaylar. */
     status: z.enum(['PENDING', 'CONFIRMED']).default('PENDING'),
+    /**
+     * Kanal misafiri zaten tanıyorsa (konuşma bir misafir kartına bağlı) o kart
+     * kullanılır; yoksa yeni kart açılır. Modül 8.
+     */
+    guestId: z.string().uuid().nullable().default(null),
   }),
   /** Kanal isteği karşılanamadı (yer yok, kapasite, geçersiz tarih). */
   'reservation.rejected': hotelScoped.extend({
@@ -180,14 +192,47 @@ export const EVENT_CATALOG = Object.freeze({
     status: z.enum(['WAITING', 'AVAILABLE', 'CONVERTED', 'CANCELLED', 'EXPIRED']),
   }),
 
-  'guest.checked_in': hotelScoped.extend({
-    reservationId: z.string().uuid(),
+  /* ── Giriş / çıkış (modül 6) ──
+     room-worker odanın doluluğunu bunlardan yazar (doluluğun tek yazıcısı);
+     notification-worker hoş geldin / teşekkür bildirimini gönderir; folyo
+     aktörü (modül 15) folyoyu açar, ücretleri kalem olarak işler ve çıkışta
+     bakiyeyi denetler. Tutarlar "1234.50" biçiminde metin; ücret yoksa null. */
+  'guest.checked_in': reservationStay.extend({
     roomId: z.string().uuid(),
+    guestId: z.string().uuid(),
+    /** Erken giriş ücreti (politikadan; personel uygulamadıysa null). */
+    earlyCheckInFee: z.string().nullable().default(null),
+    /** Girişte alınan teminat (tahsilat değil; kasaya girişi ödeme modülünde). */
+    deposit: z
+      .object({
+        method: z.enum(['CASH', 'CARD_PREAUTH', 'TRANSFER']),
+        amount: z.string(),
+        reference: z.string().nullable().default(null),
+      })
+      .nullable()
+      .default(null),
   }),
 
-  'guest.checked_out': hotelScoped.extend({
-    reservationId: z.string().uuid(),
+  'guest.checked_out': reservationStay.extend({
     roomId: z.string().uuid(),
+    guestId: z.string().uuid(),
+    lateCheckOutFee: z.string().nullable().default(null),
+    /** Çıkış tarihinden önce ayrıldı: `checkOut` kısaltılmış tarihtir, kalan geceler bırakıldı. */
+    earlyDeparture: z.boolean().default(false),
+    /** Bakiyesi kapanmadan çıkış yapıldıysa o anki açık tutar (yetkili onayıyla). */
+    openBalance: z.string().nullable().default(null),
+  }),
+
+  /** Yanlışlıkla yapılan giriş geri alındı (aynı gün): oda yeniden boş. */
+  'guest.check_in_reverted': reservationStay.extend({
+    roomId: z.string().uuid(),
+    reason: z.string().min(1),
+  }),
+
+  /** Yanlışlıkla yapılan çıkış geri alındı (aynı gün): misafir yine içeride, oda dolu. */
+  'guest.check_out_reverted': reservationStay.extend({
+    roomId: z.string().uuid(),
+    reason: z.string().min(1),
   }),
 
   /* ── Misafir mesajları ve istekleri (modül 7) ──
@@ -214,6 +259,21 @@ export const EVENT_CATALOG = Object.freeze({
     /** Kanaldaki alıcı: telefon numarası, web chat oturumu. */
     recipient: z.string(),
     author: z.enum(['STAFF', 'AI', 'SYSTEM']),
+  }),
+
+  /**
+   * Router ajanı gelen misafir mesajının niyetini belirledi (modül 8).
+   * Concierge ajanı bunu dinler; şikâyet ve "personelle görüşmek istiyorum"
+   * konuşmayı personele devreder. `affirmative`: mesaj, misafire sunulmuş bir
+   * teklife açık bir "evet" mi (rezervasyon isteği ancak bununla gönderilir).
+   */
+  'guest.intent.detected': hotelScoped.extend({
+    conversationId: z.string().uuid(),
+    messageId: z.string().uuid(),
+    intent: z.enum(['RESERVATION', 'QUESTION', 'COMPLAINT', 'HUMAN', 'OTHER']),
+    confidence: z.number().min(0).max(1),
+    language: z.string().min(2).max(8),
+    affirmative: z.boolean(),
   }),
 
   'guest.message.delivery': hotelScoped.extend({
@@ -323,6 +383,9 @@ export const EVENT_CATALOG = Object.freeze({
       'APPROVAL_REQUESTED',
       'APPROVAL_DECIDED',
       'WAITLIST_AVAILABLE',
+      'CHECKOUT_OPEN_BALANCE',
+      'AI_HANDOFF',
+      'AI_BUDGET',
     ]),
     userId: z.string().uuid().nullable(),
     permission: z.string().nullable(),
@@ -343,6 +406,31 @@ export const EVENT_CATALOG = Object.freeze({
   'approval.denied': approvalEvent.extend({ decidedBy: z.string().min(1) }),
   /** Süresi kimse karar vermeden doldu; iş yapılmadı. */
   'approval.expired': approvalEvent,
+
+  /* ── Aktör paneli (modül 12) ── */
+
+  /**
+   * Aktör bu otelde açıldı ya da kapatıldı. Kapalı aktörün işi manuel göreve
+   * düşer; AI ajanları kapanınca yeni konuşmalar personelde açılır.
+   */
+  'actor.setting.changed': hotelScoped.extend({
+    actorName: z.string().min(1),
+    enabled: z.boolean(),
+  }),
+
+  /** Aktörün yapamadığı iş personelin önüne düştü (görev ekranı ve rozet tazelenir). */
+  'manual_task.created': hotelScoped.extend({
+    taskId: z.string().uuid(),
+    module: z.string().min(1),
+    actorName: z.string().nullable(),
+  }),
+
+  /** Görev üstlenildi, bırakıldı, tamamlandı ya da "gerek kalmadı" dendi. */
+  'manual_task.updated': hotelScoped.extend({
+    taskId: z.string().uuid(),
+    module: z.string().min(1),
+    status: z.enum(['PENDING', 'IN_PROGRESS', 'DONE', 'CANCELLED']),
+  }),
 });
 
 /** @typedef {keyof typeof EVENT_CATALOG} EventName */
@@ -400,6 +488,8 @@ export const INVENTORY_CHANGED_EVENTS = Object.freeze([
   'reservation.reinstated',
   'guest.checked_in',
   'guest.checked_out',
+  'guest.check_in_reverted',
+  'guest.check_out_reverted',
 ]);
 
 /**
@@ -439,6 +529,8 @@ export const RESERVATIONS_CHANGED_EVENTS = Object.freeze([
   'room.unassigned',
   'guest.checked_in',
   'guest.checked_out',
+  'guest.check_in_reverted',
+  'guest.check_out_reverted',
   'waitlist.changed',
 ]);
 
@@ -447,6 +539,7 @@ export const MESSAGING_CHANGED_EVENTS = Object.freeze([
   'guest.message.received',
   'guest.message.reply',
   'guest.message.delivery',
+  'guest.intent.detected',
   'conversation.updated',
   'conversation.read',
 ]);
@@ -467,6 +560,9 @@ export const NOTIFICATIONS_CHANGED_EVENTS = Object.freeze([
 
 /** Zil (canlı yayın: `staff.alerts`). */
 export const STAFF_ALERT_EVENTS = Object.freeze(['staff.alert.raised']);
+
+/** Manuel görev listesini ve rozetini etkileyen event'ler (canlı yayın: `manual-tasks.changed`). */
+export const MANUAL_TASK_EVENTS = Object.freeze(['manual_task.created', 'manual_task.updated']);
 
 /** Onay kuyruğunu etkileyen event'ler (canlı yayın: `approvals.changed`). */
 export const APPROVAL_EVENTS = Object.freeze([

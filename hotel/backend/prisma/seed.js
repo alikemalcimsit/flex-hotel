@@ -219,6 +219,9 @@ async function main() {
         confirmationCode: p.code,
         createdBy: 'seed',
         confirmedAt: p.status === 'PENDING' ? null : checkIn,
+        // Giriş / çıkış izi (modül 6): içerideki kaydın giriş, çıkmışın iki zamanı da olur.
+        ...(p.status === 'CHECKED_IN' || p.status === 'CHECKED_OUT' ? { checkedInAt: checkIn, checkedInBy: 'seed' } : {}),
+        ...(p.status === 'CHECKED_OUT' ? { checkedOutAt: checkOut, checkedOutBy: 'seed' } : {}),
       },
     });
 

@@ -479,9 +479,10 @@ function WhatsAppChannelCard({ item }) {
             onChange={setField('enabled')}
           />
         ) : (
-          <Alert tone="info" title="WhatsApp geçidi henüz bağlı değil">
-            WhatsApp hattının bağlanması ayrı bir modülde (modül 8) yapılıyor. Geçit bağlanınca bu kanal buradan
-            açılabilecek; o zamana kadar misafire WhatsApp'tan bildirim gitmez.
+          <Alert tone="info" title="WhatsApp bildirimleri henüz yok">
+            WhatsApp hattı misafirle mesajlaşma için bağlanır (Ayarlar → Mesaj kanalları). Otelin başlattığı bildirim
+            (rezervasyon onayı, hatırlatma) WhatsApp kuralı gereği Meta onaylı şablon ister; şablon gönderimi eklenene
+            kadar bildirimler e-posta ve SMS ile gider.
           </Alert>
         )}
       </ChannelCard>

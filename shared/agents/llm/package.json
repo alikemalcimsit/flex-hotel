@@ -1,0 +1,15 @@
+{
+  "name": "@hotelos/llm",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "description": "LLM sağlayıcı adaptörü (OpenAI), fiyat ve bütçe hesabı — ajanların ortak model katmanı",
+  "scripts": {
+    "test": "node --test \"*.test.js\""
+  },
+  "dependencies": {
+    "openai": "^7.23.0",
+    "@hotelos/core": "*"
+  }
+}

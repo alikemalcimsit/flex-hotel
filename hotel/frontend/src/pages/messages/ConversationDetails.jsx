@@ -224,7 +224,7 @@ export function ConversationDetails({
           <dt>Yanıtlayan</dt>
           <dd className="text-ink-soft">
             {CONVERSATION_MODE_LABELS[conversation.mode]}
-            {!conversation.autoResponderAvailable && ' · AI asistanı henüz bağlı değil'}
+            {!conversation.autoResponderAvailable && ' · AI asistanı bu konuşmada kullanılamıyor'}
           </dd>
           <dt>Kanal</dt>
           <dd className="text-ink-soft">{conversation.channelConnected ? 'Bağlı' : 'Bağlantı bekleniyor'}</dd>

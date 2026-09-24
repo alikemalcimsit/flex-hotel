@@ -12,13 +12,14 @@ import {
 } from '@hotelos/hotel-contracts';
 import { prisma, prismaUnfiltered } from '../../db.js';
 import { recordAudit } from '../../lib/audit.js';
-import { encodeCursor, olderThan, parseCursor } from '../../lib/cursor.js';
+import { encodeCursor, newerThan, olderThan, parseCursor } from '../../lib/cursor.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../lib/errors.js';
 import { LIVE_SCOPES, liveVersion } from '../../lib/live-version.js';
 import { lockApprovals } from '../../lib/locks.js';
 import { PERMISSIONS } from '../../lib/permissions.js';
 import { createReadCache } from '../../lib/read-cache.js';
 import { containsText, MIN_FUZZY_TOKEN_LENGTH } from '../../lib/search.js';
+import { publishActivity } from '../../lib/activity-stream.js';
 import { sqlTimestamp } from '../../lib/sql-time.js';
 import { writeWithEvents } from '../../lib/write.js';
 import { raiseStaffAlert } from '../notifications/staff-alerts.js';
@@ -304,23 +305,6 @@ export function requestApprovalStandalone(input) {
 
 /* ══════════════════ Okuma ══════════════════ */
 
-/**
- * "Bu konumdan daha yeni" — (zaman, kimlik) artan sırası için. Bekleyenler
- * eskiden yeniye listelenir: en uzun bekleyen en üstte. `>=` koşulu index
- * taramasını imleçten başlatır (bkz. `lib/cursor.js`).
- *
- * @param {string} timeField
- * @param {{ at: Date, id: string }} cursor
- */
-function newerThan(timeField, cursor) {
-  return {
-    AND: [
-      { [timeField]: { gte: cursor.at } },
-      { OR: [{ [timeField]: { gt: cursor.at } }, { [timeField]: cursor.at, id: { gt: cursor.id } }] },
-    ],
-  };
-}
-
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
@@ -453,24 +437,30 @@ export function clearApprovalCache() {
  * @param {Array<{ actorName: string, eventId: string, resumeEvent: unknown }>} actions
  * @param {string} message
  * @param {Date} now
+ * @param {(fn: () => void) => void} afterCommit canlı akış haberi commit'ten sonra
  */
-async function closePendingActions(tx, approval, actions, message, now) {
+async function closePendingActions(tx, approval, actions, message, now, afterCommit) {
   for (const action of actions) {
     await tx.$executeRaw`
       INSERT INTO "ProcessedEvent" ("id", "hotelId", "actorName", "eventId", "createdAt", "updatedAt")
       VALUES (${randomUUID()}, ${approval.hotelId}, ${action.actorName}, ${action.eventId},
               ${sqlTimestamp(now)}, ${sqlTimestamp(now)})
       ON CONFLICT ("actorName", "eventId") DO NOTHING`;
-    await tx.activityLog.create({
+    const resumeEvent = /** @type {any} */ (action.resumeEvent) ?? {};
+    const row = await tx.activityLog.create({
       data: {
         hotelId: approval.hotelId,
         actorName: action.actorName,
         eventId: action.eventId,
+        eventName: resumeEvent.name ?? null,
+        correlationId: resumeEvent.correlationId ?? null,
         level: 'WARN',
         message: `${message}: ${approval.summary}`,
         meta: { approvalId: approval.id, event: /** @type {any} */ (action.resumeEvent)?.name ?? null },
       },
     });
+    // Canlı akış satırı commit'ten sonra görsün.
+    afterCommit(() => publishActivity({ id: row.id, hotelId: row.hotelId, level: row.level }));
   }
 }
 
@@ -492,7 +482,7 @@ async function closePendingActions(tx, approval, actions, message, now) {
  * @param {{ note?: string | null }} input
  */
 export async function decideApproval(hotelId, approvalId, decision, { note = null } = {}) {
-  const outcome = await writeWithEvents(async (tx, stage) => {
+  const outcome = await writeWithEvents(async (tx, stage, afterCommit) => {
     await lockApprovals(tx, hotelId, [approvalId]);
     const row = await tx.approval.findFirst({
       where: { id: approvalId, hotelId },
@@ -526,7 +516,7 @@ export async function decideApproval(hotelId, approvalId, decision, { note = nul
       decidedBy,
     });
     if (decision === 'DENIED') {
-      await closePendingActions(tx, row, row.pendingActions, `Onay reddedildi (${decidedBy})`, now);
+      await closePendingActions(tx, row, row.pendingActions, `Onay reddedildi (${decidedBy})`, now, afterCommit);
     }
     return { dto: toApprovalDto(updated, now) };
   });
@@ -547,7 +537,7 @@ export async function decideApproval(hotelId, approvalId, decision, { note = nul
  * @returns {Promise<boolean>}
  */
 function expireIfDue(hotelId, approvalId) {
-  return writeWithEvents(async (tx, stage) => {
+  return writeWithEvents(async (tx, stage, afterCommit) => {
     await lockApprovals(tx, hotelId, [approvalId]);
     const row = await tx.approval.findFirst({
       where: { id: approvalId, hotelId, status: 'PENDING' },
@@ -555,7 +545,7 @@ function expireIfDue(hotelId, approvalId) {
     });
     const now = new Date();
     if (!row || !approvalTiming(row, now).expired) return false;
-    await expireOne(tx, stage, row, now);
+    await expireOne(tx, stage, row, now, afterCommit);
     return true;
   });
 }
@@ -568,11 +558,12 @@ function expireIfDue(hotelId, approvalId) {
  * @param {(name: string, payload: object) => Promise<void>} stage
  * @param {object} row `pendingActions` dahil
  * @param {Date} now
+ * @param {(fn: () => void) => void} afterCommit
  */
-async function expireOne(tx, stage, row, now) {
+async function expireOne(tx, stage, row, now, afterCommit) {
   await tx.approval.update({ where: { id: row.id }, data: { status: 'EXPIRED', decidedAt: now } });
   await stage('approval.expired', { hotelId: row.hotelId, approvalId: row.id, type: row.type, actorName: row.actorName });
-  await closePendingActions(tx, row, row.pendingActions ?? [], 'Onay süresi doldu', now);
+  await closePendingActions(tx, row, row.pendingActions ?? [], 'Onay süresi doldu', now, afterCommit);
   await raiseStaffAlert(tx, stage, {
     hotelId: row.hotelId,
     kind: 'APPROVAL_REQUESTED',
@@ -598,7 +589,7 @@ async function expireOne(tx, stage, row, now) {
  * @returns {Promise<number>} düşürülen onay
  */
 export function expireApprovals(now = new Date()) {
-  return writeWithEvents(async (tx, stage) => {
+  return writeWithEvents(async (tx, stage, afterCommit) => {
     const ids = await tx.$queryRaw`
       SELECT "id" FROM "Approval"
       WHERE "status" = 'PENDING' AND "expiresAt" IS NOT NULL AND "expiresAt" < ${sqlTimestamp(now)}
@@ -611,7 +602,7 @@ export function expireApprovals(now = new Date()) {
       where: { id: { in: ids.map((row) => row.id) } },
       select: { ...APPROVAL_SELECT, pendingActions: { select: PENDING_ACTION_SELECT } },
     });
-    for (const row of rows) await expireOne(tx, stage, row, now);
+    for (const row of rows) await expireOne(tx, stage, row, now, afterCommit);
     return rows.length;
   });
 }

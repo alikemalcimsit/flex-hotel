@@ -1,0 +1,14 @@
+{
+  "name": "@hotelos/webchat-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "description": "Web sitesine gömülen sohbet balonu ve onun kanal aktörü (oturum, hız sınırı, giden mesaj)",
+  "scripts": {
+    "test": "node --test \"*.test.js\""
+  },
+  "dependencies": {
+    "@hotelos/actor-kit": "*"
+  }
+}

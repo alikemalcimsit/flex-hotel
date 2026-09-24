@@ -96,6 +96,8 @@ describe('registerRealtimeBridge', () => {
       'alertId',
       'approvalId',
       'waitlistId',
+      'taskId',
+      'actorName',
       'spreadMs',
     ].sort());
   });

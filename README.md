@@ -128,6 +128,11 @@ tekrar kullanılamayan kodlar ve sessizce yanlış fiyat hesapları.
   aynı transaction'da müsaitlik → yaz. Rezervasyonu doğrudan `tx.reservation.create/update` ile
   yazmayın; fiyat gece gece (`ReservationNight`), denetim izi ve olaylar birlikte yazılır. Tekrar
   gönderim anahtarı `requestId`; durum kuralı `reservationActionError` (contracts).
+- **Giriş / çıkış yalnızca ön büro servisinden.** `modules/front-desk/service.js`: durumu
+  `CHECKED_IN` / `CHECKED_OUT` yapan tek yer (kimlik, oda, ücret, bakiye denetimi ve olaylar
+  birlikte). İçerideki kaydın `checkedInAt`'i, çıkmışın iki zamanı da zorunlu (kısıt). Saat
+  hesabı otelin saatine göre (`hotelClock`), sunucunun değil. Kimlik numarası listede ve denetim
+  izinde maskeli (`maskIdNumber`).
 - **Onay gerektiren iş kendi kendine yapılmaz.** Aktör `ctx.requireApproval({ action,
   … })` der (`action` bildirgedeki `requiresApproval`'da olmalı); servis
   `modules/approvals/service.js → requestApproval(tx, stage, …)` çağırır. Onaylanan

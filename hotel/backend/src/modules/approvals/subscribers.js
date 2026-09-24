@@ -46,6 +46,8 @@ export async function resumeGrantedApproval(payload, envelope) {
       title: `Onaylanan iş elle yapılacak: ${approval.summary}`,
       description: `${action.actorName} aktörü: ${reason}; ${payload.decidedBy} onayladı.`,
       originalEvent: { id: action.eventId, name: event?.name ?? null, payload: event?.payload ?? null },
+      actorName: action.actorName,
+      correlationId: event?.correlationId ?? envelope?.correlationId ?? null,
     });
     await markPendingActionAbandoned(payload.hotelId, action);
     return { resumed: false };

@@ -23,25 +23,33 @@ const RETRY_BASE_DELAY_MS = 40;
  * Kilitlenme (deadlock) ya da yazma çatışmasında veritabanı işlemi geri alır;
  * iş bir kaç kez baştan çalıştırılır. Bu yüzden `work` transaction dışına yan
  * etki bırakmamalı (e-posta göndermek, önbelleğe yazmak gibi) — yalnızca `tx`
- * ve `stage` kullanır.
+ * ve `stage` kullanır. Commit'ten sonra yapılacak süreç içi iş (ör. canlı
+ * akışa "yeni satır" haberi) `afterCommit` ile bırakılır: yalnızca başarılı
+ * denemenin kancaları, olaylar dağıtıldıktan sonra çalışır; hata fırlatmamalı.
  *
  * @template T
- * @param {(tx: import('@prisma/client').Prisma.TransactionClient, stage: (name: string, payload: object) => Promise<void>) => Promise<T>} work
+ * @param {(
+ *   tx: import('@prisma/client').Prisma.TransactionClient,
+ *   stage: (name: string, payload: object) => Promise<void>,
+ *   afterCommit: (fn: () => void) => void,
+ * ) => Promise<T>} work
  * @param {{ timeout?: number, maxWait?: number }} [options]
  * @returns {Promise<T>}
  */
 export async function writeWithEvents(work, options = {}) {
   for (let attempt = 1; ; attempt += 1) {
     const staged = [];
+    const committed = [];
     try {
       const result = await prisma.$transaction(async (tx) => {
         const stage = async (name, payload) => {
           staged.push(await stageEvent(tx, name, payload));
         };
-        return work(tx, stage);
+        return work(tx, stage, (fn) => committed.push(fn));
       }, options);
 
       await dispatchStaged(staged);
+      for (const fn of committed) fn();
       return result;
     } catch (error) {
       if (attempt >= MAX_TRANSACTION_ATTEMPTS || !isRetryableTransactionError(error)) throw error;

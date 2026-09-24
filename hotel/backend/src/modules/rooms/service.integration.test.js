@@ -83,6 +83,12 @@ describe('oda envanteri servisi (entegrasyon)', { skip }, () => {
   const day = (offset) => core.toIsoDay(dayDate(offset));
 
   /** Doğrudan veritabanına rezervasyon yazar (modül 4 henüz yok). Saatler gerçekçi: giriş 14:00, çıkış 12:00. */
+  /** Durum içeride / çıkmış ise giriş-çıkış zamanları. */
+  const stayTimes = (status) => ({
+    ...(['CHECKED_IN', 'CHECKED_OUT'].includes(status) ? { checkedInAt: new Date(), checkedInBy: 'test' } : {}),
+    ...(status === 'CHECKED_OUT' ? { checkedOutAt: new Date(), checkedOutBy: 'test' } : {}),
+  });
+
   async function seedReservation({
     roomTypeId = stdTypeId,
     roomId = null,
@@ -109,6 +115,8 @@ describe('oda envanteri servisi (entegrasyon)', { skip }, () => {
         children,
         totalPrice: '3000',
         confirmationCode: code,
+        // İçerideki kaydın giriş, çıkmış kaydın iki zamanı da olur (kısıt; modül 6).
+        ...stayTimes(status),
       },
     });
   }

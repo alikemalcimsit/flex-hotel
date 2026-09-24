@@ -74,6 +74,11 @@ function toHotelDto(row) {
     cancellationPolicyDays: row.cancellationPolicyDays,
     cancellationPolicyPenaltyPct: decimalToString(row.cancellationPolicyPenaltyPct),
     overbookingPolicy: row.overbookingPolicy,
+    earlyCheckInFeeMode: row.earlyCheckInFeeMode,
+    earlyCheckInFeeValue: decimalToString(row.earlyCheckInFeeValue),
+    lateCheckOutFeeMode: row.lateCheckOutFeeMode,
+    lateCheckOutFeeValue: decimalToString(row.lateCheckOutFeeValue),
+    checkInIdentityPolicy: row.checkInIdentityPolicy,
     updatedAt: row.updatedAt.toISOString(),
   };
 }
@@ -250,6 +255,12 @@ export async function updateGeneralSettings(hotelId, input) {
           cancellationPolicyPenaltyPct: data.cancellationPolicyPenaltyPct,
           phoneCountryCode: data.phoneCountryCode,
           overbookingPolicy: data.overbookingPolicy,
+          // "Ücret yok" seçilince eski değer anlamsızdır; sıfırlanır.
+          earlyCheckInFeeMode: data.earlyCheckInFeeMode,
+          earlyCheckInFeeValue: data.earlyCheckInFeeMode === 'NONE' ? '0' : data.earlyCheckInFeeValue,
+          lateCheckOutFeeMode: data.lateCheckOutFeeMode,
+          lateCheckOutFeeValue: data.lateCheckOutFeeMode === 'NONE' ? '0' : data.lateCheckOutFeeValue,
+          checkInIdentityPolicy: data.checkInIdentityPolicy,
         },
         'Otel kaydı bulunamadı',
       );

@@ -146,8 +146,11 @@ const dayOf = (value) => (typeof value === 'string' ? value.slice(0, 10) : value
  * - `cancel`: bekleyen ve onaylı (içerideki misafir çıkış yapar, iptal edilmez).
  * - `noShow`: bekleyen ve onaylı, giriş günü gelmiş olmalı.
  * - `reinstate`: iptal ya da gelmedi; çıkış tarihi henüz geçmemiş olmalı.
+ * - `checkIn` (modül 6): bekleyen ve onaylı; giriş günü gelmiş, çıkış günü
+ *   gelmemiş olmalı (geç gelen misafir ertesi gün de girebilir).
+ * - `checkOut` (modül 6): yalnızca içerideki misafir.
  *
- * @param {'edit' | 'confirm' | 'cancel' | 'noShow' | 'reinstate'} action
+ * @param {'edit' | 'confirm' | 'cancel' | 'noShow' | 'reinstate' | 'checkIn' | 'checkOut'} action
  * @param {{ status: string, checkIn: Date | string, checkOut: Date | string }} reservation
  * @param {Date | string} businessDate otelin bugünü
  * @returns {string | null} yapılamıyorsa kullanıcıya gösterilecek sebep
@@ -170,6 +173,15 @@ export function reservationActionError(action, reservation, businessDate) {
     case 'reinstate':
       if (!['CANCELLED', 'NO_SHOW'].includes(status)) return 'Yalnızca iptal ya da gelmedi kaydı geri alınır';
       return dayOf(reservation.checkOut) > today ? null : 'Konaklama tarihleri geçmiş; geri alınamaz';
+    case 'checkIn':
+      if (status === 'CHECKED_IN') return 'Misafir zaten giriş yapmış';
+      if (!['PENDING', 'CONFIRMED'].includes(status)) return 'Yalnızca gelmesi beklenen rezervasyona giriş yapılır';
+      if (dayOf(reservation.checkIn) > today) {
+        return 'Giriş günü gelmedi. Misafir erken geldiyse önce rezervasyonun giriş tarihini bugüne çekin.';
+      }
+      return dayOf(reservation.checkOut) > today ? null : 'Konaklama tarihleri geçmiş; giriş yapılamaz';
+    case 'checkOut':
+      return status === 'CHECKED_IN' ? null : 'Yalnızca içerideki misafirin çıkışı yapılır';
     default:
       return 'Bilinmeyen işlem';
   }
@@ -178,10 +190,10 @@ export function reservationActionError(action, reservation, businessDate) {
 /**
  * @param {{ status: string, checkIn: Date | string, checkOut: Date | string }} reservation
  * @param {Date | string} businessDate
- * @returns {Array<'edit' | 'confirm' | 'cancel' | 'noShow' | 'reinstate'>}
+ * @returns {Array<'edit' | 'confirm' | 'cancel' | 'noShow' | 'reinstate' | 'checkIn' | 'checkOut'>}
  */
 export function allowedReservationActions(reservation, businessDate) {
-  return /** @type {const} */ (['edit', 'confirm', 'cancel', 'noShow', 'reinstate']).filter(
+  return /** @type {const} */ (['edit', 'confirm', 'cancel', 'noShow', 'reinstate', 'checkIn', 'checkOut']).filter(
     (action) => reservationActionError(action, reservation, businessDate) === null,
   );
 }
@@ -217,7 +229,7 @@ const boardField = z.enum(BOARD_TYPES, { error: 'Geçersiz pansiyon tipi' });
  * da virgül olabilir ("1250,50"); binlik ayırıcı kabul edilmez ("1.250" hem
  * 1250 hem 1,25 okunabilir — yanlış tutar kaydetmektense reddedilir).
  */
-const moneyField = z.union([z.string(), z.number()], { error: 'Tutar geçersiz' }).transform((value, ctx) => {
+export const moneyInputField = z.union([z.string(), z.number()], { error: 'Tutar geçersiz' }).transform((value, ctx) => {
   const text = String(value).trim().replace(',', '.');
   if (!/^\d+(\.\d{1,2})?$/.test(text)) {
     ctx.addIssue({ code: 'custom', message: 'Tutar geçersiz (ör. 1250 ya da 1250,50; en fazla 2 ondalık)' });
@@ -312,7 +324,7 @@ function refineGuestChoice(value, ctx) {
  * (`reservations.price_override`).
  */
 const manualPriceShape = {
-  manualTotal: moneyField.nullish(),
+  manualTotal: moneyInputField.nullish(),
   priceNote: trimmedOptional(MAX_PRICE_NOTE_LENGTH, 'Fiyat gerekçesi'),
 };
 
@@ -410,7 +422,7 @@ export const updateReservationSchema = z
         z.object({ mode: z.literal('CALCULATED') }),
         z.object({
           mode: z.literal('MANUAL'),
-          total: moneyField,
+          total: moneyInputField,
           note: z
             .string({ error: 'Fiyat gerekçesi zorunlu' })
             .trim()

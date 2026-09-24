@@ -10,11 +10,20 @@ import { defineActor } from '@hotelos/actor-kit';
  */
 export const roomWorkerManifest = defineActor({
   name: 'room-worker',
+  title: 'Oda aktörü',
+  packageName: '@hotelos/room-worker',
   type: 'worker',
   description:
     'Yeni rezervasyona uygun odayı otomatik seçip atar; misafir giriş yapınca odayı dolu, ' +
-    'çıkış yapınca boş ve kirli olarak işaretler. Kapalıyken bu işler manuel görev olarak düşer.',
-  subscribes: ['reservation.created', 'guest.checked_in', 'guest.checked_out'],
+    'çıkış yapınca boş ve kirli olarak işaretler; yanlışlıkla yapılan giriş ya da çıkış geri alınınca ' +
+    'doluluğu düzeltir. Kapalıyken bu işler manuel görev olarak düşer.',
+  subscribes: [
+    'reservation.created',
+    'guest.checked_in',
+    'guest.checked_out',
+    'guest.check_in_reverted',
+    'guest.check_out_reverted',
+  ],
   publishes: ['room.assigned', 'room.status.changed'],
   retry: { attempts: 3, backoffMs: 400 },
   fallbackModule: 'Oda atama',

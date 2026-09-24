@@ -87,6 +87,7 @@ describe('misafir mesajları ve istekler (entegrasyon)', { skip }, () => {
         checkIn: dayDate(-1),
         checkOut: dayDate(2),
         status: 'CHECKED_IN',
+        checkedInAt: new Date(),
         totalPrice: '3000',
         confirmationCode: `M-${randomUUID().slice(0, 8)}`,
       },
@@ -146,13 +147,37 @@ describe('misafir mesajları ve istekler (entegrasyon)', { skip }, () => {
       assert.equal((await conversationRow(conversationId)).mode, 'MANUAL');
     });
 
-    it('AI asistanı kayıtlıysa konuşma AI modunda başlar', async () => {
+    it('konuşma AI modunda yalnızca asistan kayıtlıysa, otelde AI açıksa ve kanal WhatsApp / web chat ise başlar', async () => {
+      const { cache } = await import('../../lib/cache.js');
       const unregister = channels.registerAutoResponder({ name: 'test-concierge' });
       try {
-        const { conversationId } = await inbound({ externalId: '905550000001' });
-        assert.equal((await conversationRow(conversationId)).mode, 'AI');
+        const notEnabled = await inbound({ externalId: '905550000001' });
+        assert.equal((await conversationRow(notEnabled.conversationId)).mode, 'MANUAL', 'otelde AI kapalıysa personel');
+
+        await db.aiSettings.create({
+          data: {
+            hotelId,
+            enabled: true,
+            routerModel: 'mini',
+            conciergeModel: 'buyuk',
+            prices: { mini: { input: '0.1', cachedInput: '0.01', output: '0.4' }, buyuk: { input: '1', cachedInput: '0.1', output: '4' } },
+            dailyBudgetUsd: '5',
+          },
+        });
+        cache.invalidatePrefix(`ai:${hotelId}:`);
+        const ai = await inbound({ externalId: '905550000002' });
+        assert.equal((await conversationRow(ai.conversationId)).mode, 'AI');
+        const email = await inbound({ channel: 'EMAIL', externalId: 'misafir@example.com' });
+        assert.equal((await conversationRow(email.conversationId)).mode, 'MANUAL', 'AI e-postaya cevap vermez');
+
+        // Otel AI'ı kapatınca AI'daki konuşmaya gelen mesaj konuşmayı personele alır.
+        await db.aiSettings.updateMany({ where: { hotelId }, data: { enabled: false } });
+        cache.invalidatePrefix(`ai:${hotelId}:`);
+        await inbound({ externalId: '905550000002', text: 'kimse yok mu?' });
+        assert.equal((await conversationRow(ai.conversationId)).mode, 'MANUAL');
       } finally {
         unregister();
+        cache.invalidatePrefix(`ai:${hotelId}:`);
       }
     });
 
@@ -218,6 +243,23 @@ describe('misafir mesajları ve istekler (entegrasyon)', { skip }, () => {
       assert.equal(row.unreadCount, 0);
       assert.equal(row.lastMessageAuthor, 'STAFF');
       assert.ok((await eventNames()).includes('guest.message.reply'));
+    });
+
+    it('sistem mesajı (onay kodu) misafirin bekleyen sorusunu cevaplanmış saymaz, kapalı konuşmayı açmaz', async () => {
+      const { conversationId } = await inbound({ text: 'Havaalanı transferi var mı?' });
+      const waitingSince = (await conversationRow(conversationId)).awaitingReplySince;
+      const message = await messaging.appendSystemReply(hotelId, conversationId, { text: 'Onay kodu: ABC123' });
+
+      assert.equal(message.author, 'SYSTEM');
+      assert.equal(message.delivery, 'PENDING', 'misafire gider');
+      const row = await conversationRow(conversationId);
+      assert.equal(row.awaitingReplySince?.getTime(), waitingSince.getTime(), 'soru hâlâ cevap bekliyor');
+      assert.equal(row.unreadCount, 1);
+      assert.equal(row.lastMessageAuthor, 'SYSTEM');
+
+      await db.conversation.update({ where: { id: conversationId }, data: { status: 'CLOSED', closedAt: new Date(), awaitingReplySince: null, unreadCount: 0 } });
+      await messaging.appendSystemReply(hotelId, conversationId, { text: 'Rezervasyonunuz kesinleşti' });
+      assert.equal((await conversationRow(conversationId)).status, 'CLOSED');
     });
 
     it('aynı istemci kimliğiyle ikinci gönderim yeni mesaj yazmaz', async () => {

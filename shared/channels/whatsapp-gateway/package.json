@@ -1,0 +1,14 @@
+{
+  "name": "@hotelos/whatsapp-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "description": "WhatsApp Cloud API kanal aktörü: webhook doğrulama, gelen mesaj, giden mesaj ve teslim durumu",
+  "scripts": {
+    "test": "node --test \"*.test.js\""
+  },
+  "dependencies": {
+    "@hotelos/actor-kit": "*"
+  }
+}

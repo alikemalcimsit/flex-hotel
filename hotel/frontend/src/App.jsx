@@ -6,6 +6,7 @@ import { AppLayout } from './layout/AppLayout.jsx';
 import { ToastHost } from './components/ToastHost.jsx';
 import { LoginPage } from './pages/LoginPage.jsx';
 import { HomePage } from './pages/HomePage.jsx';
+import { useManualTaskScope } from './lib/actors.js';
 import { PERMISSIONS, useCan } from './lib/permissions.js';
 
 /**
@@ -32,6 +33,21 @@ const GeneralTab = lazy(() => import('./pages/settings/GeneralTab.jsx').then((m)
 const UsersTab = lazy(() => import('./pages/settings/UsersTab.jsx').then((m) => ({ default: m.UsersTab })));
 const RolePermissionsTab = lazy(() =>
   import('./pages/settings/RolePermissionsTab.jsx').then((m) => ({ default: m.RolePermissionsTab })),
+);
+const ActivityPage = lazy(() => import('./pages/activity/ActivityPage.jsx').then((m) => ({ default: m.ActivityPage })));
+const LiveFeedTab = lazy(() => import('./pages/activity/LiveFeedTab.jsx').then((m) => ({ default: m.LiveFeedTab })));
+const EventsTab = lazy(() => import('./pages/activity/EventsTab.jsx').then((m) => ({ default: m.EventsTab })));
+const AuditTab = lazy(() => import('./pages/activity/AuditTab.jsx').then((m) => ({ default: m.AuditTab })));
+const ChainPage = lazy(() => import('./pages/activity/ChainPage.jsx').then((m) => ({ default: m.ChainPage })));
+const RecordChainsPage = lazy(() =>
+  import('./pages/activity/RecordChainsPage.jsx').then((m) => ({ default: m.RecordChainsPage })),
+);
+const ActorsPage = lazy(() => import('./pages/actors/ActorsPage.jsx').then((m) => ({ default: m.ActorsPage })));
+const ActorDetailPage = lazy(() => import('./pages/actors/ActorDetailPage.jsx').then((m) => ({ default: m.ActorDetailPage })));
+const ManualTasksPage = lazy(() => import('./pages/tasks/ManualTasksPage.jsx').then((m) => ({ default: m.ManualTasksPage })));
+const AiAssistantTab = lazy(() => import('./pages/settings/AiAssistantTab.jsx').then((m) => ({ default: m.AiAssistantTab })));
+const MessagingChannelsTab = lazy(() =>
+  import('./pages/settings/MessagingChannelsTab.jsx').then((m) => ({ default: m.MessagingChannelsTab })),
 );
 const MessagesPage = lazy(() => import('./pages/messages/MessagesPage.jsx').then((m) => ({ default: m.MessagesPage })));
 const NotificationsPage = lazy(() =>
@@ -62,6 +78,10 @@ const WaitlistTab = lazy(() => import('./pages/reservations/WaitlistTab.jsx').th
 const ReservationDetailPage = lazy(() =>
   import('./pages/reservations/ReservationDetailPage.jsx').then((m) => ({ default: m.ReservationDetailPage })),
 );
+const FrontDeskPage = lazy(() => import('./pages/front-desk/FrontDeskPage.jsx').then((m) => ({ default: m.FrontDeskPage })));
+const ArrivalsTab = lazy(() => import('./pages/front-desk/ArrivalsTab.jsx').then((m) => ({ default: m.ArrivalsTab })));
+const DeparturesTab = lazy(() => import('./pages/front-desk/DeparturesTab.jsx').then((m) => ({ default: m.DeparturesTab })));
+const InHouseTab = lazy(() => import('./pages/front-desk/InHouseTab.jsx').then((m) => ({ default: m.InHouseTab })));
 const ApprovalsPage = lazy(() => import('./pages/approvals/ApprovalsPage.jsx').then((m) => ({ default: m.ApprovalsPage })));
 const ApprovalsPendingTab = lazy(() => import('./pages/approvals/PendingTab.jsx').then((m) => ({ default: m.PendingTab })));
 const ApprovalsHistoryTab = lazy(() => import('./pages/approvals/HistoryTab.jsx').then((m) => ({ default: m.HistoryTab })));
@@ -93,6 +113,11 @@ function RequirePermission({ permission, children }) {
   return can(permission) ? children : <Navigate to="/" replace />;
 }
 
+/** Manuel görevler: işin modülüne yetkili olan kendi görevlerini görür (modül 12). */
+function RequireTaskScope({ children }) {
+  return useManualTaskScope().empty ? <Navigate to="/" replace /> : children;
+}
+
 export default function App() {
   return (
     <>
@@ -110,6 +135,30 @@ export default function App() {
             }
           >
             <Route index element={<HomePage />} />
+            <Route
+              path="gorevler"
+              element={
+                <RequireTaskScope>
+                  <ManualTasksPage />
+                </RequireTaskScope>
+              }
+            />
+            <Route
+              path="aktorler"
+              element={
+                <RequirePermission permission={PERMISSIONS.ACTORS_VIEW}>
+                  <ActorsPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="aktorler/:name"
+              element={
+                <RequirePermission permission={PERMISSIONS.ACTORS_VIEW}>
+                  <ActorDetailPage />
+                </RequirePermission>
+              }
+            />
             <Route
               path="rezervasyonlar"
               element={
@@ -130,6 +179,19 @@ export default function App() {
               />
               <Route path="bekleme-listesi" element={<WaitlistTab />} />
               <Route path=":reservationId" element={<ReservationDetailPage />} />
+            </Route>
+            <Route
+              path="on-buro"
+              element={
+                <RequirePermission permission={PERMISSIONS.STAYS_VIEW}>
+                  <FrontDeskPage />
+                </RequirePermission>
+              }
+            >
+              <Route index element={<Navigate to="/on-buro/gelecekler" replace />} />
+              <Route path="gelecekler" element={<ArrivalsTab />} />
+              <Route path="gidecekler" element={<DeparturesTab />} />
+              <Route path="konaklayanlar" element={<InHouseTab />} />
             </Route>
             <Route path="oda-plani" element={<RoomPlanPage />} />
             {/* Konuşma adreste: yenileyince açık kalır, bağlantı paylaşılabilir. */}
@@ -195,6 +257,42 @@ export default function App() {
               />
             </Route>
             <Route
+              path="aktivite"
+              element={
+                <RequirePermission permission={PERMISSIONS.ACTIVITY_VIEW}>
+                  <ActivityPage />
+                </RequirePermission>
+              }
+            >
+              <Route index element={<Navigate to="/aktivite/akis" replace />} />
+              <Route path="akis" element={<LiveFeedTab />} />
+              <Route path="olaylar" element={<EventsTab />} />
+              <Route
+                path="denetim"
+                element={
+                  <RequirePermission permission={PERMISSIONS.AUDIT_VIEW}>
+                    <AuditTab />
+                  </RequirePermission>
+                }
+              />
+            </Route>
+            <Route
+              path="aktivite/zincir/:correlationId"
+              element={
+                <RequirePermission permission={PERMISSIONS.ACTIVITY_VIEW}>
+                  <ChainPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="aktivite/kayit/:entity/:entityId"
+              element={
+                <RequirePermission permission={PERMISSIONS.ACTIVITY_VIEW}>
+                  <RecordChainsPage />
+                </RequirePermission>
+              }
+            />
+            <Route
               path="ayarlar"
               element={
                 <RequireRole role="ADMIN">
@@ -221,6 +319,22 @@ export default function App() {
                 element={
                   <RequirePermission permission={PERMISSIONS.ROLES_MANAGE}>
                     <RolePermissionsTab />
+                  </RequirePermission>
+                }
+              />
+              <Route
+                path="ai"
+                element={
+                  <RequirePermission permission={PERMISSIONS.SETTINGS_VIEW}>
+                    <AiAssistantTab />
+                  </RequirePermission>
+                }
+              />
+              <Route
+                path="mesaj-kanallari"
+                element={
+                  <RequirePermission permission={PERMISSIONS.SETTINGS_VIEW}>
+                    <MessagingChannelsTab />
                   </RequirePermission>
                 }
               />

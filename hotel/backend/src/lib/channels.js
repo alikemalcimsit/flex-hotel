@@ -7,24 +7,22 @@
  * kendini kaydeder, ekran da "bu kanal bağlı mı" sorusunun cevabını buradan
  * alır.
  *
- * ### Bugün boş olması kasıtlı
+ * ### Kim kaydolur (modül 8, `lib/actors.js`)
  *
- * Modül 8 henüz yok. Kayıt defteri boşken:
- * - Personelin cevabı "gönderim bekliyor" olarak yazılır ve `guest.message.reply`
- *   event'i yayınlanır; geçit geldiğinde bekleyenleri de gönderir
- *   (`Message.delivery = PENDING` sorgusu, `hotelId + delivery` index'li).
+ * ```js
+ * registerChannel('WHATSAPP', { name: 'whatsapp-gateway' });   // her zaman
+ * registerChannel('WEBCHAT', { name: 'webchat-gateway' });     // her zaman
+ * registerAutoResponder({ name: 'concierge-agent' });          // yalnızca OPENAI_API_KEY varsa
+ * ```
+ * Kayıt "süreçte çalışıyor" demektir; bir otelde kanalın ya da AI'ın açık olup
+ * olmadığını otelin kendi ayarı söyler (`channelActiveFor`, `aiActiveFor`).
+ *
+ * Kayıt yokken (ör. anahtar tanımsız):
+ * - Personelin cevabı "gönderim bekliyor" olarak yazılır; geçit / bekleyenleri
+ *   gönderen iş sonra gönderir (`Message_pending_outgoing_idx`).
  * - Yeni konuşmalar **personel** modunda başlar: cevap verecek bir asistan
  *   yokken konuşmayı "AI"ya bırakmak misafiri cevapsız bırakmak olurdu.
  * - Ekran bunu açıkça söyler; gönderilmiş gibi göstermez.
- *
- * ### Modül 8 ne yapacak
- *
- * ```js
- * registerChannel('WHATSAPP', { name: 'whatsapp-gateway' });
- * registerAutoResponder({ name: 'concierge-agent' });
- * ```
- * Geçit `guest.message.reply` event'ini dinler, gönderir, sonucu
- * `messaging/service.js → markMessageDelivery` ile bildirir.
  *
  * Kayıt süreç içidir (event bus gibi); çok örnekli kuruluma geçildiğinde bu
  * bilgi paylaşılan bir yere taşınır.

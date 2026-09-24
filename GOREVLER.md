@@ -485,13 +485,70 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 6. Check-in / Check-out — Ali Kemal
 **Gün sonu:** Misafir gelince tek tıkla giriş, giderken tek tıkla çıkış yapılıyor; oda durumu ve folyo otomatik değişiyor.
-- [ ] Backend: `checkIn(reservationId)` servisi (oda atanmış mı, kimlik bilgisi var mı kontrolü → CHECKED_IN → `guest.checked_in`)
-- [ ] Backend: `checkOut(reservationId)` servisi (folyo bakiyesi 0 mı kontrolü → CHECKED_OUT → `guest.checked_out`)
-- [ ] Backend: erken giriş / geç çıkış ücreti parametresi
-- [ ] Ekran: Bugün gelecekler listesi (rezervasyon, oda, durum) + "Check-in" butonu → kısa form (kimlik no, uyruk, plaka, kart/depozito)
+- [x] Backend: `checkIn(reservationId)` servisi (oda atanmış mı, kimlik bilgisi var mı kontrolü → CHECKED_IN → `guest.checked_in`)
+- [x] Backend: `checkOut(reservationId)` servisi (folyo bakiyesi 0 mı kontrolü → CHECKED_OUT → `guest.checked_out`)
+- [x] Backend: erken giriş / geç çıkış ücreti parametresi
+- [x] Ekran: Bugün gelecekler listesi (rezervasyon, oda, durum) + "Check-in" butonu → kısa form (kimlik no, uyruk, plaka, kart/depozito)
 - [ ] Ekran: Bugün gidecekler listesi + "Check-out" butonu → bakiye gösterimi, bakiye varsa ödeme ekranına yönlendir
-- [ ] Ekran: Konaklayanlar listesi (şu an içeride kim var)
+      — liste, çıkış ve bakiye gösterimi hazır; **"ödeme ekranına yönlendir" modül 17'yi bekliyor** (ekran yok)
+- [x] Ekran: Konaklayanlar listesi (şu an içeride kim var)
 - [x] Aktör: room-worker'a `guest.checked_in` → dolu, `guest.checked_out` → boş + kirli kuralları — **modül 3'te yapıldı**
+
+> **📌 Modül 6 tamamlandı (23 Eylül 2026 — Ahmet, Ali Kemal adına geçici).** Modül 13
+> (günlük durum) gerçek giriş-çıkış verisi olmadan yazılamadığı için bu dalda yapıldı.
+> Ödeme ekranına yönlendirme bilinçli olarak boş (modül 17; ekran yok).
+>
+> **Veri** (migration `20260923120000_front_desk`):
+> - `Reservation`: `checkedInAt/By`, `checkedOutAt/By` (içerideki kaydın giriş, çıkmışın iki
+>   zamanı da **zorunlu** — kısıt), `earlyCheckInFee`, `lateCheckOutFee`, `vehiclePlate`, teminat
+>   (`depositMethod` NONE/CASH/CARD_PREAUTH/TRANSFER, `depositAmount`, `depositReference`),
+>   bakiyeyle çıkış (`checkoutOpenBalance` + zorunlu `openBalanceReason`).
+> - `Guest.idType` (kimlik kartı / pasaport / diğer) + `(hotelId, idNumber)` index'i.
+> - `Hotel`: `earlyCheckInFeeMode/Value`, `lateCheckOutFeeMode/Value` (yok / sabit / gecenin yüzdesi),
+>   `checkInIdentityPolicy` (yalnız sahibi / bütün yetişkinler). Ayarlar → Genel parametreler.
+> - Folyo tablolarına index: `Folio(hotelId, reservationId)`, `FolioItem(folioId)`, `Payment(folioId)`.
+> - Zil: `CHECKOUT_OPEN_BALANCE` (`stays.checkout_open_balance` iznine).
+> - **Testlerde / seed'de `CHECKED_IN` yazan herkes `checkedInAt` da yazmalı** (kısıt).
+>
+> **Olaylar:** `guest.checked_in` (+ `guestId`, `roomTypeId`, tarihler, `earlyCheckInFee`, `deposit`),
+> `guest.checked_out` (+ `lateCheckOutFee`, `earlyDeparture`, `openBalance`), yeni
+> `guest.check_in_reverted` / `guest.check_out_reverted` (room-worker doluluğu düzeltir).
+> Bildirim merkezi (9) giriş/çıkış bildirimlerini kendiliğinden gönderir.
+>
+> **API** (`/front-desk`): `GET /summary`, `GET /arrivals?view=EXPECTED|CHECKED_IN`,
+> `GET /departures?view=EXPECTED|CHECKED_OUT`, `GET /in-house?sort=`, `GET|POST /stays/:id/check-in`,
+> `GET|POST /stays/:id/check-out`, `POST /stays/:id/check-in/revert`, `POST /stays/:id/check-out/revert`.
+> İzinler: `stays.view` (liste; kat hizmetleri ve muhasebe de görür), `stays.manage` (giriş/çıkış,
+> önizleme — kimliğin tamamını döndürür), `stays.checkout_open_balance` (yönetim).
+>
+> **Kurallar:**
+> - **Giriş:** giriş günü gelmiş, çıkış günü gelmemiş (geç gelen ertesi gün de girer). Oda
+>   verilmemişse aynı işlemde verilir. Odada önceki misafir hâlâ içerideyse, oda arızalıysa ya da
+>   bu gecelerde başkasınaysa giriş olmaz; kirliyse personel onaylar. Aynı konaklamaya aynı anda iki
+>   giriş: biri olur (kilit + sürüm; test edildi).
+> - **Kimlik (KBS):** sahibinin belgesi zorunlu; TC kimlik no sağlamalı, pasaport biçimli. Politika
+>   "bütün yetişkinler" ise refakatçi yetişkinlerin de. Refakatçi belgesinden tanınır (aynı kişiye
+>   ikinci kart açılmaz); belge başka adla kayıtlıysa personele söylenir. Kimlik numarası listede ve
+>   denetim izinde **maskeli** (KVKK). Teminat referansına / nota kart numarası yazılamaz (PCI).
+> - **Ücret:** otelin saatine göre (sunucunun değil). Erken giriş: giriş günü, giriş saatinden önce;
+>   ilk gecenin fiyatı üzerinden. Geç çıkış: çıkış günü, çıkış saatinden sonra; son gece üzerinden.
+>   İstemci gördüğü tutarı gönderir, sunucu farklı hesaplarsa (saat geçti) yazmaz (`FEE_CHANGED`).
+>   Personel ücreti uygulamayabilir (denetim izinde politika tutarıyla).
+> - **Erken ayrılış:** bugünden sonraki geceler bırakılır — envantere döner, fiyattan düşer (personel
+>   onayıyla; `EARLY_DEPARTURE`). Çıkış günü geçmişse (unutulmuş çıkış) tarih değişmez, ücret yok.
+> - **Bakiye:** `bakiye = Σ(kalem × adet) − Σ(ödeme × kur)`; silinmiş kalem/ödeme ve aktarılmış folyo
+>   sayılmaz; denormalize `Folio.balance`'a güvenilmez (`front-desk/folio.js`). Açıksa çıkış olmaz
+>   (`BALANCE_DUE`); yetkili gerekçeyle bakiyeyle çıkar, zile uyarı düşer. **Folyo yoksa bakiye
+>   bilinmiyor** sayılır (sıfır değil) ve ekran bunu söyler.
+> - **Geri alma:** yalnızca aynı gün. Giriş, folyoda hareket varsa geri alınmaz. Çıkış, oda bu arada
+>   başka misafire girişle verildiyse geri alınmaz; erken ayrılışta bırakılan geceler geri gelmez.
+>
+> **Modül 15'e (folyo) not:** billing-worker `guest.checked_in` ile folyoyu açsın; `earlyCheckInFee`,
+> `guest.checked_out`taki `lateCheckOutFee` ve `deposit` kalem/ödeme olarak işlensin. Çıkış bakiye
+> denetimi folyo tablolarını zaten okuyor — folyo yazıldığı gün bir şey değiştirmeden çalışır.
+> **Modül 17'ye (ödeme) not:** çıkış ekranındaki "bakiye var" uyarısına ödeme ekranı bağlantısı eklenir.
+> **Modül 13'e not:** `GET /front-desk/summary` gelecek / gidecek / içeride / gecikmiş sayılarını verir;
+> kısa listeler için `/front-desk/arrivals` ve `/front-desk/departures` (sayfa `/on-buro`).
 
 > **Modül 3'ten not (16 Eylül 2026 — Ahmet):** oda tarafı hazır, sen yalnızca
 > event'i yayınla. `guest.checked_in` / `guest.checked_out` gövdesinde `hotelId`
@@ -524,7 +581,7 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 - [x] Ekran: "Manuele al" butonu (concierge bu konuşmaya karışmaz)
 - [x] Ekran: İstekler listesi (oda, istek, durum, atanan) + tamamla
 - [x] Frontend: yeni mesaj gelince socket ile anlık güncelleme + ses/rozet
-- [ ] Gerçek kanal trafiği (WhatsApp / web chat) — **modül 8 bekleniyor**; ekran ve sözleşme hazır
+- [x] Gerçek kanal trafiği (WhatsApp / web chat) — modül 8'de bağlandı (aşağıdaki not)
 
 > **📌 Modül 7 tamamlandı (17 Eylül 2026 — Ahmet). Modül 8'in kısmı bilinçli olarak boş.**
 >
@@ -587,14 +644,79 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 8. WhatsApp / web chat ile konuşarak rezervasyon — Ali Kemal
 **Gün sonu:** Misafir web chat'e "15-18 Ekim 2 kişilik oda" yazıyor; AI konuşup onay alıyor; rezervasyon kendiliğinden oluşuyor, oda atanıyor, onay mesajı gidiyor.
-- [ ] Web chat widget'ı (siteye gömülen balon; socket ile mesaj gönder/al)
-- [ ] webchat-gateway paketi (widget mesajı → `guest.message.received`; `guest.message.reply` → widget'a)
-- [ ] whatsapp-gateway paketi (Meta Cloud API webhook doğrulama, gelen mesaj → event, giden mesaj → API)
-- [ ] router-agent paketi (küçük model; intent: rezervasyon / soru / şikâyet / diğer → `guest.intent.detected`)
-- [ ] concierge-agent paketi (LangGraph grafiği; tool'lar: `check_availability`, `request_reservation`, `get_hotel_info`; konuşma geçmişi + rolling summary; misafir "evet" demeden rezervasyon talebi basmaz)
-- [ ] Prompt caching + günlük token bütçesi + LlmUsage kaydı
-- [ ] Bütçe aşımı veya agent kapalıysa konuşma manuel göreve düşer (7'deki ekrana)
-- [ ] Uçtan uca demo: chat → rezervasyon → oda → onay mesajı, Activity Feed'de izlenir
+- [x] Web chat widget'ı (siteye gömülen balon; socket ile mesaj gönder/al)
+- [x] webchat-gateway paketi (widget mesajı → `guest.message.received`; `guest.message.reply` → widget'a)
+- [x] whatsapp-gateway paketi (Meta Cloud API webhook doğrulama, gelen mesaj → event, giden mesaj → API)
+- [x] router-agent paketi (küçük model; intent: rezervasyon / soru / şikâyet / diğer → `guest.intent.detected`)
+- [x] concierge-agent paketi (LangGraph grafiği; tool'lar: `check_availability`, `request_reservation`, `get_hotel_info`; konuşma geçmişi + rolling summary; misafir "evet" demeden rezervasyon talebi basmaz)
+- [x] Prompt caching + günlük token bütçesi + LlmUsage kaydı
+- [x] Bütçe aşımı veya agent kapalıysa konuşma manuel göreve düşer (7'deki ekrana)
+- [x] Uçtan uca demo: chat → rezervasyon → oda → onay mesajı, Activity Feed'de izlenir (entegrasyon testi, sahte modelle; gerçek model anahtar gelince)
+
+> **📌 Modül 8 tamamlandı (24 Eylül 2026 — Ahmet, Ali'nin yerine; modül 13'ün önünü açmak için).**
+>
+> **Paketler:** `shared/agents/llm` (OpenAI resmi SDK adaptörü, maliyet ve bütçe
+> hesabı — `usageCost`, `budgetExhausted`, `priceFor`), `shared/actor-kit`
+> (`BaseLlmAgent`: izin → çağrı → kullanım kaydı; **arka plan yürütmesi**:
+> `manifest.background = { maxConcurrent, maxQueued, onOverflow }`, `accepts()` ile
+> ilgisiz olayı sıraya almama, `registry.idle()`), `shared/agents/router-agent`,
+> `hotel/agents/concierge-agent` (LangGraph `StateGraph`), `shared/channels/whatsapp-gateway`,
+> `shared/channels/webchat-gateway` (+ `widget/widget.js`, Shadow DOM, bağımlılıksız).
+>
+> **Akış:** misafir yazar → `receiveInboundMessage` → `guest.message.received` →
+> router (küçük model, katı JSON şeması) niyeti mesaja ve hafızaya yazar →
+> `guest.intent.detected` → concierge turu (en fazla 5 model çağrısı; araçlar
+> `check_availability`, `get_hotel_info`, `propose_reservation`, `request_reservation`,
+> `handoff_to_staff`) → misafir **yeni bir mesajda** açıkça "evet" deyince (router
+> onayı + teklif önceki turda sunulmuş + fiyat/müsaitlik yeniden denetlenmiş)
+> `reservation.requested` → reservation-worker → `reservation.created` → room-worker
+> odayı atar → concierge onay kodunu **veritabanından, şablonla** sohbete yazar,
+> konuşmayı rezervasyona bağlar. Onay kodu "talebiniz alındı" cevabından sonra
+> gider (konuşma başına sıra).
+>
+> **Korumalar:** şikâyet / personel isteği modelsiz devredilir; günlük bütçe
+> (otelin iş gününe göre, fiyat ayardan, maliyet yukarı yuvarlanır) dolunca model
+> çağrılmaz, konuşma personele geçer, yönetime `AI_BUDGET` uyarısı; konuşma başına
+> günlük cevap sınırı; tur sınırı; teklif 30 dk geçerli; 30 geceden uzun / 10
+> kişiden kalabalık / 540 günden ileri istek personele; AI yalnızca WhatsApp ve
+> web chat'te. Devirde misafire kısa bilgi (dili bilinmiyorsa modelsiz tahmin),
+> konuşmaya iç not (sebep), zile `AI_HANDOFF`. 5 dk'dan uzun cevapsız AI konuşması
+> süpürücü işle personele geçer (süreç çöktüyse sıradaki iş kaybolmasın).
+>
+> **Kanallar:** WhatsApp webhook'u `/webhooks/whatsapp/:kanalKimliği` —
+> `X-Hub-Signature-256` ham gövde üzerinden doğrulanır, başka numaranın öğesi
+> atlanır, tekrar gelen mesaj tek kayıt; teslim bildirimleri mesaja işlenir; 24
+> saat penceresi kapalıysa "gönderilemedi" + sebep. Web chat `/webchat` socket ad
+> alanı: imzalı oturum token'ı (30 gün kayar), izinli site adresi, IP ve oturum
+> başına hız sınırı, "yazıyor…", "gördüm" → okundu. Gönderilmeden kalan cevapları
+> dakikada bir iş gönderir (mesaj önce sahiplenilir; çift gönderim yok).
+>
+> **Veri** (migration `20260924090000_conversational_booking`): `AiSettings`,
+> `ConversationAiState` (özet, teklifler, onay bekleyen teklif, istek kimliği,
+> günlük cevap sayacı), `MessagingChannel` (sırlar şifreli JSON), `LlmUsage.conversationId`,
+> kısmi index'ler `Message_pending_outgoing_idx` ve `Conversation_ai_waiting_idx`;
+> `Message_internal_note_valid` artık sistem iç notuna da izin verir;
+> `reservation.created` gövdesinde `source` ve `requestId`.
+>
+> **API:** `/ai/settings` (GET, PUT), `/ai/usage?days=`, `/messaging-channels`
+> (GET, `PUT /whatsapp`, `PUT /webchat`, `POST /webchat/rotate-key`),
+> `/webhooks/whatsapp/:channelId` (GET doğrulama, POST), `/webchat/widget.js`.
+> **Ekranlar:** Ayarlar → AI asistanı (model, fiyat, bütçe, AI rezervasyonu
+> kesin/opsiyonlu, otel bilgisi, kullanım ve maliyet), Ayarlar → Mesaj kanalları
+> (WhatsApp bilgileri + webhook adresi, balon ayarı + gömme kodu); gelen kutusunda
+> niyet etiketi, otomatik (onay kodu) mesajın teslim durumu, sistem iç notları.
+>
+> **Canlıya alırken:** `.env`'e `OPENAI_API_KEY` (yoksa ajanlar başlamaz, konuşmalar
+> personelde açılır), migration uygulanır, nginx `/webhooks/`, `/webchat/` ve
+> `/socket.io/` yollarını backend'e geçirir. WhatsApp için Meta uygulamasında webhook
+> kurulur (adres ve doğrulama token'ı ekranda).
+>
+> **Bilinçli sınırlar:** WhatsApp **bildirim** (otelin başlattığı, Meta onaylı
+> şablonlu mesaj — modül 9'un `registerNotificationProvider` kaydı) yapılmadı:
+> şablon onayı Meta panelinde otel başına yürüyor, ayrı iş; bildirimler e-posta/SMS
+> ile gidiyor. Ajan sırası, kanal kaydı ve event bus süreç içi (çok örnekli
+> kurulumda paylaşılan kuyruğa taşınmalı). AI yalnızca otelin varsayılan
+> pansiyonuyla fiyat verir; başka pansiyon / grup / uzun konaklama personele.
 
 > **📌 Modül 7'den devir (17 Eylül 2026 — Ahmet): gelen kutusu hazır; kanal ve AI tarafı sende.**
 > Modül 7 senin kısmını boş bıraktı, sahte doldurmadı. Bağlanma noktaları:
@@ -747,13 +869,65 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 10. Aktör Activity Feed + audit log — Ali Kemal
 **Gün sonu:** Admin, sistemde olan biteni canlı izliyor: hangi aktör hangi event'i işledi, ne kadar sürdü, hata var mı; bir rezervasyonun tüm zincirini tek tıkla görüyor.
-- [ ] Backend: ActivityLog ve EventLog listeleme API'si (filtre: aktör, event, seviye, tarih, correlationId)
+- [x] Backend: ActivityLog ve EventLog listeleme API'si (filtre: aktör, event, seviye, tarih, correlationId)
 - [x] Backend: AuditLog (kullanıcı hangi kaydı değiştirdi; servis katmanında otomatik yazım) — **modül 1'de yapıldı**
-- [ ] Backend: socket.io `activity` kanalı (her log satırı anlık yayınlanır)
-- [ ] Ekran: Canlı akış (liste, otomatik kaydırma, duraklat)
-- [ ] Ekran: Filtre çubuğu (aktör, event adı, seviye, tarih)
-- [ ] Ekran: Zincir görünümü (correlationId seç → adımlar sıralı, süreleriyle)
-- [ ] Ekran: Kullanıcı audit listesi (kim, ne zaman, hangi kayıt, eski/yeni değer)
+- [x] Backend: socket.io `activity` kanalı (her log satırı anlık yayınlanır — kimliğiyle; içerik HTTP'den)
+- [x] Ekran: Canlı akış (liste, otomatik kaydırma, duraklat)
+- [x] Ekran: Filtre çubuğu (aktör, event adı, seviye, tarih)
+- [x] Ekran: Zincir görünümü (correlationId seç → adımlar sıralı, süreleriyle)
+- [x] Ekran: Kullanıcı audit listesi (kim, ne zaman, hangi kayıt, eski/yeni değer)
+
+> **📌 Modül 10 tamamlandı (25 Eylül 2026 — Ahmet, Ali'nin yerine).**
+>
+> **Önemli düzeltme (modül 2'den kalan):** HTTP isteğinin bağlamı (kişi ve
+> zincir kimliği) `onRequest` kancasında `await`'lerden **sonra** kuruluyordu;
+> `AsyncLocalStorage.enterWith` bu hâliyle route işleyicisine geçmiyordu. Sonuç:
+> HTTP'den yapılan her değişikliğin denetim izinde kişi `system`, her yazımın
+> zincir kimliği farklıydı. Bağlam artık kancanın başında kurulup kimlik
+> doğrulanınca güncelleniyor (`app.js`). Eski denetim satırlarında kişi
+> `system` olarak kalır (geriye dönük düzeltilemez).
+>
+> **Veri** (migration `20260925090000_activity_feed`): `ActivityLog.eventName` ve
+> `correlationId` sütunları (eski satırlar `EventLog`'dan dolduruldu); otel
+> kapsamlı imleç index'leri: aktivite (zaman / aktör / olay / seviye), olay
+> (zaman / ad), denetim (zaman / kişi / kayıt türü / kayıt). Eski otel kapsamsız
+> index'ler kaldırıldı. ⚠️ Büyük tabloda bakım penceresinde uygulanmalı (index
+> kilitle oluşur).
+>
+> **Aktör tabanı:** her aktivite satırı olay adını ve zincir kimliğini taşır;
+> aktör kapalıyken ya da iş sırası taşınca akışa **uyarı** satırı yazılır (eskiden
+> iz yoktu); geçici hatadan sonra başaran işin deneme sayısı izde.
+>
+> **Canlı akış:** satır yazılınca süreç içi yayın (`lib/activity-stream.js`) →
+> socket köprüsü 500 ms'de bir otel başına **yalnızca kimlikleri** ve seviye
+> sayılarını gönderir (socket kimliği henüz doğrulanmadığı için içerik yok);
+> panel satırları aynı süzgeçle HTTP'den çeker. 200 kimliği aşan pakette panel
+> listeyi baştan yükler. İşlem içinde yazılan satır commit'ten sonra yayınlanır
+> (`writeWithEvents` → `afterCommit`). İzleyen yoksa toplama yapılmaz.
+>
+> **Zincir:** olay → onu işleyen aktör → aktörün yazdığı değişiklik ve
+> yayınladığı olay (ağaç; `causationId`, aktör adı ve işleyiş süresi ile
+> kurulur, bozuk kayıtta döngü koruması). Her kaynaktan en çok 500 adım.
+> Değişikliklerin eski/yeni değerleri yalnızca `audit.view` iznine. Olay
+> gövdesindeki telefon, e-posta, kimlik, kart vb. maskelenir (`redactPayload`).
+>
+> **API:** `/activity/feed` (aktör, olay, seviye — `PROBLEMS` = uyarı+hata —,
+> tarih, zincir, imleç; canlı için `ids`), `/activity/events` (ad, zincir,
+> `unpublished`, tarih), `/activity/chains/:correlationId`,
+> `/activity/records/:entity/:entityId` (kaydın bütün zincirleri),
+> `/activity/options`, `/audit` (kişi, kayıt türü + kimlik, işlem, tarih).
+> **İzinler:** `activity.view`, `audit.view` (yönetici ve müdür varsayılan).
+>
+> **Ekranlar:** `/aktivite/akis` (canlı, duraklat, okunan yeri korur, "N yeni"),
+> `/aktivite/olaylar` (dağıtılmamış süzgeci), `/aktivite/denetim` (eski → yeni,
+> "bu kişinin değişiklikleri", "bu kaydın geçmişi"), `/aktivite/zincir/:id`,
+> `/aktivite/kayit/:tür/:kimlik`. Rezervasyon detayında **"İşlem zinciri"**.
+> Süzgeçler adres çubuğunda (paylaşılabilir).
+>
+> **Bilinçli sınırlar:** socket el sıkışması hâlâ kimliksiz (modül 2'nin işi;
+> bu yüzden socket'ten içerik gönderilmiyor). Saklama süresi (eski aktivite /
+> olay satırlarının silinmesi) yok — denetim kaydı silinmemeli; aktivite/olay
+> için politika kararı gerekir.
 
 > **🎁 Modül 1'de senin adına yapılanlar (9 Eylül 2026 — Ahmet):**
 > Ayarlar modülünü yazarken bu modülün altyapısına ihtiyaç oldu, biz de temelini
@@ -870,13 +1044,78 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 12. Aktör yönetim paneli — Ali Kemal
 **Gün sonu:** Admin, aktörleri tek ekrandan açıp kapatıyor; kapalı aktörün işleri "manuel görevler"de listeleniyor; LLM agent'ların token harcaması görünüyor.
-- [ ] Backend: `GET /actors` (manifest + durum), `enable` / `disable` API'leri
-- [ ] Backend: ManualTask listeleme / tamamlama API'si
-- [ ] Backend: LlmUsage günlük özet API'si
-- [ ] Ekran: Aktör listesi (ad, tip, paket, durum, switch)
-- [ ] Ekran: Aktör detay paneli (açıklama, dinlediği / yayınladığı event'ler, onay gerektiren aksiyonlar, retry politikası)
-- [ ] Ekran: LLM agent kartı (model, günlük bütçe, bugünkü kullanım çubuğu, tahmini maliyet)
-- [ ] Ekran: Manuel görevler listesi (modül, başlık, orijinal event, "tamamla")
+- [x] Backend: `GET /actors` (manifest + durum), `enable` / `disable` API'leri
+- [x] Backend: ManualTask listeleme / tamamlama API'si
+- [x] Backend: LlmUsage günlük özet API'si
+- [x] Ekran: Aktör listesi (ad, tip, paket, durum, switch)
+- [x] Ekran: Aktör detay paneli (açıklama, dinlediği / yayınladığı event'ler, onay gerektiren aksiyonlar, retry politikası)
+- [x] Ekran: LLM agent kartı (model, günlük bütçe, bugünkü kullanım çubuğu, tahmini maliyet)
+- [x] Ekran: Manuel görevler listesi (modül, başlık, orijinal event, "tamamla")
+
+> **📌 Modül 12 tamamlandı (26 Eylül 2026 — Ahmet, Ali'nin yerine).**
+>
+> **Aktör paneli** (`/aktorler`, izin `actors.view`; aç/kapa `actors.manage` —
+> varsayılan yalnızca yönetici, müdür görür): her aktör tek satırda — Türkçe adı,
+> tür, paket, bu otelde açık mı (kim, ne zaman, hangi gerekçeyle kapattı), son 24
+> saatte iş/uyarı/hata, son iş, açık manuel görev, arka plan sırası. Kapatma
+> "ne durur"u söyleyip gerekçe sorar. Açma/kapama ayrı uçlar
+> (`POST /actors/:ad/enable|disable`): iki yönetici aynı anda "kapat" derse
+> sonuç yine kapalı, ikinci istek iz bırakmaz; ayar satırı kilitlenir, denetim
+> izine (`ActorSetting`) ve aktivite akışına (uyarı satırı) yazılır, olay
+> `actor.setting.changed`. Aktör her olayda ayarı veritabanından okur: kapatılan
+> aktör bir sonraki olayda durur.
+>
+> **Aktör detayı** (`/aktorler/:ad`): "kapatırsam ne olur" (işler hangi manuel
+> göreve düşer, yayınladığı olayları bekleyen aktörler kimler — bildirgeden
+> hesaplanır), dinlediği / yayınladığı olaylar (Türkçe adlarıyla, kim yayınlıyor /
+> kim dinliyor), onay gerektiren işler, yeniden deneme ve arka plan politikası,
+> son 10 iş (zincire bağlantılı). **Kurulu olmayan** aktör de görünür (ör. sunucuda
+> `OPENAI_API_KEY` yokken AI ajanları, sebebiyle); ayarı değiştirilebilir.
+>
+> **Bildirge:** `defineActor` artık `title` (panelde Türkçe ad) ve `packageName`
+> alır. **Yeni aktör yazan:** ikisini de ver; `fallbackModule` adını
+> `MANUAL_TASK_MODULE_PERMISSIONS`'a (contracts, `actors.js`) izniyle ekle — yoksa
+> görevleri yalnızca ayar yöneticisine görünür.
+>
+> **Manuel görevler** (`/gorevler`, menüde rozetli): görev, işin modülüne yetkili
+> personele görünür (zil uyarısıyla aynı izin: oda atama → oda işlemleri, cevapsız
+> mesaj → mesaj yazma). Üstlen / bırak / tamamla (not) / "gerek kalmadı"
+> (gerekçe zorunlu). Her işlem satırı kilitler: iki kişi aynı görevi üstlenemez,
+> ikinci "tamamla" 409 alır; kapanmış görev yeniden açılmaz (veritabanı kısıtı).
+> Başkasının üstlendiği görev yine tamamlanabilir (iş acil; izde tamamlayan
+> yazar). Görev işi düşüren aktörü ve olayın zincirini taşır; bağlı kayıtlara
+> (rezervasyon, konuşma, istek, onay) bağlantı verir. Liste olay gövdesi taşımaz;
+> görev açılınca gövde **maskesiz** gelir (işi yapacak kişi misafirin iletişim
+> bilgisine ihtiyaç duyar; zaten o modülün yetkisine sahip). Zil uyarısı artık
+> göreve götürür (`/gorevler?gorev=`).
+> API: `/manual-tasks` (açık — en eski önce / kapanan — en yeni kapanan önce,
+> modül, aktör, imleç), `/manual-tasks/summary`, `/manual-tasks/:id`,
+> `.../claim|release|complete|cancel`. Olaylar `manual_task.created|updated`,
+> canlı kanal `manual-tasks.changed`.
+> **Modül 13 için:** "bekleyen işler" kutusundaki manuel görev sayısı
+> `GET /manual-tasks/summary` (kişinin kapsamıyla; otel başına dakikada tek sorgu).
+>
+> **LLM kullanımı:** her model çağrısı `LlmUsage` satırına ek olarak **günlük
+> özete** (`LlmUsageDaily`: otel × iş günü × ajan × model) aynı transaction'da
+> sayılır. Bütçe denetimi ve kullanım ekranları (`/ai/usage`,
+> `/actors/:ad/usage`) artık satırları değil özeti toplar — büyük otelde günde on
+> binlerce çağrı olsa da okunan satır birkaç düzine. Ajan kartı: model, otelin
+> günlük bütçesi (ajanlar paylaşır; çubukta ajanın payı koyu), bugünkü ve dönem
+> maliyeti, çağrı başına ortalama, gün gün çubuk, model kırılımı.
+> **AI ajanları panelden kapatılırsa** AI misafire cevap vermez: yeni konuşmalar
+> personelde açılır (`aiActiveFor` ajanların açık olmasını da arar; her mesaj ayrı
+> manuel göreve düşmez). AI ayar ekranı bunu uyarı olarak gösterir.
+>
+> **Veri** (migration `20260926090000_actor_panel`): `ActorSetting.updatedBy/note`;
+> `ManualTask` üstlenen/kapanış/kapatan/not/aktör/zincir sütunları, açık görev
+> `closedAt IS NULL` ile otel kapsamlı index'ten (zaman / modül / aktör), durum ile
+> kapanış anı ve üstlenen kısıtları; `LlmUsageDaily` tablosu (eski çağrılardan
+> dolduruldu). ⚠️ `LlmUsage` büyükse bakım penceresinde uygulanmalı.
+>
+> **Bilinçli sınırlar:** `ActorSetting.dailyTokenBudget` kullanılmıyor — bütçe
+> modül 8'deki otel geneli USD bütçesi (ajan başına bütçe istenirse ayrı karar).
+> Arka plan sırası (çalışan/bekleyen) süreç içidir; birden fazla sunucu
+> çalışırsa panel isteğin düştüğü sunucununkini gösterir.
 
 > **🎁 Modül 1'de senin adına yapılanlar (9 Eylül 2026 — Ahmet):**
 > `shared/core` artık boş değil — event bus'ın çekirdeği kuruldu

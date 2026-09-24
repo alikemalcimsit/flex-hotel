@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import proxyAddr from '@fastify/proxy-addr';
 
 /**
  * HTTP katmanının güvenlik ayarları — tek yerde, ortam değişkenlerinden.
@@ -157,4 +158,26 @@ export function resolveTrustProxy(env = process.env) {
  */
 export function rateLimitKey(request) {
   return `${request.ip}|${actorFrom(request.headers['x-actor'])}`;
+}
+
+/**
+ * Socket bağlantısının istemci IP'si — Fastify'ın `request.ip` hesabıyla
+ * birebir aynı kural (`TRUST_PROXY`, aynı kütüphane). Web chat balonu herkese
+ * açık; hız sınırı gerçek IP'ye göre işlemeli, nginx'in adresine göre değil.
+ *
+ * @param {boolean | string} trustProxy `resolveTrustProxy()` çıktısı
+ * @returns {(request: import('node:http').IncomingMessage) => string}
+ */
+export function socketIpResolver(trustProxy) {
+  let trust;
+  if (trustProxy === true) trust = () => true;
+  else if (trustProxy === false) trust = () => false;
+  else trust = proxyAddr.compile(String(trustProxy).split(',').map((value) => value.trim()).filter(Boolean));
+  return (request) => {
+    try {
+      return proxyAddr(request, trust);
+    } catch {
+      return request.socket?.remoteAddress ?? 'bilinmiyor';
+    }
+  };
 }

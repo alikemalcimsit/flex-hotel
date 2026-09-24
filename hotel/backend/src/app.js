@@ -7,7 +7,7 @@ import { enterContext } from '@hotelos/core';
 import { checkDb, disconnectDb } from './db.js';
 import { asBusyError } from './lib/errors.js';
 import { cache } from './lib/cache.js';
-import { registerActors, setActorLogger } from './lib/actors.js';
+import { actorRegistry, registerActors, setActorLogger } from './lib/actors.js';
 import { registerCoreSubscribers, setEventLogger } from './lib/events.js';
 import {
   actorFrom,
@@ -20,14 +20,21 @@ import {
   resolveJwtSecret,
   resolveTrustProxy,
 } from './lib/http-security.js';
+import { activityRoutes, auditRoutes } from './modules/activity/routes.js';
+import { actorRoutes } from './modules/actors/routes.js';
 import { approvalRoutes } from './modules/approvals/routes.js';
+import { manualTaskRoutes } from './modules/manual-tasks/routes.js';
 import { approvalCacheStats } from './modules/approvals/service.js';
 import { registerApprovalSubscribers, setApprovalSubscriberLogger } from './modules/approvals/subscribers.js';
 import { authRoutes } from './modules/auth/routes.js';
+import { messagingChannelRoutes, webchatWidgetRoutes, webhookRoutes } from './modules/channels/routes.js';
+import { conciergeRoutes } from './modules/concierge/routes.js';
 import { roleRoutes } from './modules/roles/routes.js';
 import { resolveEffectivePermissions } from './modules/roles/service.js';
 import { userRoutes } from './modules/users/routes.js';
 import { guestRequestRoutes } from './modules/guest-requests/routes.js';
+import { frontDeskRoutes } from './modules/front-desk/routes.js';
+import { frontDeskCacheStats } from './modules/front-desk/service.js';
 import { reservationRoutes } from './modules/reservations/routes.js';
 import { reservationCacheStats } from './modules/reservations/service.js';
 import { registerReservationSubscribers, setReservationSubscriberLogger } from './modules/reservations/subscribers.js';
@@ -168,7 +175,13 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
     const correlationId = String(request.id);
     reply.header('x-correlation-id', correlationId);
 
-    let actor;
+    // Bağlam **ilk `await`ten önce** kurulur: `enterWith` ile `await`ten sonra
+    // kurulan bağlam route işleyicisine geçmiyordu — HTTP'den yapılan her
+    // değişikliğin denetim izinde kişi "system", zincir kimliği rastgele
+    // görünüyordu (modül 10 zincir ekranı bunu yakaladı). Kimlik doğrulanınca
+    // aynı bağlam nesnesinde güncellenir.
+    const context = enterContext({ correlationId, actor: actorFrom(request.headers['x-actor']) });
+
     try {
       const payload = await request.jwtVerify();
       request.auth = {
@@ -178,14 +191,11 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
         role: payload.role,
         permissions: await resolveEffectivePermissions(payload.hotelId, payload.role),
       };
-      actor = payload.email;
+      context.actor = payload.email;
     } catch {
+      // Token yok ya da geçersiz: bağlamda başlıktaki kimlik kalır (geriye dönük).
       request.auth = null;
-      // Geriye dönük: token gelene kadar denetim izi boş kalmasın diye başlık.
-      actor = actorFrom(request.headers['x-actor']);
     }
-
-    enterContext({ correlationId, actor });
   });
 
   /**
@@ -246,6 +256,14 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
         requestCache: requestCacheStats(),
         approvalCache: approvalCacheStats(),
         reservationCache: reservationCacheStats(),
+        frontDeskCache: frontDeskCacheStats(),
+        // Arka planda çalışan aktörlerin (AI ajanları, kanal geçitleri) iş sırası.
+        actorBacklog: Object.fromEntries(
+          actorRegistry
+            .list()
+            .filter((manifest) => manifest.background)
+            .map((manifest) => [manifest.name, actorRegistry.get(manifest.name).backlog()]),
+        ),
       },
     };
   });
@@ -256,12 +274,21 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   await app.register(settingsRoutes, { prefix: '/settings' });
   await app.register(roomsRoutes, { prefix: '/rooms' });
   await app.register(reservationRoutes, { prefix: '/reservations' });
+  await app.register(frontDeskRoutes, { prefix: '/front-desk' });
   await app.register(planRoutes, { prefix: '/plan' });
   await app.register(messagingRoutes, { prefix: '/messaging' });
   await app.register(guestRequestRoutes, { prefix: '/guest-requests' });
   await app.register(notificationRoutes, { prefix: '/notifications' });
   await app.register(staffAlertRoutes, { prefix: '/staff-alerts' });
   await app.register(approvalRoutes, { prefix: '/approvals' });
+  await app.register(activityRoutes, { prefix: '/activity' });
+  await app.register(auditRoutes, { prefix: '/audit' });
+  await app.register(actorRoutes, { prefix: '/actors' });
+  await app.register(manualTaskRoutes, { prefix: '/manual-tasks' });
+  await app.register(conciergeRoutes, { prefix: '/ai' });
+  await app.register(messagingChannelRoutes, { prefix: '/messaging-channels' });
+  await app.register(webhookRoutes, { prefix: '/webhooks' });
+  await app.register(webchatWidgetRoutes, { prefix: '/webchat' });
 
   app.addHook('onClose', async () => {
     await disconnectDb();
