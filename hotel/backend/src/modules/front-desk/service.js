@@ -339,7 +339,8 @@ async function saveCompanions(tx, hotelId, stay, companions) {
       idType: companion.idType ?? null,
       idNumber: companion.idNumber ?? null,
       nationality: companion.nationality ?? null,
-      birthDate: companion.birthDate ?? null,
+      // Boş bırakılan doğum tarihi kayıtlı olanı silmez.
+      ...(companion.birthDate ? { birthDate: companion.birthDate } : {}),
     };
     const match = companion.idNumber
       ? known.find((guest) => guest.idNumber === companion.idNumber && (!guest.nationality || guest.nationality === companion.nationality))

@@ -17,10 +17,12 @@ import * as service from './service.js';
  * Listeler ve özet `stays.view` (kat hizmetleri de gidecekleri görür); giriş,
  * çıkış, önizlemeler ve geri alma `stays.manage`. Giriş önizlemesi kimlik
  * numarasının tamamını döndürdüğü için görüntüleme izniyle açılmaz.
- * Bakiyeyle çıkış gövdeye bağlı ek yetki ister (`stays.checkout_open_balance`).
+ * Gövdeye bağlı ek yetkiler: girişte oda seçmek `rooms.operate` (oda ataması),
+ * bakiyeyle çıkış `stays.checkout_open_balance`.
  */
 
 const OPEN_BALANCE_DENIED = 'Bakiyesi kapanmadan çıkış yapma yetkiniz yok; tahsilatı tamamlayın ya da yöneticiye başvurun.';
+const ROOM_ASSIGN_DENIED = 'Oda atama yetkiniz yok; misafirin odası oda planından atanmalı.';
 
 /**
  * @param {import('fastify').FastifyInstance} app
@@ -55,10 +57,11 @@ export async function frontDeskRoutes(app) {
     data: await service.getCheckInPreview(request.hotelId, request.params.reservationId),
   }));
 
-  app.post('/stays/:reservationId/check-in', { ...manage, schema: { ...params, body: checkInSchema } }, async (request) => ({
-    success: true,
-    data: await service.checkIn(request.hotelId, request.params.reservationId, request.body),
-  }));
+  app.post('/stays/:reservationId/check-in', { ...manage, schema: { ...params, body: checkInSchema } }, async (request) => {
+    // Girişte oda seçmek bir oda atamasıdır: atama izni de gerekir (matris ayrı verebilir).
+    if (request.body.roomId) assertRequestPermission(request, PERMISSIONS.ROOMS_OPERATE, ROOM_ASSIGN_DENIED);
+    return { success: true, data: await service.checkIn(request.hotelId, request.params.reservationId, request.body) };
+  });
 
   app.get('/stays/:reservationId/check-out', { ...manage, schema: params }, async (request) => ({
     success: true,

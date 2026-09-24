@@ -263,7 +263,9 @@ describe('check-in / check-out (entegrasyon)', { skip }, () => {
       await assert.rejects(doCheckIn(reservation.id), { code: 'VALIDATION', message: /1 yetişkinin kimliği eksik/ });
 
       // Belge numarası başka bir adla kayıtlı: yanlış yazılmış olabilir.
-      const known = await db.guest.create({ data: { hotelId, firstName: 'Can', lastName: 'Demir', idType: 'NATIONAL_ID', idNumber: TC_OTHER, nationality: 'TR' } });
+      const known = await db.guest.create({
+        data: { hotelId, firstName: 'Can', lastName: 'Demir', idType: 'NATIONAL_ID', idNumber: TC_OTHER, nationality: 'TR', birthDate: new Date('1985-04-12') },
+      });
       const companion = (firstName, lastName) => ({ firstName, lastName, idType: 'NATIONAL_ID', idNumber: TC_OTHER, nationality: 'TR' });
       await assert.rejects(doCheckIn(reservation.id, { companions: [companion('Ali', 'Veli')] }), { code: 'COMPANION_ID_MISMATCH' });
 
@@ -272,6 +274,8 @@ describe('check-in / check-out (entegrasyon)', { skip }, () => {
       assert.equal(links.length, 3);
       assert.ok(links.some((link) => link.guestId === known.id && !link.isPrimary), 'kayıtlı kart yeniden kullanılmalı');
       assert.equal(await db.guest.count({ where: { hotelId, idNumber: TC_OTHER } }), 1);
+      // Formda boş bırakılan doğum tarihi kayıtlı olanı silmez.
+      assert.equal(core.toIsoDay((await db.guest.findUnique({ where: { id: known.id } })).birthDate), '1985-04-12');
     });
 
     it('erken giriş: otelin saatiyle 14:00 öncesi ilk gecenin %50\'si; görülen tutar tutmazsa yazılmaz; uygulanmayabilir', async () => {

@@ -269,6 +269,22 @@ describe('RBAC (entegrasyon)', { skip }, () => {
     // Bakiyesiz çıkış ön büroya açık (kayıt yok → 404).
     const plain = await app.inject({ method: 'POST', url: `/front-desk/stays/${stay}/check-out`, headers: desk, payload: { expectedUpdatedAt: version } });
     assert.equal(plain.statusCode, 404);
+
+    // Girişte oda seçmek oda atamasıdır: matriste atama izni kaldırılan ön büro seçemez.
+    await app.inject({
+      method: 'PUT',
+      url: '/roles/permissions',
+      headers: bearer(await asToken('admin@test.local')),
+      payload: { grants: [{ role: 'FRONT_DESK', permissions: ['stays.view', 'stays.manage', 'rooms.view'] }] },
+    });
+    const withRoom = await app.inject({
+      method: 'POST',
+      url: `/front-desk/stays/${stay}/check-in`,
+      headers: bearer(await asToken('resepsiyon@test.local')),
+      payload: { expectedUpdatedAt: version, guest: identity, roomId: randomUUID() },
+    });
+    assert.equal(withRoom.statusCode, 403);
+    assert.match(withRoom.json().error, /Oda atama yetkiniz yok/);
   });
 
   it('refresh rotation: kullanılan token bir daha çalışmaz', async () => {

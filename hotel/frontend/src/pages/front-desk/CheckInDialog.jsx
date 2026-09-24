@@ -6,6 +6,7 @@ import { Modal } from '../../components/Modal.jsx';
 import { api, apiPost } from '../../lib/api.js';
 import { DEPOSIT_OPTIONS, READINESS, frontDeskKeys } from '../../lib/front-desk.js';
 import { formatDate, formatMoney } from '../../lib/format.js';
+import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 import { reservationKeys } from '../../lib/reservations.js';
 import { validateWith } from '../../lib/validate.js';
 import { toastSuccess } from '../../store/toast.js';
@@ -32,6 +33,7 @@ const emptyCompanion = () => ({ key: globalThis.crypto.randomUUID(), firstName: 
  */
 export function CheckInDialog({ reservationId, onClose, onDone }) {
   const queryClient = useQueryClient();
+  const canAssignRoom = useCan()(PERMISSIONS.ROOMS_OPERATE);
   const preview = useQuery({
     queryKey: frontDeskKeys.checkIn(reservationId),
     queryFn: () => api(`/front-desk/stays/${reservationId}/check-in`),
@@ -49,6 +51,8 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
   const [waiveEarlyFee, setWaiveEarlyFee] = useState(false);
   const [errors, setErrors] = useState({});
   const [serverError, setServerError] = useState(null);
+  /** Sunucunun "hazır değil" dediği oda (önizlemeden sonra kirlenmiş olabilir). */
+  const [serverNotReadyRoom, setServerNotReadyRoom] = useState(null);
 
   // Form önizleme ilk geldiğinde doldurulur; sonraki tazelemeler yazılanı silmez.
   const initialized = useRef(false);
@@ -56,9 +60,12 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
     if (!data || initialized.current) return;
     initialized.current = true;
     setGuest(toIdentityForm(data.guest, data.guest.nationality));
-    setCompanions(data.companions.map((companion) => ({ ...emptyCompanion(), ...companion, identity: toIdentityForm(companion) })));
+    // Refakatçide yaş tutulmaz; belgesiz kaydedilebilen yalnızca çocuktur.
+    setCompanions(
+      data.companions.map((companion) => ({ ...emptyCompanion(), ...companion, isChild: !companion.idNumber, identity: toIdentityForm(companion) })),
+    );
     setPlate(data.reservation.vehiclePlate ?? '');
-    setChoosingRoom(!data.room);
+    setChoosingRoom(!data.room && canAssignRoom);
   }, [data]);
 
   const mutation = useMutation({
@@ -73,7 +80,10 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
     onError: (error) => {
       setServerError(error);
       if (error.fields && Object.keys(error.fields).length) setErrors(error.fields);
-      if (error.code === 'ROOM_NOT_READY') setAcceptNotReady(false);
+      if (error.code === 'ROOM_NOT_READY') {
+        setAcceptNotReady(false);
+        setServerNotReadyRoom(error.details?.roomNumber ?? null);
+      }
       if (REFRESH_CODES.has(error.code)) preview.refetch();
     },
   });
@@ -111,7 +121,7 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
     ? { id: pickedRoom.id, number: pickedRoom.number, housekeepingStatus: pickedRoom.housekeepingStatus, readiness: NOT_READY.has(pickedRoom.housekeepingStatus) ? pickedRoom.housekeepingStatus : 'READY' }
     : room;
   const roomBlocked = !pickedRoom && room && ['OCCUPIED', 'BLOCKED'].includes(room.readiness);
-  const roomNotReady = Boolean(targetRoom && NOT_READY.has(targetRoom.housekeepingStatus));
+  const roomNotReady = Boolean(targetRoom && (NOT_READY.has(targetRoom.housekeepingStatus) || serverNotReadyRoom === targetRoom.number));
   const partySize = reservation.adults + reservation.children;
   const maxCompanions = partySize - 1;
   const earlyFee = earlyCheckIn.applies ? earlyCheckIn.fee : null;
@@ -204,14 +214,18 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
               <span className="text-2xl font-bold tabular-nums text-ink">{targetRoom.number}</span>
               <Badge tone={READINESS[targetRoom.readiness]?.tone ?? 'neutral'}>{READINESS[targetRoom.readiness]?.label ?? targetRoom.readiness}</Badge>
               {pickedRoom && <Badge tone="info" dot={false}>Girişte verilecek</Badge>}
-              {!choosingRoom && (
+              {!choosingRoom && canAssignRoom && (
                 <Button type="button" size="sm" variant="outline" icon="bed" onClick={() => setChoosingRoom(true)} disabled={busy}>
                   Başka oda
                 </Button>
               )}
             </div>
           ) : (
-            <Alert tone="info" title="Oda verilmemiş">Aşağıdan misafire oda seçin; giriş ile aynı işlemde atanır.</Alert>
+            <Alert tone={canAssignRoom ? 'info' : 'warning'} title="Oda verilmemiş">
+              {canAssignRoom
+                ? 'Aşağıdan misafire oda seçin; giriş ile aynı işlemde atanır.'
+                : 'Oda atama yetkiniz yok; odayı oda planından atayacak birine haber verin.'}
+            </Alert>
           )}
           {roomBlocked && room.occupant && (
             <Alert tone="danger" title="Odada önceki misafir hâlâ içeride">
@@ -226,7 +240,7 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
           )}
           {roomNotReady && (
             <Checkbox
-              label={`Oda henüz hazır değil (${READINESS[targetRoom.housekeepingStatus]?.label.toLocaleLowerCase('tr')}); yine de giriş yap`}
+              label={`Oda henüz hazır değil${NOT_READY.has(targetRoom.housekeepingStatus) ? ` (${READINESS[targetRoom.housekeepingStatus].label.toLocaleLowerCase('tr')})` : ''}; yine de giriş yap`}
               hint="Misafir odaya temizlik bitince çıkacaksa. Denetim izine yazılır."
               checked={acceptNotReady}
               onChange={(event) => setAcceptNotReady(event.target.checked)}
@@ -242,6 +256,7 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
               onSelect={(picked) => {
                 setPickedRoom(picked);
                 setAcceptNotReady(false);
+                setServerNotReadyRoom(null);
               }}
               disabled={busy}
             />
