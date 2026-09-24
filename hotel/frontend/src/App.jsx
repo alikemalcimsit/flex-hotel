@@ -33,6 +33,14 @@ const UsersTab = lazy(() => import('./pages/settings/UsersTab.jsx').then((m) => 
 const RolePermissionsTab = lazy(() =>
   import('./pages/settings/RolePermissionsTab.jsx').then((m) => ({ default: m.RolePermissionsTab })),
 );
+const ActivityPage = lazy(() => import('./pages/activity/ActivityPage.jsx').then((m) => ({ default: m.ActivityPage })));
+const LiveFeedTab = lazy(() => import('./pages/activity/LiveFeedTab.jsx').then((m) => ({ default: m.LiveFeedTab })));
+const EventsTab = lazy(() => import('./pages/activity/EventsTab.jsx').then((m) => ({ default: m.EventsTab })));
+const AuditTab = lazy(() => import('./pages/activity/AuditTab.jsx').then((m) => ({ default: m.AuditTab })));
+const ChainPage = lazy(() => import('./pages/activity/ChainPage.jsx').then((m) => ({ default: m.ChainPage })));
+const RecordChainsPage = lazy(() =>
+  import('./pages/activity/RecordChainsPage.jsx').then((m) => ({ default: m.RecordChainsPage })),
+);
 const AiAssistantTab = lazy(() => import('./pages/settings/AiAssistantTab.jsx').then((m) => ({ default: m.AiAssistantTab })));
 const MessagingChannelsTab = lazy(() =>
   import('./pages/settings/MessagingChannelsTab.jsx').then((m) => ({ default: m.MessagingChannelsTab })),
@@ -215,6 +223,42 @@ export default function App() {
                 }
               />
             </Route>
+            <Route
+              path="aktivite"
+              element={
+                <RequirePermission permission={PERMISSIONS.ACTIVITY_VIEW}>
+                  <ActivityPage />
+                </RequirePermission>
+              }
+            >
+              <Route index element={<Navigate to="/aktivite/akis" replace />} />
+              <Route path="akis" element={<LiveFeedTab />} />
+              <Route path="olaylar" element={<EventsTab />} />
+              <Route
+                path="denetim"
+                element={
+                  <RequirePermission permission={PERMISSIONS.AUDIT_VIEW}>
+                    <AuditTab />
+                  </RequirePermission>
+                }
+              />
+            </Route>
+            <Route
+              path="aktivite/zincir/:correlationId"
+              element={
+                <RequirePermission permission={PERMISSIONS.ACTIVITY_VIEW}>
+                  <ChainPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="aktivite/kayit/:entity/:entityId"
+              element={
+                <RequirePermission permission={PERMISSIONS.ACTIVITY_VIEW}>
+                  <RecordChainsPage />
+                </RequirePermission>
+              }
+            />
             <Route
               path="ayarlar"
               element={

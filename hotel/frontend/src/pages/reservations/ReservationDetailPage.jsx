@@ -403,6 +403,7 @@ function Field({ label, children }) {
  * @param {{ reservationId: string, timeZone: string, currency: string }} props
  */
 function History({ reservationId, timeZone, currency }) {
+  const can = useCan();
   const query = useInfiniteQuery({
     queryKey: reservationKeys.history(reservationId),
     queryFn: ({ pageParam }) => api(withQuery(`/reservations/${reservationId}/history`, { cursor: pageParam })),
@@ -412,7 +413,21 @@ function History({ reservationId, timeZone, currency }) {
   const items = query.data?.pages.flatMap((page) => page.items) ?? [];
 
   return (
-    <Card title="Geçmiş">
+    <Card
+      title="Geçmiş"
+      actions={
+        can(PERMISSIONS.ACTIVITY_VIEW) ? (
+          <Link
+            to={`/aktivite/kayit/Reservation/${reservationId}`}
+            className="inline-flex items-center gap-1.5 rounded-control border border-line px-3 py-1.5 text-xs font-semibold text-ink-soft hover:bg-black/[0.04] hover:text-ink"
+            title="Bu rezervasyona dokunan her işlemin adımları: aktörler, süreler, değişen alanlar"
+          >
+            <Icon name="link" className="size-3.5" />
+            İşlem zinciri
+          </Link>
+        ) : null
+      }
+    >
       {query.isPending && <Spinner className="py-6" />}
       {query.isError && (
         <Alert tone="danger" title="Geçmiş yüklenemedi" action={<Button size="sm" variant="outline" icon="refresh" onClick={() => query.refetch()}>Tekrar dene</Button>}>

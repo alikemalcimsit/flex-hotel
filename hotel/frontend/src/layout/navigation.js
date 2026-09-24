@@ -112,6 +112,17 @@ export const NAV_SECTIONS = Object.freeze([
         ],
       },
       {
+        label: 'Aktivite',
+        to: '/aktivite',
+        icon: 'zap',
+        permission: PERMISSIONS.ACTIVITY_VIEW,
+        children: [
+          { label: 'Canlı akış', to: '/aktivite/akis', icon: 'zap' },
+          { label: 'Olaylar', to: '/aktivite/olaylar', icon: 'list' },
+          { label: 'Denetim kaydı', to: '/aktivite/denetim', icon: 'fileText', permission: PERMISSIONS.AUDIT_VIEW },
+        ],
+      },
+      {
         label: 'Ayarlar',
         to: '/ayarlar',
         icon: 'settings',

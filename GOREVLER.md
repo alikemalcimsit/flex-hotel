@@ -869,13 +869,65 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 10. Aktör Activity Feed + audit log — Ali Kemal
 **Gün sonu:** Admin, sistemde olan biteni canlı izliyor: hangi aktör hangi event'i işledi, ne kadar sürdü, hata var mı; bir rezervasyonun tüm zincirini tek tıkla görüyor.
-- [ ] Backend: ActivityLog ve EventLog listeleme API'si (filtre: aktör, event, seviye, tarih, correlationId)
+- [x] Backend: ActivityLog ve EventLog listeleme API'si (filtre: aktör, event, seviye, tarih, correlationId)
 - [x] Backend: AuditLog (kullanıcı hangi kaydı değiştirdi; servis katmanında otomatik yazım) — **modül 1'de yapıldı**
-- [ ] Backend: socket.io `activity` kanalı (her log satırı anlık yayınlanır)
-- [ ] Ekran: Canlı akış (liste, otomatik kaydırma, duraklat)
-- [ ] Ekran: Filtre çubuğu (aktör, event adı, seviye, tarih)
-- [ ] Ekran: Zincir görünümü (correlationId seç → adımlar sıralı, süreleriyle)
-- [ ] Ekran: Kullanıcı audit listesi (kim, ne zaman, hangi kayıt, eski/yeni değer)
+- [x] Backend: socket.io `activity` kanalı (her log satırı anlık yayınlanır — kimliğiyle; içerik HTTP'den)
+- [x] Ekran: Canlı akış (liste, otomatik kaydırma, duraklat)
+- [x] Ekran: Filtre çubuğu (aktör, event adı, seviye, tarih)
+- [x] Ekran: Zincir görünümü (correlationId seç → adımlar sıralı, süreleriyle)
+- [x] Ekran: Kullanıcı audit listesi (kim, ne zaman, hangi kayıt, eski/yeni değer)
+
+> **📌 Modül 10 tamamlandı (25 Eylül 2026 — Ahmet, Ali'nin yerine).**
+>
+> **Önemli düzeltme (modül 2'den kalan):** HTTP isteğinin bağlamı (kişi ve
+> zincir kimliği) `onRequest` kancasında `await`'lerden **sonra** kuruluyordu;
+> `AsyncLocalStorage.enterWith` bu hâliyle route işleyicisine geçmiyordu. Sonuç:
+> HTTP'den yapılan her değişikliğin denetim izinde kişi `system`, her yazımın
+> zincir kimliği farklıydı. Bağlam artık kancanın başında kurulup kimlik
+> doğrulanınca güncelleniyor (`app.js`). Eski denetim satırlarında kişi
+> `system` olarak kalır (geriye dönük düzeltilemez).
+>
+> **Veri** (migration `20260925090000_activity_feed`): `ActivityLog.eventName` ve
+> `correlationId` sütunları (eski satırlar `EventLog`'dan dolduruldu); otel
+> kapsamlı imleç index'leri: aktivite (zaman / aktör / olay / seviye), olay
+> (zaman / ad), denetim (zaman / kişi / kayıt türü / kayıt). Eski otel kapsamsız
+> index'ler kaldırıldı. ⚠️ Büyük tabloda bakım penceresinde uygulanmalı (index
+> kilitle oluşur).
+>
+> **Aktör tabanı:** her aktivite satırı olay adını ve zincir kimliğini taşır;
+> aktör kapalıyken ya da iş sırası taşınca akışa **uyarı** satırı yazılır (eskiden
+> iz yoktu); geçici hatadan sonra başaran işin deneme sayısı izde.
+>
+> **Canlı akış:** satır yazılınca süreç içi yayın (`lib/activity-stream.js`) →
+> socket köprüsü 500 ms'de bir otel başına **yalnızca kimlikleri** ve seviye
+> sayılarını gönderir (socket kimliği henüz doğrulanmadığı için içerik yok);
+> panel satırları aynı süzgeçle HTTP'den çeker. 200 kimliği aşan pakette panel
+> listeyi baştan yükler. İşlem içinde yazılan satır commit'ten sonra yayınlanır
+> (`writeWithEvents` → `afterCommit`). İzleyen yoksa toplama yapılmaz.
+>
+> **Zincir:** olay → onu işleyen aktör → aktörün yazdığı değişiklik ve
+> yayınladığı olay (ağaç; `causationId`, aktör adı ve işleyiş süresi ile
+> kurulur, bozuk kayıtta döngü koruması). Her kaynaktan en çok 500 adım.
+> Değişikliklerin eski/yeni değerleri yalnızca `audit.view` iznine. Olay
+> gövdesindeki telefon, e-posta, kimlik, kart vb. maskelenir (`redactPayload`).
+>
+> **API:** `/activity/feed` (aktör, olay, seviye — `PROBLEMS` = uyarı+hata —,
+> tarih, zincir, imleç; canlı için `ids`), `/activity/events` (ad, zincir,
+> `unpublished`, tarih), `/activity/chains/:correlationId`,
+> `/activity/records/:entity/:entityId` (kaydın bütün zincirleri),
+> `/activity/options`, `/audit` (kişi, kayıt türü + kimlik, işlem, tarih).
+> **İzinler:** `activity.view`, `audit.view` (yönetici ve müdür varsayılan).
+>
+> **Ekranlar:** `/aktivite/akis` (canlı, duraklat, okunan yeri korur, "N yeni"),
+> `/aktivite/olaylar` (dağıtılmamış süzgeci), `/aktivite/denetim` (eski → yeni,
+> "bu kişinin değişiklikleri", "bu kaydın geçmişi"), `/aktivite/zincir/:id`,
+> `/aktivite/kayit/:tür/:kimlik`. Rezervasyon detayında **"İşlem zinciri"**.
+> Süzgeçler adres çubuğunda (paylaşılabilir).
+>
+> **Bilinçli sınırlar:** socket el sıkışması hâlâ kimliksiz (modül 2'nin işi;
+> bu yüzden socket'ten içerik gönderilmiyor). Saklama süresi (eski aktivite /
+> olay satırlarının silinmesi) yok — denetim kaydı silinmemeli; aktivite/olay
+> için politika kararı gerekir.
 
 > **🎁 Modül 1'de senin adına yapılanlar (9 Eylül 2026 — Ahmet):**
 > Ayarlar modülünü yazarken bu modülün altyapısına ihtiyaç oldu, biz de temelini

@@ -50,6 +50,11 @@ export const PERMISSIONS = Object.freeze({
   USERS_MANAGE: 'users.manage',
   /** Rol → izin matrisini düzenlemek. */
   ROLES_MANAGE: 'roles.manage',
+
+  /** Aktivite akışı, olaylar ve işlem zincirleri (modül 10). */
+  ACTIVITY_VIEW: 'activity.view',
+  /** Denetim kaydı: kim hangi kaydı ne zaman nasıl değiştirdi (eski/yeni değerle). */
+  AUDIT_VIEW: 'audit.view',
 });
 
 /** Tüm izinlerin düz listesi (doğrulama ve "ADMIN her şeyi görür" için). */
@@ -79,6 +84,8 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.USERS_VIEW]: 'Kullanıcıları görüntüle',
   [PERMISSIONS.USERS_MANAGE]: 'Kullanıcıları yönet',
   [PERMISSIONS.ROLES_MANAGE]: 'Rolleri ve izinleri yönet',
+  [PERMISSIONS.ACTIVITY_VIEW]: 'Aktivite akışını ve zincirleri görüntüle',
+  [PERMISSIONS.AUDIT_VIEW]: 'Denetim kaydını görüntüle',
 });
 
 /**
@@ -123,6 +130,7 @@ export const PERMISSION_GROUPS = Object.freeze([
     label: 'Yönetim',
     permissions: [PERMISSIONS.USERS_VIEW, PERMISSIONS.USERS_MANAGE, PERMISSIONS.ROLES_MANAGE],
   },
+  { key: 'monitoring', label: 'İzleme', permissions: [PERMISSIONS.ACTIVITY_VIEW, PERMISSIONS.AUDIT_VIEW] },
 ]);
 
 /** Roller (Prisma `UserRole` enum'uyla birebir). */
@@ -167,6 +175,8 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.APPROVALS_VIEW,
     PERMISSIONS.APPROVALS_DECIDE,
     PERMISSIONS.USERS_VIEW,
+    PERMISSIONS.ACTIVITY_VIEW,
+    PERMISSIONS.AUDIT_VIEW,
   ]),
   FRONT_DESK: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,

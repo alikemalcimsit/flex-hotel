@@ -20,6 +20,7 @@ import { requestApprovalStandalone } from '../modules/approvals/service.js';
 import { createFromChannelRequest } from '../modules/reservations/service.js';
 import { applySystemRoomState, autoAssignRoom } from '../modules/rooms/service.js';
 import { registerAutoResponder, registerChannel } from './channels.js';
+import { publishActivity } from './activity-stream.js';
 import { eventBus } from './events.js';
 import { writeWithEvents } from './write.js';
 
@@ -79,9 +80,11 @@ const deps = {
     return setting?.enabled ?? true;
   },
 
+  /** Aktivite satırı (modül 10): yazılır, sonra canlı akışa haber verilir. */
   logActivity: async (entry) => {
     if (!entry.hotelId) return;
-    await prismaUnfiltered.activityLog.create({ data: entry });
+    const row = await prismaUnfiltered.activityLog.create({ data: entry, select: { id: true, hotelId: true, level: true } });
+    publishActivity(row);
   },
 
   /**

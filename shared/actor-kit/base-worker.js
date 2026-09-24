@@ -146,12 +146,46 @@ export class BaseWorker {
       { actor: name, event: envelope.name, queued: this.#queue.length, running: this.#running },
       'Aktörün iş sırası dolu; olay sıraya alınmadı',
     );
-    if (background.onOverflow === 'skip') return;
+    const startedAt = Date.now();
+    if (background.onOverflow === 'skip') {
+      await this.#safely(() =>
+        this.#deps.logActivity(this.#entry(payload, envelope, 'WARN', 'Yoğunluk: iş sırası dolu; iş sonra tekrar denenecek', { overflow: true }, startedAt)),
+      );
+      return;
+    }
     await this.#safely(async () => {
       if (await this.#deps.isProcessed(name, envelope.id)) return;
       await this.#fallbackToManualTask(payload, envelope, 'Yoğunluk: aktörün iş sırası dolu');
       await this.#deps.markProcessed(name, envelope.id, payload.hotelId);
+      await this.#deps.logActivity(
+        this.#entry(payload, envelope, 'WARN', 'Yoğunluk: iş sırası dolu; iş personele düştü', { overflow: true }, startedAt),
+      );
     });
+  }
+
+  /**
+   * Aktivite satırı (Activity Feed, modül 10). Olayın adı ve zincir kimliği
+   * sütun olarak yazılır: akış süzgeci ve zincir görünümü index'ten okur.
+   *
+   * @param {object} payload
+   * @param {object} envelope
+   * @param {'INFO' | 'WARN' | 'ERROR'} level
+   * @param {string} message
+   * @param {object} meta
+   * @param {number} startedAt
+   */
+  #entry(payload, envelope, level, message, meta, startedAt) {
+    return {
+      hotelId: payload.hotelId,
+      actorName: this.#manifest.name,
+      eventId: envelope.id,
+      eventName: envelope.name,
+      correlationId: envelope.correlationId ?? null,
+      level,
+      message,
+      meta: { event: envelope.name, ...meta },
+      durationMs: Date.now() - startedAt,
+    };
   }
 
   /** Çalışan ve sıradaki iş sayısı (sağlık ucu ve yönetim paneli için). */
@@ -201,12 +235,18 @@ export class BaseWorker {
       if (!approval && !(await this.#deps.isEnabled(hotelId, name))) {
         await this.#fallbackToManualTask(payload, envelope, 'Aktör kapalı');
         await this.#deps.markProcessed(name, envelope.id, hotelId);
+        // Akışı izleyen yönetici işin personele düştüğünü görsün.
+        await this.#safely(() =>
+          this.#deps.logActivity(
+            this.#entry(payload, envelope, 'WARN', `Aktör kapalı; iş personele düştü (${this.describeFallback(envelope.name, payload)})`, {}, startedAt),
+          ),
+        );
         return;
       }
 
-      let result;
+      let outcome;
       try {
-        result = await this.#runWithRetry(handler, payload, envelope, approval);
+        outcome = await this.#runWithRetry(handler, payload, envelope, approval);
       } catch (error) {
         if (!isApprovalRequired(error) || approval) throw error;
         await this.#sendToApproval(payload, envelope, error, startedAt);
@@ -214,15 +254,22 @@ export class BaseWorker {
       }
       await this.#deps.markProcessed(name, envelope.id, hotelId);
 
-      await this.#deps.logActivity({
-        hotelId,
-        actorName: name,
-        eventId: envelope.id,
-        level: 'INFO',
-        message: result?.message ?? `${envelope.name} işlendi`,
-        meta: { event: envelope.name, ...(result?.meta ?? {}), ...(approval ? { approvalId: approval.id } : {}) },
-        durationMs: Date.now() - startedAt,
-      });
+      const { result, attempts } = outcome;
+      await this.#deps.logActivity(
+        this.#entry(
+          payload,
+          envelope,
+          'INFO',
+          result?.message ?? `${envelope.name} işlendi`,
+          {
+            ...(result?.meta ?? {}),
+            ...(approval ? { approvalId: approval.id } : {}),
+            // Geçici hatadan sonra başardıysa izde görünsün.
+            ...(attempts > 1 ? { attempts } : {}),
+          },
+          startedAt,
+        ),
+      );
     } catch (error) {
       // Onaydan sonra yeniden onay istemek bir programlama hatası: iş
       // personelin önüne manuel görev olarak düşer, ikinci onay açılmaz.
@@ -232,15 +279,7 @@ export class BaseWorker {
       this.#deps.logger.error?.({ err: error, actor: name, event: envelope.name }, 'Aktör hata verdi');
 
       await this.#safely(() =>
-        this.#deps.logActivity({
-          hotelId,
-          actorName: name,
-          eventId: envelope.id,
-          level: 'ERROR',
-          message: error.message ?? 'Bilinmeyen hata',
-          meta: { event: envelope.name },
-          durationMs: Date.now() - startedAt,
-        }),
+        this.#deps.logActivity(this.#entry(payload, envelope, 'ERROR', error.message ?? 'Bilinmeyen hata', {}, startedAt)),
       );
 
       // İş kaybolmasın: hata sonrası da personelin önüne düşsün.
@@ -261,7 +300,7 @@ export class BaseWorker {
 
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
       try {
-        return await handler(payload, envelope, {
+        const result = await handler(payload, envelope, {
           attempt,
           approval,
           /** @param {ConstructorParameters<typeof ApprovalRequired>[0]} request */
@@ -269,6 +308,7 @@ export class BaseWorker {
             throw new ApprovalRequired(request);
           },
         });
+        return { result, attempts: attempt };
       } catch (error) {
         lastError = error;
         // Onay sinyali ve iş kuralı hataları tekrar denemekle düzelmez; hemen bırak.
@@ -340,16 +380,16 @@ export class BaseWorker {
       },
     });
 
-    await this.#deps.logActivity({
-      hotelId: payload.hotelId,
-      actorName: name,
-      eventId: envelope.id,
-      level: 'INFO',
-      message:
+    await this.#deps.logActivity(
+      this.#entry(
+        payload,
+        envelope,
+        'INFO',
         outcome?.created === false ? `Onay zaten bekleniyor: ${request.summary}` : `Onaya gönderildi: ${request.summary}`,
-      meta: { event: envelope.name, approvalId: outcome?.approvalId ?? null, action: request.action },
-      durationMs: Date.now() - startedAt,
-    });
+        { approvalId: outcome?.approvalId ?? null, action: request.action },
+        startedAt,
+      ),
+    );
   }
 
   /**

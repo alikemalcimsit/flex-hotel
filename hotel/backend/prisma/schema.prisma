@@ -473,7 +473,9 @@ model EventLog {
   hotel Hotel @relation(fields: [hotelId], references: [id])
   // Dağıtılmamış olaylar: kısmi index `EventLog_unpublished_idx` (migration'da).
 
-  @@index([name])
+  // Olay listesi (modül 10): otel + zaman, otel + ad + zaman.
+  @@index([hotelId, occurredAt, id])
+  @@index([hotelId, name, occurredAt, id])
   @@index([correlationId])
 }
 
@@ -529,8 +531,12 @@ model AuditLog {
 
   hotel Hotel @relation(fields: [hotelId], references: [id])
 
-  @@index([hotelId, entity, entityId])
-  @@index([hotelId, createdAt])
+  // Kaydın geçmişi (rezervasyon geçmişi, kaydın zincirleri).
+  @@index([hotelId, entity, entityId, createdAt, id])
+  // Denetim listesi (modül 10): en yeni önce; kişiye ve kayıt türüne göre.
+  @@index([hotelId, createdAt, id])
+  @@index([hotelId, actor, createdAt, id])
+  @@index([hotelId, entity, createdAt, id])
   @@index([correlationId])
 }
 
@@ -539,6 +545,10 @@ model ActivityLog {
   hotelId    String
   actorName  String
   eventId    String?
+  /// İşlenen olayın adı ve zinciri (modül 10): akış süzgeci ve zincir görünümü
+  /// JSON'dan değil sütundan okur (index'li).
+  eventName     String?
+  correlationId String?
   level      LogLevel  @default(INFO)
   message    String
   meta       Json      @default("{}")
@@ -552,8 +562,12 @@ model ActivityLog {
 
   hotel Hotel @relation(fields: [hotelId], references: [id])
 
-  @@index([actorName])
-  @@index([createdAt])
+  // Canlı akış ve süzgeçler (en yeni önce, imleçli).
+  @@index([hotelId, createdAt, id])
+  @@index([hotelId, actorName, createdAt, id])
+  @@index([hotelId, eventName, createdAt, id])
+  @@index([hotelId, level, createdAt, id])
+  @@index([correlationId])
 }
 
 /// Onay kuyruğu (modül 11): personelin karar vermesi gereken iş.

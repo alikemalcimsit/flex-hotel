@@ -450,3 +450,57 @@ describe('arka plan yürütmesi', () => {
     assert.throws(() => backgroundManifest({ maxConcurrent: 1, maxQueued: 1, onOverflow: 'drop' }), /taşma/);
   });
 });
+
+describe('aktivite izi (modül 10)', () => {
+  it('satır olayın adını ve zincir kimliğini sütun olarak taşır', async () => {
+    const { calls, deps } = makeDeps();
+    const worker = new BaseWorker(manifest, { 'reservation.created': async () => ({ message: 'tamam' }) }, deps);
+    await worker.handle(payload(), envelope());
+    assert.equal(calls.activity[0].eventName, 'reservation.created');
+    assert.equal(calls.activity[0].correlationId, 'zincir-1');
+    assert.equal(calls.activity[0].eventId, envelope().id);
+  });
+
+  it('aktör kapalıyken iş personele düşer ve akışa uyarı yazılır', async () => {
+    const { calls, deps } = makeDeps({ isEnabled: async () => false });
+    const worker = new BaseWorker(manifest, { 'reservation.created': async () => {} }, deps);
+    await worker.handle(payload(), envelope());
+    assert.equal(calls.manualTasks.length, 1);
+    assert.equal(calls.activity.length, 1);
+    assert.equal(calls.activity[0].level, 'WARN');
+    assert.match(calls.activity[0].message, /Aktör kapalı/);
+    assert.equal(calls.activity[0].correlationId, 'zincir-1');
+  });
+
+  it('geçici hatadan sonra başaran işin deneme sayısı izde görünür', async () => {
+    const { calls, deps } = makeDeps();
+    let tries = 0;
+    const worker = new BaseWorker(
+      manifest,
+      {
+        'reservation.created': async () => {
+          tries += 1;
+          if (tries < 3) throw new Error('bağlantı koptu');
+          return { message: 'sonunda oldu' };
+        },
+      },
+      deps,
+    );
+    await worker.handle(payload(), envelope());
+    assert.equal(calls.activity[0].level, 'INFO');
+    assert.equal(calls.activity[0].meta.attempts, 3);
+  });
+
+  it('hata satırı da zincire bağlıdır', async () => {
+    const { calls, deps } = makeDeps();
+    const worker = new BaseWorker(
+      manifest,
+      { 'reservation.created': async () => { throw Object.assign(new Error('kural'), { retryable: false }); } },
+      deps,
+    );
+    await worker.handle(payload(), envelope());
+    assert.equal(calls.activity[0].level, 'ERROR');
+    assert.equal(calls.activity[0].eventName, 'reservation.created');
+    assert.equal(calls.activity[0].correlationId, 'zincir-1');
+  });
+});

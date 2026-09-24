@@ -5,7 +5,7 @@ import { actorRegistry } from './lib/actors.js';
 import { originChecker, resolveJwtSecret, resolveTrustProxy, socketIpResolver } from './lib/http-security.js';
 import { startMaintenanceJobs } from './lib/maintenance-jobs.js';
 import { permissionsForRole } from './lib/permissions.js';
-import { registerRealtimeBridge, registerSocketHandlers, stopRealtimeBridge } from './lib/realtime.js';
+import { registerActivityBridge, registerRealtimeBridge, registerSocketHandlers, stopRealtimeBridge } from './lib/realtime.js';
 import { findActiveStaffByEmail } from './lib/staff.js';
 import { resolveHotelId } from './lib/tenant.js';
 import { startApprovalJobs } from './modules/approvals/jobs.js';
@@ -65,6 +65,7 @@ registerSocketHandlers(io, {
   logger: app.log,
 });
 registerRealtimeBridge(io, app.log);
+const stopActivityBridge = registerActivityBridge(io);
 setWebchatTransport(
   registerWebchatNamespace(io, {
     secret: webchatSessionSecret(resolveJwtSecret(app.log)),
@@ -98,6 +99,7 @@ app.addHook('onClose', async () => {
   setWebchatTransport(null);
   closeProviders();
   stopRealtimeBridge();
+  stopActivityBridge();
   await new Promise((resolve) => {
     io.close(() => resolve());
   });
