@@ -286,3 +286,167 @@ describe('bus bağlantısı', () => {
     assert.equal(unsubscribed, 1);
   });
 });
+
+describe('arka plan yürütmesi', () => {
+  /** Dışarıdan çözülen söz: işleyiciyi istenen ana kadar bekletmek için. */
+  const gate = () => {
+    let open;
+    const promise = new Promise((resolve) => {
+      open = resolve;
+    });
+    return { promise, open };
+  };
+
+  /** Olayı bus gibi dağıtan sahte: işleyicinin dönüşünü bekler (gerçek bus da bekler). */
+  const fakeBus = () => {
+    const handlers = [];
+    return {
+      subscribe: (_name, _subscriber, handler) => {
+        handlers.push(handler);
+        return () => {};
+      },
+      dispatch: async (body, env) => {
+        for (const handler of handlers) await handler(body, env);
+      },
+    };
+  };
+
+  const backgroundManifest = (background) =>
+    defineActor({
+      name: 'bg-worker',
+      description: 'Arka plan testi',
+      subscribes: ['reservation.created'],
+      retry: { attempts: 1, backoffMs: 0 },
+      background,
+    });
+
+  const envelopeN = (n) => envelope({ id: `22222222-2222-4222-8222-${String(n).padStart(12, '0')}` });
+
+  it('yayıncı işleyicinin bitmesini beklemez; idle() iş bitince çözülür', async () => {
+    const { deps, calls } = makeDeps();
+    const release = gate();
+    let finished = false;
+    const worker = new BaseWorker(
+      backgroundManifest({ maxConcurrent: 2, maxQueued: 10 }),
+      {
+        'reservation.created': async () => {
+          await release.promise;
+          finished = true;
+        },
+      },
+      deps,
+    );
+    const bus = fakeBus();
+    worker.bind(bus);
+
+    await bus.dispatch(payload(), envelopeN(1));
+    assert.equal(finished, false, 'yayıncı dönmeden iş bitmiş olmamalı');
+    assert.deepEqual(worker.backlog(), { running: 1, queued: 0 });
+
+    release.open();
+    await worker.idle();
+    assert.equal(finished, true);
+    assert.equal(calls.processed.length, 1);
+    assert.deepEqual(worker.backlog(), { running: 0, queued: 0 });
+  });
+
+  it('aynı anda en fazla maxConcurrent iş çalışır; kalanlar sırayla', async () => {
+    const { deps } = makeDeps();
+    const release = gate();
+    let active = 0;
+    let peak = 0;
+    let done = 0;
+    const worker = new BaseWorker(
+      backgroundManifest({ maxConcurrent: 2, maxQueued: 10 }),
+      {
+        'reservation.created': async () => {
+          active += 1;
+          peak = Math.max(peak, active);
+          await release.promise;
+          active -= 1;
+          done += 1;
+        },
+      },
+      deps,
+    );
+    const bus = fakeBus();
+    worker.bind(bus);
+    for (let n = 1; n <= 5; n += 1) await bus.dispatch(payload(), envelopeN(n));
+    assert.deepEqual(worker.backlog(), { running: 2, queued: 3 });
+
+    release.open();
+    await worker.idle();
+    assert.equal(peak, 2);
+    assert.equal(done, 5);
+  });
+
+  it('sıra doluysa taşan iş personele düşer ve işlenmiş sayılır', async () => {
+    const { deps, calls } = makeDeps();
+    const release = gate();
+    const worker = new BaseWorker(
+      backgroundManifest({ maxConcurrent: 1, maxQueued: 1 }),
+      { 'reservation.created': () => release.promise },
+      deps,
+    );
+    const bus = fakeBus();
+    worker.bind(bus);
+    for (let n = 1; n <= 3; n += 1) await bus.dispatch(payload(), envelopeN(n));
+
+    assert.equal(calls.manualTasks.length, 1);
+    assert.match(calls.manualTasks[0].description, /iş sırası dolu/);
+    assert.deepEqual(calls.processed.map((entry) => entry.eventId), [envelopeN(3).id]);
+
+    release.open();
+    await worker.idle();
+    assert.equal(calls.processed.length, 3);
+  });
+
+  it('taşma "skip" ise iş sessizce atlanır (telafisi zamanlanmış iş)', async () => {
+    const { deps, calls } = makeDeps();
+    const release = gate();
+    const worker = new BaseWorker(
+      backgroundManifest({ maxConcurrent: 1, maxQueued: 1, onOverflow: 'skip' }),
+      { 'reservation.created': () => release.promise },
+      deps,
+    );
+    const bus = fakeBus();
+    worker.bind(bus);
+    for (let n = 1; n <= 3; n += 1) await bus.dispatch(payload(), envelopeN(n));
+
+    release.open();
+    await worker.idle();
+    assert.equal(calls.manualTasks.length, 0);
+    assert.equal(calls.processed.length, 2);
+  });
+
+  it('sıradan başlayan iş kendi olayının bağlamını taşır (önceki işin değil)', async () => {
+    const { AsyncLocalStorage } = await import('node:async_hooks');
+    const storage = new AsyncLocalStorage();
+    const { deps } = makeDeps();
+    const release = gate();
+    const seen = [];
+    const worker = new BaseWorker(
+      backgroundManifest({ maxConcurrent: 1, maxQueued: 5 }),
+      {
+        'reservation.created': async () => {
+          seen.push(storage.getStore()?.correlationId);
+          await release.promise;
+        },
+      },
+      deps,
+    );
+    const bus = fakeBus();
+    worker.bind(bus);
+    await storage.run({ correlationId: 'birinci' }, () => bus.dispatch(payload(), envelopeN(1)));
+    await storage.run({ correlationId: 'ikinci' }, () => bus.dispatch(payload(), envelopeN(2)));
+
+    release.open();
+    await worker.idle();
+    assert.deepEqual(seen, ['birinci', 'ikinci']);
+  });
+
+  it('geçersiz arka plan ayarı bildirgede reddedilir', () => {
+    assert.throws(() => backgroundManifest({ maxConcurrent: 0, maxQueued: 1 }), /maxConcurrent/);
+    assert.throws(() => backgroundManifest({ maxConcurrent: 1, maxQueued: 1, onOverflow: 'drop' }), /taşma/);
+  });
+});

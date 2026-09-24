@@ -344,8 +344,8 @@ export function ConversationView({
                 {CONVERSATION_CHANNEL_LABELS[conversation.channel]} bağlı değil; cevaplar sırada bekler.
               </span>
               <span className="hidden sm:inline">
-                {CONVERSATION_CHANNEL_LABELS[conversation.channel]} bağlantısı henüz kurulmadı (WhatsApp / web chat
-                entegrasyonu). Misafir mesajları ve cevaplarınız kaydedilir; cevaplar bağlantı kurulunca gönderilir.
+                {CONVERSATION_CHANNEL_LABELS[conversation.channel]} bağlantısı kapalı (Ayarlar → Mesaj kanalları). Misafir
+                mesajları ve cevaplarınız kaydedilir; cevaplar kanal açılınca gönderilir.
               </span>
             </Alert>
           )}

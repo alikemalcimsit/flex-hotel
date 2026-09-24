@@ -130,6 +130,13 @@ export const EVENT_CATALOG = Object.freeze({
     roomId: z.string().uuid().nullable().default(null),
     /** Grup rezervasyonunun parçasıysa grup kimliği. */
     groupId: z.string().uuid().nullable().default(null),
+    /**
+     * Rezervasyonun kaynağı ve isteğin kimliği (modül 8): concierge yalnızca
+     * kanal isteğinden (WhatsApp / web chat) açılanlarla ilgilenir; sohbete
+     * yazacağı onay kodunu isteğe bu kimlikle bağlar.
+     */
+    source: z.string().min(1).max(30).nullable().default(null),
+    requestId: z.string().min(1).max(100).nullable().default(null),
   }),
   /** Tarih, oda tipi, kişi, pansiyon, fiyat ya da not değişti. */
   'reservation.updated': reservationStay.extend({
@@ -167,6 +174,11 @@ export const EVENT_CATALOG = Object.freeze({
     notes: z.string().max(2000).nullable().default(null),
     /** Kanal isteği varsayılan olarak opsiyonludur: personel onaylar. */
     status: z.enum(['PENDING', 'CONFIRMED']).default('PENDING'),
+    /**
+     * Kanal misafiri zaten tanıyorsa (konuşma bir misafir kartına bağlı) o kart
+     * kullanılır; yoksa yeni kart açılır. Modül 8.
+     */
+    guestId: z.string().uuid().nullable().default(null),
   }),
   /** Kanal isteği karşılanamadı (yer yok, kapasite, geçersiz tarih). */
   'reservation.rejected': hotelScoped.extend({
@@ -247,6 +259,21 @@ export const EVENT_CATALOG = Object.freeze({
     /** Kanaldaki alıcı: telefon numarası, web chat oturumu. */
     recipient: z.string(),
     author: z.enum(['STAFF', 'AI', 'SYSTEM']),
+  }),
+
+  /**
+   * Router ajanı gelen misafir mesajının niyetini belirledi (modül 8).
+   * Concierge ajanı bunu dinler; şikâyet ve "personelle görüşmek istiyorum"
+   * konuşmayı personele devreder. `affirmative`: mesaj, misafire sunulmuş bir
+   * teklife açık bir "evet" mi (rezervasyon isteği ancak bununla gönderilir).
+   */
+  'guest.intent.detected': hotelScoped.extend({
+    conversationId: z.string().uuid(),
+    messageId: z.string().uuid(),
+    intent: z.enum(['RESERVATION', 'QUESTION', 'COMPLAINT', 'HUMAN', 'OTHER']),
+    confidence: z.number().min(0).max(1),
+    language: z.string().min(2).max(8),
+    affirmative: z.boolean(),
   }),
 
   'guest.message.delivery': hotelScoped.extend({
@@ -357,6 +384,8 @@ export const EVENT_CATALOG = Object.freeze({
       'APPROVAL_DECIDED',
       'WAITLIST_AVAILABLE',
       'CHECKOUT_OPEN_BALANCE',
+      'AI_HANDOFF',
+      'AI_BUDGET',
     ]),
     userId: z.string().uuid().nullable(),
     permission: z.string().nullable(),
@@ -485,6 +514,7 @@ export const MESSAGING_CHANGED_EVENTS = Object.freeze([
   'guest.message.received',
   'guest.message.reply',
   'guest.message.delivery',
+  'guest.intent.detected',
   'conversation.updated',
   'conversation.read',
 ]);

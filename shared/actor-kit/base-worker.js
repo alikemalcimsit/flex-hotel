@@ -21,12 +21,19 @@
  * Altyapıyı bilmez: veritabanı işlemleri dışarıdan `deps` ile verilir.
  */
 
+import { AsyncResource } from 'node:async_hooks';
 import { ApprovalRequired, isApprovalRequired } from './approval.js';
 
 export class BaseWorker {
   #manifest;
   #handlers;
   #deps;
+  /** Arka plan yürütmesi: çalışan iş sayısı, sıradakiler, boşalmayı bekleyenler. */
+  #running = 0;
+  /** @type {Array<() => Promise<void>>} */
+  #queue = [];
+  /** @type {Array<() => void>} */
+  #idleWaiters = [];
 
   /**
    * @param {ReturnType<import('./manifest.js').defineActor>} manifest
@@ -70,13 +77,97 @@ export class BaseWorker {
    * @returns {() => void} aboneliği iptal eden fonksiyon
    */
   bind(bus) {
+    const run = this.#manifest.background
+      ? (payload, envelope) => this.#enqueue(payload, envelope)
+      : (payload, envelope) => this.handle(payload, envelope);
+    // İlgisiz olay sıraya girmez, iz bırakmaz (ör. WhatsApp geçidine web chat cevabı).
+    const entry = (payload, envelope) => (this.accepts(envelope.name, payload) ? run(payload, envelope) : undefined);
     const unsubscribers = this.#manifest.subscribes
       .filter((eventName) => this.#handlers[eventName])
-      .map((eventName) =>
-        bus.subscribe(eventName, this.#manifest.name, (payload, envelope) => this.handle(payload, envelope)),
-      );
+      .map((eventName) => bus.subscribe(eventName, this.#manifest.name, entry));
 
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
+  }
+
+  /**
+   * Arka plan aktörü: olayı sıraya alır, yayıncıyı bekletmez.
+   *
+   * İş, olayın geldiği bağlamla (correlationId, sebep olay) çalışır: sıradan
+   * başka bir işin bitişinde başlatılsa da o işin bağlamını taşımaz
+   * (`AsyncResource.bind`). Sıra doluysa iş bekletilmez; bildirgedeki taşma
+   * davranışı uygulanır.
+   *
+   * @param {object} payload
+   * @param {object} envelope
+   */
+  #enqueue(payload, envelope) {
+    const { maxConcurrent, maxQueued } = this.#manifest.background;
+    const task = AsyncResource.bind(() => this.handle(payload, envelope));
+    if (this.#running < maxConcurrent) {
+      this.#start(task);
+      return undefined;
+    }
+    if (this.#queue.length >= maxQueued) return this.#overflow(payload, envelope);
+    this.#queue.push(task);
+    return undefined;
+  }
+
+  /** @param {() => Promise<void>} task */
+  #start(task) {
+    this.#running += 1;
+    // `handle` hata fırlatmaz; yine de sayaç hiçbir durumda eksik düşmesin.
+    Promise.resolve()
+      .then(task)
+      .catch(() => {})
+      .finally(() => {
+        this.#running -= 1;
+        const next = this.#queue.shift();
+        if (next) {
+          this.#start(next);
+        } else if (this.#running === 0) {
+          const waiters = this.#idleWaiters;
+          this.#idleWaiters = [];
+          for (const resolve of waiters) resolve();
+        }
+      });
+  }
+
+  /**
+   * Sıra dolu: iş ya personele düşer (olay işlenmiş sayılır; tekrar gelirse
+   * ikinci görev açılmaz) ya da atlanır — atlanan işin telafisi aktörün kendi
+   * zamanlanmış işidir (ör. bekleyen mesajları gönderen iş).
+   *
+   * @param {object} payload
+   * @param {object} envelope
+   */
+  async #overflow(payload, envelope) {
+    const { name, background } = this.#manifest;
+    this.#deps.logger.warn?.(
+      { actor: name, event: envelope.name, queued: this.#queue.length, running: this.#running },
+      'Aktörün iş sırası dolu; olay sıraya alınmadı',
+    );
+    if (background.onOverflow === 'skip') return;
+    await this.#safely(async () => {
+      if (await this.#deps.isProcessed(name, envelope.id)) return;
+      await this.#fallbackToManualTask(payload, envelope, 'Yoğunluk: aktörün iş sırası dolu');
+      await this.#deps.markProcessed(name, envelope.id, payload.hotelId);
+    });
+  }
+
+  /** Çalışan ve sıradaki iş sayısı (sağlık ucu ve yönetim paneli için). */
+  backlog() {
+    return { running: this.#running, queued: this.#queue.length };
+  }
+
+  /**
+   * Arka plandaki bütün işler bitince çözülür (testler ve kapanış için).
+   * @returns {Promise<void>}
+   */
+  idle() {
+    if (this.#running === 0 && this.#queue.length === 0) return Promise.resolve();
+    return new Promise((resolve) => {
+      this.#idleWaiters.push(resolve);
+    });
   }
 
   /**
@@ -274,7 +365,34 @@ export class BaseWorker {
       description: `${this.#manifest.name} bu işi yapamadı: ${reason}`,
       originalEvent: { id: envelope.id, name: envelope.name, payload },
     });
+    await this.#safely(() => this.afterFallback(payload, envelope, reason));
   }
+
+  /**
+   * Olay bu aktörü ilgilendiriyor mu? Bus'tan gelen olay işlenmeden (sıraya
+   * alınmadan, "işlendi" kaydı ve aktivite izi yazılmadan) elenir. Yalnızca
+   * gövdeye bakan ucuz, senkron bir denetim olmalı. Varsayılan: hepsi.
+   *
+   * @param {string} _eventName
+   * @param {object} _payload
+   * @returns {boolean}
+   */
+  accepts(_eventName, _payload) {
+    return true;
+  }
+
+  /**
+   * İş manuel göreve düştükten sonra aktörün ek temizliği. Varsayılan: hiçbir
+   * şey. Örnek: AI ajanı kapalıyken misafir konuşması "AI" modunda kalırsa
+   * misafir cevapsız bekler; ajan burada konuşmayı personele alır.
+   * Hata fırlatsa da iş kaybolmaz (görev zaten yazıldı).
+   *
+   * @param {object} _payload
+   * @param {object} _envelope
+   * @param {string} _reason
+   * @returns {Promise<void>}
+   */
+  async afterFallback(_payload, _envelope, _reason) {}
 
   /**
    * Manuel görevin başlığı. Alt sınıflar ezerek anlamlı hâle getirir —

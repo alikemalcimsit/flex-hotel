@@ -21,13 +21,19 @@
   "dependencies": {
     "@fastify/cors": "^11.3.0",
     "@fastify/jwt": "^10.2.2",
+    "@fastify/proxy-addr": "^5.1.0",
     "@fastify/rate-limit": "^10.3.0",
     "@hotelos/actor-kit": "*",
+    "@hotelos/concierge-agent": "*",
     "@hotelos/core": "*",
     "@hotelos/hotel-contracts": "*",
+    "@hotelos/llm": "*",
     "@hotelos/notification-worker": "*",
     "@hotelos/reservation-worker": "*",
     "@hotelos/room-worker": "*",
+    "@hotelos/router-agent": "*",
+    "@hotelos/webchat-gateway": "*",
+    "@hotelos/whatsapp-gateway": "*",
     "@prisma/client": "^6.19.3",
     "bcryptjs": "^3.0.3",
     "fastify": "^5.12.3",
@@ -38,6 +44,7 @@
   },
   "devDependencies": {
     "dotenv-cli": "^10.0.0",
-    "prisma": "^6.19.3"
+    "prisma": "^6.19.3",
+    "socket.io-client": "^4.8.3"
   }
 }

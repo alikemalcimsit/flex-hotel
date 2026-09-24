@@ -1,6 +1,6 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { MESSAGE_DELIVERY_LABELS, MESSAGE_PAGE_SIZE } from '@hotelos/hotel-contracts';
+import { GUEST_INTENT_LABELS, MESSAGE_DELIVERY_LABELS, MESSAGE_PAGE_SIZE } from '@hotelos/hotel-contracts';
 import { Alert, Button, Icon, Spinner } from '@hotelos/ui';
 import { api, withQuery } from '../../lib/api.js';
 import { inboxKeys } from '../../lib/frontOffice.js';
@@ -252,16 +252,24 @@ export function MessageThread({ conversationId, timeZone, isLive, pending, onRet
  * }} props
  */
 const MessageBubble = memo(function MessageBubble({ message, startsGroup, timeZone, onRetry, onCreateRequest }) {
-  if (message.author === 'SYSTEM') {
+  // Sistemin iç notu (AI'ın devir sebebi, gönderdiği rezervasyon isteği): akışın ortasında, misafir görmez.
+  if (message.author === 'SYSTEM' && message.internal) {
     return (
-      <li className="my-2 text-center text-xs text-ink-muted">
-        {message.text} · {formatClock(message.createdAt, timeZone)}
+      <li className="my-2 flex justify-center">
+        <span className="inline-flex max-w-[min(40rem,90%)] items-start gap-1.5 rounded-full border border-line bg-surface px-3 py-1 text-center text-xs text-ink-soft">
+          <Icon name="lock" className="mt-0.5 size-3.5 shrink-0 text-ink-muted" />
+          <span>
+            {message.text} · {formatClock(message.createdAt, timeZone)}
+          </span>
+        </span>
       </li>
     );
   }
 
   const inbound = message.direction === 'IN';
   const ai = message.author === 'AI';
+  // Sistemin misafire yazdığı mesaj (rezervasyon onay kodu): teslim durumuyla, giden balon.
+  const system = message.author === 'SYSTEM';
   const note = message.internal;
   const local = message.local;
   const sending = local?.status === 'sending';
@@ -273,16 +281,20 @@ const MessageBubble = memo(function MessageBubble({ message, startsGroup, timeZo
       ? 'border border-warning-line bg-warning-soft text-ink'
       : ai
         ? 'border border-violet-200 bg-violet-50 text-ink'
-        : 'bg-ink text-white';
-  const dark = !inbound && !note && !ai;
+        : system
+          ? 'border border-line bg-surface-muted text-ink'
+          : 'bg-ink text-white';
+  const dark = !inbound && !note && !ai && !system;
 
   const author = inbound
     ? message.actorName || 'Misafir'
     : ai
       ? 'AI asistanı'
-      : note
-        ? `İç not · ${message.actorName ?? 'Siz'}`
-        : message.actorName ?? 'Siz';
+      : system
+        ? 'Otomatik mesaj'
+        : note
+          ? `İç not · ${message.actorName ?? 'Siz'}`
+          : message.actorName ?? 'Siz';
 
   const delivery = !note && !inbound && message.delivery ? DELIVERY_STYLES[message.delivery] : null;
 
@@ -291,6 +303,7 @@ const MessageBubble = memo(function MessageBubble({ message, startsGroup, timeZo
       {startsGroup && (
         <span className={`mb-1 flex items-center gap-1.5 px-1 text-[0.7rem] font-bold ${note ? 'text-warning-ink' : 'text-ink-muted'}`}>
           {ai && <Icon name="bot" className="size-3.5 text-violet-700" />}
+          {system && <Icon name="zap" className="size-3.5" />}
           {note && <Icon name="lock" className="size-3.5" />}
           {author}
         </span>
@@ -339,6 +352,12 @@ const MessageBubble = memo(function MessageBubble({ message, startsGroup, timeZo
             Tekrar dene
           </button>
         </p>
+      )}
+
+      {inbound && message.intent && (
+        <span className="mt-1 px-1 text-[0.68rem] font-semibold text-ink-muted" title="AI asistanının belirlediği niyet">
+          Niyet: {GUEST_INTENT_LABELS[message.intent] ?? message.intent}
+        </span>
       )}
 
       {inbound && onCreateRequest && (

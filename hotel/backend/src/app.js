@@ -7,7 +7,7 @@ import { enterContext } from '@hotelos/core';
 import { checkDb, disconnectDb } from './db.js';
 import { asBusyError } from './lib/errors.js';
 import { cache } from './lib/cache.js';
-import { registerActors, setActorLogger } from './lib/actors.js';
+import { actorRegistry, registerActors, setActorLogger } from './lib/actors.js';
 import { registerCoreSubscribers, setEventLogger } from './lib/events.js';
 import {
   actorFrom,
@@ -24,6 +24,8 @@ import { approvalRoutes } from './modules/approvals/routes.js';
 import { approvalCacheStats } from './modules/approvals/service.js';
 import { registerApprovalSubscribers, setApprovalSubscriberLogger } from './modules/approvals/subscribers.js';
 import { authRoutes } from './modules/auth/routes.js';
+import { messagingChannelRoutes, webchatWidgetRoutes, webhookRoutes } from './modules/channels/routes.js';
+import { conciergeRoutes } from './modules/concierge/routes.js';
 import { roleRoutes } from './modules/roles/routes.js';
 import { resolveEffectivePermissions } from './modules/roles/service.js';
 import { userRoutes } from './modules/users/routes.js';
@@ -249,6 +251,13 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
         approvalCache: approvalCacheStats(),
         reservationCache: reservationCacheStats(),
         frontDeskCache: frontDeskCacheStats(),
+        // Arka planda çalışan aktörlerin (AI ajanları, kanal geçitleri) iş sırası.
+        actorBacklog: Object.fromEntries(
+          actorRegistry
+            .list()
+            .filter((manifest) => manifest.background)
+            .map((manifest) => [manifest.name, actorRegistry.get(manifest.name).backlog()]),
+        ),
       },
     };
   });
@@ -266,6 +275,10 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   await app.register(notificationRoutes, { prefix: '/notifications' });
   await app.register(staffAlertRoutes, { prefix: '/staff-alerts' });
   await app.register(approvalRoutes, { prefix: '/approvals' });
+  await app.register(conciergeRoutes, { prefix: '/ai' });
+  await app.register(messagingChannelRoutes, { prefix: '/messaging-channels' });
+  await app.register(webhookRoutes, { prefix: '/webhooks' });
+  await app.register(webchatWidgetRoutes, { prefix: '/webchat' });
 
   app.addHook('onClose', async () => {
     await disconnectDb();

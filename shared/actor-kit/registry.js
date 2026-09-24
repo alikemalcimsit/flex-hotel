@@ -42,6 +42,46 @@ export class ActorRegistry {
   }
 
   /**
+   * Arka plan aktörlerinin işleri bitene kadar bekler (testler ve düzgün
+   * kapanış). Zincir de beklenir: bir aktörün işi bitince başka bir aktöre
+   * iş düşebilir (router → concierge → rezervasyon sonucu); hepsi aynı anda
+   * boş görülene kadar tekrar bakılır. `timeoutMs` dolarsa beklemeyi bırakır
+   * ve `false` döner.
+   *
+   * @param {number} [timeoutMs]
+   * @returns {Promise<boolean>}
+   */
+  async idle(timeoutMs = Infinity) {
+    const workers = [...this.#actors.values()].map((entry) => entry.worker);
+    const busy = () =>
+      workers.some((worker) => {
+        const backlog = worker.backlog?.();
+        return backlog ? backlog.running > 0 || backlog.queued > 0 : false;
+      });
+    const all = (async () => {
+      do {
+        await Promise.all(workers.map((worker) => worker.idle?.() ?? Promise.resolve()));
+        // Biten işin yayınladığı olay bir sonraki turda sıraya girer.
+        await new Promise((resolve) => setImmediate(resolve));
+      } while (busy());
+    })();
+    if (!Number.isFinite(timeoutMs)) {
+      await all;
+      return true;
+    }
+    let timer;
+    const timeout = new Promise((resolve) => {
+      timer = setTimeout(() => resolve(false), timeoutMs);
+      timer.unref?.();
+    });
+    try {
+      return await Promise.race([all.then(() => true), timeout]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /**
    * Yönetim paneli için aktör listesi.
    * @returns {Array<object>}
    */

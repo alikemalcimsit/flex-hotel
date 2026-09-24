@@ -124,6 +124,8 @@ export const NAV_SECTIONS = Object.freeze([
           { label: 'Genel parametreler', to: '/ayarlar/genel', icon: 'sliders' },
           { label: 'Kullanıcılar', to: '/ayarlar/kullanicilar', icon: 'user', permission: PERMISSIONS.USERS_VIEW },
           { label: 'Roller & İzinler', to: '/ayarlar/roller', icon: 'lock', permission: PERMISSIONS.ROLES_MANAGE },
+          { label: 'AI asistanı', to: '/ayarlar/ai', icon: 'bot', permission: PERMISSIONS.SETTINGS_VIEW },
+          { label: 'Mesaj kanalları', to: '/ayarlar/mesaj-kanallari', icon: 'message', permission: PERMISSIONS.SETTINGS_VIEW },
         ],
       },
     ],

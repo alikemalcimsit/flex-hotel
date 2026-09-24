@@ -23,6 +23,8 @@ const KIND_ICONS = Object.freeze({
   APPROVAL_DECIDED: 'checkCircle',
   WAITLIST_AVAILABLE: 'bookOpen',
   CHECKOUT_OPEN_BALANCE: 'alertTriangle',
+  AI_HANDOFF: 'bot',
+  AI_BUDGET: 'zap',
 });
 
 const SEVERITY_TONES = Object.freeze({

@@ -204,6 +204,17 @@ const CONSTRAINT_RULES = Object.freeze({
     code: 'CONSTRAINT',
     message: 'Bakiyesi kapanmadan yapılan çıkışın gerekçesi yazılmalı.',
   },
+  MessagingChannel_externalAccountId_key: {
+    code: 'DUPLICATE',
+    message: 'Bu WhatsApp telefon numarası kimliği başka bir otele bağlı.',
+  },
+  MessagingChannel_publicKey_key: { code: 'DUPLICATE', message: 'Balon anahtarı çakıştı; tekrar deneyin.' },
+  MessagingChannel_whatsapp_complete: {
+    code: 'CONSTRAINT',
+    message: 'WhatsApp kanalını açmak için telefon numarası kimliği ve anahtarlar gerekli.',
+  },
+  AiSettings_models_when_enabled: { code: 'CONSTRAINT', message: 'AI açıkken iki model de seçilmeli.' },
+  AiSettings_budget_valid: { code: 'CONSTRAINT', message: 'Günlük AI bütçesi eksi olamaz.' },
   Hotel_stay_fees_valid: {
     code: 'CONSTRAINT',
     message: 'Erken giriş / geç çıkış ücreti eksi olamaz; yüzde seçildiyse 100 değerini geçemez.',

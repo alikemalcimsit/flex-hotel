@@ -519,7 +519,13 @@ async function insertReservations(tx, stage, { hotelId, hotel, input, guest, roo
     });
     await writeNights(tx, hotelId, row.id, priced.nights);
     await recordAudit(tx, { hotelId, entity: 'Reservation', entityId: row.id, action: 'CREATE', after: snapshot(row) });
-    await stage('reservation.created', { ...stayPayload(row), roomId: room.roomId ?? null, groupId: groupId ?? null });
+    await stage('reservation.created', {
+      ...stayPayload(row),
+      roomId: room.roomId ?? null,
+      groupId: groupId ?? null,
+      source: row.source,
+      requestId: row.requestId ?? null,
+    });
     ids.push(row.id);
   }
   return ids;
@@ -1520,15 +1526,19 @@ export async function quoteReservation(hotelId, input) {
  */
 export async function createFromChannelRequest(payload) {
   const { hotelId } = payload;
+  // Kanal misafiri tanıyorsa (konuşma bir karta bağlı) o kart; yoksa yeni kart.
+  const knownGuestId = payload.guestId ?? null;
   const input = {
-    guestId: null,
-    guest: {
-      firstName: payload.guest.firstName,
-      lastName: payload.guest.lastName,
-      phone: payload.guest.phone,
-      email: payload.guest.email,
-      nationality: payload.guest.nationality,
-    },
+    guestId: knownGuestId,
+    guest: knownGuestId
+      ? null
+      : {
+          firstName: payload.guest.firstName,
+          lastName: payload.guest.lastName,
+          phone: payload.guest.phone,
+          email: payload.guest.email,
+          nationality: payload.guest.nationality,
+        },
     forceNewGuest: true,
     roomTypeId: payload.roomTypeId,
     adults: payload.adults,
@@ -1553,7 +1563,7 @@ export async function createFromChannelRequest(payload) {
   try {
     const hotel = await getHotelSettings(hotelId);
     input.boardType = payload.boardType ?? hotel.defaultBoardType;
-    if (!input.guest.phone && !input.guest.email) return reject('VALIDATION', 'Misafirin telefonu ya da e-postası yok');
+    if (!knownGuestId && !input.guest.phone && !input.guest.email) return reject('VALIDATION', 'Misafirin telefonu ya da e-postası yok');
     if (toUtcDayStart(input.checkOut) <= toUtcDayStart(input.checkIn)) return reject('VALIDATION', 'Çıkış tarihi girişten sonra olmalı');
     // Kanal isteği politikadan bağımsız onaya gitmez: kapasite aşımı misafire
     // söz vermektir; kanaldan gelen istek yalnızca yer varsa açılır.

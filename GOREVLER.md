@@ -581,7 +581,7 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 - [x] Ekran: "Manuele al" butonu (concierge bu konuşmaya karışmaz)
 - [x] Ekran: İstekler listesi (oda, istek, durum, atanan) + tamamla
 - [x] Frontend: yeni mesaj gelince socket ile anlık güncelleme + ses/rozet
-- [ ] Gerçek kanal trafiği (WhatsApp / web chat) — **modül 8 bekleniyor**; ekran ve sözleşme hazır
+- [x] Gerçek kanal trafiği (WhatsApp / web chat) — modül 8'de bağlandı (aşağıdaki not)
 
 > **📌 Modül 7 tamamlandı (17 Eylül 2026 — Ahmet). Modül 8'in kısmı bilinçli olarak boş.**
 >
@@ -644,14 +644,79 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 8. WhatsApp / web chat ile konuşarak rezervasyon — Ali Kemal
 **Gün sonu:** Misafir web chat'e "15-18 Ekim 2 kişilik oda" yazıyor; AI konuşup onay alıyor; rezervasyon kendiliğinden oluşuyor, oda atanıyor, onay mesajı gidiyor.
-- [ ] Web chat widget'ı (siteye gömülen balon; socket ile mesaj gönder/al)
-- [ ] webchat-gateway paketi (widget mesajı → `guest.message.received`; `guest.message.reply` → widget'a)
-- [ ] whatsapp-gateway paketi (Meta Cloud API webhook doğrulama, gelen mesaj → event, giden mesaj → API)
-- [ ] router-agent paketi (küçük model; intent: rezervasyon / soru / şikâyet / diğer → `guest.intent.detected`)
-- [ ] concierge-agent paketi (LangGraph grafiği; tool'lar: `check_availability`, `request_reservation`, `get_hotel_info`; konuşma geçmişi + rolling summary; misafir "evet" demeden rezervasyon talebi basmaz)
-- [ ] Prompt caching + günlük token bütçesi + LlmUsage kaydı
-- [ ] Bütçe aşımı veya agent kapalıysa konuşma manuel göreve düşer (7'deki ekrana)
-- [ ] Uçtan uca demo: chat → rezervasyon → oda → onay mesajı, Activity Feed'de izlenir
+- [x] Web chat widget'ı (siteye gömülen balon; socket ile mesaj gönder/al)
+- [x] webchat-gateway paketi (widget mesajı → `guest.message.received`; `guest.message.reply` → widget'a)
+- [x] whatsapp-gateway paketi (Meta Cloud API webhook doğrulama, gelen mesaj → event, giden mesaj → API)
+- [x] router-agent paketi (küçük model; intent: rezervasyon / soru / şikâyet / diğer → `guest.intent.detected`)
+- [x] concierge-agent paketi (LangGraph grafiği; tool'lar: `check_availability`, `request_reservation`, `get_hotel_info`; konuşma geçmişi + rolling summary; misafir "evet" demeden rezervasyon talebi basmaz)
+- [x] Prompt caching + günlük token bütçesi + LlmUsage kaydı
+- [x] Bütçe aşımı veya agent kapalıysa konuşma manuel göreve düşer (7'deki ekrana)
+- [x] Uçtan uca demo: chat → rezervasyon → oda → onay mesajı, Activity Feed'de izlenir (entegrasyon testi, sahte modelle; gerçek model anahtar gelince)
+
+> **📌 Modül 8 tamamlandı (24 Eylül 2026 — Ahmet, Ali'nin yerine; modül 13'ün önünü açmak için).**
+>
+> **Paketler:** `shared/agents/llm` (OpenAI resmi SDK adaptörü, maliyet ve bütçe
+> hesabı — `usageCost`, `budgetExhausted`, `priceFor`), `shared/actor-kit`
+> (`BaseLlmAgent`: izin → çağrı → kullanım kaydı; **arka plan yürütmesi**:
+> `manifest.background = { maxConcurrent, maxQueued, onOverflow }`, `accepts()` ile
+> ilgisiz olayı sıraya almama, `registry.idle()`), `shared/agents/router-agent`,
+> `hotel/agents/concierge-agent` (LangGraph `StateGraph`), `shared/channels/whatsapp-gateway`,
+> `shared/channels/webchat-gateway` (+ `widget/widget.js`, Shadow DOM, bağımlılıksız).
+>
+> **Akış:** misafir yazar → `receiveInboundMessage` → `guest.message.received` →
+> router (küçük model, katı JSON şeması) niyeti mesaja ve hafızaya yazar →
+> `guest.intent.detected` → concierge turu (en fazla 5 model çağrısı; araçlar
+> `check_availability`, `get_hotel_info`, `propose_reservation`, `request_reservation`,
+> `handoff_to_staff`) → misafir **yeni bir mesajda** açıkça "evet" deyince (router
+> onayı + teklif önceki turda sunulmuş + fiyat/müsaitlik yeniden denetlenmiş)
+> `reservation.requested` → reservation-worker → `reservation.created` → room-worker
+> odayı atar → concierge onay kodunu **veritabanından, şablonla** sohbete yazar,
+> konuşmayı rezervasyona bağlar. Onay kodu "talebiniz alındı" cevabından sonra
+> gider (konuşma başına sıra).
+>
+> **Korumalar:** şikâyet / personel isteği modelsiz devredilir; günlük bütçe
+> (otelin iş gününe göre, fiyat ayardan, maliyet yukarı yuvarlanır) dolunca model
+> çağrılmaz, konuşma personele geçer, yönetime `AI_BUDGET` uyarısı; konuşma başına
+> günlük cevap sınırı; tur sınırı; teklif 30 dk geçerli; 30 geceden uzun / 10
+> kişiden kalabalık / 540 günden ileri istek personele; AI yalnızca WhatsApp ve
+> web chat'te. Devirde misafire kısa bilgi (dili bilinmiyorsa modelsiz tahmin),
+> konuşmaya iç not (sebep), zile `AI_HANDOFF`. 5 dk'dan uzun cevapsız AI konuşması
+> süpürücü işle personele geçer (süreç çöktüyse sıradaki iş kaybolmasın).
+>
+> **Kanallar:** WhatsApp webhook'u `/webhooks/whatsapp/:kanalKimliği` —
+> `X-Hub-Signature-256` ham gövde üzerinden doğrulanır, başka numaranın öğesi
+> atlanır, tekrar gelen mesaj tek kayıt; teslim bildirimleri mesaja işlenir; 24
+> saat penceresi kapalıysa "gönderilemedi" + sebep. Web chat `/webchat` socket ad
+> alanı: imzalı oturum token'ı (30 gün kayar), izinli site adresi, IP ve oturum
+> başına hız sınırı, "yazıyor…", "gördüm" → okundu. Gönderilmeden kalan cevapları
+> dakikada bir iş gönderir (mesaj önce sahiplenilir; çift gönderim yok).
+>
+> **Veri** (migration `20260924090000_conversational_booking`): `AiSettings`,
+> `ConversationAiState` (özet, teklifler, onay bekleyen teklif, istek kimliği,
+> günlük cevap sayacı), `MessagingChannel` (sırlar şifreli JSON), `LlmUsage.conversationId`,
+> kısmi index'ler `Message_pending_outgoing_idx` ve `Conversation_ai_waiting_idx`;
+> `Message_internal_note_valid` artık sistem iç notuna da izin verir;
+> `reservation.created` gövdesinde `source` ve `requestId`.
+>
+> **API:** `/ai/settings` (GET, PUT), `/ai/usage?days=`, `/messaging-channels`
+> (GET, `PUT /whatsapp`, `PUT /webchat`, `POST /webchat/rotate-key`),
+> `/webhooks/whatsapp/:channelId` (GET doğrulama, POST), `/webchat/widget.js`.
+> **Ekranlar:** Ayarlar → AI asistanı (model, fiyat, bütçe, AI rezervasyonu
+> kesin/opsiyonlu, otel bilgisi, kullanım ve maliyet), Ayarlar → Mesaj kanalları
+> (WhatsApp bilgileri + webhook adresi, balon ayarı + gömme kodu); gelen kutusunda
+> niyet etiketi, otomatik (onay kodu) mesajın teslim durumu, sistem iç notları.
+>
+> **Canlıya alırken:** `.env`'e `OPENAI_API_KEY` (yoksa ajanlar başlamaz, konuşmalar
+> personelde açılır), migration uygulanır, nginx `/webhooks/`, `/webchat/` ve
+> `/socket.io/` yollarını backend'e geçirir. WhatsApp için Meta uygulamasında webhook
+> kurulur (adres ve doğrulama token'ı ekranda).
+>
+> **Bilinçli sınırlar:** WhatsApp **bildirim** (otelin başlattığı, Meta onaylı
+> şablonlu mesaj — modül 9'un `registerNotificationProvider` kaydı) yapılmadı:
+> şablon onayı Meta panelinde otel başına yürüyor, ayrı iş; bildirimler e-posta/SMS
+> ile gidiyor. Ajan sırası, kanal kaydı ve event bus süreç içi (çok örnekli
+> kurulumda paylaşılan kuyruğa taşınmalı). AI yalnızca otelin varsayılan
+> pansiyonuyla fiyat verir; başka pansiyon / grup / uzun konaklama personele.
 
 > **📌 Modül 7'den devir (17 Eylül 2026 — Ahmet): gelen kutusu hazır; kanal ve AI tarafı sende.**
 > Modül 7 senin kısmını boş bıraktı, sahte doldurmadı. Bağlanma noktaları:

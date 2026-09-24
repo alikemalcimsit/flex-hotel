@@ -33,6 +33,10 @@ const UsersTab = lazy(() => import('./pages/settings/UsersTab.jsx').then((m) => 
 const RolePermissionsTab = lazy(() =>
   import('./pages/settings/RolePermissionsTab.jsx').then((m) => ({ default: m.RolePermissionsTab })),
 );
+const AiAssistantTab = lazy(() => import('./pages/settings/AiAssistantTab.jsx').then((m) => ({ default: m.AiAssistantTab })));
+const MessagingChannelsTab = lazy(() =>
+  import('./pages/settings/MessagingChannelsTab.jsx').then((m) => ({ default: m.MessagingChannelsTab })),
+);
 const MessagesPage = lazy(() => import('./pages/messages/MessagesPage.jsx').then((m) => ({ default: m.MessagesPage })));
 const NotificationsPage = lazy(() =>
   import('./pages/notifications/NotificationsPage.jsx').then((m) => ({ default: m.NotificationsPage })),
@@ -238,6 +242,22 @@ export default function App() {
                 element={
                   <RequirePermission permission={PERMISSIONS.ROLES_MANAGE}>
                     <RolePermissionsTab />
+                  </RequirePermission>
+                }
+              />
+              <Route
+                path="ai"
+                element={
+                  <RequirePermission permission={PERMISSIONS.SETTINGS_VIEW}>
+                    <AiAssistantTab />
+                  </RequirePermission>
+                }
+              />
+              <Route
+                path="mesaj-kanallari"
+                element={
+                  <RequirePermission permission={PERMISSIONS.SETTINGS_VIEW}>
+                    <MessagingChannelsTab />
                   </RequirePermission>
                 }
               />

@@ -146,6 +146,8 @@ const MANUAL_TASK_PERMISSIONS = Object.freeze({
   'Bildirim merkezi': 'notifications.manage',
   Rezervasyon: 'reservations.manage',
   'Onay kuyruğu': 'approvals.decide',
+  // Modül 8: AI ajanları ve kanal geçitleri (cevaplanmamış / gönderilememiş misafir mesajı).
+  'Misafir mesajları': 'messages.reply',
 });
 
 export const MANUAL_TASK_FALLBACK_PERMISSION = 'settings.manage';

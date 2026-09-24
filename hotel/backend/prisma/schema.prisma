@@ -174,6 +174,10 @@ enum StaffAlertKind {
   WAITLIST_AVAILABLE
   /// Bakiyesi kapanmadan çıkış yapıldı (modül 6): tahsilatı takip edecek yönetime.
   CHECKOUT_OPEN_BALANCE
+  /// AI konuşmayı personele devretti (şikâyet, misafir personel istedi, ajan hatası) — modül 8.
+  AI_HANDOFF
+  /// Günlük AI bütçesi doldu; yeni konuşmalar personele düşüyor — modül 8.
+  AI_BUDGET
 }
 
 /// Rezervasyon fiyatının kaynağı (modül 4): sistem hesabı ya da yetkili
@@ -355,6 +359,9 @@ model Hotel {
   users                 User[]
   refreshTokens         RefreshToken[]
   rolePermissions       RolePermission[]
+  aiSettings            AiSettings?
+  messagingChannels     MessagingChannel[]
+  conversationAiStates  ConversationAiState[]
   eventLogs             EventLog[]
   processedEvents       ProcessedEvent[]
   actorSettings         ActorSetting[]
@@ -634,6 +641,8 @@ model LlmUsage {
   id        String    @id @default(uuid())
   hotelId   String
   actorName String
+  /// Çağrının ait olduğu konuşma (modül 8); konuşma başına maliyet için.
+  conversationId String?
   model     String
   tokensIn  Int       @default(0)
   tokensOut Int       @default(0)
@@ -647,6 +656,8 @@ model LlmUsage {
   hotel Hotel @relation(fields: [hotelId], references: [id])
 
   @@index([actorName, date])
+  // Günlük bütçe: "bu otel bugün ne harcadı" (her model çağrısından önce).
+  @@index([hotelId, date])
 }
 
 /// Misafire giden bildirim (modül 9) — aynı zamanda gönderim kuyruğu (outbox).
@@ -1289,6 +1300,7 @@ model Conversation {
   assignedTo  User?          @relation("ConversationAssignee", fields: [assignedToId], references: [id])
   messages    Message[]
   requests    GuestRequest[]
+  aiState     ConversationAiState?
 
   @@unique([hotelId, channel, externalId])
   // Gelen kutusu: "açık konuşmalar, en son mesaj önce".
@@ -1302,6 +1314,8 @@ model Conversation {
   @@index([displayName(ops: raw("gin_trgm_ops"))], map: "Conversation_displayName_trgm_idx", type: Gin)
   @@index([externalId(ops: raw("gin_trgm_ops"))], map: "Conversation_externalId_trgm_idx", type: Gin)
   @@index([lastMessagePreview(ops: raw("gin_trgm_ops"))], map: "Conversation_lastMessagePreview_trgm_idx", type: Gin)
+  // Kısmi index (migration'da): `Conversation_ai_waiting_idx` — AI'da cevap
+  // bekleyen konuşmalar (modül 8, takılan AI turunu personele devreden iş).
 }
 
 model Message {
@@ -1334,6 +1348,10 @@ model Message {
   @@index([conversationId, createdAt, id])
   // Kanal kuyruğu: gönderim bekleyen giden mesajlar.
   @@index([hotelId, delivery])
+  // Kanalın teslim bildirimi mesajı kendi kimliğiyle bulur (WhatsApp `wamid`).
+  @@index([hotelId, externalId])
+  // Kısmi index (Prisma ifade edemez, migration'da): `Message_pending_outgoing_idx`
+  // — gönderim bekleyen giden mesajlar (modül 8, bekleyenleri gönderen iş).
 }
 
 /// Misafir isteği: havlu, oda servisi, uyandırma, arıza bildirimi, şikâyet.
@@ -1561,4 +1579,93 @@ model LostItem {
   hotel Hotel  @relation(fields: [hotelId], references: [id])
   room  Room?  @relation(fields: [roomId], references: [id])
   guest Guest? @relation(fields: [guestId], references: [id])
+}
+
+/// Otelin AI asistanı ayarları (modül 8). Satır yoksa AI kapalıdır.
+///
+/// Fiyatlar sağlayıcının 1M token başına USD fiyatıdır; model başına
+/// `{ "model": { "input": "0.40", "cachedInput": "0.10", "output": "1.60" } }`.
+/// Fiyatı tanımlı olmayan modelle çağrı yapılmaz (maliyet sayılamazsa bütçe
+/// denetlenemez). Bütçe 0 ise AI kapalı sayılır.
+model AiSettings {
+  id                           String            @id @default(uuid())
+  hotelId                      String            @unique
+  enabled                      Boolean           @default(false)
+  /// Niyet sınıflandırma ve özet (küçük model).
+  routerModel                  String            @default("")
+  /// Misafirle konuşan ajan.
+  conciergeModel               String            @default("")
+  prices                       Json              @default("{}")
+  dailyBudgetUsd               Decimal           @default(0) @db.Decimal(10, 2)
+  /// AI'ın açtığı rezervasyon: kesin (onay bildirimi gider) ya da opsiyonlu.
+  reservationStatus            ReservationStatus @default(CONFIRMED)
+  /// Otelin misafire anlatılabilecek bilgisi (olanaklar, ulaşım, kurallar).
+  hotelInfo                    String?
+  /// Tek konuşmada günde en fazla AI cevabı (kötüye kullanıma karşı).
+  maxRepliesPerConversationDay Int               @default(40)
+  updatedBy                    String?
+  createdAt                    DateTime          @default(now())
+  updatedAt                    DateTime          @updatedAt
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+}
+
+/// AI asistanının konuşma başına hafızası (modül 8): özet, son müsaitlik
+/// teklifleri, misafire sunulup onay bekleyen teklif, gönderilmiş rezervasyon isteği.
+model ConversationAiState {
+  conversationId  String    @id
+  hotelId         String
+  /// Misafirin dili (router'ın tespiti; ISO 639-1).
+  language        String?
+  lastIntent      String?
+  /// Eski mesajların özeti; `summarizedUntil` ve öncesi özette.
+  summary         String?
+  summarizedUntil DateTime?
+  /// Son müsaitlik sorgusunun seçenekleri (fiyat, tip, tarih).
+  offers          Json      @default("[]")
+  offersAt        DateTime?
+  /// Misafire sunulan ve "evet" bekleyen teklif (misafir bilgisiyle).
+  pendingOffer    Json?
+  /// Gönderilen rezervasyon isteği; `reservation.created/rejected` bununla eşleşir.
+  pendingRequestId String?  @unique
+  requestedAt     DateTime?
+  /// Günlük cevap sayacı.
+  repliesDay      DateTime? @db.Date
+  repliesCount    Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  hotel        Hotel        @relation(fields: [hotelId], references: [id])
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+
+  @@index([hotelId])
+}
+
+/// Mesaj kanalı bağlantısı (modül 8): WhatsApp Cloud API ya da web chat balonu.
+///
+/// - WhatsApp: `externalAccountId` = Meta telefon numarası kimliği; sırlar
+///   (erişim token'ı, uygulama sırrı, webhook doğrulama token'ı) `secret`
+///   içinde şifreli JSON. Webhook adresi kayda özel: `/webhooks/whatsapp/{id}`.
+/// - Web chat: `publicKey` sitedeki balonun genel anahtarı (gizli değil);
+///   `settings.allowedOrigins` balonun gömülebileceği site adresleri.
+model MessagingChannel {
+  id                String              @id @default(uuid())
+  hotelId           String
+  channel           NotificationChannel
+  enabled           Boolean             @default(false)
+  externalAccountId String?             @unique
+  publicKey         String?             @unique
+  settings          Json                @default("{}")
+  secret            String?
+  secretUpdatedAt   DateTime?
+  lastInboundAt     DateTime?
+  lastErrorAt       DateTime?
+  lastError         String?
+  updatedBy         String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+
+  @@unique([hotelId, channel])
 }

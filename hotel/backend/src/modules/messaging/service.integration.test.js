@@ -147,13 +147,37 @@ describe('misafir mesajları ve istekler (entegrasyon)', { skip }, () => {
       assert.equal((await conversationRow(conversationId)).mode, 'MANUAL');
     });
 
-    it('AI asistanı kayıtlıysa konuşma AI modunda başlar', async () => {
+    it('konuşma AI modunda yalnızca asistan kayıtlıysa, otelde AI açıksa ve kanal WhatsApp / web chat ise başlar', async () => {
+      const { cache } = await import('../../lib/cache.js');
       const unregister = channels.registerAutoResponder({ name: 'test-concierge' });
       try {
-        const { conversationId } = await inbound({ externalId: '905550000001' });
-        assert.equal((await conversationRow(conversationId)).mode, 'AI');
+        const notEnabled = await inbound({ externalId: '905550000001' });
+        assert.equal((await conversationRow(notEnabled.conversationId)).mode, 'MANUAL', 'otelde AI kapalıysa personel');
+
+        await db.aiSettings.create({
+          data: {
+            hotelId,
+            enabled: true,
+            routerModel: 'mini',
+            conciergeModel: 'buyuk',
+            prices: { mini: { input: '0.1', cachedInput: '0.01', output: '0.4' }, buyuk: { input: '1', cachedInput: '0.1', output: '4' } },
+            dailyBudgetUsd: '5',
+          },
+        });
+        cache.invalidatePrefix(`ai:${hotelId}:`);
+        const ai = await inbound({ externalId: '905550000002' });
+        assert.equal((await conversationRow(ai.conversationId)).mode, 'AI');
+        const email = await inbound({ channel: 'EMAIL', externalId: 'misafir@example.com' });
+        assert.equal((await conversationRow(email.conversationId)).mode, 'MANUAL', 'AI e-postaya cevap vermez');
+
+        // Otel AI'ı kapatınca AI'daki konuşmaya gelen mesaj konuşmayı personele alır.
+        await db.aiSettings.updateMany({ where: { hotelId }, data: { enabled: false } });
+        cache.invalidatePrefix(`ai:${hotelId}:`);
+        await inbound({ externalId: '905550000002', text: 'kimse yok mu?' });
+        assert.equal((await conversationRow(ai.conversationId)).mode, 'MANUAL');
       } finally {
         unregister();
+        cache.invalidatePrefix(`ai:${hotelId}:`);
       }
     });
 
