@@ -1,5 +1,8 @@
+import { conciergeAgentManifest } from '@hotelos/concierge-agent';
 import { currentActor } from '@hotelos/core';
+import { routerAgentManifest } from '@hotelos/router-agent';
 import { prisma } from '../../db.js';
+import { isActorEnabledCached } from '../../lib/actor-settings.js';
 import { recordAudit } from '../../lib/audit.js';
 import { cache } from '../../lib/cache.js';
 import { hasAutoResponder } from '../../lib/channels.js';
@@ -11,15 +14,36 @@ import { writeWithEvents } from '../../lib/write.js';
  * AI asistanı ayarları (modül 8).
  *
  * "Bu otelde AI misafire cevap verir mi?" sorusunun tek cevabı burada
- * (`aiActiveFor`): sunucuda anahtar tanımlı ve ajan kayıtlı (süreç düzeyi)
- * **ve** otel AI'ı açmış. Gelen kutusu yeni konuşmayı buna göre AI ya da
- * personel modunda açar.
+ * (`aiActiveFor`): sunucuda anahtar tanımlı ve ajan kayıtlı (süreç düzeyi),
+ * otel AI'ı açmış **ve** iki ajan da aktör panelinde (modül 12) açık. Gelen
+ * kutusu yeni konuşmayı buna göre AI ya da personel modunda açar; ajan
+ * kapalıyken her misafir mesajı ayrı bir manuel göreve düşmez, konuşma
+ * baştan personelde olur.
  *
  * Ayar sık okunur (her mesajda); kısa süre önbelleklenir, kayıtta silinir.
  */
 
 const CACHE_TTL_MS = 60_000;
 const cacheKey = (hotelId) => `ai:${hotelId}:settings`;
+
+/** AI'ın misafire cevap verebilmesi için açık olması gereken ajanlar. */
+export const AI_AGENT_NAMES = Object.freeze([routerAgentManifest.name, conciergeAgentManifest.name]);
+
+/** Ajan → ayardaki model alanı (aktör panelinin LLM kartı için). */
+const AGENT_MODEL_FIELDS = Object.freeze({
+  [routerAgentManifest.name]: 'routerModel',
+  [conciergeAgentManifest.name]: 'conciergeModel',
+});
+
+/**
+ * Ajanın bu oteldeki modeli; LLM ajanı değilse ya da seçilmemişse `null`.
+ * @param {string} actorName
+ * @param {{ routerModel?: string, conciergeModel?: string }} settings
+ */
+export function agentModel(actorName, settings) {
+  const field = AGENT_MODEL_FIELDS[actorName];
+  return (field && settings?.[field]) || null;
+}
 
 /** Sunucuda model anahtarı var mı (süreç düzeyi; anahtarın kendisi hiçbir cevapta dönmez). */
 export function aiKeyConfigured(env = process.env) {
@@ -74,7 +98,17 @@ export function getAiSettingsCached(hotelId) {
  */
 export async function aiActiveFor(hotelId) {
   if (!hasAutoResponder()) return false;
-  return (await getAiSettingsCached(hotelId)).enabled;
+  if (!(await getAiSettingsCached(hotelId)).enabled) return false;
+  return aiAgentsEnabled(hotelId);
+}
+
+/**
+ * AI ajanlarının ikisi de aktör panelinde açık mı?
+ * @param {string} hotelId
+ */
+export async function aiAgentsEnabled(hotelId) {
+  const states = await Promise.all(AI_AGENT_NAMES.map((name) => isActorEnabledCached(hotelId, name)));
+  return states.every(Boolean);
 }
 
 /**
@@ -83,7 +117,12 @@ export async function aiActiveFor(hotelId) {
  */
 export async function getAiSettings(hotelId) {
   const settings = toDto(await prisma.aiSettings.findFirst({ where: { hotelId } }));
-  return { ...settings, keyConfigured: aiKeyConfigured(), agentRunning: hasAutoResponder() };
+  return {
+    ...settings,
+    keyConfigured: aiKeyConfigured(),
+    agentRunning: hasAutoResponder(),
+    agentsEnabled: await aiAgentsEnabled(hotelId),
+  };
 }
 
 /**

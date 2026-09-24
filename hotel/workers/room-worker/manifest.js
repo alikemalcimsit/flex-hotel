@@ -10,6 +10,8 @@ import { defineActor } from '@hotelos/actor-kit';
  */
 export const roomWorkerManifest = defineActor({
   name: 'room-worker',
+  title: 'Oda aktörü',
+  packageName: '@hotelos/room-worker',
   type: 'worker',
   description:
     'Yeni rezervasyona uygun odayı otomatik seçip atar; misafir giriş yapınca odayı dolu, ' +

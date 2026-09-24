@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ACTIVITY_LEVEL_FILTER_LABELS, ACTIVITY_LEVEL_FILTERS, ACTIVITY_LIVE_BATCH, ACTIVITY_PAGE_SIZE } from '@hotelos/hotel-contracts';
+import { ACTIVITY_LEVEL_FILTER_LABELS, ACTIVITY_LEVEL_FILTERS, ACTIVITY_LIVE_BATCH, ACTIVITY_PAGE_SIZE, EVENT_LABELS } from '@hotelos/hotel-contracts';
 import { Badge, Button, Card, EmptyState, Icon, Select, Spinner } from '@hotelos/ui';
 import { api, withQuery } from '../../lib/api.js';
 import { activityKeys, dayRange, formatClockSeconds, formatDuration, useActivityStream } from '../../lib/activity.js';
@@ -179,9 +179,15 @@ export function LiveFeedTab() {
 
   const actorOptions = [
     { value: '', label: 'Tüm aktörler' },
-    ...(options.data?.actors ?? []).map((actor) => ({ value: actor.name, label: actor.name })),
+    ...(options.data?.actors ?? []).map((actor) => ({
+      value: actor.name,
+      label: actor.title && actor.title !== actor.name ? `${actor.title} (${actor.name})` : actor.name,
+    })),
   ];
-  const eventOptions = [{ value: '', label: 'Tüm olaylar' }, ...(options.data?.events ?? []).map((name) => ({ value: name, label: name }))];
+  const eventOptions = [
+    { value: '', label: 'Tüm olaylar' },
+    ...(options.data?.events ?? []).map((name) => ({ value: name, label: EVENT_LABELS[name] ? `${EVENT_LABELS[name]} (${name})` : name })),
+  ];
   const liveStatus = !liveEnabled
     ? { tone: 'neutral', label: 'Geçmiş aralık (canlı değil)' }
     : paused

@@ -13,6 +13,8 @@ import { BaseWorker, defineActor } from '@hotelos/actor-kit';
 
 export const webchatGatewayManifest = defineActor({
   name: 'webchat-gateway',
+  title: 'Web chat geçidi',
+  packageName: '@hotelos/webchat-gateway',
   type: 'worker',
   description:
     'Misafire yazılan cevapları web sitesindeki sohbet balonuna iletir ve "gönderildi" olarak işaretler. ' +

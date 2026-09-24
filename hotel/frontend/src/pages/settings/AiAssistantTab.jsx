@@ -120,9 +120,11 @@ export function AiAssistantTab() {
     ? { tone: 'neutral', label: 'Anahtar yok' }
     : !settings.agentRunning
       ? { tone: 'warning', label: 'Ajan çalışmıyor' }
-      : settings.enabled
-        ? { tone: 'success', label: 'Açık' }
-        : { tone: 'neutral', label: 'Kapalı' };
+      : !settings.agentsEnabled
+        ? { tone: 'warning', label: 'Ajanlar kapalı' }
+        : settings.enabled
+          ? { tone: 'success', label: 'Açık' }
+          : { tone: 'neutral', label: 'Kapalı' };
 
   return (
     <div className="flex max-w-5xl flex-col gap-6">
@@ -137,6 +139,11 @@ export function AiAssistantTab() {
       {settings.keyConfigured && !settings.agentRunning && (
         <Alert tone="warning" title="Anahtar tanımlı ama AI ajanları çalışmıyor">
           Anahtar sunucu açıldıktan sonra eklenmiş olabilir. Sunucu yeniden başlatılınca ajanlar devreye girer.
+        </Alert>
+      )}
+      {settings.agentsEnabled === false && (
+        <Alert tone="warning" title="AI ajanları aktör panelinde kapatılmış">
+          Bu ayar açık olsa da AI misafire cevap vermez; yeni konuşmalar personelde açılır. Ajanları Yönetim › Aktörler ekranından açabilirsiniz.
         </Alert>
       )}
       {!canManage && (

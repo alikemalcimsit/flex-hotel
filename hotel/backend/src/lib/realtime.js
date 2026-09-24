@@ -1,6 +1,7 @@
 import {
   APPROVAL_EVENTS,
   LIVE_VIEW_EVENTS,
+  MANUAL_TASK_EVENTS,
   MESSAGING_CHANGED_EVENTS,
   NOTIFICATIONS_CHANGED_EVENTS,
   REQUESTS_CHANGED_EVENTS,
@@ -64,6 +65,12 @@ export const APPROVALS_CHANNEL = 'approvals.changed';
 /** Rezervasyon listesi, detayı ve bekleme listesi kanalı. */
 export const RESERVATIONS_CHANNEL = 'reservations.changed';
 
+/** Manuel görev listesi ve yan menü rozeti kanalı (modül 12). */
+export const MANUAL_TASKS_CHANNEL = 'manual-tasks.changed';
+
+/** Aktör paneli kanalı: bir yönetici aktörü açıp kapatınca diğer açık paneller tazelenir. */
+export const ACTORS_CHANNEL = 'actors.changed';
+
 /**
  * Aktivite akışı kanalı (modül 10). Olaydan değil aktivite satırından beslenir
  * (bkz. `registerActivityBridge`); yalnızca akış ekranı açık paneller abone olur.
@@ -82,6 +89,8 @@ const CHANNEL_EVENTS = Object.freeze({
   [STAFF_ALERTS_CHANNEL]: STAFF_ALERT_EVENTS,
   [APPROVALS_CHANNEL]: APPROVAL_EVENTS,
   [RESERVATIONS_CHANNEL]: RESERVATIONS_CHANGED_EVENTS,
+  [MANUAL_TASKS_CHANNEL]: MANUAL_TASK_EVENTS,
+  [ACTORS_CHANNEL]: ['actor.setting.changed'],
 });
 
 /** @param {string} hotelId */
@@ -182,6 +191,8 @@ export function registerRealtimeBridge(io, logger = console) {
         notificationId: payload.notificationId ?? null,
         approvalId: payload.approvalId ?? null,
         waitlistId: payload.waitlistId ?? null,
+        taskId: payload.taskId ?? null,
+        actorName: payload.actorName ?? null,
         // Zil: uyarı kimliği, türü ve kime gittiği (içerik yok).
         alertId: payload.alertId ?? null,
         kind: payload.kind ?? null,

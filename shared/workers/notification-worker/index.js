@@ -45,6 +45,8 @@ function markBusinessErrorsFinal(error) {
 export function notificationWorkerManifest(triggers) {
   return defineActor({
     name: ACTOR_NAME,
+    title: 'Bildirim aktörü',
+    packageName: '@hotelos/notification-worker',
     type: 'worker',
     description:
       'Rezervasyon onayı, oda bilgisi, hoş geldiniz ve teşekkür bildirimlerini şablondan hazırlayıp gönderim ' +

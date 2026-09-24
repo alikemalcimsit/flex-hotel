@@ -404,6 +404,9 @@ export class BaseWorker {
       title: this.describeFallback(envelope.name, payload),
       description: `${this.#manifest.name} bu işi yapamadı: ${reason}`,
       originalEvent: { id: envelope.id, name: envelope.name, payload },
+      // Aktör paneli "bu aktörün düşürdüğü işler"i, görev ekranı işlem zincirini buradan bulur.
+      actorName: this.#manifest.name,
+      correlationId: envelope.correlationId ?? null,
     });
     await this.#safely(() => this.afterFallback(payload, envelope, reason));
   }

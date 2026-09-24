@@ -64,6 +64,23 @@ export function olderThan(timeField, cursor) {
 }
 
 /**
+ * "Bu konumdan daha yeni" — (zaman, kimlik) artan sırası için. Bekleyenler
+ * eskiden yeniye listelenir: en uzun bekleyen en üstte. `>=` koşulu index
+ * taramasını imleçten başlatır (bkz. `olderThan`).
+ *
+ * @param {string} timeField
+ * @param {{ at: Date, id: string }} cursor
+ */
+export function newerThan(timeField, cursor) {
+  return {
+    AND: [
+      { [timeField]: { gte: cursor.at } },
+      { OR: [{ [timeField]: { gt: cursor.at } }, { [timeField]: cursor.at, id: { gt: cursor.id } }] },
+    ],
+  };
+}
+
+/**
  * Sorgu dizesindeki imleci çözer; bozuksa doğrulama hatası (500 değil).
  *
  * @param {string | undefined} raw

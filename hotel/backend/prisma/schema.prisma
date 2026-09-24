@@ -371,6 +371,7 @@ model Hotel {
   pendingActions        PendingAction[]
   manualTasks           ManualTask[]
   llmUsages             LlmUsage[]
+  llmUsageDaily         LlmUsageDaily[]
   notifications         Notification[]
   notificationTemplates NotificationTemplate[]
   notificationChannels  NotificationChannelConfig[]
@@ -495,6 +496,7 @@ model ProcessedEvent {
   @@index([createdAt])
 }
 
+/// Aktörün otel bazındaki ayarı (modül 12). Satır yoksa aktör açıktır.
 model ActorSetting {
   id               String    @id @default(uuid())
   hotelId          String
@@ -502,6 +504,9 @@ model ActorSetting {
   enabled          Boolean   @default(true)
   config           Json      @default("{}")
   dailyTokenBudget Int?
+  /// Son açan / kapatan (e-posta) ve gerekçesi — panelde "neden kapalı" sorusunun cevabı.
+  updatedBy        String?
+  note             String?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
   deletedAt        DateTime?
@@ -634,6 +639,9 @@ model PendingAction {
   @@index([approvalId])
 }
 
+/// Aktörün yapamadığı iş (modül 3, 12): aktör kapalıydı, hata verdi ya da
+/// iş sırası doluydu. İşin modülüne yetkili personel üstlenir, tamamlar ya da
+/// "gerek kalmadı" der.
 model ManualTask {
   id            String     @id @default(uuid())
   hotelId       String
@@ -642,13 +650,28 @@ model ManualTask {
   description   String?
   status        TaskStatus @default(PENDING)
   originalEvent Json?
+  /// İşi düşüren aktör ve olayın zinciri (Activity Feed'e bağlantı).
+  actorName     String?
+  correlationId String?
+  /// Üstlenen personelin kimliği (User.id) ve ne zaman üstlendiği.
   assignedTo    String?
+  assignedAt    DateTime?
   completedAt   DateTime?
+  /// Görev kapandı mı (tamamlandı ya da gerek kalmadı): açık görevler `closedAt IS NULL`.
+  closedAt      DateTime?
+  /// Kapatan (e-posta) ve notu / gerekçesi.
+  resolvedBy    String?
+  resolution    String?
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
   deletedAt     DateTime?
 
   hotel Hotel @relation(fields: [hotelId], references: [id])
+
+  // Açık görevler en eski önce, kapananlar en yeni kapanan önce (imleçli).
+  @@index([hotelId, closedAt, createdAt, id])
+  @@index([hotelId, module, closedAt, createdAt, id])
+  @@index([hotelId, actorName, closedAt, createdAt, id])
 }
 
 model LlmUsage {
@@ -670,8 +693,33 @@ model LlmUsage {
   hotel Hotel @relation(fields: [hotelId], references: [id])
 
   @@index([actorName, date])
-  // Günlük bütçe: "bu otel bugün ne harcadı" (her model çağrısından önce).
+  // Gün bazlı döküm ve saklama süresi temizliği.
   @@index([hotelId, date])
+}
+
+/// LLM kullanımının günlük özeti (modül 12): otel × iş günü × ajan × model.
+///
+/// Her model çağrısı `LlmUsage`'a bir satır yazar; büyük otelde günde on
+/// binlerce satır demek. Bütçe denetimi ve kullanım ekranları o satırları
+/// toplamak yerine buradan okur: çağrı kaydedilirken aynı transaction'da
+/// sayaçlar artırılır (`ON CONFLICT DO UPDATE`).
+model LlmUsageDaily {
+  hotelId   String
+  date      DateTime @db.Date
+  actorName String
+  model     String
+  calls     Int      @default(0)
+  tokensIn  BigInt   @default(0)
+  tokensOut BigInt   @default(0)
+  cacheRead BigInt   @default(0)
+  costUsd   Decimal  @default(0) @db.Decimal(14, 6)
+  updatedAt DateTime @updatedAt
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+
+  @@id([hotelId, date, actorName, model])
+  // Ajan kartı: bir ajanın son N günü.
+  @@index([hotelId, actorName, date])
 }
 
 /// Misafire giden bildirim (modül 9) — aynı zamanda gönderim kuyruğu (outbox).

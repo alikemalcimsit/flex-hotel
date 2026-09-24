@@ -6,6 +6,7 @@ import { AppLayout } from './layout/AppLayout.jsx';
 import { ToastHost } from './components/ToastHost.jsx';
 import { LoginPage } from './pages/LoginPage.jsx';
 import { HomePage } from './pages/HomePage.jsx';
+import { useManualTaskScope } from './lib/actors.js';
 import { PERMISSIONS, useCan } from './lib/permissions.js';
 
 /**
@@ -41,6 +42,9 @@ const ChainPage = lazy(() => import('./pages/activity/ChainPage.jsx').then((m) =
 const RecordChainsPage = lazy(() =>
   import('./pages/activity/RecordChainsPage.jsx').then((m) => ({ default: m.RecordChainsPage })),
 );
+const ActorsPage = lazy(() => import('./pages/actors/ActorsPage.jsx').then((m) => ({ default: m.ActorsPage })));
+const ActorDetailPage = lazy(() => import('./pages/actors/ActorDetailPage.jsx').then((m) => ({ default: m.ActorDetailPage })));
+const ManualTasksPage = lazy(() => import('./pages/tasks/ManualTasksPage.jsx').then((m) => ({ default: m.ManualTasksPage })));
 const AiAssistantTab = lazy(() => import('./pages/settings/AiAssistantTab.jsx').then((m) => ({ default: m.AiAssistantTab })));
 const MessagingChannelsTab = lazy(() =>
   import('./pages/settings/MessagingChannelsTab.jsx').then((m) => ({ default: m.MessagingChannelsTab })),
@@ -109,6 +113,11 @@ function RequirePermission({ permission, children }) {
   return can(permission) ? children : <Navigate to="/" replace />;
 }
 
+/** Manuel görevler: işin modülüne yetkili olan kendi görevlerini görür (modül 12). */
+function RequireTaskScope({ children }) {
+  return useManualTaskScope().empty ? <Navigate to="/" replace /> : children;
+}
+
 export default function App() {
   return (
     <>
@@ -126,6 +135,30 @@ export default function App() {
             }
           >
             <Route index element={<HomePage />} />
+            <Route
+              path="gorevler"
+              element={
+                <RequireTaskScope>
+                  <ManualTasksPage />
+                </RequireTaskScope>
+              }
+            />
+            <Route
+              path="aktorler"
+              element={
+                <RequirePermission permission={PERMISSIONS.ACTORS_VIEW}>
+                  <ActorsPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="aktorler/:name"
+              element={
+                <RequirePermission permission={PERMISSIONS.ACTORS_VIEW}>
+                  <ActorDetailPage />
+                </RequirePermission>
+              }
+            />
             <Route
               path="rezervasyonlar"
               element={

@@ -63,6 +63,8 @@ export const AUDIT_ENTITY_LABELS = Object.freeze({
   NotificationChannelConfig: 'Bildirim kanalı',
   MessagingChannel: 'Mesaj kanalı',
   AiSettings: 'AI asistanı ayarı',
+  ActorSetting: 'Aktör ayarı',
+  ManualTask: 'Manuel görev',
   Approval: 'Onay',
   User: 'Kullanıcı',
   RolePermission: 'Rol izinleri',
@@ -290,4 +292,10 @@ export const AUDIT_FIELD_LABELS = Object.freeze({
   occupancyStatus: 'Doluluk',
   priority: 'Öncelik',
   dailyBudgetUsd: 'Günlük bütçe',
+  // Modül 12: aktör ayarı ve manuel görev.
+  actorName: 'Aktör',
+  note: 'Gerekçe',
+  assignedTo: 'Üstlenen',
+  resolvedBy: 'Kapatan',
+  resolution: 'Not / gerekçe',
 });

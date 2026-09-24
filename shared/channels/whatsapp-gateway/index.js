@@ -16,6 +16,8 @@ import { windowOpen } from './protocol.js';
 
 export const whatsappGatewayManifest = defineActor({
   name: 'whatsapp-gateway',
+  title: 'WhatsApp geçidi',
+  packageName: '@hotelos/whatsapp-gateway',
   type: 'worker',
   description:
     'Misafire yazılan cevapları WhatsApp Cloud API ile gönderir, teslim durumunu mesaja işler. ' +

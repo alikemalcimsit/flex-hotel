@@ -14,6 +14,8 @@ import { defineActor } from '@hotelos/actor-kit';
  */
 export const reservationWorkerManifest = defineActor({
   name: 'reservation-worker',
+  title: 'Rezervasyon aktörü',
+  packageName: '@hotelos/reservation-worker',
   type: 'worker',
   description:
     'Kanaldan (WhatsApp, web chat, e-posta, OTA) gelen rezervasyon isteğini müsaitlik ve fiyat denetimiyle açar; ' +

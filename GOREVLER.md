@@ -1044,13 +1044,78 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 12. Aktör yönetim paneli — Ali Kemal
 **Gün sonu:** Admin, aktörleri tek ekrandan açıp kapatıyor; kapalı aktörün işleri "manuel görevler"de listeleniyor; LLM agent'ların token harcaması görünüyor.
-- [ ] Backend: `GET /actors` (manifest + durum), `enable` / `disable` API'leri
-- [ ] Backend: ManualTask listeleme / tamamlama API'si
-- [ ] Backend: LlmUsage günlük özet API'si
-- [ ] Ekran: Aktör listesi (ad, tip, paket, durum, switch)
-- [ ] Ekran: Aktör detay paneli (açıklama, dinlediği / yayınladığı event'ler, onay gerektiren aksiyonlar, retry politikası)
-- [ ] Ekran: LLM agent kartı (model, günlük bütçe, bugünkü kullanım çubuğu, tahmini maliyet)
-- [ ] Ekran: Manuel görevler listesi (modül, başlık, orijinal event, "tamamla")
+- [x] Backend: `GET /actors` (manifest + durum), `enable` / `disable` API'leri
+- [x] Backend: ManualTask listeleme / tamamlama API'si
+- [x] Backend: LlmUsage günlük özet API'si
+- [x] Ekran: Aktör listesi (ad, tip, paket, durum, switch)
+- [x] Ekran: Aktör detay paneli (açıklama, dinlediği / yayınladığı event'ler, onay gerektiren aksiyonlar, retry politikası)
+- [x] Ekran: LLM agent kartı (model, günlük bütçe, bugünkü kullanım çubuğu, tahmini maliyet)
+- [x] Ekran: Manuel görevler listesi (modül, başlık, orijinal event, "tamamla")
+
+> **📌 Modül 12 tamamlandı (26 Eylül 2026 — Ahmet, Ali'nin yerine).**
+>
+> **Aktör paneli** (`/aktorler`, izin `actors.view`; aç/kapa `actors.manage` —
+> varsayılan yalnızca yönetici, müdür görür): her aktör tek satırda — Türkçe adı,
+> tür, paket, bu otelde açık mı (kim, ne zaman, hangi gerekçeyle kapattı), son 24
+> saatte iş/uyarı/hata, son iş, açık manuel görev, arka plan sırası. Kapatma
+> "ne durur"u söyleyip gerekçe sorar. Açma/kapama ayrı uçlar
+> (`POST /actors/:ad/enable|disable`): iki yönetici aynı anda "kapat" derse
+> sonuç yine kapalı, ikinci istek iz bırakmaz; ayar satırı kilitlenir, denetim
+> izine (`ActorSetting`) ve aktivite akışına (uyarı satırı) yazılır, olay
+> `actor.setting.changed`. Aktör her olayda ayarı veritabanından okur: kapatılan
+> aktör bir sonraki olayda durur.
+>
+> **Aktör detayı** (`/aktorler/:ad`): "kapatırsam ne olur" (işler hangi manuel
+> göreve düşer, yayınladığı olayları bekleyen aktörler kimler — bildirgeden
+> hesaplanır), dinlediği / yayınladığı olaylar (Türkçe adlarıyla, kim yayınlıyor /
+> kim dinliyor), onay gerektiren işler, yeniden deneme ve arka plan politikası,
+> son 10 iş (zincire bağlantılı). **Kurulu olmayan** aktör de görünür (ör. sunucuda
+> `OPENAI_API_KEY` yokken AI ajanları, sebebiyle); ayarı değiştirilebilir.
+>
+> **Bildirge:** `defineActor` artık `title` (panelde Türkçe ad) ve `packageName`
+> alır. **Yeni aktör yazan:** ikisini de ver; `fallbackModule` adını
+> `MANUAL_TASK_MODULE_PERMISSIONS`'a (contracts, `actors.js`) izniyle ekle — yoksa
+> görevleri yalnızca ayar yöneticisine görünür.
+>
+> **Manuel görevler** (`/gorevler`, menüde rozetli): görev, işin modülüne yetkili
+> personele görünür (zil uyarısıyla aynı izin: oda atama → oda işlemleri, cevapsız
+> mesaj → mesaj yazma). Üstlen / bırak / tamamla (not) / "gerek kalmadı"
+> (gerekçe zorunlu). Her işlem satırı kilitler: iki kişi aynı görevi üstlenemez,
+> ikinci "tamamla" 409 alır; kapanmış görev yeniden açılmaz (veritabanı kısıtı).
+> Başkasının üstlendiği görev yine tamamlanabilir (iş acil; izde tamamlayan
+> yazar). Görev işi düşüren aktörü ve olayın zincirini taşır; bağlı kayıtlara
+> (rezervasyon, konuşma, istek, onay) bağlantı verir. Liste olay gövdesi taşımaz;
+> görev açılınca gövde **maskesiz** gelir (işi yapacak kişi misafirin iletişim
+> bilgisine ihtiyaç duyar; zaten o modülün yetkisine sahip). Zil uyarısı artık
+> göreve götürür (`/gorevler?gorev=`).
+> API: `/manual-tasks` (açık — en eski önce / kapanan — en yeni kapanan önce,
+> modül, aktör, imleç), `/manual-tasks/summary`, `/manual-tasks/:id`,
+> `.../claim|release|complete|cancel`. Olaylar `manual_task.created|updated`,
+> canlı kanal `manual-tasks.changed`.
+> **Modül 13 için:** "bekleyen işler" kutusundaki manuel görev sayısı
+> `GET /manual-tasks/summary` (kişinin kapsamıyla; otel başına dakikada tek sorgu).
+>
+> **LLM kullanımı:** her model çağrısı `LlmUsage` satırına ek olarak **günlük
+> özete** (`LlmUsageDaily`: otel × iş günü × ajan × model) aynı transaction'da
+> sayılır. Bütçe denetimi ve kullanım ekranları (`/ai/usage`,
+> `/actors/:ad/usage`) artık satırları değil özeti toplar — büyük otelde günde on
+> binlerce çağrı olsa da okunan satır birkaç düzine. Ajan kartı: model, otelin
+> günlük bütçesi (ajanlar paylaşır; çubukta ajanın payı koyu), bugünkü ve dönem
+> maliyeti, çağrı başına ortalama, gün gün çubuk, model kırılımı.
+> **AI ajanları panelden kapatılırsa** AI misafire cevap vermez: yeni konuşmalar
+> personelde açılır (`aiActiveFor` ajanların açık olmasını da arar; her mesaj ayrı
+> manuel göreve düşmez). AI ayar ekranı bunu uyarı olarak gösterir.
+>
+> **Veri** (migration `20260926090000_actor_panel`): `ActorSetting.updatedBy/note`;
+> `ManualTask` üstlenen/kapanış/kapatan/not/aktör/zincir sütunları, açık görev
+> `closedAt IS NULL` ile otel kapsamlı index'ten (zaman / modül / aktör), durum ile
+> kapanış anı ve üstlenen kısıtları; `LlmUsageDaily` tablosu (eski çağrılardan
+> dolduruldu). ⚠️ `LlmUsage` büyükse bakım penceresinde uygulanmalı.
+>
+> **Bilinçli sınırlar:** `ActorSetting.dailyTokenBudget` kullanılmıyor — bütçe
+> modül 8'deki otel geneli USD bütçesi (ajan başına bütçe istenirse ayrı karar).
+> Arka plan sırası (çalışan/bekleyen) süreç içidir; birden fazla sunucu
+> çalışırsa panel isteğin düştüğü sunucununkini gösterir.
 
 > **🎁 Modül 1'de senin adına yapılanlar (9 Eylül 2026 — Ahmet):**
 > `shared/core` artık boş değil — event bus'ın çekirdeği kuruldu

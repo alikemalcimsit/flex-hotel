@@ -12,7 +12,7 @@ import {
 } from '@hotelos/hotel-contracts';
 import { prisma, prismaUnfiltered } from '../../db.js';
 import { recordAudit } from '../../lib/audit.js';
-import { encodeCursor, olderThan, parseCursor } from '../../lib/cursor.js';
+import { encodeCursor, newerThan, olderThan, parseCursor } from '../../lib/cursor.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../lib/errors.js';
 import { LIVE_SCOPES, liveVersion } from '../../lib/live-version.js';
 import { lockApprovals } from '../../lib/locks.js';
@@ -304,23 +304,6 @@ export function requestApprovalStandalone(input) {
 }
 
 /* ══════════════════ Okuma ══════════════════ */
-
-/**
- * "Bu konumdan daha yeni" — (zaman, kimlik) artan sırası için. Bekleyenler
- * eskiden yeniye listelenir: en uzun bekleyen en üstte. `>=` koşulu index
- * taramasını imleçten başlatır (bkz. `lib/cursor.js`).
- *
- * @param {string} timeField
- * @param {{ at: Date, id: string }} cursor
- */
-function newerThan(timeField, cursor) {
-  return {
-    AND: [
-      { [timeField]: { gte: cursor.at } },
-      { OR: [{ [timeField]: { gt: cursor.at } }, { [timeField]: cursor.at, id: { gt: cursor.id } }] },
-    ],
-  };
-}
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

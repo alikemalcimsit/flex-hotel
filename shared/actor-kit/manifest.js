@@ -14,6 +14,8 @@ import { isKnownEvent } from '@hotelos/core';
 /**
  * @param {{
  *   name: string,
+ *   title?: string,
+ *   packageName?: string | null,
  *   type?: ActorType,
  *   description: string,
  *   subscribes?: string[],
@@ -27,6 +29,8 @@ import { isKnownEvent } from '@hotelos/core';
 export function defineActor(definition) {
   const {
     name,
+    title,
+    packageName = null,
     type = 'worker',
     description,
     subscribes = [],
@@ -68,6 +72,10 @@ export function defineActor(definition) {
 
   return Object.freeze({
     name,
+    /** Panelde görünen kısa Türkçe ad ("Oda aktörü"); verilmezse teknik ad. */
+    title: title?.trim() || name,
+    /** Aktörün kodunun bulunduğu paket (`@hotelos/room-worker`); panelde "paket" sütunu. */
+    packageName,
     type,
     description,
     subscribes: Object.freeze([...subscribes]),

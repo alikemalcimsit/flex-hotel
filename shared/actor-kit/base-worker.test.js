@@ -75,6 +75,14 @@ describe('manifest doğrulaması', () => {
     assert.throws(() => defineActor({ name: 'x' }), /açıklaması olmalı/);
   });
 
+  it('panel adı verilmezse teknik ad kullanılır; paket isteğe bağlı', () => {
+    assert.equal(manifest.title, 'test-worker');
+    assert.equal(manifest.packageName, null);
+    const named = defineActor({ name: 'x-worker', title: '  Oda aktörü ', packageName: '@hotelos/x', description: 'y' });
+    assert.equal(named.title, 'Oda aktörü');
+    assert.equal(named.packageName, '@hotelos/x');
+  });
+
   it('beyan edilmemiş event için işleyici yazılamaz', () => {
     const { deps } = makeDeps();
     assert.throws(
@@ -152,6 +160,9 @@ describe('aktör kapalıyken', () => {
     assert.equal(calls.manualTasks[0].hotelId, HOTEL);
     assert.match(calls.manualTasks[0].description, /Aktör kapalı/);
     assert.equal(calls.manualTasks[0].originalEvent.name, 'reservation.created');
+    // Aktör paneli "bu aktörün düşürdüğü işler"i, görev ekranı zinciri bununla bulur.
+    assert.equal(calls.manualTasks[0].actorName, 'test-worker');
+    assert.equal(calls.manualTasks[0].correlationId, 'zincir-1');
   });
 
   it('kapalıyken de event işlenmiş sayılır (tekrar tekrar görev üretmesin)', async () => {

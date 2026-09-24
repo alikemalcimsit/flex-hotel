@@ -21,7 +21,9 @@ import {
   resolveTrustProxy,
 } from './lib/http-security.js';
 import { activityRoutes, auditRoutes } from './modules/activity/routes.js';
+import { actorRoutes } from './modules/actors/routes.js';
 import { approvalRoutes } from './modules/approvals/routes.js';
+import { manualTaskRoutes } from './modules/manual-tasks/routes.js';
 import { approvalCacheStats } from './modules/approvals/service.js';
 import { registerApprovalSubscribers, setApprovalSubscriberLogger } from './modules/approvals/subscribers.js';
 import { authRoutes } from './modules/auth/routes.js';
@@ -281,6 +283,8 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   await app.register(approvalRoutes, { prefix: '/approvals' });
   await app.register(activityRoutes, { prefix: '/activity' });
   await app.register(auditRoutes, { prefix: '/audit' });
+  await app.register(actorRoutes, { prefix: '/actors' });
+  await app.register(manualTaskRoutes, { prefix: '/manual-tasks' });
   await app.register(conciergeRoutes, { prefix: '/ai' });
   await app.register(messagingChannelRoutes, { prefix: '/messaging-channels' });
   await app.register(webhookRoutes, { prefix: '/webhooks' });

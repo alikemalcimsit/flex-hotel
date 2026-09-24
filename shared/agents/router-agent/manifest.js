@@ -11,6 +11,8 @@ import { defineActor } from '@hotelos/actor-kit';
  */
 export const routerAgentManifest = defineActor({
   name: 'router-agent',
+  title: 'Niyet ajanı',
+  packageName: '@hotelos/router-agent',
   type: 'agent',
   description:
     'Misafir mesajının niyetini (rezervasyon, soru, şikâyet, personel isteği) küçük modelle belirler. ' +

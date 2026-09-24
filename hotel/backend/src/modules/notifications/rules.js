@@ -137,26 +137,6 @@ export function guestOptedOut(preferences, channel) {
   return Array.isArray(optOut) && optOut.includes(channel);
 }
 
-/**
- * Personele bırakılan işin uyarısını kim görür: işin modülüne göre izin.
- * Tanımsız modül yönetime düşer.
- */
-const MANUAL_TASK_PERMISSIONS = Object.freeze({
-  'Oda atama': 'rooms.operate',
-  'Bildirim merkezi': 'notifications.manage',
-  Rezervasyon: 'reservations.manage',
-  'Onay kuyruğu': 'approvals.decide',
-  // Modül 8: AI ajanları ve kanal geçitleri (cevaplanmamış / gönderilememiş misafir mesajı).
-  'Misafir mesajları': 'messages.reply',
-});
-
-export const MANUAL_TASK_FALLBACK_PERMISSION = 'settings.manage';
-
-/** @param {string} module */
-export function manualTaskPermission(module) {
-  return MANUAL_TASK_PERMISSIONS[module] ?? MANUAL_TASK_FALLBACK_PERMISSION;
-}
-
 /** Aynı günün aynı kanal+hata uyarıları tek uyarıda toplanır. */
 export function failureAlertKey(channel, errorCode, day) {
   return `notification-failed:${channel}:${errorCode ?? 'UNKNOWN'}:${toIsoDay(day)}`;

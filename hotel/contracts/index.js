@@ -139,6 +139,8 @@ export * from './reservations.js';
 export * from './front-desk.js';
 export * from './concierge.js';
 export * from './activity.js';
+export * from './actors.js';
+export * from './events.js';
 export { displayPhone, internationalPhone } from './phone.js';
 export {
   DEFAULT_ROLE_PERMISSIONS,

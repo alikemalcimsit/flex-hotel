@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { useManualTaskBadge } from '../lib/actors.js';
 import { useApprovalBadge } from '../lib/approvals.js';
 import { useFrontOfficeBadges } from '../lib/frontOffice.js';
 import { useHotelSettings } from '../lib/useHotel.js';
@@ -40,7 +41,8 @@ export function AppLayout() {
   const hotelQuery = useHotelSettings();
   const frontOfficeBadges = useFrontOfficeBadges();
   const approvals = useApprovalBadge();
-  const badges = { ...frontOfficeBadges, approvals };
+  const tasks = useManualTaskBadge();
+  const badges = { ...frontOfficeBadges, approvals, tasks };
   const waitingCount = frontOfficeBadges.messages?.count ?? 0;
 
   // Panel başka sekmedeyken de "misafir yazdı" görülsün: sekme başlığında sayı.

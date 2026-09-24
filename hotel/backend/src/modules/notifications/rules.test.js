@@ -4,8 +4,6 @@ import { quietHoursRelease } from '@hotelos/hotel-contracts';
 import {
   failureAlertKey,
   guestOptedOut,
-  manualTaskPermission,
-  MANUAL_TASK_FALLBACK_PERMISSION,
   notificationDedupeKey,
   recipientFor,
   smsQuietHours,
@@ -128,11 +126,6 @@ describe('misafir tercihi ve uyarı izni', () => {
     assert.equal(guestOptedOut({}, 'SMS'), false);
     assert.equal(guestOptedOut(null, 'SMS'), false);
     assert.equal(guestOptedOut({ notifications: { optOut: 'SMS' } }, 'SMS'), false, 'dizi olmayan değer yok sayılır');
-  });
-
-  it('elle yapılacak iş modülüne göre izne gider; bilinmeyen yönetime düşer', () => {
-    assert.equal(manualTaskPermission('Oda atama'), 'rooms.operate');
-    assert.equal(manualTaskPermission('Başka'), MANUAL_TASK_FALLBACK_PERMISSION);
   });
 });
 

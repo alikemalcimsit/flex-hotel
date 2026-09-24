@@ -10,6 +10,8 @@ import { defineActor } from '@hotelos/actor-kit';
  */
 export const conciergeAgentManifest = defineActor({
   name: 'concierge-agent',
+  title: 'Concierge ajanı',
+  packageName: '@hotelos/concierge-agent',
   type: 'agent',
   description:
     'Misafirle konuşur: müsaitlik ve fiyat bakar, teklif hazırlar, misafir açıkça onaylayınca rezervasyon ister; ' +

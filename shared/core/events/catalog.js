@@ -406,6 +406,31 @@ export const EVENT_CATALOG = Object.freeze({
   'approval.denied': approvalEvent.extend({ decidedBy: z.string().min(1) }),
   /** Süresi kimse karar vermeden doldu; iş yapılmadı. */
   'approval.expired': approvalEvent,
+
+  /* ── Aktör paneli (modül 12) ── */
+
+  /**
+   * Aktör bu otelde açıldı ya da kapatıldı. Kapalı aktörün işi manuel göreve
+   * düşer; AI ajanları kapanınca yeni konuşmalar personelde açılır.
+   */
+  'actor.setting.changed': hotelScoped.extend({
+    actorName: z.string().min(1),
+    enabled: z.boolean(),
+  }),
+
+  /** Aktörün yapamadığı iş personelin önüne düştü (görev ekranı ve rozet tazelenir). */
+  'manual_task.created': hotelScoped.extend({
+    taskId: z.string().uuid(),
+    module: z.string().min(1),
+    actorName: z.string().nullable(),
+  }),
+
+  /** Görev üstlenildi, bırakıldı, tamamlandı ya da "gerek kalmadı" dendi. */
+  'manual_task.updated': hotelScoped.extend({
+    taskId: z.string().uuid(),
+    module: z.string().min(1),
+    status: z.enum(['PENDING', 'IN_PROGRESS', 'DONE', 'CANCELLED']),
+  }),
 });
 
 /** @typedef {keyof typeof EVENT_CATALOG} EventName */
@@ -535,6 +560,9 @@ export const NOTIFICATIONS_CHANGED_EVENTS = Object.freeze([
 
 /** Zil (canlı yayın: `staff.alerts`). */
 export const STAFF_ALERT_EVENTS = Object.freeze(['staff.alert.raised']);
+
+/** Manuel görev listesini ve rozetini etkileyen event'ler (canlı yayın: `manual-tasks.changed`). */
+export const MANUAL_TASK_EVENTS = Object.freeze(['manual_task.created', 'manual_task.updated']);
 
 /** Onay kuyruğunu etkileyen event'ler (canlı yayın: `approvals.changed`). */
 export const APPROVAL_EVENTS = Object.freeze([

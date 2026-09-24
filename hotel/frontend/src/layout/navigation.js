@@ -1,4 +1,14 @@
-import { PERMISSIONS, ROLE_LABELS } from '@hotelos/hotel-contracts';
+import {
+  MANUAL_TASK_FALLBACK_PERMISSION,
+  MANUAL_TASK_MODULE_PERMISSIONS,
+  PERMISSIONS,
+  ROLE_LABELS,
+} from '@hotelos/hotel-contracts';
+
+/** Manuel görev görebilen izinler: işin modülüne yetkili olan görevleri görür (modül 12). */
+const MANUAL_TASK_PERMISSIONS = Object.freeze([
+  ...new Set([...Object.values(MANUAL_TASK_MODULE_PERMISSIONS), MANUAL_TASK_FALLBACK_PERMISSION]),
+]);
 
 /**
  * Menü yapısı — tek kaynak.
@@ -8,15 +18,19 @@ import { PERMISSIONS, ROLE_LABELS } from '@hotelos/hotel-contracts';
  * ayrı ayrı güncellenmez.
  *
  * `roles` dolu olan girdiler yalnızca o rollere, `permission` taşıyanlar
- * yalnızca o izne sahip kullanıcılara gösterilir (alt sayfalar da kendi izniyle
- * süzülür). İzinler giriş yapan kullanıcının oturumundan gelir (modül 2).
+ * yalnızca o izne, `anyPermission` taşıyanlar bu izinlerden en az birine sahip
+ * kullanıcılara gösterilir (alt sayfalar da kendi izniyle süzülür). İzinler giriş yapan kullanıcının oturumundan gelir (modül 2).
  * `badge` yan menüde sayı rozeti gösterilecek maddeyi işaretler.
  * Not: bu görsel bir kısıt; gerçek yetki kontrolü sunucuda.
  */
 export const NAV_SECTIONS = Object.freeze([
   {
     title: 'Genel',
-    items: [{ label: 'Panel', to: '/', icon: 'dashboard', end: true }],
+    items: [
+      { label: 'Panel', to: '/', icon: 'dashboard', end: true },
+      // Aktörün yapamadığı işler: herkes kendi modülününkini görür.
+      { label: 'Görevler', to: '/gorevler', icon: 'wrench', badge: 'tasks', anyPermission: MANUAL_TASK_PERMISSIONS },
+    ],
   },
   {
     title: 'Ön büro',
@@ -123,6 +137,12 @@ export const NAV_SECTIONS = Object.freeze([
         ],
       },
       {
+        label: 'Aktörler',
+        to: '/aktorler',
+        icon: 'server',
+        permission: PERMISSIONS.ACTORS_VIEW,
+      },
+      {
         label: 'Ayarlar',
         to: '/ayarlar',
         icon: 'settings',
@@ -153,7 +173,9 @@ export { ROLE_LABELS };
 function allowedFor(role, granted) {
   const set = granted ?? [];
   return (entry) =>
-    (!entry.roles || entry.roles.includes(role)) && (!entry.permission || set.includes(entry.permission));
+    (!entry.roles || entry.roles.includes(role)) &&
+    (!entry.permission || set.includes(entry.permission)) &&
+    (!entry.anyPermission || entry.anyPermission.some((permission) => set.includes(permission)));
 }
 
 /**

@@ -55,6 +55,11 @@ export const PERMISSIONS = Object.freeze({
   ACTIVITY_VIEW: 'activity.view',
   /** Denetim kaydı: kim hangi kaydı ne zaman nasıl değiştirdi (eski/yeni değerle). */
   AUDIT_VIEW: 'audit.view',
+
+  /** Aktör paneli (modül 12): aktörlerin durumu, bildirgesi, LLM harcaması. */
+  ACTORS_VIEW: 'actors.view',
+  /** Aktörü bu otelde açmak / kapatmak (kapalı aktörün işi personele düşer). */
+  ACTORS_MANAGE: 'actors.manage',
 });
 
 /** Tüm izinlerin düz listesi (doğrulama ve "ADMIN her şeyi görür" için). */
@@ -86,6 +91,8 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.ROLES_MANAGE]: 'Rolleri ve izinleri yönet',
   [PERMISSIONS.ACTIVITY_VIEW]: 'Aktivite akışını ve zincirleri görüntüle',
   [PERMISSIONS.AUDIT_VIEW]: 'Denetim kaydını görüntüle',
+  [PERMISSIONS.ACTORS_VIEW]: 'Aktör panelini görüntüle',
+  [PERMISSIONS.ACTORS_MANAGE]: 'Aktörleri aç / kapat',
 });
 
 /**
@@ -131,6 +138,7 @@ export const PERMISSION_GROUPS = Object.freeze([
     permissions: [PERMISSIONS.USERS_VIEW, PERMISSIONS.USERS_MANAGE, PERMISSIONS.ROLES_MANAGE],
   },
   { key: 'monitoring', label: 'İzleme', permissions: [PERMISSIONS.ACTIVITY_VIEW, PERMISSIONS.AUDIT_VIEW] },
+  { key: 'actors', label: 'Aktörler', permissions: [PERMISSIONS.ACTORS_VIEW, PERMISSIONS.ACTORS_MANAGE] },
 ]);
 
 /** Roller (Prisma `UserRole` enum'uyla birebir). */
@@ -177,6 +185,8 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.USERS_VIEW,
     PERMISSIONS.ACTIVITY_VIEW,
     PERMISSIONS.AUDIT_VIEW,
+    // Müdür aktörleri görür; açıp kapatmak (otomasyonu durdurmak) yöneticinin kararı.
+    PERMISSIONS.ACTORS_VIEW,
   ]),
   FRONT_DESK: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,

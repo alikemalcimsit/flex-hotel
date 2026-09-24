@@ -332,7 +332,7 @@ export function activityOptions() {
   return {
     actors: actorRegistry
       .list()
-      .map((manifest) => ({ name: manifest.name, type: manifest.type, description: manifest.description }))
+      .map((manifest) => ({ name: manifest.name, title: manifest.title ?? manifest.name, type: manifest.type, description: manifest.description }))
       .sort((a, b) => a.name.localeCompare(b.name)),
     events: Object.keys(EVENT_CATALOG).sort(),
   };

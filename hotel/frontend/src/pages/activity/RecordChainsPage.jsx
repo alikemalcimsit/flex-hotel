@@ -13,6 +13,7 @@ import { goBack, QueryError } from './shared.jsx';
 const RECORD_LINKS = Object.freeze({
   Reservation: (id) => `/rezervasyonlar/${id}`,
   Conversation: (id) => `/mesajlar/${id}`,
+  ManualTask: (id) => `/gorevler?gorev=${id}`,
 });
 
 /**

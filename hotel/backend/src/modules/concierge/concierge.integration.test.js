@@ -267,11 +267,13 @@ describe('konuşarak rezervasyon (modül 8, entegrasyon)', { skip }, () => {
   });
 
   it('bütçe dolmuşsa model çağrılmaz; misafire bilgi, konuşma personele, yönetime bütçe uyarısı', async () => {
-    await db.llmUsage.create({
+    // Bütçe denetimi günlük özetten okur (modül 12): bugün bütçe aşılmış.
+    await db.llmUsageDaily.create({
       data: {
         hotelId,
         actorName: 'concierge-agent',
         model: CONCIERGE_MODEL,
+        calls: 1,
         costUsd: '5.000001',
         date: core.calendarDateInTimeZone(ZONE),
       },
