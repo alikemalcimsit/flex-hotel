@@ -581,10 +581,10 @@ async function writeOutgoing(tx, stage, { hotelId, conversation, text, author, i
     lastMessageAt: now,
     lastMessagePreview: messagePreview(text),
     lastMessageAuthor: author,
-    // Cevap verildi: bekleme biter, okunmamışlar okunmuş sayılır.
-    awaitingReplySince: null,
-    unreadCount: 0,
-    lastReadAt: now,
+    // Cevap verildi: bekleme biter, okunmamışlar okunmuş sayılır. Sistem
+    // mesajı (onay kodu, isteğin sonucu) misafirin sorusunun cevabı değildir:
+    // bekleyen soru "cevap bekleyen" listesinden ve rozetten düşmez.
+    ...(author === 'SYSTEM' ? {} : { awaitingReplySince: null, unreadCount: 0, lastReadAt: now }),
   };
   const changedFields = [];
   // Sistem mesajı (ör. rezervasyon onay kodu) kapalı konuşmayı açmaz: yeni bir iş doğurmaz.

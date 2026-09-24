@@ -245,6 +245,23 @@ describe('misafir mesajları ve istekler (entegrasyon)', { skip }, () => {
       assert.ok((await eventNames()).includes('guest.message.reply'));
     });
 
+    it('sistem mesajı (onay kodu) misafirin bekleyen sorusunu cevaplanmış saymaz, kapalı konuşmayı açmaz', async () => {
+      const { conversationId } = await inbound({ text: 'Havaalanı transferi var mı?' });
+      const waitingSince = (await conversationRow(conversationId)).awaitingReplySince;
+      const message = await messaging.appendSystemReply(hotelId, conversationId, { text: 'Onay kodu: ABC123' });
+
+      assert.equal(message.author, 'SYSTEM');
+      assert.equal(message.delivery, 'PENDING', 'misafire gider');
+      const row = await conversationRow(conversationId);
+      assert.equal(row.awaitingReplySince?.getTime(), waitingSince.getTime(), 'soru hâlâ cevap bekliyor');
+      assert.equal(row.unreadCount, 1);
+      assert.equal(row.lastMessageAuthor, 'SYSTEM');
+
+      await db.conversation.update({ where: { id: conversationId }, data: { status: 'CLOSED', closedAt: new Date(), awaitingReplySince: null, unreadCount: 0 } });
+      await messaging.appendSystemReply(hotelId, conversationId, { text: 'Rezervasyonunuz kesinleşti' });
+      assert.equal((await conversationRow(conversationId)).status, 'CLOSED');
+    });
+
     it('aynı istemci kimliğiyle ikinci gönderim yeni mesaj yazmaz', async () => {
       const { conversationId } = await inbound();
       const clientMessageId = randomUUID();
