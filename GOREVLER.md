@@ -1157,13 +1157,84 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 13. Günlük durum ekranı — arkadaşın
 **Gün sonu:** Müdür sabah tek ekrana bakıp günü anlıyor: doluluk, gelecek/gidecek, gelir, bekleyen işler.
-- [ ] Backend: `GET /dashboard/today` (doluluk %, gelecek/gidecek sayısı, dolu/boş oda, kirli oda, arızalı oda, bugünkü gelir, ADR)
+- [x] Backend: `GET /dashboard/today` (doluluk %, gelecek/gidecek sayısı, dolu/boş oda, kirli oda, arızalı oda, bugünkü gelir, ADR)
       — doluluk % paydası **satılabilir oda** (toplam − arızalı); hizmet dışı paydadan düşmez
-- [ ] Backend: `GET /dashboard/week` (7 günlük doluluk serisi)
-- [ ] Ekran: KPI kartları (6 kart)
-- [ ] Ekran: Haftalık doluluk çizgi grafiği
-- [ ] Ekran: Bugün gelecekler / gidecekler kısa listesi (6'ya link)
-- [ ] Ekran: Bekleyen işler kutusu (onaylar, manuel görevler, açık arızalar)
+- [x] Backend: `GET /dashboard/week` (7 günlük doluluk serisi)
+- [x] Ekran: KPI kartları (6 kart)
+- [x] Ekran: Haftalık doluluk çizgi grafiği
+- [x] Ekran: Bugün gelecekler / gidecekler kısa listesi (6'ya link)
+- [x] Ekran: Bekleyen işler kutusu (onaylar, manuel görevler, açık arızalar)
+
+> **📌 Modül 13 tamamlandı (26 Eylül 2026 — Ahmet).**
+>
+> **Nerede:** ana sayfa (`/`), izin `dashboard.view` (yeni; müdür ve muhasebe
+> varsayılan — gelir içerdiği için ayrı izin). İzni olmayan eskisi gibi hızlı
+> erişim kartlarını görür.
+>
+> **Tanımlar tek kaynaktan:** doluluk, satılan ve satılabilir oda oda planının
+> gün özetinden (`plan/rules.js` → `summarizeDays`) gelir — iki ekranın sayısı
+> ayrışamaz (entegrasyon testi haftalık seriyi oda planıyla birebir karşılaştırır).
+> Satılan = bekleyen + onaylı + içeride; geçmiş gecelerde çıkış yapmış olanlar da
+> (erken çıkışta ileriki geceler sayılmaz). Satılabilir = toplam − arızalı;
+> hizmet dışı oda paydada kalır. Gelecek / gidecek sayıları ön büro özetinden
+> (`getFrontDeskSummary`): kart tıklanınca açılan listeyle aynı.
+>
+> **Gelir, ADR, RevPAR — vergiler hariç:** gece fiyatlarından (`ReservationNight`,
+> `(hotelId, date)` index'i) aynı "sayılan gece" kuralıyla SQL'de toplanır. Fiyata
+> dahil oda vergileri (KDV, konaklama vergisi — ayardaki `isIncluded` + `ROOM`)
+> ayrılır: net = brüt ÷ (1 + dahil oranlar); rezervasyon ekranının vergi dökümüyle
+> aynı formül. Brüt ayrıca döner. ADR = net / fiyatı olan satılan gece (satış yoksa
+> tanımsız, "0" değil); RevPAR = net / satılabilir oda. Opsiyonlu (kesinleşmemiş)
+> gelir ayrı. Otelin para birimi dışında satır çıkarsa toplama **karıştırılmaz**,
+> ayrı uyarılır. Bu **oda geliridir** (eldeki rezervasyon); F&B, minibar, iptal /
+> gelmedi ücreti folyo gelince (modül 15) eklenir. Vergi oranı güncel ayardan
+> okunur (geçmiş günde oran değişmişse küçük fark; gece bazında vergi folyoda).
+>
+> **Dünle kıyas ve kalan oda:** doluluk ve gelir dün geceyle (gerçekleşen)
+> kıyaslanır. "Kalan" = satılabilir − satılan; **fazla satışta negatif** (gizlenmez,
+> ekranda uyarı; grafik ekseni %100'ün üstüne açılır). Oda tipine göre kırılım
+> modül 3'ün müsaitlik takviminden (rezervasyon ekranının "yer var mı" cevabı).
+> Bu gece konaklayan kişi sayısı pansiyona göre (kahvaltı / mutfak planı).
+> Dünden kalan gelecekler (girişi geçmiş, gelmemiş — gelmedi adayı) ayrıca sayılır.
+>
+> **Anlık oda durumu:** dolu / boş / kirli / temizleniyor / temiz / kontrol
+> edildi, "hazır boş oda" (boş, temiz ya da kontrol edilmiş, bugün arıza kaydı
+> yok) ve bunlardan **bu gece kimseye verilmemiş** olanlar tek SQL sayımında;
+> odası verilmemiş gelecek sayısı bundan fazlaysa kat hizmeti kartı uyarır. Açık
+> arızalar: bugün süren arıza / hizmet dışı kayıtları (en eski 10'u + toplam).
+>
+> **Gözden geçirmede bulunan hata (modül 6'yı da etkiliyordu):** rezervasyon
+> tarihleri saat taşıyabilir (veritabanı kısıtları `date_trunc` ile gün
+> karşılaştırır; demo verisi 11:00). Ön büro "bugün gelecekler / gidecekler" ve
+> özeti gece yarısıyla karşılaştırıyordu: bugün 11:00'de gelecek misafir listede
+> yoktu, bugün 11:00'de çıkacak olan gidecekler listesinde yoktu. Karşılaştırmalar
+> gün düzeyine çevrildi (`stayCoversNight`: girişi yarından önce, çıkışı yarın ya
+> da sonra; index'ten okunur). **Yeni sorgu yazan:** rezervasyon tarihini gece
+> yarısıyla `<=` / `>` karşılaştırmayın; gün sınırıyla yazın.
+>
+> **API:** `GET /dashboard/today`, `GET /dashboard/week?from=YYYY-MM-DD` (7 gün;
+> iş gününden en çok 366 gün uzak, aşarsa 422). Cevaplar otel × canlı sürüm
+> (envanter + rezervasyon) × iş günü anahtarıyla önbellekli: rezervasyon, giriş /
+> çıkış, oda durumu, arıza olayı gelince tazelenir; aynı anda gelen istekler tek
+> hesaplamayı bekler. Ekran `inventory.changed` kanalını dinler (en sık 15 sn'de
+> bir tazelenir; kopukken 5 dk'da bir).
+>
+> **Ekran:** 6 kart (doluluk + dünle kıyas + kalan, gelecekler + dünden kalanlar,
+> gidecekler, odalar, kat hizmeti ve arıza, oda geliri + ADR + RevPAR) ilgili
+> ekrana bağlanır; oda tipine göre bu gece, bu gece konaklayanlar (pansiyon). Haftalık doluluk: bugünden 3
+> gün önce + 3 gün sonra, tek çizgi (dün gerçekleşen, yarın eldeki), "Bugün"
+> işaretli, üzerine gelince / klavyeyle gün ayrıntısı (gelir, ADR, opsiyonlu,
+> arızalı), erişilebilir **tablo görünümü**. Bekleyen işler: onaylar
+> (`/approvals/summary`), manuel görevler (`/manual-tasks/summary`, kişinin
+> kapsamıyla), cevap bekleyen mesajlar, açık / geciken misafir istekleri (her
+> biri kendi izniyle), açık arızalar. Bugünün gelecek / gidecek ilk 5'i ön büroya
+> bağlantılı (`stays.view` gerekir).
+>
+> **Modül 23 / 25'e not:** gelir ve doluluk için aynı iki kaynağı kullanın
+> (`summarizeDays` + gece geliri sorgusu, `modules/dashboard/service.js`);
+> forecast (25) haftalık serinin ileri günlerini zaten "eldeki rezervasyon"
+> olarak veriyor. Gece kapanışı (18) gelince iş günü `getBusinessDate`'ten döner;
+> ekran kendiliğinden uyar.
 
 ---
 

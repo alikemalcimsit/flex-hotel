@@ -23,6 +23,8 @@ import {
 import { activityRoutes, auditRoutes } from './modules/activity/routes.js';
 import { actorRoutes } from './modules/actors/routes.js';
 import { approvalRoutes } from './modules/approvals/routes.js';
+import { dashboardRoutes } from './modules/dashboard/routes.js';
+import { dashboardCacheStats } from './modules/dashboard/service.js';
 import { manualTaskRoutes } from './modules/manual-tasks/routes.js';
 import { approvalCacheStats } from './modules/approvals/service.js';
 import { registerApprovalSubscribers, setApprovalSubscriberLogger } from './modules/approvals/subscribers.js';
@@ -257,6 +259,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
         approvalCache: approvalCacheStats(),
         reservationCache: reservationCacheStats(),
         frontDeskCache: frontDeskCacheStats(),
+        dashboardCache: dashboardCacheStats(),
         // Arka planda çalışan aktörlerin (AI ajanları, kanal geçitleri) iş sırası.
         actorBacklog: Object.fromEntries(
           actorRegistry
@@ -284,6 +287,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   await app.register(activityRoutes, { prefix: '/activity' });
   await app.register(auditRoutes, { prefix: '/audit' });
   await app.register(actorRoutes, { prefix: '/actors' });
+  await app.register(dashboardRoutes, { prefix: '/dashboard' });
   await app.register(manualTaskRoutes, { prefix: '/manual-tasks' });
   await app.register(conciergeRoutes, { prefix: '/ai' });
   await app.register(messagingChannelRoutes, { prefix: '/messaging-channels' });

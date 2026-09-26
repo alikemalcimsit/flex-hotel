@@ -210,10 +210,13 @@ const rangeOverlap = ({ from, to }) => ({ startDate: { lt: to }, endDate: { gt: 
  * Otelin tamamı için özet girdileri: oda sayısı, konaklamalar (çıkış
  * yapmışlar dahil), arıza kayıtları ve kapanmış oda dilimleri.
  *
+ * Günlük durum ekranı (modül 13) da bunu kullanır: doluluk tanımı iki
+ * ekranda aynı kalsın (`summarizeDays`).
+ *
  * @param {string} hotelId
  * @param {{ from: Date, to: Date }} window
  */
-async function loadSummarySource(hotelId, window) {
+export async function loadSummarySource(hotelId, window) {
   const [totalRooms, reservations, blocks, segments] = await Promise.all([
     prisma.room.count({ where: { hotelId } }),
     prisma.reservation.findMany({

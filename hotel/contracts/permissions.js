@@ -56,6 +56,9 @@ export const PERMISSIONS = Object.freeze({
   /** Denetim kaydı: kim hangi kaydı ne zaman nasıl değiştirdi (eski/yeni değerle). */
   AUDIT_VIEW: 'audit.view',
 
+  /** Günlük durum ekranı (modül 13): doluluk, gelecek / gidecek, oda geliri, ADR. */
+  DASHBOARD_VIEW: 'dashboard.view',
+
   /** Aktör paneli (modül 12): aktörlerin durumu, bildirgesi, LLM harcaması. */
   ACTORS_VIEW: 'actors.view',
   /** Aktörü bu otelde açmak / kapatmak (kapalı aktörün işi personele düşer). */
@@ -91,6 +94,7 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.ROLES_MANAGE]: 'Rolleri ve izinleri yönet',
   [PERMISSIONS.ACTIVITY_VIEW]: 'Aktivite akışını ve zincirleri görüntüle',
   [PERMISSIONS.AUDIT_VIEW]: 'Denetim kaydını görüntüle',
+  [PERMISSIONS.DASHBOARD_VIEW]: 'Günlük durumu görüntüle (doluluk, gelir)',
   [PERMISSIONS.ACTORS_VIEW]: 'Aktör panelini görüntüle',
   [PERMISSIONS.ACTORS_MANAGE]: 'Aktörleri aç / kapat',
 });
@@ -137,6 +141,7 @@ export const PERMISSION_GROUPS = Object.freeze([
     label: 'Yönetim',
     permissions: [PERMISSIONS.USERS_VIEW, PERMISSIONS.USERS_MANAGE, PERMISSIONS.ROLES_MANAGE],
   },
+  { key: 'dashboard', label: 'Günlük durum', permissions: [PERMISSIONS.DASHBOARD_VIEW] },
   { key: 'monitoring', label: 'İzleme', permissions: [PERMISSIONS.ACTIVITY_VIEW, PERMISSIONS.AUDIT_VIEW] },
   { key: 'actors', label: 'Aktörler', permissions: [PERMISSIONS.ACTORS_VIEW, PERMISSIONS.ACTORS_MANAGE] },
 ]);
@@ -187,6 +192,7 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.AUDIT_VIEW,
     // Müdür aktörleri görür; açıp kapatmak (otomasyonu durdurmak) yöneticinin kararı.
     PERMISSIONS.ACTORS_VIEW,
+    PERMISSIONS.DASHBOARD_VIEW,
   ]),
   FRONT_DESK: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,
@@ -215,6 +221,8 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.STAYS_VIEW,
     PERMISSIONS.NOTIFICATIONS_VIEW,
     PERMISSIONS.APPROVALS_VIEW,
+    // Gelir ve ADR muhasebenin günlük işi.
+    PERMISSIONS.DASHBOARD_VIEW,
   ]),
   FNB: Object.freeze([PERMISSIONS.ROOMS_VIEW, PERMISSIONS.REQUESTS_VIEW, PERMISSIONS.REQUESTS_MANAGE]),
 });

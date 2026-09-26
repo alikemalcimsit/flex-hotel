@@ -1,4 +1,4 @@
-import { currentActor, isZero, toDecimal, toIsoDay, toMoneyString, toUtcDayStart } from '@hotelos/core';
+import { addDays, currentActor, isZero, toDecimal, toIsoDay, toMoneyString, toUtcDayStart } from '@hotelos/core';
 import {
   HOUSEKEEPING_STATUS_LABELS,
   PERMISSIONS,
@@ -80,6 +80,21 @@ import {
  * Kimlik numarası listelerde ve denetim izinde maskelidir; tamamı yalnızca
  * giriş formunun önizlemesinde (giriş yetkisiyle) döner.
  */
+
+/**
+ * "Konaklama bu geceyi kapsıyor" — gün düzeyinde: giriş günü ≤ bugün < çıkış
+ * günü. Tarihler saat taşıyabilir (veritabanı kısıtları da `date_trunc` ile gün
+ * karşılaştırır; ör. demo verisi 11:00); gece yarısıyla doğrudan karşılaştırmak
+ * bugün 11:00'de girecek misafiri "gelecek" saymaz, bugün 11:00'de çıkacak
+ * olanı içeride sayardı. Gün sınırlarıyla yazılır: index'ten okunur.
+ *
+ * @param {Date} businessDate
+ * @returns {[{ checkIn: { lt: Date } }, { checkOut: { gte: Date } }]}
+ */
+function stayCoversNight(businessDate) {
+  const tomorrow = addDays(businessDate, 1);
+  return [{ checkIn: { lt: tomorrow } }, { checkOut: { gte: tomorrow } }];
+}
 
 /** Özet sayılar önbelleği (sekme rozetleri sık sorar). */
 const SUMMARY_TTL_MS = 10_000;
@@ -1008,8 +1023,8 @@ export async function listArrivals(hotelId, query, { now = new Date() } = {}) {
   } else {
     const where = await scoped(hotelId, query.search, [
       { status: { in: ['PENDING', 'CONFIRMED'] } },
-      { checkIn: { lte: businessDate } },
-      { checkOut: { gt: businessDate } },
+      // Gün düzeyinde (saat içeren kayıt da doğru sayılsın): girişi yarından önce, çıkışı yarın ya da sonra.
+      ...stayCoversNight(businessDate),
     ]);
     page = await pageOf(where, [{ checkIn: 'asc' }, { id: 'asc' }], query);
   }
@@ -1035,7 +1050,7 @@ export async function listDepartures(hotelId, query, { now = new Date() } = {}) 
     const where = await scoped(hotelId, query.search, [{ checkedOutAt: { gte: start, lt: end } }]);
     page = await pageOf(where, [{ checkedOutAt: 'desc' }, { id: 'desc' }], query);
   } else {
-    const where = await scoped(hotelId, query.search, [{ status: 'CHECKED_IN' }, { checkOut: { lte: businessDate } }]);
+    const where = await scoped(hotelId, query.search, [{ status: 'CHECKED_IN' }, { checkOut: { lt: addDays(businessDate, 1) } }]);
     page = await pageOf(where, [{ checkOut: 'asc' }, { id: 'asc' }], query);
   }
   return withBalances(hotelId, page, query, context);
@@ -1096,13 +1111,14 @@ export async function getFrontDeskSummary(hotelId, { now = new Date() } = {}) {
   return summaryCache.get(key, async () => {
     const { start, end } = hotelDayRange(clock.day, hotel.timezone);
     const count = (where) => prisma.reservation.count({ where: { hotelId, ...where }, take: RESERVATION_COUNT_CAP + 1 });
-    const expectedArrival = { status: { in: ['PENDING', 'CONFIRMED'] }, checkIn: { lte: businessDate }, checkOut: { gt: businessDate } };
+    const [coversIn, coversOut] = stayCoversNight(businessDate);
+    const expectedArrival = { status: { in: ['PENDING', 'CONFIRMED'] }, ...coversIn, ...coversOut };
     const [arrivalsExpected, arrivalsUnassigned, checkedInToday, departuresExpected, departuresOverdue, checkedOutToday, inHouse] =
       await Promise.all([
         count(expectedArrival),
         count({ ...expectedArrival, roomId: null }),
         count({ checkedInAt: { gte: start, lt: end } }),
-        count({ status: 'CHECKED_IN', checkOut: { lte: businessDate } }),
+        count({ status: 'CHECKED_IN', checkOut: { lt: addDays(businessDate, 1) } }),
         count({ status: 'CHECKED_IN', checkOut: { lt: businessDate } }),
         count({ checkedOutAt: { gte: start, lt: end } }),
         count({ status: 'CHECKED_IN' }),
