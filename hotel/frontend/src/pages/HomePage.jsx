@@ -3,10 +3,12 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Badge, Icon } from '@hotelos/ui';
 import { api } from '../lib/api.js';
+import { PERMISSIONS, useCan } from '../lib/permissions.js';
 import { socket } from '../lib/socket.js';
 import { useHotelSettings } from '../lib/useHotel.js';
 import { visibleSections } from '../layout/navigation.js';
 import { useAuthStore } from '../store/auth.js';
+import { DashboardOverview } from './dashboard/DashboardOverview.jsx';
 
 /**
  * Sistem durumu kartlarının tazelenmesi. Canlı bağlantı durumu socket'ten
@@ -17,10 +19,10 @@ const HEALTH_POLL_MS = 30_000;
 /**
  * Panel ana sayfası.
  *
- * Doluluk, gelir gibi göstergeler buraya modül 13 (Dashboard) ile gelecek;
- * o veriler henüz yok, uydurma sayı konmadı. Bugün gösterilen her şey
- * gerçek: sunucu sağlığı, veritabanı, canlı bağlantı, önbellek istatistiği ve
- * kullanıcının rolüne açık bölümler.
+ * Günlük durumu görme izni olan (müdür, muhasebe) en üstte günü görür:
+ * doluluk, gelecek / gidecek, oda durumu, gelir, haftalık doluluk, bekleyen
+ * işler (modül 13). Herkes altta sistem durumunu ve rolüne açık bölümlere
+ * hızlı erişimi görür.
  */
 
 /** Hızlı erişim kartlarının alt yazısı; menüde olmayan bilgi. */
@@ -38,6 +40,7 @@ const SHORTCUT_HINTS = {
 export function HomePage() {
   const user = useAuthStore((s) => s.user);
   const permissions = useAuthStore((s) => s.permissions);
+  const canDashboard = useCan()(PERMISSIONS.DASHBOARD_VIEW);
   const health = useQuery({
     queryKey: ['health'],
     queryFn: () => api('/health'),
@@ -120,7 +123,9 @@ export function HomePage() {
             </h1>
             <p className="mt-2 max-w-xl text-sm text-white/70">
               {hotelQuery.data?.name ? `${hotelQuery.data.name} paneli. ` : ''}
-              Sistem durumu aşağıda; bölümlere hızlı erişim kartlarından geçebilirsiniz.
+              {canDashboard
+                ? 'Günün durumu aşağıda; kartlardan ilgili ekrana geçebilirsiniz.'
+                : 'Sistem durumu aşağıda; bölümlere hızlı erişim kartlarından geçebilirsiniz.'}
             </p>
           </div>
           <Link
@@ -132,6 +137,8 @@ export function HomePage() {
           </Link>
         </div>
       </section>
+
+      {canDashboard && <DashboardOverview />}
 
       <section aria-labelledby="system-status-title">
         <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
