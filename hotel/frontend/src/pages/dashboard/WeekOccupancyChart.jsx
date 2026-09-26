@@ -7,8 +7,13 @@ import { QueryError } from '../activity/shared.jsx';
 /** Grafiğin çizim alanı (px). Yükseklik x ekseni şeridini de içerir: kartta iç kaydırma çıkmaz. */
 const HEIGHT = 240;
 const PAD = Object.freeze({ top: 28, right: 20, bottom: 40, left: 44 });
-/** Y ekseni: doluluk yüzdesi, her zaman 0–100 (günler kıyaslansın, ölçek oynamasın). */
-const Y_TICKS = Object.freeze([0, 25, 50, 75, 100]);
+/**
+ * Y ekseni: doluluk yüzdesi, 0–100 (günler kıyaslansın, ölçek oynamasın). Fazla
+ * satış olan hafta eksen %100'ün üstüne açılır: noktayı %100'de kesmek fazla
+ * satışı gizlerdi.
+ */
+const Y_STEP = 25;
+const Y_MIN_TOP = 100;
 /** Nokta yarıçapı ve yüzey halkası (dataviz: ≥ 8px nokta, 2px halka). */
 const DOT_RADIUS = 4;
 const RING = 2;
@@ -51,9 +56,9 @@ export function WeekOccupancyChart({ query }) {
   return (
     <Card
       title="Haftalık doluluk"
-      description="Satılan oda / satılabilir oda (arızalı oda paydadan düşer). Bugünden öncesi gerçekleşen, sonrası eldeki rezervasyon."
+      description="Satılan oda / satılabilir oda (arızalı oda paydadan düşer). Bugünden öncesi gerçekleşen, sonrası eldeki rezervasyon; gelir vergiler hariç."
       actions={
-        <Button variant="outline" size="sm" icon={showTable ? 'zap' : 'list'} onClick={() => setShowTable((value) => !value)} aria-pressed={showTable}>
+        <Button variant="outline" size="sm" icon={showTable ? 'dashboard' : 'list'} onClick={() => setShowTable((value) => !value)} aria-pressed={showTable}>
           {showTable ? 'Grafik' : 'Tablo'}
         </Button>
       }
@@ -79,8 +84,10 @@ function Plot({ week }) {
   const plotWidth = Math.max(0, width - PAD.left - PAD.right);
   const plotHeight = HEIGHT - PAD.top - PAD.bottom;
   const step = days.length > 1 ? plotWidth / (days.length - 1) : 0;
+  const yTop = Math.max(Y_MIN_TOP, Math.ceil(Math.max(...days.map((day) => day.occupancyPct)) / Y_STEP) * Y_STEP);
+  const yTicks = Array.from({ length: yTop / Y_STEP + 1 }, (_, index) => index * Y_STEP);
   const x = (index) => PAD.left + index * step;
-  const y = (pct) => PAD.top + plotHeight * (1 - Math.min(100, Math.max(0, pct)) / 100);
+  const y = (pct) => PAD.top + plotHeight * (1 - Math.max(0, pct) / yTop);
   const points = days.map((day, index) => [x(index), y(day.occupancyPct)]);
   const line = points.map(([px, py], index) => `${index === 0 ? 'M' : 'L'}${px},${py}`).join(' ');
   const area = `${line} L${x(days.length - 1)},${y(0)} L${x(0)},${y(0)} Z`;
@@ -93,9 +100,17 @@ function Plot({ week }) {
       {width > 0 && (
         <svg width={width} height={HEIGHT} role="img" aria-label={`Haftalık doluluk, ${days[0].date} – ${days.at(-1).date}`} className="block">
           {/* Izgara: düz, ince, geri planda */}
-          {Y_TICKS.map((tick) => (
+          {yTicks.map((tick) => (
             <g key={tick}>
-              <line x1={PAD.left} x2={width - PAD.right} y1={y(tick)} y2={y(tick)} stroke="var(--color-line)" strokeWidth={1} />
+              <line
+                x1={PAD.left}
+                x2={width - PAD.right}
+                y1={y(tick)}
+                y2={y(tick)}
+                // %100 çizgisi fazla satış haftasında kapasite sınırıdır: bir ton koyu.
+                stroke={tick === 100 && yTop > 100 ? 'var(--color-line-strong)' : 'var(--color-line)'}
+                strokeWidth={1}
+              />
               <text x={PAD.left - 8} y={y(tick)} dy="0.32em" textAnchor="end" className="fill-ink-muted text-[11px] tabular-nums">
                 %{tick}
               </text>
@@ -202,11 +217,15 @@ function Tooltip({ day, currency, isToday, isPast, left, width }) {
         Oda geliri {formatMoney(day.revenue, currency)}
         {day.adr !== null && <> · ADR {formatMoney(day.adr, currency)}</>}
       </p>
-      {(day.outOfOrder > 0 || day.pendingSold > 0) && (
-        <p className="mt-0.5 text-ink-muted">
-          {[day.pendingSold > 0 ? `${day.pendingSold} opsiyonlu` : null, day.outOfOrder > 0 ? `${day.outOfOrder} arızalı oda` : null].filter(Boolean).join(' · ')}
-        </p>
-      )}
+      <p className="mt-0.5 text-ink-muted">
+        {[
+          day.available < 0 ? `${-day.available} oda fazla satış` : `${day.available} oda kaldı`,
+          day.pendingSold > 0 ? `${day.pendingSold} opsiyonlu` : null,
+          day.outOfOrder > 0 ? `${day.outOfOrder} arızalı oda` : null,
+        ]
+          .filter(Boolean)
+          .join(' · ')}
+      </p>
     </div>
   );
 }
@@ -215,14 +234,16 @@ function Tooltip({ day, currency, isToday, isPast, left, width }) {
 function WeekTable({ week }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[34rem] text-sm">
+      <table className="w-full min-w-[40rem] text-sm">
         <thead className="text-left text-[0.7rem] uppercase tracking-[0.08em] text-ink-muted">
           <tr>
             <th scope="col" className="px-2 py-2 font-bold">Gün</th>
             <th scope="col" className="px-2 py-2 text-right font-bold">Doluluk</th>
             <th scope="col" className="px-2 py-2 text-right font-bold">Satılan / satılabilir</th>
+            <th scope="col" className="px-2 py-2 text-right font-bold">Kalan</th>
             <th scope="col" className="px-2 py-2 text-right font-bold">Oda geliri</th>
             <th scope="col" className="px-2 py-2 text-right font-bold">ADR</th>
+            <th scope="col" className="px-2 py-2 text-right font-bold">RevPAR</th>
           </tr>
         </thead>
         <tbody>
@@ -236,8 +257,10 @@ function WeekTable({ week }) {
               <td className="px-2 py-2 text-right tabular-nums">
                 {day.sold} / {day.sellable}
               </td>
+              <td className={`px-2 py-2 text-right tabular-nums ${day.available < 0 ? 'text-sec-strong' : ''}`}>{day.available}</td>
               <td className="px-2 py-2 text-right tabular-nums">{formatMoney(day.revenue, week.currency)}</td>
               <td className="px-2 py-2 text-right tabular-nums">{day.adr !== null ? formatMoney(day.adr, week.currency) : '—'}</td>
+              <td className="px-2 py-2 text-right tabular-nums">{day.revpar !== null ? formatMoney(day.revpar, week.currency) : '—'}</td>
             </tr>
           ))}
         </tbody>
