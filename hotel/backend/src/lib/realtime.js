@@ -1,5 +1,6 @@
 import {
   APPROVAL_EVENTS,
+  FOLIO_EVENTS,
   LIVE_VIEW_EVENTS,
   MANUAL_TASK_EVENTS,
   MESSAGING_CHANGED_EVENTS,
@@ -71,6 +72,9 @@ export const MANUAL_TASKS_CHANNEL = 'manual-tasks.changed';
 /** Aktör paneli kanalı: bir yönetici aktörü açıp kapatınca diğer açık paneller tazelenir. */
 export const ACTORS_CHANNEL = 'actors.changed';
 
+/** Folyo ekranı, folyo listesi ve bakiyeler (modül 15). */
+export const FOLIOS_CHANNEL = 'folios.changed';
+
 /**
  * Aktivite akışı kanalı (modül 10). Olaydan değil aktivite satırından beslenir
  * (bkz. `registerActivityBridge`); yalnızca akış ekranı açık paneller abone olur.
@@ -91,6 +95,7 @@ const CHANNEL_EVENTS = Object.freeze({
   [RESERVATIONS_CHANNEL]: RESERVATIONS_CHANGED_EVENTS,
   [MANUAL_TASKS_CHANNEL]: MANUAL_TASK_EVENTS,
   [ACTORS_CHANNEL]: ['actor.setting.changed'],
+  [FOLIOS_CHANNEL]: FOLIO_EVENTS,
 });
 
 /** @param {string} hotelId */
@@ -190,6 +195,7 @@ export function registerRealtimeBridge(io, logger = console) {
         requestId: payload.requestId ?? null,
         notificationId: payload.notificationId ?? null,
         approvalId: payload.approvalId ?? null,
+        folioId: payload.folioId ?? null,
         waitlistId: payload.waitlistId ?? null,
         taskId: payload.taskId ?? null,
         actorName: payload.actorName ?? null,

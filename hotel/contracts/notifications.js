@@ -425,6 +425,7 @@ export const STAFF_ALERT_KINDS = Object.freeze([
   'APPROVAL_DECIDED',
   'WAITLIST_AVAILABLE',
   'CHECKOUT_OPEN_BALANCE',
+  'FOLIO_ATTENTION',
   'AI_HANDOFF',
   'AI_BUDGET',
 ]);
@@ -439,6 +440,7 @@ export const STAFF_ALERT_KIND_LABELS = Object.freeze({
   APPROVAL_DECIDED: 'İstediğim onayın sonucu',
   WAITLIST_AVAILABLE: 'Bekleme listesinde yer açıldı',
   CHECKOUT_OPEN_BALANCE: 'Bakiyesi kapanmadan çıkış',
+  FOLIO_ATTENTION: 'Folyoda dikkat gereken durum',
   AI_HANDOFF: 'AI konuşmayı devretti',
   AI_BUDGET: 'AI bütçesi doldu',
 });

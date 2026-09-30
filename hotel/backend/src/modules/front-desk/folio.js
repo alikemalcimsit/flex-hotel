@@ -1,22 +1,27 @@
+import { lockFolios } from '../../lib/locks.js';
 import { folioBalance } from './rules.js';
 
 /**
  * Konaklamaların folyo bakiyesi — çıkışın "hesap kapandı mı" sorusu (modül 6).
  *
- * Folyo modülü (15) folyoyu açar, kalemleri ve ödemeleri (modül 17) yazar; bu
- * dosya yalnızca okur. Sözleşme:
+ * Folyo modülü (15) folyoyu açar ve kalemleri yazar, ödeme modülü (17)
+ * ödemeleri; bu dosya yalnızca okur. Sözleşme:
  *
- *   bakiye = Σ(kalem tutarı × adet) − Σ(ödeme tutarı × kur)
+ *   bakiye = Σ kalem toplamı − Σ (ödeme tutarı × kur)
  *
- * - Silinmiş kalem ve ödeme (`deletedAt`) sayılmaz; iptal edilen kalem ya
- *   silinir ya da eksi tutarlı kalemle düzeltilir.
- * - Başka folyoya aktarılmış folyo (`TRANSFERRED`) sayılmaz: bakiyesi aktarıldığı folyoda.
- * - Ödemenin `exchangeRate`'i ödeme para biriminden folyo para birimine çevirir;
- *   boşsa ödeme folyo para birimindedir.
- * - Denormalize `Folio.balance` kolonuna güvenilmez: tek doğru kaynak kalemler ve ödemeler.
+ * - Kalem toplamı (`FolioItem.total`) = tutar × adet + hariç vergiler.
+ * - İptal edilen kalem silinmez; ters kaydı (eksi tutar) toplamı sıfırlar.
+ *   Silinmiş kalem ve ödeme (`deletedAt`) sayılmaz.
+ * - Başka folyoya birleştirilmiş folyo (`TRANSFERRED`) sayılmaz: kalemleri
+ *   birleştiği folyoda.
+ * - Ödemenin `exchangeRate`'i ödeme para biriminden folyo para birimine çevirir
+ *   (ödeme başına kuruşa yuvarlanır); boşsa ödeme folyo para birimindedir.
+ * - Denormalize `Folio.balance` kolonu listeler içindir; para-kritik yol (çıkış)
+ *   kalemlerden yeniden hesaplar.
  *
- * Konaklamanın hiç folyosu yoksa sonuçta yer almaz: bakiye **bilinmiyor**
- * demektir (sıfır değil). Çıkış bu durumda bakiye denetimi yapamadığını söyler.
+ * Konaklamanın hiç folyosu yoksa sonuçta yer almaz: işlenmiş kalem de ödeme de
+ * yoktur. Çıkış bu durumda ödeneceği yalnızca işlenecek tutarlardan hesaplar
+ * (`amountDue`).
  *
  * @param {import('@prisma/client').PrismaClient | import('@prisma/client').Prisma.TransactionClient} client
  * @param {string} hotelId
@@ -32,12 +37,12 @@ export async function stayBalances(client, hotelId, reservationIds) {
            COALESCE(SUM(p."total"), 0)::text AS "paid"
     FROM "Folio" f
     LEFT JOIN LATERAL (
-      SELECT SUM(i."amount" * i."quantity") AS "total"
+      SELECT SUM(i."total") AS "total"
       FROM "FolioItem" i
       WHERE i."folioId" = f."id" AND i."deletedAt" IS NULL
     ) c ON TRUE
     LEFT JOIN LATERAL (
-      SELECT SUM(pay."amount" * COALESCE(pay."exchangeRate", 1)) AS "total"
+      SELECT SUM(ROUND(pay."amount" * COALESCE(pay."exchangeRate", 1), 2)) AS "total"
       FROM "Payment" pay
       WHERE pay."folioId" = f."id" AND pay."deletedAt" IS NULL
     ) p ON TRUE
@@ -55,9 +60,27 @@ export async function stayBalances(client, hotelId, reservationIds) {
 }
 
 /**
- * Konaklamaya folyoda bir hareket (kalem ya da ödeme) işlenmiş mi? Girişin
- * geri alınabilmesi için hareket olmamalı: geri alınan girişin kalemi
- * sahipsiz kalırdı.
+ * Konaklamanın folyolarını kilitler: çıkış bakiyeyi okurken aynı anda folyoya
+ * kalem ya da ödeme yazan işlem beklesin (okunan bakiye commit edilmemiş bir
+ * yazımı kaçırmasın). Rezervasyon kilidinden sonra çağrılır.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string} reservationId
+ */
+export async function lockStayFolios(tx, hotelId, reservationId) {
+  const folios = await tx.folio.findMany({ where: { hotelId, reservationId }, select: { id: true } });
+  await lockFolios(tx, hotelId, folios.map((folio) => folio.id));
+}
+
+/**
+ * Konaklamada folyo hareketi var mı? Girişin geri alınabilmesi için hareket
+ * olmamalı: geri alınan girişin kalemi sahipsiz kalırdı.
+ *
+ * Hareket: bu konaklamadan doğan kalemler (başka folyoya aktarılmış olsa da)
+ * ve konaklamanın folyolarındaki ödemeler. **Erken giriş ücreti hareket
+ * sayılmaz:** girişin kendi ücretidir; giriş geri alınınca folyo aktörü ters
+ * kayıtla düşer (ücreti ve ters kaydı da sayılmaz).
  *
  * @param {import('@prisma/client').Prisma.TransactionClient} client
  * @param {string} hotelId
@@ -65,13 +88,22 @@ export async function stayBalances(client, hotelId, reservationIds) {
  */
 export async function hasFolioActivity(client, hotelId, reservationId) {
   const [row] = await client.$queryRaw`
-    SELECT EXISTS (
-      SELECT 1 FROM "Folio" f
-      WHERE f."hotelId" = ${hotelId} AND f."reservationId" = ${reservationId} AND f."deletedAt" IS NULL
-        AND (
-          EXISTS (SELECT 1 FROM "FolioItem" i WHERE i."folioId" = f."id" AND i."deletedAt" IS NULL)
-          OR EXISTS (SELECT 1 FROM "Payment" pay WHERE pay."folioId" = f."id" AND pay."deletedAt" IS NULL)
-        )
+    SELECT (
+      EXISTS (
+        SELECT 1 FROM "FolioItem" i
+        WHERE i."hotelId" = ${hotelId} AND i."reservationId" = ${reservationId} AND i."deletedAt" IS NULL
+          AND i."source" <> 'EARLY_CHECK_IN'
+          AND NOT (
+            i."source" = 'REVERSAL'
+            AND EXISTS (SELECT 1 FROM "FolioItem" o WHERE o."id" = i."reversalOfId" AND o."source" = 'EARLY_CHECK_IN')
+          )
+      )
+      OR EXISTS (
+        SELECT 1 FROM "Payment" pay
+        JOIN "Folio" f ON f."id" = pay."folioId"
+        WHERE f."hotelId" = ${hotelId} AND f."reservationId" = ${reservationId}
+          AND f."deletedAt" IS NULL AND pay."deletedAt" IS NULL
+      )
     ) AS "active"`;
   return Boolean(row?.active);
 }

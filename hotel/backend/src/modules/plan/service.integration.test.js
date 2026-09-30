@@ -293,14 +293,18 @@ describe('oda planı servisi (entegrasyon)', { skip }, () => {
     it('konaklama, misafir ve folyo bilgisini birlikte verir', async () => {
       const reservation = await seedReservation({ roomId: room['101'].id, checkIn: 0, checkOut: 3 });
       const guest = await prismaUnfiltered.guest.findFirst({ where: { hotelId } });
+      // İki pencere (bölünmüş folyo): çekmece toplam bakiyeyi gösterir.
       await prismaUnfiltered.folio.create({
-        data: { hotelId, reservationId: reservation.id, guestId: guest.id, status: 'OPEN', balance: '1250.50' },
+        data: { hotelId, reservationId: reservation.id, guestId: guest.id, window: 1, status: 'OPEN', chargesTotal: '1000.50', balance: '1000.50' },
+      });
+      await prismaUnfiltered.folio.create({
+        data: { hotelId, reservationId: reservation.id, guestId: guest.id, window: 2, status: 'CLOSED', closedAt: new Date(), chargesTotal: '250', balance: '250' },
       });
 
       const detail = await plan.getReservationDetail(hotelId, reservation.id);
       assert.equal(detail.nights, 3);
       assert.equal(detail.room.number, '101');
-      assert.equal(detail.folio.balance, '1250.5');
+      assert.deepEqual([detail.folio.balance, detail.folio.status, detail.folio.count], ['1250.50', 'OPEN', 2]);
       assert.equal(detail.totalPrice, '3000');
       assert.equal(detail.actions.canChangeRoom, true);
       assert.equal(detail.actions.canUnassign, true);

@@ -256,7 +256,7 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 - [x] Ekran: Rezervasyon listesi (tablo, filtre, durum rozeti)
 - [x] Ekran: Yeni rezervasyon formu (misafir ara/yeni, tarih, kişi, oda tipi, pansiyon, fiyat önizleme, not)
 - [x] Ekran: Rezervasyon detayı (bilgiler, durum geçmişi, iptal butonu)
-- [ ] Ekran: Rezervasyon detayında folyo linki — **modül 15 (folyo) bekleniyor**; iptal / gelmedi ücreti rezervasyonda kayıtlı
+- [x] Ekran: Rezervasyon detayında folyo linki — modül 15'le geldi: "Folyo" kartı (pencereler, bakiyeler, eksik oda ücreti uyarısı), folyo ekranına bağlantı; iptal / gelmedi ücreti folyo aktörüyle folyoya işlenir
 - [x] Ekran: Grup rezervasyon (tek formda birden fazla oda satırı)
 - [x] Ekran: Bekleyen liste (yer yoksa "listeye al", yer açılınca uyarı)
 - [x] Aktör: reservation-worker paketi (`reservation.requested` → servis → `reservation.created` / `reservation.rejected`)
@@ -958,7 +958,7 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 - [x] Ekran: Onay detayı (veri, gerekçe) + Onayla / Reddet + not
 - [x] Ekran: Geçmiş onaylar
 - [x] Frontend: yeni onay gelince üst barda sayaç + socket bildirimi
-- [ ] Onaya iş götüren ilk gerçek akış — **modül 15 / 17 / 31 bekleniyor**; altyapı, aktör tabanı ve ekran hazır
+- [x] Onaya iş götüren ilk gerçek akış — **folyo kalemi iptali (modül 15, tür `FOLIO_VOID`)**: servis açar, karar dinleyicisi uygular; dört göz kuralı (isteyen onaylayamaz). İade / büyük ödeme (17) ve toplu fiyat (31) aynı yoldan gelecek
 
 > **📌 Modül 11 tamamlandı (17 Eylül 2026 — Ahmet). İsteyen tarafı bilinçli olarak boş.**
 >
@@ -1276,14 +1276,147 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 15. Folyo yönetimi — arkadaşın
 **Gün sonu:** Her konaklamanın hesabı tek ekranda: oda ücreti, restoran, minibar kalemleri; bölme, birleştirme, transfer yapılabiliyor.
-- [ ] Backend: Folio / FolioItem API'leri (aç, kalem ekle, kalem iptal, kapat)
-- [ ] Backend: `splitFolio`, `mergeFolios`, `transferItem` servisleri
-- [ ] Backend: bakiye hesabı (kalemler − ödemeler), vergi dahil/hariç
-- [ ] Ekran: Folyo detayı (kalem tablosu, toplam, ödenen, bakiye)
-- [ ] Ekran: Harcama ekle formu (tip, açıklama, tutar, adet, vergi)
-- [ ] Ekran: Bölme (kalemleri iki folyoya dağıt), birleştirme (grup), transfer
-- [ ] Ekran: Kalem iptali → onay kuyruğuna gider
-- [ ] Aktör: billing-worker paketi (`guest.checked_in` → folyo aç; gece → oda ücreti kalemi; `fnb.order.charged` / `minibar.consumed` → kalem; `guest.checked_out` → bakiye kontrolü)
+- [x] Backend: Folio / FolioItem API'leri (aç, kalem ekle, kalem iptal, kapat)
+- [x] Backend: `splitFolio`, `mergeFolios`, `transferItem` servisleri
+- [x] Backend: bakiye hesabı (kalemler − ödemeler), vergi dahil/hariç
+- [x] Ekran: Folyo detayı (kalem tablosu, toplam, ödenen, bakiye)
+- [x] Ekran: Harcama ekle formu (tip, açıklama, tutar, adet, vergi)
+- [x] Ekran: Bölme (kalemleri iki folyoya dağıt), birleştirme (grup), transfer
+- [x] Ekran: Kalem iptali → onay kuyruğuna gider
+- [x] Aktör: billing-worker paketi (`guest.checked_in` → folyo aç; gece → oda ücreti kalemi; `fnb.order.charged` / `minibar.consumed` → kalem; `guest.checked_out` → bakiye kontrolü)
+
+> **📌 Modül 15 tamamlandı (30 Eylül 2026 — Ahmet).**
+>
+> **Veri** (migration `20260930090000_folio_management`):
+> - `Folio`: konaklamadaki **pencere** (`window`, 1 ana folyo; bölmeyle 2, 3… en çok 8,
+>   konaklamada tekil), ödeyen adı (`payerName`: şirket / acente — faturanın alıcı
+>   varsayılanı), denormalize **borç / ödenen / bakiye** (kısıt: bakiye = borç − ödenen),
+>   açan / kapatan, birleştirme izi (`mergedIntoId`, durum `TRANSFERRED`).
+> - `FolioItem`: doğduğu konaklama (`reservationId`, aktarmada değişmez), **hizmet günü**
+>   (oda ücretinde gece), **kaynak** (`FolioItemSource`: elle, gece, erken giriş, geç çıkış,
+>   iptal, gelmedi, restoran, minibar, iptal kaydı), vergi kategorisi ve **işlendiği andaki
+>   vergi dökümü** (`taxLines`), satır net + vergi = toplam (kısıt), **tekrar işleme
+>   anahtarı** (`sourceKey`, otel başına tekil), iptal (ters kayıt `reversalOfId` tekil +
+>   `voidedAt/By/Reason`), bekleyen iptal onayı, son aktarma izi. `taxId` kolonu kalktı
+>   (vergi kalemin dökümünde; vergi silinse de geçmiş bozulmaz — silme engeli kaldırıldı).
+> - Yeni: `FolioRoute` (konaklama × tip → folyo), `RoomChargeRun` (otel × gece tekil).
+> - Zil: `FOLIO_ATTENTION`. Eski satırlar (yalnızca demo seed'inden) silinmedi, dolduruldu.
+>
+> **Para kuralları:**
+> - **Satır:** brüt = birim × adet (dahil vergiler içinde); net = brüt ÷ (1 + Σ dahil oran),
+>   dahil vergilerin toplamı brüt − net (kuruş kaybolmaz); hariç her vergi net × oran;
+>   toplam = brüt + hariç vergiler. Rezervasyon ekranının dökümüyle aynı formül, **satır
+>   bazında** yuvarlanır (çok gecede toplamla kuruş farkı olabilir). Vergi kalemin
+>   kategorisine göre (ayarlardaki "uygulandığı kalem"); indirim seçilen gelirin vergisini düşürür.
+> - **Bakiye** = Σ kalem toplamı − Σ (ödeme × kur, ödeme başına kuruşa yuvarlanır).
+>   Denormalize toplamlar folyo kilitliyken kalemlerden yeniden hesaplanır
+>   (`refreshFolioTotals`); çıkış yine kalemlerden hesaplar.
+> - **Kalem silinmez:** iptal eksi tutarlı ters kayıttır (asıl kalem "iptal edildi"),
+>   iptal günü tarihli (kapanmış günün geliri geriye dönmez). Elle iptal **onay kuyruğuna**
+>   gider (`FOLIO_VOID`); **isteyen onaylayamaz** (dört göz — kasa açığına karşı),
+>   reddederek geri çekebilir. Onaylanınca ters kayıt onaylayan adına işlenir.
+> - **Gece oda ücreti:** gün dönünce (iş günü ilerleyince) zamanlayıcı otel başına bir
+>   kez `folio.room_charges.due` yayınlar; folyo aktörü içerideki bütün konaklamaların o
+>   geceye kadar eksik gecelerini işler (100'lük parçalar, her parça ayrı transaction,
+>   yarıda kalan çalışma kaldığı yerden devam eder). **Uzlaştırma:** işlenmemiş gece
+>   işlenir; fiyatı sonradan değişen gece için fark kalemi (artıysa oda, eksiyse oda
+>   gelirinden indirim); konaklamadan çıkan işlenmiş gece sıfırlanır; **iptal edilmiş
+>   (ikram) geceye dokunulmaz**. Anahtar `night:<konaklama>:<gün>[:<sıra>]`: iki çalışma
+>   aynı anda koşsa da çift kalem yazılmaz (test edildi). Sunucu kapalıyken geçen geceler
+>   ilk çalışmada telafi edilir.
+> - **Yönlendirme:** sistem kalemleri (gece, ücretler, restoran, minibar) konaklamanın
+>   tip → folyo yönlendirmesine, yoksa ilk açık folyosuna düşer; açık folyosu yoksa yeni
+>   pencere açılır. Elle harcama seçili folyoya gider.
+> - **Tek seferlik ücretler** (erken giriş, geç çıkış, iptal, gelmedi) konaklama başına bir
+>   kez etkin: giriş geri alınıp yeniden yapılsa da ikinci ücret çıkmaz; geri alınınca ücret
+>   ters kayıtla düşer (yalnızca geri almadan **önce** işlenen). Erken / geç ücret "Oda"
+>   vergisiyle, iptal / gelmedi ücreti **"Diğer"** vergisiyle (otel ayarlar).
+> - **Kapatma:** bakiye sıfır, bekleyen iptal yok, içerideki misafirin **son açık
+>   folyosu değil** (önce yapısal engel söylenir). Kapanan folyoya yönlenen tipler serbest
+>   kalır. Yeniden açma yetkiyle, gerekçeli.
+> - **Birleştirme (grup hesabı):** kaynakların bütün kalem ve **ödemeleri** hedefe taşınır,
+>   kaynak `TRANSFERRED`; kaynak konaklamada o folyoya düşen tipler hedefe yönlenir (diğer
+>   pencerelere düşenler olduğu gibi). Geri alınmaz (kalemler aktarılarak ayrılır).
+>
+> **Kilit sırası:** rezervasyon → (oda tipi) → folyo; folyolar id sırasıyla tek seferde.
+> Yeni pencere açabilen her işlem rezervasyonu kilitler; hedef kilit altında yeniden
+> okunur (bu arada kapanan folyoya kalem düşmez). Aynı folyoya eşzamanlı 10 harcama:
+> toplamlar tutarlı (test edildi).
+>
+> **Olaylar** (`folios.changed` kanalı; gövdede tutar / açıklama yok): `folio.opened`,
+> `.updated`, `.charge.posted`, `.room_charges.due` (iç tetikleyici), `.room_charges.posted`
+> (gece başına tek özet — 2500 socket haberi değil), `.item.void_requested`, `.item.voided`,
+> `.item.void_declined`, `.items.transferred`, `.split`, `.merged`, `.routes.changed`,
+> **`folio.closed`** (fatura), `.reopened`. Dış kaynak sözleşmeleri: `fnb.order.charged`,
+> `minibar.consumed` (konaklama ya da oda + kalemler; odada misafir yoksa iş personele düşer).
+>
+> **API** (`/folios`): liste (`view`: içeridekiler / açık bakiye / bütün açıklar / kapananlar;
+> arama: misafir, onay kodu, oda no, ödeyen; sayfalı, sayım 2000'de kesilir), `GET /room-charges`
+> (son çalışma, eksik gece), `POST /room-charges/run`, `POST /charges/preview`,
+> `GET|POST /stays/:reservationId` (folyolar + yönlendirme + eksik oda ücreti / folyo aç),
+> `PUT /stays/:id/routes`, `POST /stays/:id/room-charges`, `GET /:folioId` (toplamlar, vergi
+> özeti), `GET /:folioId/items` (hizmet günü + işlenme sırası, imleçli), `GET /:folioId/payments`,
+> `PATCH /:folioId` (ödeyen), `POST /:folioId/charges` (201 / aynı istek 200),
+> `POST /:folioId/items/:itemId/void` (202, onaya), `/transfer`, `/split`, `/merge`, `/close`,
+> `/reopen`. İzinler: `folio.view` (kat hizmetleri görmez), `folio.post` (resepsiyon, müdür,
+> muhasebe), `folio.adjust` (indirim, yeniden açma — müdür, muhasebe).
+>
+> **Aktör (`@hotelos/billing-worker`):** giriş → folyo + erken giriş ücreti; çıkış → kalan
+> geceler + geç çıkış ücreti, bakiyesi sıfır olan folyo kapanır (`folio.closed`), bakiye
+> kalırsa (bakiyeyle çıkış değilse) folyo yetkilisine zil; giriş / çıkış geri alma → ücret
+> düşer, folyo yeniden açılır; iptal / gelmedi → ücret, geri alınırsa düşer; gece → oda
+> ücretleri; restoran / minibar → kalem. Kapalıyken iş "Folyo" modülünün manuel görevine
+> düşer; personel aynı işi folyo ekranından yapar (aynı anahtar: sonradan ikinci kez yazılmaz).
+>
+> **Ekranlar:** `/folyolar` (görünümler, arama, gece oda ücreti şeridi + "Oda ücretlerini
+> işle"), `/folyolar/:reservationId` (pencere sekmeleri, yönlendirme satırı, toplamlar,
+> vergi özeti, döküm: seçim, iptal edilen üstü çizili + iptal kaydı, aktarma / kaynak izi,
+> bekleyen iptal rozeti, "daha fazla"; ödemeler; harcama ekle (sunucudan canlı vergi
+> önizlemesi, hazır açıklamalar, çift gönderim korumalı), iptal iste, aktar (aynı konaklama
+> ya da arama ile başka konaklama), böl (ödeyen + yönlendirme), birleştir (çoklu arama),
+> yönlendirme, ödeyen, kapat, yeniden aç). Rezervasyon detayında folyo kartı, çıkış
+> penceresinde "işlenecek" satırları ve "Folyoyu aç", ön büro listelerinde bakiye → folyo,
+> oda planı çekmecesinde toplam bakiye (bütün pencereler) + bağlantı. Onaylarda kendi
+> isteğinin "Onayla" düğmesi kapalı (sebebi yazılı).
+>
+> **Modül 6'da değişen (çıkış):** ödenecek = folyo bakiyesi + **çıkışta işlenecekler**
+> (kalan geceler, geç çıkış ücreti — vergileriyle, `pendingStayCharges`); yönlendirmeyle
+> başka konaklamanın folyosuna düşecek tutar misafirin borcu değildir. **Folyo yoksa bakiye
+> artık "bilinmiyor" değil sıfırdır** (işlenmiş kalem de ödeme de yok): gece ücretleri
+> ödenecek sayılır. Çıkış bakiyeyi folyolar kilitliyken okur. Erken giriş ücreti girişin geri
+> alınmasını engellemez. Oda planı çekmecesi artık yalnız son folyonun değil bütün
+> pencerelerin bakiyesini gösteriyordu (hata düzeltildi).
+>
+> **2500 kişi için:** gece çalışması parça parça, tek özet olay; kalem sorgusu
+> `(folioId, serviceDate, postedAt, id)` index'iyle imleçli; uzlaştırma
+> `(reservationId, source, serviceDate)` index'iyle; liste `(hotelId, status, updatedAt|closedAt, id)`
+> index'leri ve denormalize bakiye; çıkış yalnızca o konaklamanın folyolarını kilitler.
+> Test: kurallar 22 + sözleşme 13 + aktör 14 birim; 18 folyo + güncellenen ön büro / plan /
+> aktör entegrasyon testi (tüm entegrasyon 359/359).
+>
+> **⚠️ Canlıya alırken:** 15 canlıya çıkınca oda ücretleri folyoya işlenir ve çıkış bakiyenin
+> kapanmasını ister; **ödeme girişi modül 17'de**. 17 gelene kadar çıkış ancak
+> `stays.checkout_open_balance` yetkisiyle, gerekçeli yapılır — 15 ve 17'yi birlikte almak
+> önerilir. Canlıdaki demo verisinde seed'in eski "toplu oda ücreti" folyoları var; gece
+> çalışması geceleri ayrıca işler (çift sayım) — canlıya alırken demo folyoları temizlenmeli
+> (yedekle, onayla).
+>
+> **Devir:**
+> - **Modül 16 (fatura):** `folio.closed`'u dinle; satırlar kalemlerden (`taxLines` işlendiği
+>   andaki döküm; `netAmount` / `taxAmount`), alıcı varsayılanı `payerName` yoksa misafir.
+>   Faturası kesilmiş folyoyu `reopenFolio` / `reopenStayOnCheckOutRevert` içinde durdur.
+> - **Modül 17 (ödeme):** `Payment` yazarken folyoyu kilitle (`lockFolios`) ve
+>   `refreshFolioTotals` çağır; ödeme folyo para birimine çevrilmiş tutarla bakiyeye girer.
+>   Çıkmış konaklamanın folyosu ödemeyle sıfırlanınca kapatma (`closeFolio` kuralları) sende.
+>   Girişteki nakit / havale teminatı ödeme olarak (provizyon değil) burada işlenmeli
+>   (`guest.checked_in.deposit`). İade ve büyük ödeme onayı: `requestApproval` (bkz. modül 11).
+>   Çıkış penceresindeki "bakiye var" uyarısına ödeme ekranı bağlantısı.
+> - **Modül 18 (gece kapanışı):** oda ücreti hazır: `runRoomCharges(hotelId, { night })`
+>   (günü kapatmadan önce o geceyi işlemek için) — zamanlayıcı `getBusinessDate`'i izler,
+>   audit iş gününü değiştirince kendiliğinden uyar.
+> - **Modül 19 / 39 / 41 (minibar, restoran, oda servisi):** `minibar.consumed` /
+>   `fnb.order.charged` yayınla (katalogdaki şema); kalem otelin vergi ayarıyla işlenir,
+>   yönlendirmeye uyar, aynı olay ikinci kez gelse de tek yazılır.
 
 ### 16. Fatura kesme — Ali Kemal
 **Gün sonu:** Kapanan folyodan tek tıkla fatura üretiliyor, PDF alınıyor, numara serisi düzgün ilerliyor.

@@ -6,6 +6,7 @@ import {
   NOTIFICATION_TRIGGER_EVENTS,
   manualTaskPermission,
 } from '@hotelos/hotel-contracts';
+import { createBillingWorker } from '@hotelos/billing-worker';
 import { parseToolArguments } from '@hotelos/llm';
 import { createNotificationWorker, NOTIFICATION_WORKER_NAME } from '@hotelos/notification-worker';
 import { createReservationWorker } from '@hotelos/reservation-worker';
@@ -18,6 +19,7 @@ import { webchatGatewayService, webchatTransport } from '../modules/channels/web
 import { whatsappGatewayService } from '../modules/channels/whatsapp.js';
 import { createLlmDeps } from '../modules/concierge/llm.js';
 import { conciergeService, routerService } from '../modules/concierge/service.js';
+import * as folioService from '../modules/folios/service.js';
 import { enqueueTriggerNotifications } from '../modules/notifications/service.js';
 import { raiseStaffAlert } from '../modules/notifications/staff-alerts.js';
 import { requestApprovalStandalone } from '../modules/approvals/service.js';
@@ -205,6 +207,23 @@ export function registerActors() {
   }
   if (!actorRegistry.get('reservation-worker')) {
     actorRegistry.register(createReservationWorker({ createFromChannelRequest }, deps));
+  }
+  if (!actorRegistry.get('billing-worker')) {
+    actorRegistry.register(
+      createBillingWorker(
+        {
+          openStayOnCheckIn: folioService.openStayOnCheckIn,
+          settleStayOnCheckOut: folioService.settleStayOnCheckOut,
+          reverseCheckInFees: folioService.reverseCheckInFees,
+          reopenStayOnCheckOutRevert: folioService.reopenStayOnCheckOutRevert,
+          postReservationFee: folioService.postReservationFee,
+          reverseReservationFees: folioService.reverseReservationFees,
+          runRoomCharges: folioService.runRoomCharges,
+          postExternalCharge: folioService.postExternalCharge,
+        },
+        deps,
+      ),
+    );
   }
   if (!actorRegistry.get(NOTIFICATION_WORKER_NAME)) {
     actorRegistry.register(

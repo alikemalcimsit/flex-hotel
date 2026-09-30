@@ -65,6 +65,8 @@ const NotificationChannelsTab = lazy(() =>
 const GuestRequestsPage = lazy(() =>
   import('./pages/requests/GuestRequestsPage.jsx').then((m) => ({ default: m.GuestRequestsPage })),
 );
+const FoliosPage = lazy(() => import('./pages/folios/FoliosPage.jsx').then((m) => ({ default: m.FoliosPage })));
+const StayFolioPage = lazy(() => import('./pages/folios/StayFolioPage.jsx').then((m) => ({ default: m.StayFolioPage })));
 const ReservationsPage = lazy(() =>
   import('./pages/reservations/ReservationsPage.jsx').then((m) => ({ default: m.ReservationsPage })),
 );
@@ -194,6 +196,22 @@ export default function App() {
               <Route path="konaklayanlar" element={<InHouseTab />} />
             </Route>
             <Route path="oda-plani" element={<RoomPlanPage />} />
+            <Route
+              path="folyolar"
+              element={
+                <RequirePermission permission={PERMISSIONS.FOLIO_VIEW}>
+                  <FoliosPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="folyolar/:reservationId"
+              element={
+                <RequirePermission permission={PERMISSIONS.FOLIO_VIEW}>
+                  <StayFolioPage />
+                </RequirePermission>
+              }
+            />
             {/* Konuşma adreste: yenileyince açık kalır, bağlantı paylaşılabilir. */}
             <Route
               path="mesajlar/:conversationId?"

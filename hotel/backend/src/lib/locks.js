@@ -8,7 +8,7 @@
  * karar verir.
  *
  * **Kilit sırası kuralı (deadlock önlemi):** rezervasyon → oda tipi → oda →
- * konuşma → mesaj → istek; her grup kendi içinde id sırasıyla. Bu dosyadaki
+ * konuşma → mesaj → istek → folyo; her grup kendi içinde id sırasıyla. Bu dosyadaki
  * fonksiyonlar id'leri sıralayıp tek sorguda kilitler — çağıranlar yalnızca
  * gruplar arası sıraya uymalı (oda kilidini aldıktan sonra rezervasyon
  * kilitlenmez). Modül 4 rezervasyon oluştururken `lockRoomTypes` çağırmalı;
@@ -124,4 +124,18 @@ export function lockApprovals(tx, hotelId, approvalIds) {
  */
 export function lockWaitlistEntries(tx, hotelId, waitlistIds) {
   return lockRows(tx, 'WaitlistEntry', hotelId, waitlistIds);
+}
+
+/**
+ * Folyo satırı (modül 15): kalem işleme, aktarma, bölme, birleştirme, kapatma
+ * ve çıkıştaki bakiye okuması aynı folyoda sıraya girer. Kilit altında
+ * toplamlar yeniden hesaplanır; kapanmakta olan folyoya kalem düşmez.
+ * Sıra: önce rezervasyon kilidi (gerekiyorsa), sonra folyolar (id sırasıyla).
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} folioIds
+ */
+export function lockFolios(tx, hotelId, folioIds) {
+  return lockRows(tx, 'Folio', hotelId, folioIds);
 }

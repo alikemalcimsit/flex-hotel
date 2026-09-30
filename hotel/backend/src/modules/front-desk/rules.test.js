@@ -150,10 +150,11 @@ describe('bakiye', () => {
     assert.equal(folioBalance({ charges: '4500.00', paid: '5000.00' }), '-500.00');
   });
 
-  it('ödenecek: bakiye + folyoya henüz işlenmemiş ücret; folyo yoksa denetlenemez', () => {
+  it('ödenecek: bakiye + henüz işlenmemiş tutarlar; folyo yoksa bakiye sıfırdır', () => {
     assert.equal(amountDue({ balance: '0.00' }, ['400.00', null]), '400.00');
     assert.equal(amountDue({ balance: '-100.00' }, [null]), '-100.00');
-    assert.equal(amountDue(null, ['400.00']), null);
+    assert.equal(amountDue(null, ['1018.18', '255.00']), '1273.18');
+    assert.equal(amountDue(null, []), '0.00');
   });
 
   it('tutar karşılaştırması biçimden bağımsız', () => {

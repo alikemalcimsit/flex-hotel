@@ -81,7 +81,7 @@ export function InHouseTab() {
         </span>
       ),
     },
-    { key: 'balance', header: 'Bakiye', render: (row) => <BalanceCell balance={row.balance} currency={row.currency} /> },
+    { key: 'balance', header: 'Bakiye', render: (row) => <BalanceCell balance={row.balance} currency={row.currency} reservationId={row.id} /> },
   ];
 
   return (

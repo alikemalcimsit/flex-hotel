@@ -1,4 +1,4 @@
-import { addDays, nightCount, toIsoDay, toUtcDayStart } from '@hotelos/core';
+import { addDays, nightCount, sum, toIsoDay, toMoneyString, toUtcDayStart } from '@hotelos/core';
 import { PLAN_ASSIGNABLE_STATUSES, PLAN_SEGMENT_STATUSES } from '@hotelos/hotel-contracts';
 import { prisma } from '../../db.js';
 import { getBusinessDate } from '../../lib/business-date.js';
@@ -485,11 +485,12 @@ export async function getReservationDetail(hotelId, reservationId) {
         room: {
           select: { id: true, number: true, floor: true, occupancy: true, housekeepingStatus: true },
         },
+        // Konaklamanın bütün folyoları (pencereleri); birleştirilmiş olan sayılmaz
+        // (kalemleri birleştiği folyoda). Bir konaklamada en fazla 8.
         folios: {
-          where: { deletedAt: null },
+          where: { deletedAt: null, status: { not: 'TRANSFERRED' } },
           select: { id: true, status: true, balance: true, currency: true },
-          orderBy: { createdAt: 'desc' },
-          take: 1,
+          orderBy: { window: 'asc' },
         },
         roomSegments: {
           where: { deletedAt: null },
@@ -512,7 +513,16 @@ export async function getReservationDetail(hotelId, reservationId) {
 
   const stayEnded = toUtcDayStart(row.checkOut) <= businessDate.getTime();
   const changeable = ROOM_CHANGEABLE_STATUSES.has(row.status);
-  const folio = row.folios[0] ?? null;
+  // Çekmecede tek satır: bütün pencerelerin bakiyesi toplamı; biri açıksa "açık".
+  const folio = row.folios.length
+    ? {
+        id: row.folios[0].id,
+        status: row.folios.some((entry) => entry.status === 'OPEN') ? 'OPEN' : 'CLOSED',
+        balance: toMoneyString(sum(...row.folios.map((entry) => entry.balance.toString()))),
+        currency: row.folios[0].currency,
+        count: row.folios.length,
+      }
+    : null;
 
   // Oda geçmişi: kapanmış dilimler + açık dilim, gece sırasıyla.
   const roomHistory = [
@@ -559,7 +569,7 @@ export async function getReservationDetail(hotelId, reservationId) {
     roomType: row.roomType,
     room: row.room,
     roomHistory,
-    folio: folio ? { ...folio, balance: folio.balance.toString() } : null,
+    folio,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     actions: {

@@ -1,6 +1,7 @@
+import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
-import { eachNight } from '@hotelos/core';
+import { eachNight, runWithContext } from '@hotelos/core';
 import { distributeTotal } from '../src/modules/reservations/rules.js';
 
 const prisma = new PrismaClient();
@@ -240,27 +241,6 @@ async function main() {
     }
 
     if (p.status === 'CHECKED_IN' || p.status === 'CHECKED_OUT') {
-      const hasFolio = await prisma.folio.findFirst({ where: { reservationId: reservation.id } });
-      if (!hasFolio) {
-        const isClosed = p.status === 'CHECKED_OUT';
-        await prisma.folio.create({
-          data: {
-            hotelId,
-            reservationId: reservation.id,
-            guestId: guests[p.guest].id,
-            status: isClosed ? 'CLOSED' : 'OPEN',
-            balance: isClosed ? 0 : totalPrice + 450,
-            closedAt: isClosed ? daysFromNow(p.inDay + p.nights) : null,
-            items: {
-              create: [
-                { hotelId, type: 'ROOM', description: `Oda ücreti (${p.nights} gece)`, amount: totalPrice, quantity: 1, postedBy: 'seed' },
-                { hotelId, type: 'MINIBAR', description: 'Minibar', amount: 250, quantity: 1, postedBy: 'seed' },
-                { hotelId, type: 'FNB', description: 'Restoran', amount: 200, quantity: 1, postedBy: 'seed' },
-              ],
-            },
-          },
-        });
-      }
       // Oda durumu rezervasyonun **gerçek** odasına yazılır: çakışma yüzünden
       // oda verilememişse ortada dolu bir oda da yok.
       if (reservation.roomId) {
@@ -275,6 +255,8 @@ async function main() {
     }
   }
 
+  const folioSeed = await seedFolios(hotelId);
+
   const { conversations, requests } = await seedMessaging(hotelId, guests, roomByNumber);
 
   // Bildirim şablonları (modül 9): var olan (otelin düzenlediği) şablona dokunulmaz.
@@ -285,7 +267,7 @@ async function main() {
   console.log(
     `Seed tamam: 1 otel, ${users.length} kullanıcı, ${ROOM_TYPES.length} oda tipi, ${ROOMS.length} oda, ` +
       `${GUESTS.length} misafir, ${reservationPlans.length} rezervasyon, ${conversations} konuşma, ${requests} istek, ` +
-      `${templates} yeni bildirim şablonu.`,
+      `${templates} yeni bildirim şablonu, ${folioSeed.stays} içerideki konaklamanın folyosu (${folioSeed.extras} demo harcama).`,
   );
 }
 
@@ -433,6 +415,48 @@ function tomorrowAtInTimeZone(timeZone, { hour, minute }, toUtc) {
   const tomorrow = new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10);
   const pad = (value) => String(value).padStart(2, '0');
   return toUtc(`${tomorrow}T${pad(hour)}:${pad(minute)}`, timeZone);
+}
+
+/** İçerideki demo konaklamalara işlenen harcamalar (her konaklamaya bir kez). */
+const DEMO_EXTRAS = Object.freeze([
+  { type: 'MINIBAR', description: 'Su (0,5 L)', amount: '45', quantity: 2 },
+  { type: 'FNB', description: 'Akşam yemeği — à la carte', amount: '850', quantity: 1 },
+]);
+
+/**
+ * Folyolar (modül 15). Uydurma kalem yazılmaz: içerideki demo konaklamalara
+ * folyo servisinin kendisiyle dün geceye kadarki oda ücretleri (gece
+ * çalışmasının yapacağının aynısı, vergisiyle) ve birkaç harcama işlenir.
+ * Çıkmış konaklamalara folyo yazılmaz: ödeme (modül 17) olmadan "kapanmış
+ * folyo" uydurma olurdu. Tekrar çalıştırmak güvenli (geceler tekrar işlenmez,
+ * harcama zaten varsa eklenmez).
+ *
+ * @param {string} hotelId
+ */
+async function seedFolios(hotelId) {
+  const folios = await import('../src/modules/folios/service.js');
+  const stays = await prisma.reservation.findMany({
+    where: { hotelId, status: 'CHECKED_IN' },
+    select: { id: true },
+    orderBy: { confirmationCode: 'asc' },
+  });
+  let extras = 0;
+  await runWithContext({ correlationId: randomUUID(), actor: 'seed' }, async () => {
+    for (const stay of stays) {
+      await folios.postStayRoomCharges(hotelId, stay.id);
+      const folio = await prisma.folio.findFirst({
+        where: { reservationId: stay.id, status: 'OPEN' },
+        orderBy: { window: 'asc' },
+        select: { id: true },
+      });
+      if (!folio || (await prisma.folioItem.count({ where: { reservationId: stay.id, source: 'MANUAL' } })) > 0) continue;
+      for (const extra of DEMO_EXTRAS) {
+        await folios.postCharge(hotelId, folio.id, { requestId: randomUUID(), ...extra });
+        extras += 1;
+      }
+    }
+  });
+  return { stays: stays.length, extras };
 }
 
 async function seedMessaging(hotelId, guests, roomByNumber) {

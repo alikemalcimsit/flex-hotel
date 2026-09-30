@@ -28,6 +28,8 @@ import { dashboardCacheStats } from './modules/dashboard/service.js';
 import { manualTaskRoutes } from './modules/manual-tasks/routes.js';
 import { approvalCacheStats } from './modules/approvals/service.js';
 import { registerApprovalSubscribers, setApprovalSubscriberLogger } from './modules/approvals/subscribers.js';
+import { folioRoutes } from './modules/folios/routes.js';
+import { registerFolioSubscribers } from './modules/folios/subscribers.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { messagingChannelRoutes, webchatWidgetRoutes, webhookRoutes } from './modules/channels/routes.js';
 import { conciergeRoutes } from './modules/concierge/routes.js';
@@ -128,6 +130,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   registerApprovalSubscribers();
   setReservationSubscriberLogger(app.log);
   registerReservationSubscribers();
+  registerFolioSubscribers();
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
@@ -288,6 +291,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   await app.register(auditRoutes, { prefix: '/audit' });
   await app.register(actorRoutes, { prefix: '/actors' });
   await app.register(dashboardRoutes, { prefix: '/dashboard' });
+  await app.register(folioRoutes, { prefix: '/folios' });
   await app.register(manualTaskRoutes, { prefix: '/manual-tasks' });
   await app.register(conciergeRoutes, { prefix: '/ai' });
   await app.register(messagingChannelRoutes, { prefix: '/messaging-channels' });

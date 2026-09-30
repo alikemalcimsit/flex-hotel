@@ -142,18 +142,18 @@ export function priceAfterRelease(nights, releasedNights) {
 }
 
 /**
- * Çıkışta ödenecek tutar: folyo bakiyesi + henüz folyoya işlenmemiş ücret.
- * Folyo yoksa (folyo modülü devrede değil ya da folyo açılmamış) `null`:
- * bakiye denetlenemez. Artı: misafir borçlu; eksi: otel iade edecek.
+ * Çıkışta ödenecek tutar: folyo bakiyesi + henüz folyoya işlenmemiş ama
+ * çıkışta işlenecek tutarlar (kalan oda geceleri, geç çıkış ücreti —
+ * vergileriyle; folyo modülünün `pendingStayCharges` hesabı). Konaklamanın
+ * folyosu yoksa işlenmiş kalem de ödeme de yoktur: bakiye sıfırdır.
+ * Artı: misafir borçlu; eksi: otel iade edecek.
  *
  * @param {{ balance: string } | null} folio
- * @param {Array<string | null>} pendingFees
- * @returns {string | null}
+ * @param {Array<string | null>} pending
+ * @returns {string}
  */
-export function amountDue(folio, pendingFees) {
-  if (!folio) return null;
-  const fees = pendingFees.filter(Boolean);
-  return toMoneyString(fees.length ? sum(folio.balance, ...fees) : folio.balance);
+export function amountDue(folio, pending) {
+  return toMoneyString(sum(folio?.balance ?? '0', ...pending.filter(Boolean)));
 }
 
 /**

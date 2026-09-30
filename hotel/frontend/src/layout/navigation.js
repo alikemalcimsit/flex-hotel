@@ -64,6 +64,8 @@ export const NAV_SECTIONS = Object.freeze([
         ],
       },
       { label: 'Oda planı', to: '/oda-plani', icon: 'calendar' },
+      // Konaklamaların hesabı (modül 15): kat hizmetleri görmez.
+      { label: 'Folyolar', to: '/folyolar', icon: 'fileText', permission: PERMISSIONS.FOLIO_VIEW },
       {
         label: 'Mesajlar',
         to: '/mesajlar',

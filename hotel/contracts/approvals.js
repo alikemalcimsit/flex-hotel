@@ -19,15 +19,44 @@ const DAY_MS = 24 * HOUR_MS;
  * Onay türleri. Yeni bir modül onaya iş götürecekse türünü buraya ekler;
  * ekran türe göre süzer ve etiketler. `OTHER` serbest.
  */
-export const APPROVAL_TYPES = Object.freeze(['REFUND', 'LARGE_PAYMENT', 'BULK_PRICE_CHANGE', 'OVERBOOKING', 'OTHER']);
+export const APPROVAL_TYPES = Object.freeze([
+  'REFUND',
+  'LARGE_PAYMENT',
+  'BULK_PRICE_CHANGE',
+  'OVERBOOKING',
+  'FOLIO_VOID',
+  'OTHER',
+]);
 
 export const APPROVAL_TYPE_LABELS = Object.freeze({
   REFUND: 'Para iadesi',
   LARGE_PAYMENT: 'Büyük ödeme',
   BULK_PRICE_CHANGE: 'Toplu fiyat değişimi',
   OVERBOOKING: 'Kapasite aşımı (overbooking)',
+  FOLIO_VOID: 'Folyo kalemi iptali',
   OTHER: 'Diğer',
 });
+
+/**
+ * Dört göz kuralı: bu türlerde isteyen kişi kendi isteğini **onaylayamaz**.
+ * Kalem iptali paranın izini değiştirir (nakit alınmış bir harcamayı iptal
+ * edip farkı cebe atmak klasik kasa açığıdır); ikinci bir yetkili görmeli.
+ * Reddetmek (isteği geri çekmek) serbesttir: iş yapılmaz, zarar yok.
+ */
+export const APPROVAL_SELF_DECISION_FORBIDDEN_TYPES = Object.freeze(['FOLIO_VOID']);
+
+/**
+ * Bu kişi bu onayı kendi isteği olduğu için onaylayamıyor mu? Onaylayamıyorsa sebep.
+ * @param {{ type: string, requestedBy: string }} approval
+ * @param {string | null | undefined} decider oturumdaki kişi (e-posta)
+ * @param {'GRANTED' | 'DENIED'} [decision]
+ * @returns {string | null}
+ */
+export function approvalSelfDecisionError(approval, decider, decision = 'GRANTED') {
+  if (decision !== 'GRANTED' || !APPROVAL_SELF_DECISION_FORBIDDEN_TYPES.includes(approval.type)) return null;
+  if (!decider || String(approval.requestedBy).toLowerCase() !== String(decider).toLowerCase()) return null;
+  return 'Kendi isteğinizi onaylayamazsınız; başka bir yetkili onaylamalı (reddederek geri çekebilirsiniz)';
+}
 
 /** Prisma `ApprovalStatus` ile birebir. */
 export const APPROVAL_STATUSES = Object.freeze(['PENDING', 'GRANTED', 'DENIED', 'EXPIRED']);

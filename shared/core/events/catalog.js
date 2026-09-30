@@ -37,6 +37,43 @@ const reservationStay = hotelScoped.extend({
   checkOut: isoDate,
 });
 
+/** "1234.50" / "-45.00" biçiminde tutar metni. */
+const moneyText = z.string().regex(/^-?\d+(\.\d{1,2})?$/, 'tutar "1234.50" biçiminde olmalı');
+
+/** "YYYY-MM-DD" takvim günü (otelin günü). */
+const isoDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'gün "YYYY-MM-DD" biçiminde olmalı');
+
+/** Folyo olaylarının ortak gövdesi (modül 15): hangi folyo, hangi konaklamanın. */
+const folioEvent = hotelScoped.extend({
+  folioId: z.string().uuid(),
+  reservationId: z.string().uuid(),
+});
+
+/**
+ * Dış kaynaktan (restoran siparişi, minibar tüketimi) folyoya işlenecek
+ * harcama. Konaklama biliniyorsa `reservationId`; bilinmiyorsa oda (`roomId`,
+ * o an odada konaklayan misafir bulunur). Tutarlar otelin para biriminde,
+ * vergi dahil/hariç otelin vergi ayarına göre (kalem tipi: restoran / minibar).
+ */
+const externalCharge = hotelScoped
+  .extend({
+    reservationId: z.string().uuid().nullable().default(null),
+    roomId: z.string().uuid().nullable().default(null),
+    /** Kaynaktaki kayıt no (adisyon, tüketim fişi) — folyoda ve denetimde görünür. */
+    reference: z.string().min(1).max(60),
+    items: z
+      .array(
+        z.object({
+          description: z.string().min(1).max(200),
+          unitPrice: z.string().regex(/^\d+(\.\d{1,2})?$/, 'birim fiyat "45.50" biçiminde olmalı'),
+          quantity: z.number().int().min(1).max(999),
+        }),
+      )
+      .min(1)
+      .max(50),
+  })
+  .refine((value) => Boolean(value.reservationId || value.roomId), { message: 'konaklama ya da oda gerekli' });
+
 /** Onay olaylarının ortak gövdesi (modül 11). */
 const approvalEvent = hotelScoped.extend({
   approvalId: z.string().uuid(),
@@ -431,6 +468,81 @@ export const EVENT_CATALOG = Object.freeze({
     module: z.string().min(1),
     status: z.enum(['PENDING', 'IN_PROGRESS', 'DONE', 'CANCELLED']),
   }),
+
+  /* ── Folyo (modül 15) ──
+     Folyo ekranı, liste ve ön büro bakiyeleri bunlarla canlı tazelenir
+     (`FOLIO_EVENTS`). Gövdelerde tutar ve açıklama yok (socket'e hesap
+     içeriği çıkmaz); ekran HTTP ile okur. Fatura modülü (16) `folio.closed`'u,
+     sadakat (35) harcamayı dinler. */
+
+  /** Konaklamaya folyo açıldı (girişte aktör, bölmede ya da elle personel). */
+  'folio.opened': folioEvent.extend({ window: z.number().int().min(1) }),
+  /** Ödeyen adı değişti. */
+  'folio.updated': folioEvent,
+  /** Folyoya kalem işlendi (elle harcama, indirim, giriş/çıkış ücreti, restoran, minibar). */
+  'folio.charge.posted': folioEvent.extend({
+    itemIds: z.array(z.string().uuid()).min(1).max(100),
+    source: z.string().min(1),
+    total: moneyText,
+  }),
+  /**
+   * Bu gecenin oda ücretleri işlenmeli (zamanlayıcı, gün dönünce bir kez).
+   * Folyo aktörü dinler; kapalıysa iş "oda ücretleri işlenecek" görevine düşer.
+   */
+  'folio.room_charges.due': hotelScoped.extend({ night: isoDay }),
+  /** Oda ücretleri işlendi (gece ya da çıkışta): kaç konaklama, kaç kalem, toplam. */
+  'folio.room_charges.posted': hotelScoped.extend({
+    night: isoDay,
+    stays: z.number().int().min(0),
+    items: z.number().int().min(0),
+    total: moneyText,
+  }),
+  /** Kalem iptali onaya gitti. */
+  'folio.item.void_requested': folioEvent.extend({ itemId: z.string().uuid(), approvalId: z.string().uuid() }),
+  /** Kalem iptal edildi (ters kayıt işlendi). Onaylı iptalde `approvalId` dolu; sistemin geri alması boş. */
+  'folio.item.voided': folioEvent.extend({
+    itemId: z.string().uuid(),
+    reversalId: z.string().uuid(),
+    approvalId: z.string().uuid().nullable().default(null),
+  }),
+  /** İptal isteği reddedildi ya da süresi doldu: kalem olduğu gibi kalır. */
+  'folio.item.void_declined': folioEvent.extend({
+    itemId: z.string().uuid(),
+    approvalId: z.string().uuid(),
+    outcome: z.enum(['DENIED', 'EXPIRED']),
+  }),
+  /** Kalemler bir folyodan diğerine aktarıldı (başka konaklamanın folyosuna da olabilir). */
+  'folio.items.transferred': hotelScoped.extend({
+    fromFolioId: z.string().uuid(),
+    toFolioId: z.string().uuid(),
+    /** Etkilenen konaklamalar (kaynak ve hedef). */
+    reservationIds: z.array(z.string().uuid()).min(1).max(2),
+    itemIds: z.array(z.string().uuid()).min(1).max(200),
+  }),
+  /** Folyo bölündü: aynı konaklamada yeni folyo açıldı, seçilen kalemler taşındı. */
+  'folio.split': folioEvent.extend({
+    newFolioId: z.string().uuid(),
+    itemIds: z.array(z.string().uuid()).max(200),
+  }),
+  /** Folyolar bu folyoda birleşti (grup hesabı): kaynaklar "birleştirildi" oldu. */
+  'folio.merged': folioEvent.extend({
+    sourceFolioIds: z.array(z.string().uuid()).min(1).max(20),
+    /** Kaynak folyoların konaklamaları (sonraki kalemleri buraya yönlendi). */
+    reservationIds: z.array(z.string().uuid()).min(1).max(21),
+  }),
+  /** Konaklamanın yönlendirmesi değişti (hangi tip hangi folyoya düşer). */
+  'folio.routes.changed': hotelScoped.extend({ reservationId: z.string().uuid() }),
+  /** Folyo kapandı (bakiye sıfır). Fatura modülü taslak faturayı buradan üretir. */
+  'folio.closed': folioEvent.extend({ chargesTotal: moneyText, currency: z.string().length(3) }),
+  /** Kapanmış folyo yeniden açıldı (yetkiliyle, gerekçeli; ya da çıkış geri alındı). */
+  'folio.reopened': folioEvent.extend({ reason: z.string().min(1) }),
+
+  /* ── Folyoya dış kaynaklı harcama (yayıncıları: modül 19 minibar, 39 / 41 restoran) ── */
+
+  /** Restoran / oda servisi siparişi odaya yazıldı. */
+  'fnb.order.charged': externalCharge,
+  /** Kat görevlisi odada minibar tüketimi girdi. */
+  'minibar.consumed': externalCharge,
 });
 
 /** @typedef {keyof typeof EVENT_CATALOG} EventName */
@@ -563,6 +675,14 @@ export const STAFF_ALERT_EVENTS = Object.freeze(['staff.alert.raised']);
 
 /** Manuel görev listesini ve rozetini etkileyen event'ler (canlı yayın: `manual-tasks.changed`). */
 export const MANUAL_TASK_EVENTS = Object.freeze(['manual_task.created', 'manual_task.updated']);
+
+/**
+ * Folyo ekranlarını ve bakiyeleri etkileyen event'ler (canlı yayın:
+ * `folios.changed`). `folio.room_charges.due` iç tetikleyicidir, listede yok.
+ */
+export const FOLIO_EVENTS = Object.freeze(
+  Object.keys(EVENT_CATALOG).filter((name) => name.startsWith('folio.') && name !== 'folio.room_charges.due'),
+);
 
 /** Onay kuyruğunu etkileyen event'ler (canlı yayın: `approvals.changed`). */
 export const APPROVAL_EVENTS = Object.freeze([

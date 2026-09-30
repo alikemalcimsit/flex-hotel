@@ -14,6 +14,7 @@ import { useLiveChannel } from '../../lib/useLiveChannel.js';
 import { toastError, toastSuccess } from '../../store/toast.js';
 import { CheckInDialog } from '../front-desk/CheckInDialog.jsx';
 import { CheckOutDialog } from '../front-desk/CheckOutDialog.jsx';
+import { FolioSummaryCard } from '../folios/FolioSummaryCard.jsx';
 import { CancelReservationDialog } from './CancelReservationDialog.jsx';
 import { EditReservationDialog } from './EditReservationDialog.jsx';
 import { NoShowDialog } from './NoShowDialog.jsx';
@@ -303,6 +304,7 @@ export function ReservationDetailPage() {
               </p>
             )}
           </Card>
+          {can(PERMISSIONS.FOLIO_VIEW) && <FolioSummaryCard reservationId={reservationId} />}
         </div>
       </div>
 

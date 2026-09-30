@@ -59,6 +59,13 @@ export const PERMISSIONS = Object.freeze({
   /** Günlük durum ekranı (modül 13): doluluk, gelecek / gidecek, oda geliri, ADR. */
   DASHBOARD_VIEW: 'dashboard.view',
 
+  /** Folyoları ve kalemlerini görmek (modül 15). Kat hizmetleri görmez. */
+  FOLIO_VIEW: 'folio.view',
+  /** Harcama işlemek, kalem aktarmak, folyo bölmek / birleştirmek / kapatmak, iptal istemek (iptal onaya gider). */
+  FOLIO_POST: 'folio.post',
+  /** İndirim uygulamak, kapanmış folyoyu yeniden açmak. Yönetim / muhasebe işi. */
+  FOLIO_ADJUST: 'folio.adjust',
+
   /** Aktör paneli (modül 12): aktörlerin durumu, bildirgesi, LLM harcaması. */
   ACTORS_VIEW: 'actors.view',
   /** Aktörü bu otelde açmak / kapatmak (kapalı aktörün işi personele düşer). */
@@ -95,6 +102,9 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.ACTIVITY_VIEW]: 'Aktivite akışını ve zincirleri görüntüle',
   [PERMISSIONS.AUDIT_VIEW]: 'Denetim kaydını görüntüle',
   [PERMISSIONS.DASHBOARD_VIEW]: 'Günlük durumu görüntüle (doluluk, gelir)',
+  [PERMISSIONS.FOLIO_VIEW]: 'Folyoları görüntüle',
+  [PERMISSIONS.FOLIO_POST]: 'Folyoya harcama işle, aktar, böl, birleştir',
+  [PERMISSIONS.FOLIO_ADJUST]: 'İndirim uygula, kapanmış folyoyu yeniden aç',
   [PERMISSIONS.ACTORS_VIEW]: 'Aktör panelini görüntüle',
   [PERMISSIONS.ACTORS_MANAGE]: 'Aktörleri aç / kapat',
 });
@@ -142,6 +152,11 @@ export const PERMISSION_GROUPS = Object.freeze([
     permissions: [PERMISSIONS.USERS_VIEW, PERMISSIONS.USERS_MANAGE, PERMISSIONS.ROLES_MANAGE],
   },
   { key: 'dashboard', label: 'Günlük durum', permissions: [PERMISSIONS.DASHBOARD_VIEW] },
+  {
+    key: 'folios',
+    label: 'Folyo',
+    permissions: [PERMISSIONS.FOLIO_VIEW, PERMISSIONS.FOLIO_POST, PERMISSIONS.FOLIO_ADJUST],
+  },
   { key: 'monitoring', label: 'İzleme', permissions: [PERMISSIONS.ACTIVITY_VIEW, PERMISSIONS.AUDIT_VIEW] },
   { key: 'actors', label: 'Aktörler', permissions: [PERMISSIONS.ACTORS_VIEW, PERMISSIONS.ACTORS_MANAGE] },
 ]);
@@ -193,6 +208,9 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     // Müdür aktörleri görür; açıp kapatmak (otomasyonu durdurmak) yöneticinin kararı.
     PERMISSIONS.ACTORS_VIEW,
     PERMISSIONS.DASHBOARD_VIEW,
+    PERMISSIONS.FOLIO_VIEW,
+    PERMISSIONS.FOLIO_POST,
+    PERMISSIONS.FOLIO_ADJUST,
   ]),
   FRONT_DESK: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,
@@ -206,6 +224,9 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.REQUESTS_VIEW,
     PERMISSIONS.REQUESTS_MANAGE,
     PERMISSIONS.NOTIFICATIONS_VIEW,
+    // Resepsiyon hesabı görür, harcama işler; indirim ve yeniden açma yönetimde.
+    PERMISSIONS.FOLIO_VIEW,
+    PERMISSIONS.FOLIO_POST,
   ]),
   HOUSEKEEPING: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,
@@ -223,6 +244,10 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.APPROVALS_VIEW,
     // Gelir ve ADR muhasebenin günlük işi.
     PERMISSIONS.DASHBOARD_VIEW,
+    // Hesap düzeltmesi, açık bakiye takibi muhasebenin işi.
+    PERMISSIONS.FOLIO_VIEW,
+    PERMISSIONS.FOLIO_POST,
+    PERMISSIONS.FOLIO_ADJUST,
   ]),
   FNB: Object.freeze([PERMISSIONS.ROOMS_VIEW, PERMISSIONS.REQUESTS_VIEW, PERMISSIONS.REQUESTS_MANAGE]),
 });
