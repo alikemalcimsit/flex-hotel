@@ -21,8 +21,9 @@ import { guestFullName } from '../reservations/guests.js';
 import { sameGuestName } from '../reservations/rules.js';
 import { getReservation, reservationSearchConditions } from '../reservations/service.js';
 import { assignRoomInTransaction, roomConflictForStay } from '../rooms/service.js';
+import { pendingStayCharges } from '../folios/service.js';
 import { getHotelSettings } from '../settings/service.js';
-import { hasFolioActivity, stayBalances } from './folio.js';
+import { hasFolioActivity, lockStayFolios, stayBalances } from './folio.js';
 import {
   amountDue,
   departurePlan,
@@ -66,8 +67,10 @@ import {
  *
  * Erken giriş / geç çıkış ücreti rezervasyona yazılır ve olay gövdesinde
  * taşınır; folyoya kalem olarak işlenmesi folyo modülünün (15) işidir. Bakiye
- * folyo tablolarından okunur (`folio.js`); konaklamanın folyosu yoksa bakiye
- * bilinmiyor demektir ve çıkış bunu açıkça söyler (sıfır saymaz).
+ * folyo tablolarından okunur (`folio.js`). Çıkışta ödenecek = folyo bakiyesi +
+ * çıkışta işlenecek tutarlar (kalan oda geceleri, geç çıkış ücreti —
+ * vergileriyle, `pendingStayCharges`); yönlendirmeyle başka konaklamanın
+ * folyosuna (ör. grup hesabı) düşecek tutar misafirin borcuna yazılmaz.
  *
  * ### Geri alma
  *
@@ -588,6 +591,9 @@ export async function getCheckOutPreview(hotelId, reservationId, { now = new Dat
         })
       : { applies: false, fee: null };
   const folio = (await stayBalances(prisma, hotelId, [stay.id])).get(stay.id) ?? null;
+  const keptNights = nights.filter((night) => !plan.releasedNights.includes(night.date));
+  const pending = await pendingStayCharges(prisma, hotelId, stay, { keptNights, lateFee: late.fee });
+  const pendingWithoutLateFee = pending.own.filter((line) => line.source !== 'LATE_CHECK_OUT').map((line) => line.total);
 
   return {
     reservation: stayRow(stay, { businessDate, clock, timezone: hotel.timezone }),
@@ -603,8 +609,11 @@ export async function getCheckOutPreview(hotelId, reservationId, { now = new Dat
     },
     lateCheckOut: { ...late, mode: hotel.lateCheckOutFeeMode, checkOutTime: hotel.checkOutTime },
     folio,
-    // Geç çıkış ücreti uygulanırsa ödenecek (personel ücreti kaldırırsa ekran düşer).
-    due: amountDue(folio, [late.fee]),
+    // Çıkışta folyoya işlenecekler (vergileriyle) ve başka folyoya düşecekler.
+    pendingCharges: pending,
+    // Geç çıkış ücreti uygulanırsa ödenecek; personel ücreti uygulamazsa `dueWithoutLateFee`.
+    due: amountDue(folio, [pending.ownTotal]),
+    dueWithoutLateFee: amountDue(folio, pendingWithoutLateFee),
     deposit: stay.depositMethod
       ? { method: stay.depositMethod, amount: money(stay.depositAmount), reference: stay.depositReference }
       : null,
@@ -666,10 +675,15 @@ export async function checkOut(hotelId, reservationId, input, { now = new Date()
         );
       }
 
+      // Kilit sırası: rezervasyon → oda tipi → folyo. Folyolar kilitliyken bakiye
+      // okunur: aynı anda işlenen kalem ya da ödeme okumayı kaçırmaz.
+      if (early) await lockRoomTypes(tx, hotelId, [stay.roomTypeId]);
+      await lockStayFolios(tx, hotelId, stay.id);
       const folio = (await stayBalances(tx, hotelId, [stay.id])).get(stay.id) ?? null;
-      const due = amountDue(folio, [lateFee]);
+      const pending = await pendingStayCharges(tx, hotelId, stay, { keptNights: kept, lateFee });
+      const due = amountDue(folio, [pending.ownTotal]);
       let openBalance = null;
-      if (due !== null && !isZero(due)) {
+      if (!isZero(due)) {
         if (!input.allowOpenBalance) {
           const owes = toDecimal(due).isPositive();
           throw new ConflictError(
@@ -677,7 +691,7 @@ export async function checkOut(hotelId, reservationId, input, { now = new Date()
               ? `Folyoda ${priced(due, stay.currency)} ödenmemiş bakiye var. Tahsil edip tekrar deneyin ya da yetkiliyle bakiyeyle çıkış yapın.`
               : `Misafire ${priced(due, stay.currency)} iade edilecek. İadeyi yapıp tekrar deneyin ya da yetkiliyle bakiyeyle çıkış yapın.`,
             'BALANCE_DUE',
-            { due, balance: folio.balance },
+            { due, balance: folio?.balance ?? '0.00', pending: pending.ownTotal },
           );
         }
         if (!canAllowOpenBalance) throw new ForbiddenError('Bakiyesi kapanmadan çıkış yapma yetkiniz yok', { permission: PERMISSIONS.STAYS_OPEN_BALANCE });
@@ -685,8 +699,7 @@ export async function checkOut(hotelId, reservationId, input, { now = new Date()
       }
 
       if (early) {
-        // Bırakılan geceler: envanter oda tipi kilidiyle döner, fiyattan düşer.
-        await lockRoomTypes(tx, hotelId, [stay.roomTypeId]);
+        // Bırakılan geceler: envanter oda tipi kilidiyle (yukarıda alındı) döner, fiyattan düşer.
         await tx.reservationNight.deleteMany({ where: { hotelId, reservationId: stay.id, date: { gte: plan.checkOut } } });
       }
       const updated = await tx.reservation.update({
@@ -717,6 +730,7 @@ export async function checkOut(hotelId, reservationId, input, { now = new Date()
           lateCheckOutPolicyFee: late.fee,
           lateFeeWaived: Boolean(late.fee && input.waiveLateFee),
           folioBalance: folio?.balance ?? null,
+          pendingCharges: pending.ownTotal,
         },
       });
       await stage('guest.checked_out', {

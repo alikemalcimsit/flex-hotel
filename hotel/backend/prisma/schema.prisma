@@ -90,6 +90,19 @@ enum FolioItemType {
   OTHER
 }
 
+/// Folyo kaleminin kaynağı (modül 15). Tekrar işlemeye karşı `FolioItem.sourceKey` ile birlikte.
+enum FolioItemSource {
+  MANUAL
+  ROOM_NIGHT
+  EARLY_CHECK_IN
+  LATE_CHECK_OUT
+  CANCELLATION
+  NO_SHOW
+  FNB_ORDER
+  MINIBAR
+  REVERSAL
+}
+
 enum InvoiceStatus {
   DRAFT
   ISSUED
@@ -174,6 +187,9 @@ enum StaffAlertKind {
   WAITLIST_AVAILABLE
   /// Bakiyesi kapanmadan çıkış yapıldı (modül 6): tahsilatı takip edecek yönetime.
   CHECKOUT_OPEN_BALANCE
+  /// Folyoda personelin bakması gereken durum (modül 15): çıkıştan sonra bakiye
+  /// kaldı, onaylanan iptal uygulanamadı.
+  FOLIO_ATTENTION
   /// AI konuşmayı personele devretti (şikâyet, misafir personel istedi, ajan hatası) — modül 8.
   AI_HANDOFF
   /// Günlük AI bütçesi doldu; yeni konuşmalar personele düşüyor — modül 8.
@@ -321,39 +337,39 @@ enum LogLevel {
 // ───────────── SİSTEM ─────────────
 
 model Hotel {
-  id                           String    @id @default(uuid())
+  id                           String            @id @default(uuid())
   name                         String
-  code                         String    @unique
-  timezone                     String    @default("Europe/Istanbul")
-  currency                     String    @default("TRY")
+  code                         String            @unique
+  timezone                     String            @default("Europe/Istanbul")
+  currency                     String            @default("TRY")
   /// Ülke kodu yazılmamış telefonların yorumlandığı kod (Türkiye: 90). Misafiri
   /// WhatsApp numarasından bulurken kullanılır (modül 7).
-  phoneCountryCode             String    @default("90")
+  phoneCountryCode             String            @default("90")
   address                      String?
   phone                        String?
   email                        String?
   logoUrl                      String?
-  checkInTime                  String    @default("14:00")
-  checkOutTime                 String    @default("12:00")
-  defaultBoardType             BoardType @default(BB)
-  cancellationPolicyDays       Int       @default(0)
-  cancellationPolicyPenaltyPct Decimal   @default(0) @db.Decimal(5, 2)
+  checkInTime                  String            @default("14:00")
+  checkOutTime                 String            @default("12:00")
+  defaultBoardType             BoardType         @default(BB)
+  cancellationPolicyDays       Int               @default(0)
+  cancellationPolicyPenaltyPct Decimal           @default(0) @db.Decimal(5, 2)
   /// Kapasite aşımında rezervasyon reddedilir ya da yönetici onayına gider.
   overbookingPolicy            OverbookingPolicy @default(REJECT)
   /// Rol matrisi (modül 2) kaydedildiğinde katalogda olan izinler. Sonradan
   /// kataloğa eklenen izin burada yoktur: o izinde rollerin koddaki varsayılanı
   /// geçerli olur (yeni modülün izni, matrisi kaydetmiş otelde kimseye kapalı kalmasın).
-  permissionCatalog            String[]  @default([])
+  permissionCatalog            String[]          @default([])
   /// Erken giriş (giriş saatinden önce) ve geç çıkış (çıkış saatinden sonra)
   /// ücreti. Değer: FIXED ise tutar, PERCENT_OF_NIGHT ise yüzde (modül 6).
-  earlyCheckInFeeMode          StayFeeMode @default(NONE)
-  earlyCheckInFeeValue         Decimal     @default(0) @db.Decimal(12, 2)
-  lateCheckOutFeeMode          StayFeeMode @default(NONE)
-  lateCheckOutFeeValue         Decimal     @default(0) @db.Decimal(12, 2)
-  checkInIdentityPolicy        IdentityPolicy @default(PRIMARY_GUEST)
-  settings                     Json      @default("{}")
-  createdAt                    DateTime  @default(now())
-  updatedAt                    DateTime  @updatedAt
+  earlyCheckInFeeMode          StayFeeMode       @default(NONE)
+  earlyCheckInFeeValue         Decimal           @default(0) @db.Decimal(12, 2)
+  lateCheckOutFeeMode          StayFeeMode       @default(NONE)
+  lateCheckOutFeeValue         Decimal           @default(0) @db.Decimal(12, 2)
+  checkInIdentityPolicy        IdentityPolicy    @default(PRIMARY_GUEST)
+  settings                     Json              @default("{}")
+  createdAt                    DateTime          @default(now())
+  updatedAt                    DateTime          @updatedAt
   deletedAt                    DateTime?
 
   users                 User[]
@@ -391,6 +407,8 @@ model Hotel {
   guestRequests         GuestRequest[]
   folios                Folio[]
   folioItems            FolioItem[]
+  folioRoutes           FolioRoute[]
+  roomChargeRuns        RoomChargeRun[]
   invoices              Invoice[]
   payments              Payment[]
   nightAudits           NightAudit[]
@@ -546,24 +564,24 @@ model AuditLog {
 }
 
 model ActivityLog {
-  id         String    @id @default(uuid())
-  hotelId    String
-  actorName  String
-  eventId    String?
+  id            String    @id @default(uuid())
+  hotelId       String
+  actorName     String
+  eventId       String?
   /// İşlenen olayın adı ve zinciri (modül 10): akış süzgeci ve zincir görünümü
   /// JSON'dan değil sütundan okur (index'li).
   eventName     String?
   correlationId String?
-  level      LogLevel  @default(INFO)
-  message    String
-  meta       Json      @default("{}")
-  durationMs Int?
-  tokensIn   Int?
-  tokensOut  Int?
-  costUsd    Decimal?  @db.Decimal(12, 6)
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  deletedAt  DateTime?
+  level         LogLevel  @default(INFO)
+  message       String
+  meta          Json      @default("{}")
+  durationMs    Int?
+  tokensIn      Int?
+  tokensOut     Int?
+  costUsd       Decimal?  @db.Decimal(12, 6)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
 
   hotel Hotel @relation(fields: [hotelId], references: [id])
 
@@ -675,20 +693,20 @@ model ManualTask {
 }
 
 model LlmUsage {
-  id        String    @id @default(uuid())
-  hotelId   String
-  actorName String
+  id             String    @id @default(uuid())
+  hotelId        String
+  actorName      String
   /// Çağrının ait olduğu konuşma (modül 8); konuşma başına maliyet için.
   conversationId String?
-  model     String
-  tokensIn  Int       @default(0)
-  tokensOut Int       @default(0)
-  cacheRead Int       @default(0)
-  costUsd   Decimal   @default(0) @db.Decimal(12, 6)
-  date      DateTime  @db.Date
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  model          String
+  tokensIn       Int       @default(0)
+  tokensOut      Int       @default(0)
+  cacheRead      Int       @default(0)
+  costUsd        Decimal   @default(0) @db.Decimal(12, 6)
+  date           DateTime  @db.Date
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
 
   hotel Hotel @relation(fields: [hotelId], references: [id])
 
@@ -915,7 +933,7 @@ model RoomType {
   updatedAt        DateTime  @updatedAt
   deletedAt        DateTime?
 
-  hotel        Hotel         @relation(fields: [hotelId], references: [id])
+  hotel        Hotel           @relation(fields: [hotelId], references: [id])
   rooms        Room[]
   reservations Reservation[]
   ratePlans    RatePlan[]
@@ -994,7 +1012,7 @@ model RoomBlock {
 }
 
 model Guest {
-  id          String    @id @default(uuid())
+  id          String          @id @default(uuid())
   hotelId     String
   firstName   String
   lastName    String
@@ -1006,10 +1024,10 @@ model Guest {
   idNumber    String?
   birthDate   DateTime?
   notes       String?
-  preferences Json      @default("{}")
-  tags        String[]  @default([])
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  preferences Json            @default("{}")
+  tags        String[]        @default([])
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
   deletedAt   DateTime?
 
   hotel             Hotel              @relation(fields: [hotelId], references: [id])
@@ -1033,63 +1051,63 @@ model Guest {
 }
 
 model Reservation {
-  id               String            @id @default(uuid())
-  hotelId          String
-  guestId          String
-  roomTypeId       String
-  roomId           String?
-  checkIn          DateTime
-  checkOut         DateTime
-  adults           Int               @default(1)
-  children         Int               @default(0)
-  status           ReservationStatus @default(PENDING)
-  source           ReservationSource @default(UI)
-  totalPrice       Decimal           @db.Decimal(12, 2)
-  currency         String            @default("TRY")
-  boardType        BoardType         @default(BB)
-  requestId        String?
-  agencyId         String?
-  groupId          String?
-  notes            String?
-  confirmationCode String            @unique
+  id                  String               @id @default(uuid())
+  hotelId             String
+  guestId             String
+  roomTypeId          String
+  roomId              String?
+  checkIn             DateTime
+  checkOut            DateTime
+  adults              Int                  @default(1)
+  children            Int                  @default(0)
+  status              ReservationStatus    @default(PENDING)
+  source              ReservationSource    @default(UI)
+  totalPrice          Decimal              @db.Decimal(12, 2)
+  currency            String               @default("TRY")
+  boardType           BoardType            @default(BB)
+  requestId           String?
+  agencyId            String?
+  groupId             String?
+  notes               String?
+  confirmationCode    String               @unique
   /// İçerideki misafir oda değiştirdiyse, `roomId` odasında kalmaya başladığı
   /// gece (gün başı). Boşsa konaklamanın tamamı `roomId` odasındadır. Önceki
   /// odalardaki geceler `RoomStaySegment`'te durur.
-  roomSince        DateTime?
+  roomSince           DateTime?
   /// Fiyatın kaynağı; `MANUAL` ise `priceNote` gerekçedir. Geceler `ReservationNight`'ta.
-  priceMode        ReservationPriceMode @default(CALCULATED)
-  priceNote        String?
+  priceMode           ReservationPriceMode @default(CALCULATED)
+  priceNote           String?
   /// Rezervasyonu açan (personel e-postası, aktör adı ya da kanal).
-  createdBy        String            @default("system")
-  confirmedAt      DateTime?
-  cancelledAt      DateTime?
-  cancelledBy      String?
-  cancelReason     String?
+  createdBy           String               @default("system")
+  confirmedAt         DateTime?
+  cancelledAt         DateTime?
+  cancelledBy         String?
+  cancelReason        String?
   /// İptal politikasına göre hesaplanan ceza (tahsilatı folyo/ödeme modülünde).
-  cancellationFee  Decimal?          @db.Decimal(12, 2)
-  noShowAt         DateTime?
-  noShowFee        Decimal?          @db.Decimal(12, 2)
+  cancellationFee     Decimal?             @db.Decimal(12, 2)
+  noShowAt            DateTime?
+  noShowFee           Decimal?             @db.Decimal(12, 2)
   /// Giriş / çıkış (modül 6). İçerideyse `checkedInAt`, çıkmışsa ikisi de dolu (kısıt).
-  checkedInAt      DateTime?
-  checkedInBy      String?
-  checkedOutAt     DateTime?
-  checkedOutBy     String?
+  checkedInAt         DateTime?
+  checkedInBy         String?
+  checkedOutAt        DateTime?
+  checkedOutBy        String?
   /// Erken giriş / geç çıkış ücreti (politikadan; personel uygulamayabilir). Folyoya
   /// kalem olarak işlenmesi folyo modülünde (15), olay gövdesinden.
-  earlyCheckInFee  Decimal?          @db.Decimal(12, 2)
-  lateCheckOutFee  Decimal?          @db.Decimal(12, 2)
-  vehiclePlate     String?
+  earlyCheckInFee     Decimal?             @db.Decimal(12, 2)
+  lateCheckOutFee     Decimal?             @db.Decimal(12, 2)
+  vehiclePlate        String?
   /// Girişte alınan teminat (tahsilat değil; bkz. `DepositMethod`).
-  depositMethod    DepositMethod?
-  depositAmount    Decimal?          @db.Decimal(12, 2)
+  depositMethod       DepositMethod?
+  depositAmount       Decimal?             @db.Decimal(12, 2)
   /// Provizyon / dekont numarası. Kart numarası yazılamaz (sözleşmede reddedilir).
-  depositReference String?
+  depositReference    String?
   /// Bakiyesi kapanmadan yapılan çıkış: o anki açık tutar ve yetkilinin gerekçesi.
-  checkoutOpenBalance Decimal?       @db.Decimal(12, 2)
+  checkoutOpenBalance Decimal?             @db.Decimal(12, 2)
   openBalanceReason   String?
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  deletedAt        DateTime?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  deletedAt           DateTime?
 
   hotel             Hotel              @relation(fields: [hotelId], references: [id])
   guest             Guest              @relation(fields: [guestId], references: [id])
@@ -1100,6 +1118,8 @@ model Reservation {
   waitlistEntries   WaitlistEntry[]
   reservationGuests ReservationGuest[]
   folios            Folio[]
+  folioItems        FolioItem[]
+  folioRoutes       FolioRoute[]
   roomSegments      RoomStaySegment[]
   conversations     Conversation[]
   guestRequests     GuestRequest[]
@@ -1313,8 +1333,7 @@ model Tax {
   updatedAt  DateTime  @updatedAt
   deletedAt  DateTime?
 
-  hotel      Hotel       @relation(fields: [hotelId], references: [id])
-  folioItems FolioItem[]
+  hotel Hotel @relation(fields: [hotelId], references: [id])
 
   @@index([hotelId, deletedAt])
 }
@@ -1356,13 +1375,15 @@ model Conversation {
   updatedAt          DateTime            @updatedAt
   deletedAt          DateTime?
 
-  hotel       Hotel          @relation(fields: [hotelId], references: [id])
-  guest       Guest?         @relation(fields: [guestId], references: [id])
-  reservation Reservation?   @relation(fields: [reservationId], references: [id])
-  assignedTo  User?          @relation("ConversationAssignee", fields: [assignedToId], references: [id])
+  hotel       Hotel                @relation(fields: [hotelId], references: [id])
+  guest       Guest?               @relation(fields: [guestId], references: [id])
+  reservation Reservation?         @relation(fields: [reservationId], references: [id])
+  assignedTo  User?                @relation("ConversationAssignee", fields: [assignedToId], references: [id])
   messages    Message[]
   requests    GuestRequest[]
   aiState     ConversationAiState?
+  // Kısmi index (migration'da): `Conversation_ai_waiting_idx` — AI'da cevap
+  // bekleyen konuşmalar (modül 8, takılan AI turunu personele devreden iş).
 
   @@unique([hotelId, channel, externalId])
   // Gelen kutusu: "açık konuşmalar, en son mesaj önce".
@@ -1376,8 +1397,6 @@ model Conversation {
   @@index([displayName(ops: raw("gin_trgm_ops"))], map: "Conversation_displayName_trgm_idx", type: Gin)
   @@index([externalId(ops: raw("gin_trgm_ops"))], map: "Conversation_externalId_trgm_idx", type: Gin)
   @@index([lastMessagePreview(ops: raw("gin_trgm_ops"))], map: "Conversation_lastMessagePreview_trgm_idx", type: Gin)
-  // Kısmi index (migration'da): `Conversation_ai_waiting_idx` — AI'da cevap
-  // bekleyen konuşmalar (modül 8, takılan AI turunu personele devreden iş).
 }
 
 model Message {
@@ -1405,6 +1424,8 @@ model Message {
   hotel        Hotel          @relation(fields: [hotelId], references: [id])
   conversation Conversation   @relation(fields: [conversationId], references: [id])
   requests     GuestRequest[]
+  // Kısmi index (Prisma ifade edemez, migration'da): `Message_pending_outgoing_idx`
+  // — gönderim bekleyen giden mesajlar (modül 8, bekleyenleri gönderen iş).
 
   // Konuşma geçmişi imleçle sayfalanır: (createdAt, id) sırası.
   @@index([conversationId, createdAt, id])
@@ -1412,8 +1433,6 @@ model Message {
   @@index([hotelId, delivery])
   // Kanalın teslim bildirimi mesajı kendi kimliğiyle bulur (WhatsApp `wamid`).
   @@index([hotelId, externalId])
-  // Kısmi index (Prisma ifade edemez, migration'da): `Message_pending_outgoing_idx`
-  // — gönderim bekleyen giden mesajlar (modül 8, bekleyenleri gönderen iş).
 }
 
 /// Misafir isteği: havlu, oda servisi, uyandırma, arıza bildirimi, şikâyet.
@@ -1477,51 +1496,155 @@ model GuestRequest {
 
 // ───────────── FOLYO / ÖDEME ─────────────
 
+/// Konaklamanın hesabı (modül 15). Bir konaklamanın birden fazla folyosu
+/// (penceresi) olabilir: 1 ana folyo, bölmeyle 2, 3... Kalem silinmez; iptal
+/// eksi tutarlı ters kayıttır. Bakiye = Σ kalem toplamı − Σ ödeme × kur.
 model Folio {
   id            String      @id @default(uuid())
   hotelId       String
   reservationId String
+  /// Ödeyen misafir (varsayılan: rezervasyon sahibi).
   guestId       String
+  /// Konaklamadaki sırası: 1 ana folyo; bölmeyle 2, 3... (en fazla `FOLIO_MAX_WINDOWS`).
+  window        Int         @default(1)
+  /// Ödeyen başkasıysa adı (şirket, acente). Boşsa misafir. Faturanın (16) alıcı varsayılanı.
+  payerName     String?
   status        FolioStatus @default(OPEN)
+  /// Denormalize toplamlar: folyoya yazan her işlem folyo kilitliyken kalem ve
+  /// ödemelerden yeniden hesaplar (`refreshFolioTotals`); listeler bunları okur.
+  /// Para-kritik yol (çıkış) yine kalemlerden hesaplar. Kısıt: bakiye = borç − ödenen.
+  chargesTotal  Decimal     @default(0) @db.Decimal(12, 2)
+  paymentsTotal Decimal     @default(0) @db.Decimal(12, 2)
   balance       Decimal     @default(0) @db.Decimal(12, 2)
   currency      String      @default("TRY")
+  openedBy      String      @default("system")
   closedAt      DateTime?
+  closedBy      String?
+  /// Birleştirildiyse (durum `TRANSFERRED`) kalemlerinin taşındığı folyo.
+  mergedIntoId  String?
+  mergedAt      DateTime?
+  mergedBy      String?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
   deletedAt     DateTime?
 
-  hotel       Hotel       @relation(fields: [hotelId], references: [id])
-  reservation Reservation @relation(fields: [reservationId], references: [id])
-  guest       Guest       @relation(fields: [guestId], references: [id])
-  items       FolioItem[]
-  invoices    Invoice[]
-  payments    Payment[]
+  hotel            Hotel        @relation(fields: [hotelId], references: [id])
+  reservation      Reservation  @relation(fields: [reservationId], references: [id])
+  guest            Guest        @relation(fields: [guestId], references: [id])
+  mergedInto       Folio?       @relation("FolioMerge", fields: [mergedIntoId], references: [id], onDelete: Restrict)
+  mergedFrom       Folio[]      @relation("FolioMerge")
+  items            FolioItem[]  @relation("FolioItems")
+  transferredItems FolioItem[]  @relation("FolioItemTransferredFrom")
+  routes           FolioRoute[]
+  invoices         Invoice[]
+  payments         Payment[]
 
-  // Çıkışta konaklamanın bakiyesi (modül 6) ve folyo listesi.
+  /// Konaklamada pencere numarası tekil.
+  @@unique([reservationId, window])
+  // Çıkışta konaklamanın bakiyesi (modül 6) ve konaklamanın folyoları.
   @@index([hotelId, reservationId])
+  // Folyo listesi: açıklar (son hareket önce), kapananlar (son kapanan önce).
+  @@index([hotelId, status, updatedAt, id])
+  @@index([hotelId, status, closedAt, id])
+  @@index([mergedIntoId])
 }
 
+/// Folyo kalemi (modül 15). Satır: net + vergi = toplam; toplam = tutar × adet
+/// + hariç vergiler. Vergi dökümü işlendiği andaki ayardan (`taxLines`).
 model FolioItem {
-  id          String        @id @default(uuid())
+  id                     String          @id @default(uuid())
+  hotelId                String
+  folioId                String
+  /// Kalemin doğduğu konaklama (aktarma / birleştirmede değişmez).
+  reservationId          String
+  type                   FolioItemType
+  source                 FolioItemSource @default(MANUAL)
+  description            String
+  /// Birim tutar (dahil vergiler içinde). İndirimde eksi; ters kayıtta asıl kalemin tersi.
+  amount                 Decimal         @db.Decimal(12, 2)
+  quantity               Int             @default(1)
+  /// Vergi kategorisi (ayarlardaki "uygulandığı kalem"); boşsa vergisiz.
+  taxCategory            String?
+  netAmount              Decimal         @db.Decimal(12, 2)
+  taxAmount              Decimal         @db.Decimal(12, 2)
+  total                  Decimal         @db.Decimal(12, 2)
+  /// İşlendiği andaki vergi dökümü: [{ taxId, name, rate, included, amount }].
+  taxLines               Json            @default("[]")
+  /// Hizmetin ait olduğu gün: oda ücretinde gece, diğerlerinde işlendiği iş günü.
+  serviceDate            DateTime        @db.Date
+  /// Tekrar işleme anahtarı (otel başına tekil): gece, olay, elle istek kimliği.
+  sourceKey              String?
+  postedBy               String
+  postedAt               DateTime        @default(now())
+  /// Ters kayıtsa asıl kalem (tekil: bir kalem bir kez iptal edilir).
+  reversalOfId           String?         @unique
+  voidedAt               DateTime?
+  voidedBy               String?
+  voidReason             String?
+  /// İptal onayı: bekliyorsa `voidRequestedAt` dolu, karar verilince temizlenir.
+  voidApprovalId         String?
+  voidRequestedAt        DateTime?
+  voidRequestedBy        String?
+  /// Son aktarmanın kaynağı (tam iz denetim kaydında).
+  transferredFromFolioId String?
+  transferredAt          DateTime?
+  transferredBy          String?
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+  deletedAt              DateTime?
+
+  hotel           Hotel       @relation(fields: [hotelId], references: [id])
+  folio           Folio       @relation("FolioItems", fields: [folioId], references: [id])
+  reservation     Reservation @relation(fields: [reservationId], references: [id])
+  reversalOf      FolioItem?  @relation("FolioItemReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversal        FolioItem?  @relation("FolioItemReversal")
+  transferredFrom Folio?      @relation("FolioItemTransferredFrom", fields: [transferredFromFolioId], references: [id], onDelete: Restrict)
+
+  @@unique([hotelId, sourceKey])
+  // Folyo dökümü: hizmet günü, aynı gün içinde işlenme sırası (imleçli).
+  @@index([folioId, serviceDate, postedAt, id])
+  // Konaklamanın gece ücretleri ve tek seferlik ücretleri (erken giriş, iptal...).
+  @@index([reservationId, source, serviceDate])
+}
+
+/// Konaklamanın yönlendirmesi (modül 15): bu tipteki sistem kalemleri (oda
+/// ücreti, restoran, minibar) bu folyoya düşer. Yoksa konaklamanın ilk açık folyosu.
+model FolioRoute {
+  id            String        @id @default(uuid())
+  hotelId       String
+  reservationId String
+  type          FolioItemType
+  folioId       String
+  createdBy     String
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  hotel       Hotel       @relation(fields: [hotelId], references: [id])
+  reservation Reservation @relation(fields: [reservationId], references: [id])
+  folio       Folio       @relation(fields: [folioId], references: [id])
+
+  @@unique([reservationId, type])
+  @@index([folioId])
+}
+
+/// Gecenin oda ücretlerinin işlenmesi (modül 15). Zamanlayıcı gün dönünce otel
+/// başına bir kez açar (tekil) ve folyo aktörüne haber verir; işlenince tamamlanır.
+model RoomChargeRun {
+  id          String    @id @default(uuid())
   hotelId     String
-  folioId     String
-  type        FolioItemType
-  description String
-  amount      Decimal       @db.Decimal(12, 2)
-  quantity    Int           @default(1)
-  taxId       String?
-  postedBy    String
-  postedAt    DateTime      @default(now())
-  source      String?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  deletedAt   DateTime?
+  night       DateTime  @db.Date
+  dueAt       DateTime  @default(now())
+  completedAt DateTime?
+  completedBy String?
+  stays       Int?
+  items       Int?
+  total       Decimal?  @db.Decimal(14, 2)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   hotel Hotel @relation(fields: [hotelId], references: [id])
-  folio Folio @relation(fields: [folioId], references: [id])
-  tax   Tax?  @relation(fields: [taxId], references: [id])
 
-  @@index([folioId])
+  @@unique([hotelId, night])
 }
 
 model Invoice {
@@ -1675,27 +1798,27 @@ model AiSettings {
 /// AI asistanının konuşma başına hafızası (modül 8): özet, son müsaitlik
 /// teklifleri, misafire sunulup onay bekleyen teklif, gönderilmiş rezervasyon isteği.
 model ConversationAiState {
-  conversationId  String    @id
-  hotelId         String
+  conversationId   String    @id
+  hotelId          String
   /// Misafirin dili (router'ın tespiti; ISO 639-1).
-  language        String?
-  lastIntent      String?
+  language         String?
+  lastIntent       String?
   /// Eski mesajların özeti; `summarizedUntil` ve öncesi özette.
-  summary         String?
-  summarizedUntil DateTime?
+  summary          String?
+  summarizedUntil  DateTime?
   /// Son müsaitlik sorgusunun seçenekleri (fiyat, tip, tarih).
-  offers          Json      @default("[]")
-  offersAt        DateTime?
+  offers           Json      @default("[]")
+  offersAt         DateTime?
   /// Misafire sunulan ve "evet" bekleyen teklif (misafir bilgisiyle).
-  pendingOffer    Json?
+  pendingOffer     Json?
   /// Gönderilen rezervasyon isteği; `reservation.created/rejected` bununla eşleşir.
-  pendingRequestId String?  @unique
-  requestedAt     DateTime?
+  pendingRequestId String?   @unique
+  requestedAt      DateTime?
   /// Günlük cevap sayacı.
-  repliesDay      DateTime? @db.Date
-  repliesCount    Int       @default(0)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  repliesDay       DateTime? @db.Date
+  repliesCount     Int       @default(0)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   hotel        Hotel        @relation(fields: [hotelId], references: [id])
   conversation Conversation @relation(fields: [conversationId], references: [id])

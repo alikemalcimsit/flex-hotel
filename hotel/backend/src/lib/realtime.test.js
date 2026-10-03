@@ -95,6 +95,7 @@ describe('registerRealtimeBridge', () => {
       'userId',
       'alertId',
       'approvalId',
+      'folioId',
       'waitlistId',
       'taskId',
       'actorName',

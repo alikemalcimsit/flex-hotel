@@ -3,7 +3,9 @@ import { useQuery } from '@tanstack/react-query';
 import { Badge, Input } from '@hotelos/ui';
 import { api } from '../../lib/api.js';
 import { balanceTone, frontDeskKeys } from '../../lib/front-desk.js';
+import { folioPath } from '../../lib/folios.js';
 import { formatMoney } from '../../lib/format.js';
+import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 
 /** Günün özeti (sekme rozetleri, sayılar). Canlı kanal tazeler. */
 export function useFrontDeskSummary() {
@@ -75,11 +77,25 @@ export function IdentityBadge({ guest }) {
   );
 }
 
-/** Folyo bakiyesi: borç / iade / kapalı; folyo yoksa bilinmiyor. */
-export function BalanceCell({ balance, currency }) {
-  if (balance === null || balance === undefined) return <span className="text-xs text-ink-muted">Folyo yok</span>;
-  const value = Number(balance);
-  const tone = balanceTone(balance);
-  const label = value > 0 ? formatMoney(balance, currency) : value < 0 ? `İade ${formatMoney(balance.replace('-', ''), currency)}` : 'Kapalı';
-  return <Badge tone={tone}>{label}</Badge>;
+/**
+ * Folyo bakiyesi: borç / iade / kapalı; folyo yoksa "Folyo yok". Folyo
+ * görüntüleme yetkisi varsa konaklamanın folyo ekranına götürür.
+ * @param {{ balance: string | null | undefined, currency: string, reservationId?: string }} props
+ */
+export function BalanceCell({ balance, currency, reservationId }) {
+  const can = useCan();
+  const content =
+    balance === null || balance === undefined ? (
+      <span className="text-xs text-ink-muted">Folyo yok</span>
+    ) : (
+      <Badge tone={balanceTone(balance)}>
+        {Number(balance) > 0 ? formatMoney(balance, currency) : Number(balance) < 0 ? `İade ${formatMoney(balance.replace('-', ''), currency)}` : 'Kapalı'}
+      </Badge>
+    );
+  if (!reservationId || !can(PERMISSIONS.FOLIO_VIEW)) return content;
+  return (
+    <Link to={folioPath(reservationId)} className="inline-flex rounded-full focus-visible:outline-2" title="Folyoyu aç">
+      {content}
+    </Link>
+  );
 }

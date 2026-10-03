@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { api, withQuery } from '../../lib/api.js';
 import { frontDeskKeys } from '../../lib/front-desk.js';
-import { INVENTORY_CHANNEL, RESERVATIONS_CHANNEL } from '../../lib/socket.js';
+import { FOLIOS_CHANNEL, INVENTORY_CHANNEL, RESERVATIONS_CHANNEL } from '../../lib/socket.js';
 import { useLiveChannel } from '../../lib/useLiveChannel.js';
 
 /** Sayfa başına satır. */
@@ -66,6 +66,8 @@ export function useStayList(kind, { views, sorts, defaultView, defaultSort } = {
   const keys = { queryKeys: [frontDeskKeys.lists, frontDeskKeys.summary], minIntervalMs: 1000 };
   const reservations = useLiveChannel(RESERVATIONS_CHANNEL, keys);
   const inventory = useLiveChannel(INVENTORY_CHANNEL, keys);
+  // Bakiye sütunu: kalem / ödeme işlenince (modül 15).
+  useLiveChannel(FOLIOS_CHANNEL, { queryKeys: [frontDeskKeys.lists], minIntervalMs: 1000 });
   const isLive = reservations.isLive && inventory.isLive;
 
   const query = useQuery({

@@ -9,6 +9,7 @@ import { registerActivityBridge, registerRealtimeBridge, registerSocketHandlers,
 import { findActiveStaffByEmail } from './lib/staff.js';
 import { resolveHotelId } from './lib/tenant.js';
 import { startApprovalJobs } from './modules/approvals/jobs.js';
+import { startFolioJobs } from './modules/folios/jobs.js';
 import { startReservationJobs } from './modules/reservations/jobs.js';
 import { startChannelJobs } from './modules/channels/jobs.js';
 import { webchatOrigins } from './modules/channels/service.js';
@@ -80,6 +81,7 @@ app.decorate('io', io);
 const stopNotificationJobs = startNotificationJobs(app.log);
 const stopMaintenanceJobs = startMaintenanceJobs(app.log);
 const stopApprovalJobs = startApprovalJobs(app.log);
+const stopFolioJobs = startFolioJobs(app.log);
 const stopReservationJobs = startReservationJobs(app.log);
 const stopChannelJobs = startChannelJobs(app.log);
 const stopConciergeJobs = startConciergeJobs(app.log);
@@ -90,6 +92,7 @@ app.addHook('onClose', async () => {
   stopNotificationJobs();
   stopMaintenanceJobs();
   stopApprovalJobs();
+  stopFolioJobs();
   stopReservationJobs();
   stopChannelJobs();
   stopConciergeJobs();

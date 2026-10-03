@@ -11,6 +11,8 @@ export const TYPE_ICONS = Object.freeze({
   REFUND: 'rotateCcw',
   LARGE_PAYMENT: 'zap',
   BULK_PRICE_CHANGE: 'sliders',
+  OVERBOOKING: 'bed',
+  FOLIO_VOID: 'fileText',
   OTHER: 'clipboard',
 });
 

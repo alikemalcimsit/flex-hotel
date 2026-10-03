@@ -559,16 +559,9 @@ export async function deleteTax(hotelId, id) {
     const existing = await tx.tax.findFirst({ where: { id, hotelId } });
     if (!existing) throw new NotFoundError('Vergi bulunamadı');
 
-    // Kesilmiş folyo kalemlerine bağlı vergi silinirse geçmiş hesap bozulur.
-    const folioItems = await tx.folioItem.count({ where: { taxId: id, hotelId } });
-    const usage = nonZero({ folyoKalemi: folioItems });
-    if (Object.keys(usage).length > 0) {
-      throw new InUseError(
-        `"${existing.name}" vergisi geçmiş folyo kalemlerinde kullanıldığı için silinemez.`,
-        usage,
-      );
-    }
-
+    // Geçmiş hesap bozulmaz: folyo kalemi vergisini işlendiği andaki
+    // dökümüyle (ad, oran, tutar) kendi üzerinde taşır (modül 15), vergi
+    // kaydına bağlı değil. Silinen vergi yalnızca bundan sonraki kalemlere uygulanmaz.
     await tx.tax.update({ where: { id }, data: { deletedAt: new Date() } });
     await recordAudit(tx, {
       hotelId,

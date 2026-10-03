@@ -249,8 +249,9 @@ describe('aktör paneli ve manuel görevler (modül 12, entegrasyon)', { skip },
     assert.deepEqual(await ids('admin@test.local'), [roomTask.id, reservationTask.id, unknownTask.id].sort());
     assert.deepEqual(await ids('resepsiyon@test.local'), [roomTask.id, reservationTask.id].sort(), 'ön büro bilinmeyen modülü görmez');
     assert.deepEqual(await ids('kat@test.local'), [roomTask.id], 'kat hizmetleri yalnızca oda işlerini');
-    assert.equal((await get('/manual-tasks', 'muhasebe@test.local')).statusCode, 403);
-    assert.equal((await get('/manual-tasks/summary', 'muhasebe@test.local')).statusCode, 403);
+    // Muhasebe yalnızca folyo aktörünün görevlerini görür (modül 15); oda / rezervasyon işi onun değil.
+    assert.deepEqual(await ids('muhasebe@test.local'), []);
+    assert.equal((await get('/manual-tasks/summary', 'muhasebe@test.local')).json().data.open, 0);
 
     // Modül süzgeci ve tek görev de kapsamla sınırlı.
     assert.equal((await get(`/manual-tasks?module=${encodeURIComponent('Rezervasyon')}`, 'kat@test.local')).statusCode, 403);

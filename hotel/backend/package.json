@@ -24,6 +24,7 @@
     "@fastify/proxy-addr": "^5.1.0",
     "@fastify/rate-limit": "^10.3.0",
     "@hotelos/actor-kit": "*",
+    "@hotelos/billing-worker": "*",
     "@hotelos/concierge-agent": "*",
     "@hotelos/core": "*",
     "@hotelos/hotel-contracts": "*",

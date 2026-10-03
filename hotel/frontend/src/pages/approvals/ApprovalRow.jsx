@@ -1,7 +1,8 @@
 import { memo } from 'react';
-import { APPROVAL_STATUS_LABELS, approvalTiming } from '@hotelos/hotel-contracts';
+import { APPROVAL_STATUS_LABELS, approvalSelfDecisionError, approvalTiming } from '@hotelos/hotel-contracts';
 import { Badge, Button, Icon } from '@hotelos/ui';
 import { formatMoney } from '../../lib/format.js';
+import { useAuthStore } from '../../store/auth.js';
 import { formatElapsed, formatListTime, formatMinutes } from '../../lib/timeFormat.js';
 import { STATUS_TONES, TYPE_ICONS } from './approvalTheme.js';
 
@@ -22,6 +23,8 @@ import { STATUS_TONES, TYPE_ICONS } from './approvalTheme.js';
  * }} props
  */
 export const ApprovalRow = memo(function ApprovalRow({ item, now, timeZone, canDecide, onOpen }) {
+  const me = useAuthStore((state) => state.user?.email);
+  const selfBlocked = approvalSelfDecisionError(item, me);
   const timing = approvalTiming(item, now);
   const requester = item.actorName ? `${item.actorName} (aktör)` : item.requestedBy;
   const amount = item.amount !== null ? formatMoney(item.amount, item.currency ?? '') : null;
@@ -73,7 +76,7 @@ export const ApprovalRow = memo(function ApprovalRow({ item, now, timeZone, canD
                 <Button size="sm" variant="outline" icon="close" onClick={() => onOpen(item.id, 'deny')}>
                   Reddet
                 </Button>
-                <Button size="sm" icon="check" onClick={() => onOpen(item.id, 'grant')}>
+                <Button size="sm" icon="check" disabled={Boolean(selfBlocked)} title={selfBlocked ?? undefined} onClick={() => onOpen(item.id, 'grant')}>
                   Onayla
                 </Button>
               </>

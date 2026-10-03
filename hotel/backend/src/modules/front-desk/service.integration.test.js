@@ -10,8 +10,9 @@ import { after, before, beforeEach, describe, it } from 'node:test';
  * durması, kimlik politikası ve refakatçinin belgesinden tanınması, aynı
  * konaklamaya aynı anda iki giriş, otel saatine göre erken giriş / geç çıkış
  * ücreti ve "görülen tutar" koruması, erken ayrılışta gecelerin ve envanterin
- * geri dönmesi, folyo bakiyesi ve bakiyeyle çıkış, aynı gün geri alma, listeler
- * ve özet, kimlik numarasının maskelenmesi.
+ * geri dönmesi, folyo bakiyesi (işlenmemiş geceler dahil — modül 15) ve
+ * bakiyeyle çıkış, aynı gün geri alma, listeler ve özet, kimlik numarasının
+ * maskelenmesi.
  */
 
 const TEST_DB = process.env.TEST_DATABASE_URL;
@@ -174,12 +175,40 @@ describe('check-in / check-out (entegrasyon)', { skip }, () => {
     return stay;
   }
 
-  /** Folyo: kalemler ve ödemeler. */
-  async function seedFolio(reservation, { charges = [], payments = [] } = {}) {
+  /**
+   * Folyo (modül 15'in yazdığı biçimde): istenirse konaklamanın geceleri
+   * işlenmiş (gece kalemleri), ek harcamalar ve ödemeler (modül 17'nin yazacağı).
+   */
+  async function seedFolio(reservation, { nights = false, extras = [], payments = [] } = {}) {
     const folio = await db.folio.create({ data: { hotelId, reservationId: reservation.id, guestId: reservation.guestId } });
-    for (const amount of charges) {
-      await db.folioItem.create({ data: { hotelId, folioId: folio.id, type: 'ROOM', description: 'Oda', amount, postedBy: 'test' } });
+    const item = (data) =>
+      db.folioItem.create({
+        data: {
+          hotelId,
+          folioId: folio.id,
+          reservationId: reservation.id,
+          quantity: 1,
+          postedBy: 'test',
+          serviceDate: new Date(day(0)),
+          netAmount: data.amount,
+          taxAmount: '0',
+          total: data.amount,
+          ...data,
+        },
+      });
+    if (nights) {
+      for (const night of await db.reservationNight.findMany({ where: { reservationId: reservation.id } })) {
+        await item({
+          type: 'ROOM',
+          source: 'ROOM_NIGHT',
+          description: 'Oda ücreti',
+          amount: String(night.amount),
+          serviceDate: night.date,
+          sourceKey: `night:${reservation.id}:${core.toIsoDay(night.date)}`,
+        });
+      }
     }
+    for (const amount of extras) await item({ type: 'MINIBAR', source: 'MANUAL', description: 'Minibar', amount });
     for (const amount of payments) {
       await db.payment.create({ data: { hotelId, folioId: folio.id, method: 'CARD', amount, receivedBy: 'test' } });
     }
@@ -303,12 +332,21 @@ describe('check-in / check-out (entegrasyon)', { skip }, () => {
   });
 
   describe('çıkış', () => {
-    it('zamanında çıkış: oda olayı, bakiye bilinmiyor (folyo yok) ama çıkış olur', async () => {
+    it('folyo yoksa işlenmemiş geceler ödenecek sayılır; ödeme yoksa çıkış olmaz', async () => {
       const stay = await seedInHouse({ checkOutOffset: 0 });
       const preview = await frontDesk.getCheckOutPreview(hotelId, stay.id, { now: at('11:00') });
-      assert.equal(preview.departure.kind, 'ON_TIME');
       assert.equal(preview.folio, null);
-      assert.equal(preview.due, null);
+      assert.equal(preview.due, '2000.00');
+      assert.deepEqual(preview.pendingCharges.own.map((line) => [line.source, line.total]), [['ROOM_NIGHT', '2000.00']]);
+      await rejectsWith(doCheckOut(stay.id), 'BALANCE_DUE', { due: '2000.00', balance: '0.00', pending: '2000.00' });
+    });
+
+    it('zamanında çıkış: ödeme gecelere yetiyorsa çıkış olur, oda olayı', async () => {
+      const stay = await seedInHouse({ checkOutOffset: 0 });
+      await seedFolio(stay, { payments: ['2000.00'] });
+      const preview = await frontDesk.getCheckOutPreview(hotelId, stay.id, { now: at('11:00') });
+      assert.equal(preview.departure.kind, 'ON_TIME');
+      assert.equal(preview.due, '0.00');
 
       const result = await doCheckOut(stay.id);
       assert.equal(result.status, 'CHECKED_OUT');
@@ -324,6 +362,10 @@ describe('check-in / check-out (entegrasyon)', { skip }, () => {
       const busy = await rooms.checkAvailability(hotelId, { checkIn: new Date(day(1)), checkOut: new Date(day(2)), roomTypeId: types.std.id });
 
       await rejectsWith(doCheckOut(stay.id), 'EARLY_DEPARTURE', { releasedNights: [day(0), day(1), day(2)], totalPrice: '1000.00' });
+      // Bırakılan geceler ödenecekten düşer: yalnızca kalan tek gece.
+      const preview = await frontDesk.getCheckOutPreview(hotelId, stay.id, { now: at('11:00') });
+      assert.equal(preview.due, '1000.00');
+      await seedFolio(stay, { payments: ['1000.00'] });
       await doCheckOut(stay.id, { confirmEarlyDeparture: true });
 
       const row = await db.reservation.findUnique({ where: { id: stay.id }, include: { nights: true } });
@@ -338,7 +380,10 @@ describe('check-in / check-out (entegrasyon)', { skip }, () => {
 
     it('geç çıkış: 12:00 sonrası sabit ücret; görülen tutar yoksa FEE_CHANGED; önceden ücret yok', async () => {
       const stay = await seedInHouse({ checkOutOffset: 0 });
+      await seedFolio(stay, { nights: true, payments: ['2400.00'] });
       await rejectsWith(doCheckOut(stay.id, {}, { now: at('13:30') }), 'FEE_CHANGED', { lateCheckOutFee: '400.00' });
+      const preview = await frontDesk.getCheckOutPreview(hotelId, stay.id, { now: at('13:30') });
+      assert.deepEqual([preview.due, preview.dueWithoutLateFee], ['0.00', '-400.00']);
       await doCheckOut(stay.id, { expectedLateFee: '400' }, { now: at('13:30') });
       const [event] = await eventsNamed('guest.checked_out');
       assert.equal(event.payload.lateCheckOutFee, '400.00');
@@ -346,9 +391,9 @@ describe('check-in / check-out (entegrasyon)', { skip }, () => {
 
     it('bakiye: borç varsa çıkış olmaz; yetkisi olmayan bakiyeyle çıkamaz; yetkili gerekçeyle çıkar, yönetime uyarı düşer', async () => {
       const stay = await seedInHouse({ checkOutOffset: 0 });
-      await seedFolio(stay, { charges: ['2000.00', '150.00'], payments: ['1500.00'] });
+      await seedFolio(stay, { nights: true, extras: ['150.00'], payments: ['1500.00'] });
 
-      await rejectsWith(doCheckOut(stay.id), 'BALANCE_DUE', { due: '650.00', balance: '650.00' });
+      await rejectsWith(doCheckOut(stay.id), 'BALANCE_DUE', { due: '650.00', balance: '650.00', pending: '0.00' });
       await assert.rejects(
         doCheckOut(stay.id, { allowOpenBalance: true, openBalanceReason: 'Şirket ay sonunda ödeyecek' }),
         { code: 'FORBIDDEN' },
@@ -367,13 +412,24 @@ describe('check-in / check-out (entegrasyon)', { skip }, () => {
 
     it('bakiye kapanmışsa (ödeme = kalem) çıkış olur; geç çıkış ücreti bakiyeye eklenir', async () => {
       const stay = await seedInHouse({ checkOutOffset: 0 });
-      await seedFolio(stay, { charges: ['2000.00'], payments: ['2000.00'] });
+      await seedFolio(stay, { nights: true, payments: ['2000.00'] });
       await doCheckOut(stay.id);
       assert.equal((await db.reservation.findUnique({ where: { id: stay.id } })).status, 'CHECKED_OUT');
 
       const late = await seedInHouse({ checkOutOffset: 0, roomId: room[102].id });
-      await seedFolio(late, { charges: ['2000.00'], payments: ['2000.00'] });
+      await seedFolio(late, { nights: true, payments: ['2000.00'] });
       await rejectsWith(doCheckOut(late.id, { expectedLateFee: '400' }, { now: at('13:00') }), 'BALANCE_DUE', { due: '400.00', balance: '0.00' });
+    });
+
+    it('geç çıkış ücretine oda vergisi eklenir (hariç vergi): ödenecek vergili tutardır', async () => {
+      await db.tax.create({ data: { hotelId, name: 'Konaklama vergisi', rate: '2', isIncluded: false, appliesTo: ['ROOM'] } });
+      cache.cache.invalidatePrefix('settings:');
+      const stay = await seedInHouse({ checkOutOffset: 0 });
+      await seedFolio(stay, { nights: true, payments: ['2000.00'] });
+      const preview = await frontDesk.getCheckOutPreview(hotelId, stay.id, { now: at('13:00') });
+      // 400 + %2 = 408; gece kalemleri testte vergisiz işlendi (kalem, işlendiği andaki dökümü taşır).
+      assert.deepEqual(preview.pendingCharges.own.map((line) => [line.source, line.total]), [['LATE_CHECK_OUT', '408.00']]);
+      assert.equal(preview.due, '408.00');
     });
   });
 
@@ -399,7 +455,7 @@ describe('check-in / check-out (entegrasyon)', { skip }, () => {
     it('folyoda hareket varsa giriş geri alınmaz', async () => {
       const reservation = await book();
       await doCheckIn(reservation.id);
-      await seedFolio(await db.reservation.findUnique({ where: { id: reservation.id } }), { charges: ['100.00'] });
+      await seedFolio(await db.reservation.findUnique({ where: { id: reservation.id } }), { extras: ['100.00'] });
       await assert.rejects(
         as(async () => frontDesk.revertCheckIn(hotelId, reservation.id, { expectedUpdatedAt: await version(reservation.id), reason: 'x' }, { now: AFTERNOON() })),
         { code: 'FOLIO_ACTIVITY' },
@@ -408,6 +464,7 @@ describe('check-in / check-out (entegrasyon)', { skip }, () => {
 
     it('çıkış aynı gün geri alınır; oda bu arada başka misafire girişle verildiyse alınmaz', async () => {
       const stay = await seedInHouse({ checkOutOffset: 0 });
+      await seedFolio(stay, { payments: ['2000.00'] });
       await doCheckOut(stay.id);
       const next = await book({ checkIn: 0, nights: 1 });
       await doCheckIn(next.id);
@@ -457,6 +514,7 @@ describe('check-in / check-out (entegrasyon)', { skip }, () => {
       assert.equal(departures.items[0].guest.idMasked, '100••••••78');
       assert.ok(!JSON.stringify(departures).includes(TC_OTHER), 'listede tam kimlik numarası olmamalı');
 
+      await seedFolio(departing, { payments: ['2400.00'] });
       await doCheckOut(departing.id, { expectedLateFee: '400' }, { now: AFTERNOON() });
       const checkedOut = await frontDesk.listDepartures(hotelId, { view: 'CHECKED_OUT', page: 1, pageSize: 20 }, { now: AFTERNOON() });
       assert.deepEqual(checkedOut.items.map((row) => [row.id, row.canRevertCheckOut]), [[departing.id, true]]);

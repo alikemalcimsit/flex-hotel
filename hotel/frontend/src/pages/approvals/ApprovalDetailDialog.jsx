@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   APPROVAL_STATUS_LABELS,
   approvalDecisionError,
+  approvalSelfDecisionError,
   approvalTiming,
   denyApprovalSchema,
   grantApprovalSchema,
@@ -15,6 +16,7 @@ import { formatMoney } from '../../lib/format.js';
 import { formatDateTime, formatMinutes } from '../../lib/timeFormat.js';
 import { useNow } from '../../lib/useNow.js';
 import { validateWith } from '../../lib/validate.js';
+import { useAuthStore } from '../../store/auth.js';
 import { toastError, toastSuccess } from '../../store/toast.js';
 import { STATUS_TONES } from './approvalTheme.js';
 
@@ -41,6 +43,7 @@ const CLOCK_TICK_MS = 30_000;
 export function ApprovalDetailDialog({ approvalId, canDecide, timeZone, initialMode = 'view', onClose }) {
   const queryClient = useQueryClient();
   const now = useNow(CLOCK_TICK_MS);
+  const me = useAuthStore((state) => state.user?.email);
   /** `view` | `grant` (not isteğe bağlı) | `deny` (gerekçe zorunlu) */
   const [mode, setMode] = useState(canDecide ? initialMode : 'view');
   const [note, setNote] = useState('');
@@ -89,6 +92,8 @@ export function ApprovalDetailDialog({ approvalId, canDecide, timeZone, initialM
 
   const timing = item ? approvalTiming(item, now) : null;
   const decidable = canDecide && item && approvalDecisionError(item, now) === null;
+  // Dört göz: kendi kalem iptali isteğini onaylayamaz, reddedip geri çekebilir.
+  const selfBlocked = item ? approvalSelfDecisionError(item, me) : null;
   const busy = decideMutation.isPending;
 
   // Satırdan "Onayla" ile açıldı ama kayıt bu arada karara bağlanmış ya da
@@ -126,7 +131,7 @@ export function ApprovalDetailDialog({ approvalId, canDecide, timeZone, initialM
           </Button>
         )}
         {decidable && (
-          <Button icon="check" onClick={() => setMode('grant')}>
+          <Button icon="check" disabled={Boolean(selfBlocked)} title={selfBlocked ?? undefined} onClick={() => setMode('grant')}>
             Onayla
           </Button>
         )}

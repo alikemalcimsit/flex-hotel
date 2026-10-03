@@ -49,6 +49,8 @@ export const ACTIVITY_CHANNEL = 'activity.changed';
 export const MANUAL_TASKS_CHANNEL = 'manual-tasks.changed';
 /** Aktör paneli (modül 12): biri aktörü açıp kapatınca. */
 export const ACTORS_CHANNEL = 'actors.changed';
+/** Folyo (modül 15): kalem işlendi, iptal / aktarma / kapanış; bakiyeler. */
+export const FOLIOS_CHANNEL = 'folios.changed';
 
 /**
  * Kanal aboneliği sayacı. Aynı kanalı birden fazla bileşen dinleyebilir

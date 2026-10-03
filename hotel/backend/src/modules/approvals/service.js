@@ -7,6 +7,7 @@ import {
   APPROVAL_TYPE_LABELS,
   approvalDecisionError,
   approvalRequestSchema,
+  approvalSelfDecisionError,
   approvalTiming,
   toFieldErrors,
 } from '@hotelos/hotel-contracts';
@@ -495,6 +496,9 @@ export async function decideApproval(hotelId, approvalId, decision, { note = nul
     if (blocked) return { blocked, expiredNow: row.status === 'PENDING' };
 
     const decidedBy = currentActor();
+    // Dört göz: bazı türlerde (kalem iptali) isteyen kendi isteğini onaylayamaz (reddedebilir).
+    const selfDecision = approvalSelfDecisionError(row, decidedBy, decision);
+    if (selfDecision) throw new ConflictError(selfDecision, 'SELF_DECISION');
     const updated = await tx.approval.update({
       where: { id: approvalId },
       data: { status: decision, decidedBy, decidedAt: now, note: note || null },

@@ -5,7 +5,9 @@ import { Alert, Badge, Button, Icon, Spinner } from '@hotelos/ui';
 import { Modal } from '../../components/Modal.jsx';
 import { HousekeepingBadge, OccupancyBadge } from '../../components/RoomStateBadges.jsx';
 import { api } from '../../lib/api.js';
+import { folioPath } from '../../lib/folios.js';
 import { formatDate, formatMoney } from '../../lib/format.js';
+import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 import { RESERVATION_TONES } from './planTheme.js';
 
 /**
@@ -27,6 +29,7 @@ import { RESERVATION_TONES } from './planTheme.js';
  * }} props
  */
 export function ReservationDrawer({ reservationId, canOperate, onClose, onChangeRoom, onUnassign }) {
+  const canViewFolio = useCan()(PERMISSIONS.FOLIO_VIEW);
   const query = useQuery({
     queryKey: ['plan', 'reservation', reservationId],
     queryFn: () => api(`/plan/reservations/${reservationId}`),
@@ -130,7 +133,16 @@ export function ReservationDrawer({ reservationId, canOperate, onClose, onChange
               {detail.folio ? (
                 <>
                   {formatMoney(detail.folio.balance, detail.folio.currency)}
-                  <span className="text-xs text-ink-muted"> · {detail.folio.status === 'OPEN' ? 'açık' : 'kapalı'}</span>
+                  <span className="text-xs text-ink-muted">
+                    {' '}
+                    · {detail.folio.status === 'OPEN' ? 'açık' : 'kapalı'}
+                    {detail.folio.count > 1 ? ` · ${detail.folio.count} folyo` : ''}
+                  </span>
+                  {canViewFolio && (
+                    <Link to={folioPath(detail.id)} className="block text-xs font-semibold text-info-ink underline-offset-2 hover:underline">
+                      Folyoyu aç
+                    </Link>
+                  )}
                 </>
               ) : (
                 <span className="text-ink-muted">Henüz folyo açılmadı</span>

@@ -39,11 +39,18 @@ describe('manuel görev kimi ilgilendirir', () => {
     const scope = manualTaskScope(DEFAULT_ROLE_PERMISSIONS.FRONT_DESK);
     assert.equal(scope.all, false);
     assert.equal(scope.others, false);
-    assert.deepEqual([...scope.modules].sort(), ['Misafir mesajları', 'Oda atama', 'Rezervasyon']);
+    assert.deepEqual([...scope.modules].sort(), ['Folyo', 'Misafir mesajları', 'Oda atama', 'Rezervasyon']);
   });
 
-  it('muhasebe hiçbir görevi görmez (boş kapsam)', () => {
+  it('muhasebe yalnızca folyo görevlerini görür', () => {
     const scope = manualTaskScope(DEFAULT_ROLE_PERMISSIONS.ACCOUNTING);
+    assert.equal(scope.empty, false);
+    assert.equal(scope.others, false);
+    assert.deepEqual([...scope.modules], ['Folyo']);
+  });
+
+  it('yiyecek-içecek hiçbir aktör görevini görmez (boş kapsam)', () => {
+    const scope = manualTaskScope(DEFAULT_ROLE_PERMISSIONS.FNB);
     assert.equal(scope.empty, true);
   });
 

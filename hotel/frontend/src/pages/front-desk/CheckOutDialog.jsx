@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { DEPOSIT_METHOD_LABELS, checkOutSchema } from '@hotelos/hotel-contracts';
 import { Alert, Button, Checkbox, Icon, Spinner, Textarea } from '@hotelos/ui';
 import { Modal } from '../../components/Modal.jsx';
 import { api, apiPost } from '../../lib/api.js';
+import { folioKeys, folioPath } from '../../lib/folios.js';
 import { frontDeskKeys } from '../../lib/front-desk.js';
 import { formatDate, formatMoney } from '../../lib/format.js';
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
@@ -18,12 +20,12 @@ const REFRESH_CODES = new Set(['STALE_WRITE', 'INVALID_STATUS', 'FEE_CHANGED', '
  * Check-out formu (modül 6).
  *
  * Ekran çıkıştan önce her şeyi gösterir: erken ayrılışta bırakılacak geceler ve
- * yeni tutar, geç çıkış ücreti, folyo bakiyesi, girişte alınan teminat (iade
- * hatırlatması). Bakiye kapanmamışsa çıkış olmaz; tahsilat ödeme ekranında
- * (modül 17) yapılır. Yetkili kişi gerekçe yazarak bakiyeyle çıkış yapabilir.
- *
- * Folyosu olmayan konaklamada bakiye bilinmez: ekran bunu açıkça söyler,
- * sıfır saymaz.
+ * yeni tutar, geç çıkış ücreti, folyo bakiyesi, çıkışta folyoya işlenecek
+ * tutarlar (kalan geceler, geç çıkış — vergileriyle; modül 15), girişte alınan
+ * teminat (iade hatırlatması). Bakiye kapanmamışsa çıkış olmaz; tahsilat ödeme
+ * ekranında (modül 17) yapılır. Yetkili kişi gerekçe yazarak bakiyeyle çıkış
+ * yapabilir. Yönlendirmeyle başka folyoya (ör. grup hesabı) düşecek tutar
+ * misafirin borcu değildir; ayrıca gösterilir.
  *
  * @param {{ reservationId: string, onClose: () => void, onDone?: (reservation: object) => void }} props
  */
@@ -31,6 +33,7 @@ export function CheckOutDialog({ reservationId, onClose, onDone }) {
   const queryClient = useQueryClient();
   const can = useCan();
   const canOpenBalance = can(PERMISSIONS.STAYS_OPEN_BALANCE);
+  const canViewFolio = can(PERMISSIONS.FOLIO_VIEW);
   const preview = useQuery({
     queryKey: frontDeskKeys.checkOut(reservationId),
     queryFn: () => api(`/front-desk/stays/${reservationId}/check-out`),
@@ -50,6 +53,7 @@ export function CheckOutDialog({ reservationId, onClose, onDone }) {
       toastSuccess(`Çıkış yapıldı — ${updated.guest?.name ?? ''}${updated.room ? `, oda ${updated.room.number} kirli olarak işaretlenecek` : ''}`);
       queryClient.invalidateQueries({ queryKey: frontDeskKeys.all });
       queryClient.invalidateQueries({ queryKey: reservationKeys.all });
+      queryClient.invalidateQueries({ queryKey: folioKeys.all });
       onDone?.(updated);
       onClose();
     },
@@ -79,7 +83,7 @@ export function CheckOutDialog({ reservationId, onClose, onDone }) {
   }
 
   const data = preview.data;
-  const { reservation, departure, lateCheckOut, folio, deposit, currency } = data;
+  const { reservation, departure, lateCheckOut, folio, deposit, currency, pendingCharges } = data;
   const title = `Check-out — ${reservation.confirmationCode}${reservation.room ? ` · oda ${reservation.room.number}` : ''}`;
 
   if (data.blocker) {
@@ -93,9 +97,10 @@ export function CheckOutDialog({ reservationId, onClose, onDone }) {
   const early = departure.kind === 'EARLY';
   const lateFee = lateCheckOut.applies ? lateCheckOut.fee : null;
   const appliedLateFee = lateFee && !waiveLateFee ? lateFee : null;
-  // Ödenecek: sunucunun hesabı (bakiye + geç çıkış ücreti); ücret uygulanmazsa yalnız bakiye.
-  const due = folio ? (appliedLateFee ? data.due : folio.balance) : null;
-  const balanceOpen = due !== null && Number(due) !== 0;
+  // Ödenecek: sunucunun hesabı (bakiye + çıkışta işlenecekler); ücret uygulanmazsa geç çıkışsız hesap.
+  const due = appliedLateFee ? data.due : data.dueWithoutLateFee;
+  const balanceOpen = Number(due) !== 0;
+  const pendingLines = pendingCharges.own.filter((line) => line.source !== 'LATE_CHECK_OUT' || appliedLateFee);
 
   function submit(event) {
     event.preventDefault();
@@ -183,27 +188,31 @@ export function CheckOutDialog({ reservationId, onClose, onDone }) {
           ))}
 
         <section className="flex flex-col gap-2 rounded-panel border border-line p-4" aria-labelledby="check-out-balance">
-          <h3 id="check-out-balance" className="text-sm font-bold text-ink">Hesap</h3>
-          {folio ? (
-            <dl className="grid grid-cols-2 gap-y-1 text-sm">
-              <dt className="text-ink-muted">Harcamalar</dt>
-              <dd className="text-right tabular-nums">{formatMoney(folio.charges, currency)}</dd>
-              <dt className="text-ink-muted">Ödenen</dt>
-              <dd className="text-right tabular-nums">{formatMoney(folio.paid, currency)}</dd>
-              {appliedLateFee && (
-                <>
-                  <dt className="text-ink-muted">Geç çıkış ücreti</dt>
-                  <dd className="text-right tabular-nums">{formatMoney(appliedLateFee, currency)}</dd>
-                </>
-              )}
-              <dt className="font-bold text-ink">{Number(due) < 0 ? 'İade edilecek' : 'Ödenecek'}</dt>
-              <dd className={`text-right font-bold tabular-nums ${balanceOpen ? 'text-sec-strong' : 'text-success-ink'}`}>
-                {formatMoney(due.replace('-', ''), currency)}
-              </dd>
-            </dl>
-          ) : (
-            <p className="text-sm text-ink-muted">
-              Bu konaklamanın folyosu yok; bakiye buradan denetlenemiyor. Tahsilatın tamamlandığından emin olun.
+          <div className="flex items-center justify-between gap-2">
+            <h3 id="check-out-balance" className="text-sm font-bold text-ink">Hesap</h3>
+            {canViewFolio && (
+              <Link to={folioPath(reservation.id)} className="text-xs font-semibold text-info-ink underline-offset-2 hover:underline" onClick={onClose}>
+                Folyoyu aç
+              </Link>
+            )}
+          </div>
+          <dl className="grid grid-cols-2 gap-y-1 text-sm">
+            <dt className="text-ink-muted">Harcamalar</dt>
+            <dd className="text-right tabular-nums">{formatMoney(folio?.charges ?? '0', currency)}</dd>
+            <dt className="text-ink-muted">Ödenen</dt>
+            <dd className="text-right tabular-nums">{formatMoney(folio?.paid ?? '0', currency)}</dd>
+            {pendingLines.map((line) => (
+              <PendingRow key={`${line.source}-${line.label}`} label={`İşlenecek: ${line.label}`} value={formatMoney(line.total, currency)} />
+            ))}
+            <dt className="font-bold text-ink">{Number(due) < 0 ? 'İade edilecek' : 'Ödenecek'}</dt>
+            <dd className={`text-right font-bold tabular-nums ${balanceOpen ? 'text-sec-strong' : 'text-success-ink'}`}>
+              {formatMoney(String(due).replace('-', ''), currency)}
+            </dd>
+          </dl>
+          {pendingCharges.elsewhere.length > 0 && (
+            <p className="text-xs text-ink-muted">
+              {pendingCharges.elsewhere.map((line) => `${line.label} (${formatMoney(line.total, currency)})`).join(', ')} → oda{' '}
+              {pendingCharges.elsewhere[0].folio.roomNumber ?? '—'} · {pendingCharges.elsewhere[0].folio.name} folyosuna işlenecek; misafirin borcu değil.
             </p>
           )}
           {balanceOpen && (
@@ -246,5 +255,15 @@ export function CheckOutDialog({ reservationId, onClose, onDone }) {
         )}
       </form>
     </Modal>
+  );
+}
+
+/** @param {{ label: string, value: string }} props */
+function PendingRow({ label, value }) {
+  return (
+    <>
+      <dt className="text-ink-muted">{label}</dt>
+      <dd className="text-right tabular-nums">{value}</dd>
+    </>
   );
 }

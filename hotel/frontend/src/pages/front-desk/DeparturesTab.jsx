@@ -50,7 +50,7 @@ export function DeparturesTab() {
       ? {
           key: 'balance',
           header: 'Bakiye',
-          render: (row) => <BalanceCell balance={row.balance} currency={row.currency} />,
+          render: (row) => <BalanceCell balance={row.balance} currency={row.currency} reservationId={row.id} />,
         }
       : {
           key: 'at',

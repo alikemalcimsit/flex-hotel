@@ -69,6 +69,23 @@ export const EVENT_LABELS = Object.freeze({
   'actor.setting.changed': 'Aktör açıldı / kapatıldı',
   'manual_task.created': 'Manuel görev açıldı',
   'manual_task.updated': 'Manuel görev güncellendi',
+
+  'folio.opened': 'Folyo açıldı',
+  'folio.updated': 'Folyo bilgisi değişti',
+  'folio.charge.posted': 'Folyoya kalem işlendi',
+  'folio.room_charges.due': 'Gecenin oda ücretleri işlenecek',
+  'folio.room_charges.posted': 'Oda ücretleri işlendi',
+  'folio.item.void_requested': 'Folyo kalemi için iptal istendi',
+  'folio.item.voided': 'Folyo kalemi iptal edildi',
+  'folio.item.void_declined': 'Folyo kalemi iptali reddedildi',
+  'folio.items.transferred': 'Folyo kalemleri aktarıldı',
+  'folio.split': 'Folyo bölündü',
+  'folio.merged': 'Folyolar birleştirildi',
+  'folio.routes.changed': 'Folyo yönlendirmesi değişti',
+  'folio.closed': 'Folyo kapandı',
+  'folio.reopened': 'Folyo yeniden açıldı',
+  'fnb.order.charged': 'Restoran siparişi odaya yazıldı',
+  'minibar.consumed': 'Minibar tüketimi girildi',
 });
 
 /**
