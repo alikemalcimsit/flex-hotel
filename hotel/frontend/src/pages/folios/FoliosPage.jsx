@@ -13,6 +13,8 @@ import { FOLIOS_CHANNEL } from '../../lib/socket.js';
 import { useLiveChannel } from '../../lib/useLiveChannel.js';
 import { toastError, toastSuccess } from '../../store/toast.js';
 
+/** Canlı tazeleme seyreltme aralığı (liste otelin her folyo haberinde değişir). */
+const LIVE_MIN_INTERVAL_MS = 2000;
 const PAGE_SIZE = 25;
 const OFFLINE_REFRESH_MS = 60_000;
 const SEARCH_DEBOUNCE_MS = 300;
@@ -78,7 +80,8 @@ export function FoliosPage() {
     return () => clearTimeout(timer);
   }, [searchText, filters.search, updateParams]);
 
-  const { isLive } = useLiveChannel(FOLIOS_CHANNEL, { queryKeys: [folioKeys.lists, folioKeys.roomCharges] });
+  // Liste otelin her kalem / ödeme haberinde değişir; yoğun saatte panel başına seyreltilir.
+  const { isLive } = useLiveChannel(FOLIOS_CHANNEL, { queryKeys: [folioKeys.lists, folioKeys.roomCharges], minIntervalMs: LIVE_MIN_INTERVAL_MS });
 
   const query = useQuery({
     queryKey: folioKeys.list(filters),

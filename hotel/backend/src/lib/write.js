@@ -30,7 +30,7 @@ const RETRY_BASE_DELAY_MS = 40;
  * @template T
  * @param {(
  *   tx: import('@prisma/client').Prisma.TransactionClient,
- *   stage: (name: string, payload: object) => Promise<void>,
+ *   stage: (name: string, payload: object) => Promise<{ id: string, name: string }>,
  *   afterCommit: (fn: () => void) => void,
  * ) => Promise<T>} work
  * @param {{ timeout?: number, maxWait?: number }} [options]
@@ -42,8 +42,11 @@ export async function writeWithEvents(work, options = {}) {
     const committed = [];
     try {
       const result = await prisma.$transaction(async (tx) => {
+        // Zarfı döndürür: olay kimliği kayda bağlanabilsin (ör. folyo kaleminin tekrar işleme anahtarı).
         const stage = async (name, payload) => {
-          staged.push(await stageEvent(tx, name, payload));
+          const envelope = await stageEvent(tx, name, payload);
+          staged.push(envelope);
+          return envelope;
         };
         return work(tx, stage, (fn) => committed.push(fn));
       }, options);

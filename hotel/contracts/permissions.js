@@ -75,6 +75,15 @@ export const PERMISSIONS = Object.freeze({
   /** Günlük döviz kurunu girmek. Döviz ödemeleri bu kurla çevrilir. */
   EXCHANGE_RATES_MANAGE: 'exchange_rates.manage',
 
+  /** Minibar tüketimlerini, çamaşır siparişlerini ve günlük raporu görmek (modül 19). */
+  EXTRAS_VIEW: 'extras.view',
+  /** Odada minibar tüketimi girmek (kat görevlisi). Folyoya otomatik yansır. */
+  MINIBAR_POST: 'minibar.post',
+  /** Çamaşır siparişi almak, parça sayımını düzeltmek, durumunu ilerletmek / teslim etmek. */
+  LAUNDRY_POST: 'laundry.post',
+  /** Minibar ve çamaşırhane fiyat listeleri, ekspres farkı. */
+  EXTRAS_MANAGE: 'extras.manage',
+
   /** Aktör paneli (modül 12): aktörlerin durumu, bildirgesi, LLM harcaması. */
   ACTORS_VIEW: 'actors.view',
   /** Aktörü bu otelde açmak / kapatmak (kapalı aktörün işi personele düşer). */
@@ -118,6 +127,10 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.PAYMENT_REFUND]: 'İade / ödeme iptali iste (onaya gider)',
   [PERMISSIONS.CASH_VIEW]: 'Kasayı görüntüle',
   [PERMISSIONS.EXCHANGE_RATES_MANAGE]: 'Günlük döviz kurunu gir',
+  [PERMISSIONS.EXTRAS_VIEW]: 'Minibar / çamaşır kayıtlarını ve günlük raporu görüntüle',
+  [PERMISSIONS.MINIBAR_POST]: 'Minibar tüketimi gir',
+  [PERMISSIONS.LAUNDRY_POST]: 'Çamaşır siparişi al, durumunu güncelle',
+  [PERMISSIONS.EXTRAS_MANAGE]: 'Minibar / çamaşır fiyat listelerini yönet',
   [PERMISSIONS.ACTORS_VIEW]: 'Aktör panelini görüntüle',
   [PERMISSIONS.ACTORS_MANAGE]: 'Aktörleri aç / kapat',
 });
@@ -174,6 +187,11 @@ export const PERMISSION_GROUPS = Object.freeze([
     key: 'payments',
     label: 'Ödeme ve kasa',
     permissions: [PERMISSIONS.PAYMENT_RECEIVE, PERMISSIONS.PAYMENT_REFUND, PERMISSIONS.CASH_VIEW, PERMISSIONS.EXCHANGE_RATES_MANAGE],
+  },
+  {
+    key: 'extras',
+    label: 'Minibar ve çamaşır',
+    permissions: [PERMISSIONS.EXTRAS_VIEW, PERMISSIONS.MINIBAR_POST, PERMISSIONS.LAUNDRY_POST, PERMISSIONS.EXTRAS_MANAGE],
   },
   { key: 'monitoring', label: 'İzleme', permissions: [PERMISSIONS.ACTIVITY_VIEW, PERMISSIONS.AUDIT_VIEW] },
   { key: 'actors', label: 'Aktörler', permissions: [PERMISSIONS.ACTORS_VIEW, PERMISSIONS.ACTORS_MANAGE] },
@@ -233,6 +251,10 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.PAYMENT_REFUND,
     PERMISSIONS.CASH_VIEW,
     PERMISSIONS.EXCHANGE_RATES_MANAGE,
+    PERMISSIONS.EXTRAS_VIEW,
+    PERMISSIONS.MINIBAR_POST,
+    PERMISSIONS.LAUNDRY_POST,
+    PERMISSIONS.EXTRAS_MANAGE,
   ]),
   FRONT_DESK: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,
@@ -253,6 +275,10 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.PAYMENT_RECEIVE,
     PERMISSIONS.PAYMENT_REFUND,
     PERMISSIONS.CASH_VIEW,
+    // Resepsiyon misafirin çamaşırını alır, çıkışta minibarı sorar.
+    PERMISSIONS.EXTRAS_VIEW,
+    PERMISSIONS.MINIBAR_POST,
+    PERMISSIONS.LAUNDRY_POST,
   ]),
   HOUSEKEEPING: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,
@@ -261,6 +287,10 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.STAYS_VIEW,
     PERMISSIONS.REQUESTS_VIEW,
     PERMISSIONS.REQUESTS_MANAGE,
+    // Minibar sayımı ve çamaşırhane kat hizmetlerinin işi; fiyat listesi yönetimde.
+    PERMISSIONS.EXTRAS_VIEW,
+    PERMISSIONS.MINIBAR_POST,
+    PERMISSIONS.LAUNDRY_POST,
   ]),
   ACCOUNTING: Object.freeze([
     PERMISSIONS.SETTINGS_VIEW,
@@ -279,6 +309,9 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.PAYMENT_REFUND,
     PERMISSIONS.CASH_VIEW,
     PERMISSIONS.EXCHANGE_RATES_MANAGE,
+    // Ek hizmet geliri ve fiyat listesi muhasebenin de işi.
+    PERMISSIONS.EXTRAS_VIEW,
+    PERMISSIONS.EXTRAS_MANAGE,
   ]),
   FNB: Object.freeze([PERMISSIONS.ROOMS_VIEW, PERMISSIONS.REQUESTS_VIEW, PERMISSIONS.REQUESTS_MANAGE]),
 });

@@ -77,6 +77,20 @@ export const NAV_SECTIONS = Object.freeze([
           { label: 'Döviz kurları', to: '/kasa/kurlar', icon: 'coins' },
         ],
       },
+      // Minibar sayımı ve çamaşırhane (modül 19): kat hizmetleri ve resepsiyon.
+      {
+        label: 'Minibar & çamaşır',
+        to: '/ek-hizmetler',
+        icon: 'utensils',
+        anyPermission: [PERMISSIONS.EXTRAS_VIEW, PERMISSIONS.MINIBAR_POST, PERMISSIONS.LAUNDRY_POST, PERMISSIONS.EXTRAS_MANAGE],
+        children: [
+          { label: 'Minibar girişi', to: '/ek-hizmetler/minibar', icon: 'plus', permission: PERMISSIONS.MINIBAR_POST },
+          { label: 'Minibar kayıtları', to: '/ek-hizmetler/minibar-kayitlari', icon: 'list', permission: PERMISSIONS.EXTRAS_VIEW },
+          { label: 'Çamaşırhane', to: '/ek-hizmetler/camasir', icon: 'layers', permission: PERMISSIONS.EXTRAS_VIEW },
+          { label: 'Günlük rapor', to: '/ek-hizmetler/rapor', icon: 'fileText', permission: PERMISSIONS.EXTRAS_VIEW },
+          { label: 'Fiyat listeleri', to: '/ek-hizmetler/fiyatlar', icon: 'sliders', permission: PERMISSIONS.EXTRAS_MANAGE },
+        ],
+      },
       {
         label: 'Mesajlar',
         to: '/mesajlar',

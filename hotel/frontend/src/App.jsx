@@ -71,6 +71,13 @@ const CashPage = lazy(() => import('./pages/cash/CashPage.jsx').then((m) => ({ d
 const CashIndex = lazy(() => import('./pages/cash/CashPage.jsx').then((m) => ({ default: m.CashIndex })));
 const CashDayTab = lazy(() => import('./pages/cash/CashDayTab.jsx').then((m) => ({ default: m.CashDayTab })));
 const ExchangeRatesTab = lazy(() => import('./pages/cash/ExchangeRatesTab.jsx').then((m) => ({ default: m.ExchangeRatesTab })));
+const ExtrasPage = lazy(() => import('./pages/extras/ExtrasPage.jsx').then((m) => ({ default: m.ExtrasPage })));
+const ExtrasIndex = lazy(() => import('./pages/extras/ExtrasPage.jsx').then((m) => ({ default: m.ExtrasIndex })));
+const MinibarEntryTab = lazy(() => import('./pages/extras/MinibarEntryTab.jsx').then((m) => ({ default: m.MinibarEntryTab })));
+const MinibarRecordsTab = lazy(() => import('./pages/extras/MinibarRecordsTab.jsx').then((m) => ({ default: m.MinibarRecordsTab })));
+const LaundryTab = lazy(() => import('./pages/extras/LaundryTab.jsx').then((m) => ({ default: m.LaundryTab })));
+const ExtrasReportTab = lazy(() => import('./pages/extras/ExtrasReportTab.jsx').then((m) => ({ default: m.ExtrasReportTab })));
+const PriceListsTab = lazy(() => import('./pages/extras/PriceListsTab.jsx').then((m) => ({ default: m.PriceListsTab })));
 const ReservationsPage = lazy(() =>
   import('./pages/reservations/ReservationsPage.jsx').then((m) => ({ default: m.ReservationsPage })),
 );
@@ -240,6 +247,58 @@ export default function App() {
                 }
               />
               <Route path="kurlar" element={<ExchangeRatesTab />} />
+            </Route>
+            <Route
+              path="ek-hizmetler"
+              element={
+                <RequireAnyPermission
+                  permissions={[PERMISSIONS.EXTRAS_VIEW, PERMISSIONS.MINIBAR_POST, PERMISSIONS.LAUNDRY_POST, PERMISSIONS.EXTRAS_MANAGE]}
+                >
+                  <ExtrasPage />
+                </RequireAnyPermission>
+              }
+            >
+              <Route index element={<ExtrasIndex />} />
+              <Route
+                path="minibar"
+                element={
+                  <RequirePermission permission={PERMISSIONS.MINIBAR_POST}>
+                    <MinibarEntryTab />
+                  </RequirePermission>
+                }
+              />
+              <Route
+                path="minibar-kayitlari"
+                element={
+                  <RequirePermission permission={PERMISSIONS.EXTRAS_VIEW}>
+                    <MinibarRecordsTab />
+                  </RequirePermission>
+                }
+              />
+              <Route
+                path="camasir"
+                element={
+                  <RequirePermission permission={PERMISSIONS.EXTRAS_VIEW}>
+                    <LaundryTab />
+                  </RequirePermission>
+                }
+              />
+              <Route
+                path="rapor"
+                element={
+                  <RequirePermission permission={PERMISSIONS.EXTRAS_VIEW}>
+                    <ExtrasReportTab />
+                  </RequirePermission>
+                }
+              />
+              <Route
+                path="fiyatlar"
+                element={
+                  <RequirePermission permission={PERMISSIONS.EXTRAS_MANAGE}>
+                    <PriceListsTab />
+                  </RequirePermission>
+                }
+              />
             </Route>
             {/* Konuşma adreste: yenileyince açık kalır, bağlantı paylaşılabilir. */}
             <Route

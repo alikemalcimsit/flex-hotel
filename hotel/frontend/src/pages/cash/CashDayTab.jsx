@@ -22,6 +22,11 @@ import { CASH_CHANNEL } from '../../lib/socket.js';
 import { useLiveChannel } from '../../lib/useLiveChannel.js';
 
 const OFFLINE_REFRESH_MS = 60_000;
+/**
+ * Yoğun saatte (çıkış sabahı yüzlerce ödeme) açık her kasa ekranı her ödemede
+ * toplam sormasın: iki tazeleme arası en az bu kadar.
+ */
+const LIVE_MIN_INTERVAL_MS = 3000;
 const timeFormatter = new Intl.DateTimeFormat('tr-TR', { hour: '2-digit', minute: '2-digit' });
 
 /**
@@ -48,11 +53,16 @@ export function CashDayTab() {
       { replace: true },
     );
 
-  const { isLive } = useLiveChannel(CASH_CHANNEL, { queryKeys: [cashKeys.all] });
+  // Geçmiş gün kapanmıştır (ödeme işlendiği iş gününe yazılır): yalnızca bugün canlı.
+  const { isLive } = useLiveChannel(CASH_CHANNEL, {
+    queryKeys: [cashKeys.summary({ date, mine }), ['cash', 'movements']],
+    enabled: !date,
+    minIntervalMs: LIVE_MIN_INTERVAL_MS,
+  });
   const summary = useQuery({
     queryKey: cashKeys.summary({ date, mine }),
     queryFn: () => api(withQuery('/payments/cash/summary', { date, mine })),
-    refetchInterval: isLive ? false : OFFLINE_REFRESH_MS,
+    refetchInterval: date || isLive ? false : OFFLINE_REFRESH_MS,
   });
   const movementFilters = { date, mine, method: method || undefined, kind: kind || undefined };
   const movements = useInfiniteQuery({
@@ -83,7 +93,7 @@ export function CashDayTab() {
           <Switch checked={mine} onChange={(next) => setParam('benim', next ? '1' : '')} label="Yalnızca benim aldıklarım" />
           Yalnızca benim aldıklarım
         </label>
-        <Badge tone={isLive ? 'success' : 'warning'} className="mb-2 ml-auto">{isLive ? 'Canlı' : 'Canlı değil'}</Badge>
+        {data.isToday && <Badge tone={isLive ? 'success' : 'warning'} className="mb-2 ml-auto">{isLive ? 'Canlı' : 'Canlı değil'}</Badge>}
       </div>
 
       <MethodTotals data={data} />

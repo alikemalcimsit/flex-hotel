@@ -100,6 +100,7 @@ enum FolioItemSource {
   NO_SHOW
   FNB_ORDER
   MINIBAR
+  LAUNDRY
   REVERSAL
 }
 
@@ -261,6 +262,38 @@ enum DepositMethod {
   TRANSFER
 }
 
+/// Minibar ürün kategorisi (modül 19).
+enum MinibarCategory {
+  DRINK
+  ALCOHOL
+  SNACK
+  OTHER
+}
+
+/// Minibar tüketimi kime yazıldı: odadaki misafir, odadan yakın zamanda ayrılan
+/// misafir (geç kalem) ya da kimse (kayıp, gerekçeli).
+enum MinibarChargeTarget {
+  IN_HOUSE
+  LATE
+  NONE
+}
+
+/// Çamaşırhane hizmeti.
+enum LaundryService {
+  WASH
+  DRY_CLEAN
+  PRESS
+}
+
+/// Çamaşır siparişinin durumu: alındı → yıkamada → hazır → teslim (ücret folyoya); ya da iptal.
+enum LaundryStatus {
+  RECEIVED
+  IN_PROCESS
+  READY
+  DELIVERED
+  CANCELLED
+}
+
 enum WaitlistStatus {
   WAITING
   AVAILABLE
@@ -391,6 +424,8 @@ model Hotel {
   /// Bu tutar (otel para biriminde) ve üstü ödeme ikinci bir yetkilinin onayına
   /// gider; onaylanana kadar bakiyeye girmez (modül 17). 0: onay yok.
   largePaymentThreshold        Decimal           @default(0) @db.Decimal(12, 2)
+  /// Ekspres çamaşır farkı (yüzde, modül 19): ekspres siparişte parçaların toplamına eklenir.
+  laundryExpressPct            Decimal           @default(50) @db.Decimal(5, 2)
   settings                     Json              @default("{}")
   createdAt                    DateTime          @default(now())
   updatedAt                    DateTime          @updatedAt
@@ -436,6 +471,10 @@ model Hotel {
   invoices              Invoice[]
   payments              Payment[]
   exchangeRates         ExchangeRate[]
+  minibarItems          MinibarItem[]
+  minibarConsumptions   MinibarConsumption[]
+  laundryItems          LaundryItem[]
+  laundryOrders         LaundryOrder[]
   nightAudits           NightAudit[]
   housekeepingTasks     HousekeepingTask[]
   maintenanceTickets    MaintenanceTicket[]
@@ -989,15 +1028,17 @@ model Room {
   updatedAt          DateTime           @updatedAt
   deletedAt          DateTime?
 
-  hotel              Hotel               @relation(fields: [hotelId], references: [id])
-  roomType           RoomType            @relation(fields: [roomTypeId], references: [id])
-  reservations       Reservation[]
-  blocks             RoomBlock[]
-  staySegments       RoomStaySegment[]
-  guestRequests      GuestRequest[]
-  housekeepingTasks  HousekeepingTask[]
-  maintenanceTickets MaintenanceTicket[]
-  lostItems          LostItem[]
+  hotel               Hotel                @relation(fields: [hotelId], references: [id])
+  roomType            RoomType             @relation(fields: [roomTypeId], references: [id])
+  reservations        Reservation[]
+  blocks              RoomBlock[]
+  staySegments        RoomStaySegment[]
+  guestRequests       GuestRequest[]
+  housekeepingTasks   HousekeepingTask[]
+  maintenanceTickets  MaintenanceTicket[]
+  lostItems           LostItem[]
+  minibarConsumptions MinibarConsumption[]
+  laundryOrders       LaundryOrder[]
 
   // Oda numarası benzersizliği de kısmi index ile (bkz. RoomType açıklaması):
   // silinen 101 numaralı oda sonradan tekrar açılabilmeli.
@@ -1134,22 +1175,24 @@ model Reservation {
   updatedAt           DateTime             @updatedAt
   deletedAt           DateTime?
 
-  hotel             Hotel              @relation(fields: [hotelId], references: [id])
-  guest             Guest              @relation(fields: [guestId], references: [id])
-  roomType          RoomType           @relation(fields: [roomTypeId], references: [id])
-  room              Room?              @relation(fields: [roomId], references: [id])
-  group             ReservationGroup?  @relation(fields: [groupId], references: [id])
-  nights            ReservationNight[]
-  waitlistEntries   WaitlistEntry[]
-  reservationGuests ReservationGuest[]
-  folios            Folio[]
-  folioItems        FolioItem[]
-  folioRoutes       FolioRoute[]
-  payments          Payment[]
-  roomSegments      RoomStaySegment[]
-  conversations     Conversation[]
-  guestRequests     GuestRequest[]
-  notifications     Notification[]
+  hotel               Hotel                @relation(fields: [hotelId], references: [id])
+  guest               Guest                @relation(fields: [guestId], references: [id])
+  roomType            RoomType             @relation(fields: [roomTypeId], references: [id])
+  room                Room?                @relation(fields: [roomId], references: [id])
+  group               ReservationGroup?    @relation(fields: [groupId], references: [id])
+  nights              ReservationNight[]
+  waitlistEntries     WaitlistEntry[]
+  reservationGuests   ReservationGuest[]
+  folios              Folio[]
+  folioItems          FolioItem[]
+  folioRoutes         FolioRoute[]
+  payments            Payment[]
+  minibarConsumptions MinibarConsumption[]
+  laundryOrders       LaundryOrder[]
+  roomSegments        RoomStaySegment[]
+  conversations       Conversation[]
+  guestRequests       GuestRequest[]
+  notifications       Notification[]
 
   // Müsaitlik sorgusunun sıcak yolu: "şu otelde, şu oda tipinde, şu tarihlerde
   // envanteri tüketen rezervasyonlar". Dolu bir otelde saniyede onlarca kez çalışır.
@@ -1779,6 +1822,188 @@ model ExchangeRate {
   @@unique([hotelId, currency, date])
   // Günün kurları ve geçmiş (son gün önce).
   @@index([hotelId, date])
+}
+
+/// Minibar ürünü (modül 19). Fiyat vergi ayarına göre (kalem tipi minibar)
+/// dahil / hariç yorumlanır. Kod otel içinde tekil (silinmemişler arasında:
+/// kısmi index `MinibarItem_hotelId_code_active_key`).
+model MinibarItem {
+  id        String          @id @default(uuid())
+  hotelId   String
+  code      String
+  name      String
+  category  MinibarCategory @default(DRINK)
+  price     Decimal         @db.Decimal(12, 2)
+  /// Odadaki standart adet (dolum ve sayım ekranı için).
+  parLevel  Int             @default(1)
+  active    Boolean         @default(true)
+  sortOrder Int             @default(0)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  deletedAt DateTime?
+
+  hotel Hotel                    @relation(fields: [hotelId], references: [id])
+  lines MinibarConsumptionLine[]
+
+  // Giriş ekranının satıştaki ürünleri (sıralı) ve yönetim listesi.
+  @@index([hotelId, active, sortOrder])
+}
+
+/// Odanın minibar sayımı: bir fiş (modül 19). Konaklamaya yazılan fiş
+/// `minibar.consumed` olayıyla folyoya gider (`eventId`: folyo kalemlerinin
+/// tekrar işleme anahtarı `evt:<eventId>:<sıra>`); kayıp fiş folyoya gitmez.
+/// Fiş silinmez, değiştirilmez: düzeltme folyodaki kalem iptaliyle.
+model MinibarConsumption {
+  id            String              @id @default(uuid())
+  hotelId       String
+  roomId        String
+  /// Yazıldığı konaklama (kayıpta boş).
+  reservationId String?
+  chargeTarget  MinibarChargeTarget
+  /// İnsanın okuyacağı fiş no ("MB-7K2Q9X"): folyo kaleminde ve denetimde görünür.
+  reference     String
+  /// Sayımın iş günü (rapor).
+  businessDate  DateTime            @db.Date
+  totalAmount   Decimal             @db.Decimal(12, 2)
+  itemCount     Int
+  lossReason    String?
+  note          String?
+  /// Çift gönderim koruması (otel başına tekil).
+  requestId     String
+  /// Folyoya giden olay (kayıpta boş).
+  eventId       String?
+  recordedBy    String
+  recordedAt    DateTime            @default(now())
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  deletedAt     DateTime?
+
+  hotel       Hotel                    @relation(fields: [hotelId], references: [id])
+  room        Room                     @relation(fields: [roomId], references: [id])
+  reservation Reservation?             @relation(fields: [reservationId], references: [id], onDelete: Restrict)
+  lines       MinibarConsumptionLine[]
+
+  @@unique([hotelId, requestId])
+  @@unique([hotelId, reference])
+  // Günün fişleri (son giren önce, imleçli) ve günlük rapor.
+  @@index([hotelId, businessDate, recordedAt, id])
+  // Odanın son sayımları (aynı odaya iki kez girişe karşı uyarı).
+  @@index([roomId, recordedAt])
+  @@index([reservationId])
+}
+
+/// Minibar fişinin satırı: ürünün o anki adı ve fiyatı (fiyat sonradan değişse de fiş değişmez).
+model MinibarConsumptionLine {
+  id            String  @id @default(uuid())
+  hotelId       String
+  consumptionId String
+  itemId        String
+  name          String
+  unitPrice     Decimal @db.Decimal(12, 2)
+  quantity      Int
+  total         Decimal @db.Decimal(12, 2)
+
+  consumption MinibarConsumption @relation(fields: [consumptionId], references: [id])
+  item        MinibarItem        @relation(fields: [itemId], references: [id])
+
+  @@index([consumptionId])
+  @@index([itemId])
+}
+
+/// Çamaşırhane fiyat listesi satırı: parça × hizmet (ör. gömlek — yıkama + ütü).
+/// Kod otel içinde tekil (kısmi index `LaundryItem_hotelId_code_active_key`).
+model LaundryItem {
+  id        String         @id @default(uuid())
+  hotelId   String
+  code      String
+  name      String
+  service   LaundryService @default(WASH)
+  price     Decimal        @db.Decimal(12, 2)
+  active    Boolean        @default(true)
+  sortOrder Int            @default(0)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  deletedAt DateTime?
+
+  hotel Hotel              @relation(fields: [hotelId], references: [id])
+  lines LaundryOrderLine[]
+
+  @@index([hotelId, active, sortOrder])
+}
+
+/// Çamaşır siparişi (modül 19): içerideki misafir adına alınır, teslimde
+/// ücreti `laundry.charged` olayıyla folyoya gider (`chargeEventId`).
+/// Ekspres farkı sipariş anındaki ayardan (`expressPct`).
+model LaundryOrder {
+  id                    String        @id @default(uuid())
+  hotelId               String
+  roomId                String
+  reservationId         String
+  reference             String
+  status                LaundryStatus @default(RECEIVED)
+  express               Boolean       @default(false)
+  expressPct            Decimal       @default(0) @db.Decimal(5, 2)
+  subtotal              Decimal       @db.Decimal(12, 2)
+  surcharge             Decimal       @default(0) @db.Decimal(12, 2)
+  total                 Decimal       @db.Decimal(12, 2)
+  itemCount             Int
+  dueAt                 DateTime
+  note                  String?
+  requestId             String
+  /// Alındığı iş günü (rapor).
+  businessDate          DateTime      @db.Date
+  receivedBy            String
+  receivedAt            DateTime      @default(now())
+  statusChangedAt       DateTime      @default(now())
+  statusChangedBy       String
+  deliveredAt           DateTime?
+  deliveredBy           String?
+  /// Teslim edildiği iş günü (gelir raporu).
+  deliveredBusinessDate DateTime?     @db.Date
+  chargeEventId         String?
+  cancelledAt           DateTime?
+  cancelledBy           String?
+  cancelReason          String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  deletedAt             DateTime?
+
+  hotel       Hotel              @relation(fields: [hotelId], references: [id])
+  room        Room               @relation(fields: [roomId], references: [id])
+  reservation Reservation        @relation(fields: [reservationId], references: [id])
+  lines       LaundryOrderLine[]
+
+  @@unique([hotelId, requestId])
+  @@unique([hotelId, reference])
+  // Pano: açık siparişler teslim sırasıyla, gecikenler.
+  @@index([hotelId, status, dueAt, id])
+  // Teslim edilenler / iptaller (son değişen önce; ikisi de son durum).
+  @@index([hotelId, status, statusChangedAt, id])
+  // Günlük rapor: o gün teslim edilenler (gelir).
+  @@index([hotelId, deliveredBusinessDate])
+  // Günlük rapor: o gün alınanlar.
+  @@index([hotelId, businessDate])
+  // Çıkışta teslim edilmemiş sipariş uyarısı.
+  @@index([reservationId, status])
+}
+
+/// Çamaşır siparişinin satırı: parçanın o anki adı, hizmeti ve fiyatı.
+model LaundryOrderLine {
+  id        String         @id @default(uuid())
+  hotelId   String
+  orderId   String
+  itemId    String
+  name      String
+  service   LaundryService
+  unitPrice Decimal        @db.Decimal(12, 2)
+  quantity  Int
+  total     Decimal        @db.Decimal(12, 2)
+
+  order LaundryOrder @relation(fields: [orderId], references: [id])
+  item  LaundryItem  @relation(fields: [itemId], references: [id])
+
+  @@index([orderId])
+  @@index([itemId])
 }
 
 model NightAudit {

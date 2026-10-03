@@ -258,6 +258,7 @@ async function main() {
   }
 
   const folioSeed = await seedFolios(hotelId);
+  const extrasSeed = await seedExtrasCatalog(hotelId);
 
   const { conversations, requests } = await seedMessaging(hotelId, guests, roomByNumber);
 
@@ -269,7 +270,8 @@ async function main() {
   console.log(
     `Seed tamam: 1 otel, ${users.length} kullanıcı, ${ROOM_TYPES.length} oda tipi, ${ROOMS.length} oda, ` +
       `${GUESTS.length} misafir, ${reservationPlans.length} rezervasyon, ${conversations} konuşma, ${requests} istek, ` +
-      `${templates} yeni bildirim şablonu, ${folioSeed.stays} içerideki konaklamanın folyosu (${folioSeed.extras} demo harcama).`,
+      `${templates} yeni bildirim şablonu, ${folioSeed.stays} içerideki konaklamanın folyosu (${folioSeed.extras} demo harcama), ` +
+      `${extrasSeed} minibar / çamaşır fiyat kalemi.`,
   );
 }
 
@@ -420,6 +422,57 @@ function tomorrowAtInTimeZone(timeZone, { hour, minute }, toUtc) {
 }
 
 /** İçerideki demo konaklamalara işlenen harcamalar (her konaklamaya bir kez). */
+/** Örnek fiyat listeleri (modül 19): otel kendi ürün ve fiyatlarını girer. */
+const DEMO_MINIBAR_ITEMS = Object.freeze([
+  { code: 'SU', name: 'Su 0,5 L', category: 'DRINK', price: '45', parLevel: 2, sortOrder: 10 },
+  { code: 'MADEN', name: 'Maden suyu', category: 'DRINK', price: '55', parLevel: 2, sortOrder: 20 },
+  { code: 'KOLA', name: 'Kola 330 ml', category: 'DRINK', price: '95', parLevel: 2, sortOrder: 30 },
+  { code: 'MEYVE', name: 'Meyve suyu', category: 'DRINK', price: '85', parLevel: 2, sortOrder: 40 },
+  { code: 'BIRA', name: 'Bira 50 cl', category: 'ALCOHOL', price: '215', parLevel: 2, sortOrder: 50 },
+  { code: 'SARAP', name: 'Şarap 187 ml', category: 'ALCOHOL', price: '380', parLevel: 1, sortOrder: 60 },
+  { code: 'CIKOLATA', name: 'Çikolata', category: 'SNACK', price: '110', parLevel: 1, sortOrder: 70 },
+  { code: 'KURUYEMIS', name: 'Kuruyemiş', category: 'SNACK', price: '160', parLevel: 1, sortOrder: 80 },
+]);
+
+const DEMO_LAUNDRY_ITEMS = Object.freeze([
+  { code: 'GOMLEK-Y', name: 'Gömlek', service: 'WASH', price: '120', sortOrder: 10 },
+  { code: 'PANTOLON-Y', name: 'Pantolon', service: 'WASH', price: '140', sortOrder: 20 },
+  { code: 'TSHIRT-Y', name: 'Tişört', service: 'WASH', price: '90', sortOrder: 30 },
+  { code: 'TAKIM-K', name: 'Takım elbise', service: 'DRY_CLEAN', price: '420', sortOrder: 40 },
+  { code: 'CEKET-K', name: 'Ceket', service: 'DRY_CLEAN', price: '260', sortOrder: 50 },
+  { code: 'ELBISE-K', name: 'Elbise', service: 'DRY_CLEAN', price: '300', sortOrder: 60 },
+  { code: 'GOMLEK-U', name: 'Gömlek', service: 'PRESS', price: '70', sortOrder: 70 },
+  { code: 'PANTOLON-U', name: 'Pantolon', service: 'PRESS', price: '80', sortOrder: 80 },
+]);
+
+/**
+ * Minibar ve çamaşırhane fiyat listesi (modül 19): yalnızca liste boşsa,
+ * katalog servisinin kendisiyle (denetim izi ve olayla). Tüketim ve sipariş
+ * uydurulmaz: onlar personelin girişiyle oluşur.
+ *
+ * @param {string} hotelId
+ */
+async function seedExtrasCatalog(hotelId) {
+  const catalog = await import('../src/modules/extras/catalog.js');
+  const contracts = await import('@hotelos/hotel-contracts');
+  let created = 0;
+  await runWithContext({ correlationId: randomUUID(), actor: 'seed' }, async () => {
+    if ((await prisma.minibarItem.count({ where: { hotelId } })) === 0) {
+      for (const item of DEMO_MINIBAR_ITEMS) {
+        await catalog.createCatalogItem('MINIBAR', hotelId, contracts.minibarItemInputSchema.parse(item));
+        created += 1;
+      }
+    }
+    if ((await prisma.laundryItem.count({ where: { hotelId } })) === 0) {
+      for (const item of DEMO_LAUNDRY_ITEMS) {
+        await catalog.createCatalogItem('LAUNDRY', hotelId, contracts.laundryItemInputSchema.parse(item));
+        created += 1;
+      }
+    }
+  });
+  return created;
+}
+
 const DEMO_EXTRAS = Object.freeze([
   { type: 'MINIBAR', description: 'Su (0,5 L)', amount: '45', quantity: 2 },
   { type: 'FNB', description: 'Akşam yemeği — à la carte', amount: '850', quantity: 1 },

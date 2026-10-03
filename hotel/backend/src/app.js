@@ -31,6 +31,7 @@ import { registerApprovalSubscribers, setApprovalSubscriberLogger } from './modu
 import { folioRoutes } from './modules/folios/routes.js';
 import { registerFolioSubscribers } from './modules/folios/subscribers.js';
 import { exchangeRateRoutes, paymentRoutes } from './modules/payments/routes.js';
+import { extrasRoutes } from './modules/extras/routes.js';
 import { registerPaymentSubscribers } from './modules/payments/subscribers.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { messagingChannelRoutes, webchatWidgetRoutes, webhookRoutes } from './modules/channels/routes.js';
@@ -297,6 +298,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   await app.register(folioRoutes, { prefix: '/folios' });
   await app.register(paymentRoutes, { prefix: '/payments' });
   await app.register(exchangeRateRoutes, { prefix: '/exchange-rates' });
+  await app.register(extrasRoutes, { prefix: '/extras' });
   await app.register(manualTaskRoutes, { prefix: '/manual-tasks' });
   await app.register(conciergeRoutes, { prefix: '/ai' });
   await app.register(messagingChannelRoutes, { prefix: '/messaging-channels' });

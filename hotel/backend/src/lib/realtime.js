@@ -1,6 +1,7 @@
 import {
   APPROVAL_EVENTS,
   CASH_EVENTS,
+  EXTRAS_EVENTS,
   FOLIO_EVENTS,
   LIVE_VIEW_EVENTS,
   PAYMENT_EVENTS,
@@ -80,6 +81,9 @@ export const FOLIOS_CHANNEL = 'folios.changed';
 /** Kasa görünümü ve kur ekranı (modül 17). */
 export const CASH_CHANNEL = 'cash.changed';
 
+/** Minibar kayıtları, çamaşır panosu ve fiyat listeleri (modül 19). */
+export const EXTRAS_CHANNEL = 'extras.changed';
+
 /**
  * Aktivite akışı kanalı (modül 10). Olaydan değil aktivite satırından beslenir
  * (bkz. `registerActivityBridge`); yalnızca akış ekranı açık paneller abone olur.
@@ -102,6 +106,7 @@ const CHANNEL_EVENTS = Object.freeze({
   [ACTORS_CHANNEL]: ['actor.setting.changed'],
   [FOLIOS_CHANNEL]: [...FOLIO_EVENTS, ...PAYMENT_EVENTS],
   [CASH_CHANNEL]: CASH_EVENTS,
+  [EXTRAS_CHANNEL]: EXTRAS_EVENTS,
 });
 
 /** @param {string} hotelId */

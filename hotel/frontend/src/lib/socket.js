@@ -53,6 +53,8 @@ export const ACTORS_CHANNEL = 'actors.changed';
 export const FOLIOS_CHANNEL = 'folios.changed';
 /** Kasa ve kurlar (modül 17): ödeme işlendi / onaya gitti, kur girildi. */
 export const CASH_CHANNEL = 'cash.changed';
+/** Minibar ve çamaşırhane (modül 19): fiş girildi, sipariş durumu, fiyat listesi. */
+export const EXTRAS_CHANNEL = 'extras.changed';
 
 /**
  * Kanal aboneliği sayacı. Aynı kanalı birden fazla bileşen dinleyebilir

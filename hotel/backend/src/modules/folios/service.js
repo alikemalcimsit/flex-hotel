@@ -1824,22 +1824,34 @@ export async function reverseReservationFees(hotelId, reservationId, { occurredA
   });
 }
 
+/** Dış kaynaklı harcamanın kalem tipi (vergi kategorisi de bu). */
+const EXTERNAL_CHARGE_TYPES = Object.freeze({ FNB_ORDER: 'FNB', MINIBAR: 'MINIBAR', LAUNDRY: 'LAUNDRY' });
+
 /**
- * Dış kaynaklı harcama (restoran siparişi, minibar tüketimi): konaklama
- * verilmişse ona, yalnızca oda verilmişse o odada içerideki misafire işlenir.
- * İçeride misafir yoksa iş kuralı hatası (aktör tekrar denemez, personele düşer).
+ * Dış kaynaklı harcama (restoran siparişi, minibar tüketimi, teslim edilen
+ * çamaşır): konaklama verilmişse ona, yalnızca oda verilmişse o odada
+ * içerideki misafire işlenir.
+ *
+ * **Geç kalem** (modül 19): konaklama açıkça verilmişse ve misafir çıkış
+ * yapmışsa harcama, konaklamanın **açık** folyosuna işlenir (çıkıştan sonra
+ * odada bulunan minibar, çıkıştan sonra teslim edilen çamaşır). Açık folyosu
+ * kalmadıysa (ödenip kapandıysa) yeni folyo açılmaz: iş kuralı hatası —
+ * aktör tekrar denemez, iş folyo yetkilisine görev olarak düşer (yeniden açıp
+ * işler ya da kayıp yazar). İçeride misafir yoksa (yalnızca oda verilmiş) de
+ * aynı. Aynı olay iki kez gelse de kalemler tek yazılır (`evt:<olay>:<sıra>`).
  *
  * @param {string} hotelId
  * @param {{ reservationId: string | null, roomId: string | null, reference: string, items: Array<{ description: string, unitPrice: string, quantity: number }> }} charge
- * @param {{ source: 'FNB_ORDER' | 'MINIBAR', eventId: string }} options
+ * @param {{ source: 'FNB_ORDER' | 'MINIBAR' | 'LAUNDRY', eventId: string }} options
  */
 export async function postExternalCharge(hotelId, charge, { source, eventId }) {
   const [taxes, today] = await Promise.all([getActiveTaxes(hotelId), businessDay(hotelId)]);
-  const type = source === 'FNB_ORDER' ? 'FNB' : 'MINIBAR';
+  const type = EXTERNAL_CHARGE_TYPES[source];
   const stayRef = charge.reservationId
     ? await prisma.reservation.findFirst({ where: { id: charge.reservationId, hotelId }, select: { id: true, status: true } })
     : await prisma.reservation.findFirst({ where: { hotelId, roomId: charge.roomId, status: 'CHECKED_IN' }, select: { id: true, status: true } });
-  if (!stayRef || stayRef.status !== 'CHECKED_IN') {
+  const lateCharge = Boolean(charge.reservationId) && stayRef?.status === 'CHECKED_OUT';
+  if (!stayRef || (stayRef.status !== 'CHECKED_IN' && !lateCharge)) {
     throw new ConflictError(
       charge.reservationId ? 'Konaklama içeride değil; harcama folyoya elle işlenmeli.' : 'Odada konaklayan misafir yok; harcama folyoya elle işlenmeli.',
       'NO_STAY',
@@ -1848,7 +1860,16 @@ export async function postExternalCharge(hotelId, charge, { source, eventId }) {
   return writeWithEvents(async (tx, stage) => {
     await lockReservations(tx, hotelId, [stayRef.id]);
     const stay = await readStayForPosting(tx, hotelId, stayRef.id);
-    if (stay.status !== 'CHECKED_IN') throw new ConflictError('Misafir bu sırada çıkış yaptı; harcama folyoya elle işlenmeli.', 'NO_STAY');
+    if (stay.status !== 'CHECKED_IN' && !(lateCharge && stay.status === 'CHECKED_OUT')) {
+      throw new ConflictError('Konaklamanın durumu bu sırada değişti; harcama folyoya elle işlenmeli.', 'NO_STAY');
+    }
+    // Çıkmış misafire yeni folyo açılmaz: geç kalem yalnızca açık folyoya.
+    if (stay.status === 'CHECKED_OUT' && (await tx.folio.count({ where: { hotelId, reservationId: stay.id, status: 'OPEN' } })) === 0) {
+      throw new ConflictError(
+        'Misafir çıkış yaptı ve folyosu kapalı; folyoyu yeniden açıp harcamayı elle işleyin ya da kayıp yazın.',
+        'FOLIO_CLOSED',
+      );
+    }
     const specs = charge.items.map((item, index) => ({
       reservationId: stay.id,
       type,
@@ -1861,6 +1882,6 @@ export async function postExternalCharge(hotelId, charge, { source, eventId }) {
       sourceKey: `evt:${eventId}:${index}`,
     }));
     const { items } = await postSpecs(tx, stage, { hotelId, specs, stays: new Map([[stay.id, stay]]), taxes });
-    return { reservationId: stay.id, items: items.length, total: linesTotal(items) };
+    return { reservationId: stay.id, items: items.length, total: linesTotal(items), late: stay.status === 'CHECKED_OUT' };
   });
 }

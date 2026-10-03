@@ -45,6 +45,9 @@ const PAYMENT_EVENTS = Object.freeze(['payment.received', 'payment.refunded', 'p
 /** @param {string} text */
 const capitalized = (text) => text.charAt(0).toLocaleUpperCase('tr') + text.slice(1);
 
+/** Çıkış yapmış misafirin açık folyosuna yazıldıysa iz notu. @param {{ late?: boolean }} result */
+const lateNote = (result) => (result.late ? '; çıkış sonrası geç kalem' : '');
+
 /**
  * Folyo aktörü.
  *
@@ -62,7 +65,7 @@ class BillingWorker extends BaseWorker {
    *   postReservationFee: (hotelId: string, reservationId: string, input: { kind: 'CANCELLATION' | 'NO_SHOW', eventId: string }) => Promise<{ skipped?: string, posted?: string | null }>,
    *   reverseReservationFees: (hotelId: string, reservationId: string, input: { occurredAt: Date }) => Promise<{ reversed: number }>,
    *   runRoomCharges: (hotelId: string, input: { night: string }) => Promise<{ night: string, stays: number, items: number, total: string }>,
-   *   postExternalCharge: (hotelId: string, charge: object, options: { source: 'FNB_ORDER' | 'MINIBAR', eventId: string }) => Promise<{ reservationId: string, items: number, total: string }>,
+   *   postExternalCharge: (hotelId: string, charge: object, options: { source: 'FNB_ORDER' | 'MINIBAR' | 'LAUNDRY', eventId: string }) => Promise<{ reservationId: string, items: number, total: string, late?: boolean }>,
    *   recordCheckInDeposit: (hotelId: string, reservationId: string) => Promise<{ skipped?: string, status?: string, amount?: string, currency?: string }>,
    *   reverseCheckInDeposits: (hotelId: string, reservationId: string, input: { reason: string, occurredAt: Date }) => Promise<{ reversed: number, withdrawn: number }>,
    *   closeFolioIfSettled: (hotelId: string, folioId: string) => Promise<{ closed: boolean, reason?: string, balance?: string }>,
@@ -186,7 +189,13 @@ class BillingWorker extends BaseWorker {
 
         'minibar.consumed': async (payload, envelope) => {
           const result = await run(() => service.postExternalCharge(payload.hotelId, payload, { source: 'MINIBAR', eventId: envelope.id }));
-          return { message: `Minibar tüketimi ${payload.reference} folyoya işlendi (${result.total})`, meta: result };
+          return { message: `Minibar tüketimi ${payload.reference} folyoya işlendi (${result.total}${lateNote(result)})`, meta: result };
+        },
+
+        /** Çamaşır siparişi teslim edildi: ücreti (ekspres farkı dahil) folyoya. */
+        'laundry.charged': async (payload, envelope) => {
+          const result = await run(() => service.postExternalCharge(payload.hotelId, payload, { source: 'LAUNDRY', eventId: envelope.id }));
+          return { message: `Çamaşır siparişi ${payload.reference} folyoya işlendi (${result.total}${lateNote(result)})`, meta: result };
         },
 
         /**
@@ -258,6 +267,8 @@ class BillingWorker extends BaseWorker {
         return `Restoran siparişi ${payload.reference} folyoya elle işlenecek`;
       case 'minibar.consumed':
         return `Minibar tüketimi ${payload.reference} folyoya elle işlenecek`;
+      case 'laundry.charged':
+        return `Çamaşır siparişi ${payload.reference} folyoya elle işlenecek`;
       case 'payment.received':
       case 'payment.refunded':
       case 'payment.voided':

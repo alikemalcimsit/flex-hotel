@@ -23,6 +23,9 @@ import { PaymentDialog, VoidPaymentDialog } from './PaymentDialogs.jsx';
 
 const OFFLINE_REFRESH_MS = 60_000;
 
+/** Başka konaklamanın kimliğiyle gelse de bu ekranı etkileyebilen haberler (kaynak / hedef folyo). */
+const CROSS_STAY_EVENTS = new Set(['folio.items.transferred', 'folio.merged', 'folio.routes.changed']);
+
 /**
  * Konaklamanın hesabı tek ekranda (modül 15): folyolar (pencereler) sekme
  * olarak, seçili folyonun dökümü, toplamları, vergi özeti ve ödemeleri.
@@ -39,7 +42,14 @@ export function StayFolioPage() {
   const can = useCan();
   const canPost = can(PERMISSIONS.FOLIO_POST);
 
-  const { isLive } = useLiveChannel(FOLIOS_CHANNEL, { queryKeys: [folioKeys.all] });
+  // Yalnızca bu konaklamanın haberi (ya da konaklamalar arası işler: aktarma, birleştirme,
+  // gecenin oda ücretleri) ekranı tazeler; otelin her ödemesinde 2500 panel sormasın.
+  const { isLive } = useLiveChannel(FOLIOS_CHANNEL, {
+    queryKeys: (payload) =>
+      !payload || !payload.reservationId || payload.reservationId === reservationId || CROSS_STAY_EVENTS.has(payload.event)
+        ? [folioKeys.all]
+        : [],
+  });
   useLiveChannel(RESERVATIONS_CHANNEL, {
     queryKeys: (payload) => (payload && payload.reservationId !== reservationId ? [] : [folioKeys.stay(reservationId)]),
   });

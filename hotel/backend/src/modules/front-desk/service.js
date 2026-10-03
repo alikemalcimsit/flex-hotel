@@ -23,6 +23,7 @@ import { getReservation, reservationSearchConditions } from '../reservations/ser
 import { assignRoomInTransaction, roomConflictForStay } from '../rooms/service.js';
 import { pendingStayCharges } from '../folios/service.js';
 import { stayPaymentStatus } from '../payments/service.js';
+import { openLaundryForStay } from '../extras/laundry.js';
 import { getHotelSettings } from '../settings/service.js';
 import { hasFolioActivity, lockStayFolios, stayBalances } from './folio.js';
 import {
@@ -592,10 +593,11 @@ export async function getCheckOutPreview(hotelId, reservationId, { now = new Dat
         })
       : { applies: false, fee: null };
   const keptNights = nights.filter((night) => !plan.releasedNights.includes(night.date));
-  const [balances, pending, payments] = await Promise.all([
+  const [balances, pending, payments, openLaundry] = await Promise.all([
     stayBalances(prisma, hotelId, [stay.id]),
     pendingStayCharges(prisma, hotelId, stay, { keptNights, lateFee: late.fee }),
     stayPaymentStatus(prisma, hotelId, stay),
+    openLaundryForStay(prisma, hotelId, stay.id),
   ]);
   const folio = balances.get(stay.id) ?? null;
   const pendingWithoutLateFee = pending.own.filter((line) => line.source !== 'LATE_CHECK_OUT').map((line) => line.total);
@@ -624,6 +626,8 @@ export async function getCheckOutPreview(hotelId, reservationId, { now = new Dat
     // Onay bekleyen ödeme / iade (modül 17): bakiyeye henüz girmedi; onaylanınca ödenecek düşer.
     pendingPayments: payments.pendingPayments,
     pendingRefunds: payments.pendingRefunds,
+    // Teslim edilmemiş çamaşır siparişleri (modül 19): ücret teslimde folyoya düşer.
+    openLaundry,
     currency: stay.currency,
     businessDate: toIsoDay(businessDate),
   };

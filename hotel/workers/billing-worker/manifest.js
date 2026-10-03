@@ -17,7 +17,8 @@ export const billingWorkerManifest = defineActor({
   description:
     'Misafir giriş yapınca folyoyu açar ve erken giriş ücretini, her gece oda ücretlerini, çıkışta kalan geceleri ' +
     've geç çıkış ücretini işler; bakiyesi kapanan folyoyu kapatır. İptal / gelmedi ücretini, restoran ve minibar ' +
-    'harcamalarını folyoya yazar. Girişte alınan nakit / havale teminatını ödeme olarak işler. Giriş, çıkış ya da ' +
+    'harcamalarını, teslim edilen çamaşırı folyoya yazar (çıkmış misafirin açık folyosuna geç kalem). ' +
+    'Girişte alınan nakit / havale teminatını ödeme olarak işler. Giriş, çıkış ya da ' +
     'iptal geri alınınca kendi işlediği ücreti ve teminatı ters kayıtla düşer. Çıkmış misafirin folyosu ödemeyle ' +
     'sıfırlanınca folyoyu kapatır (fatura). Kapalıyken bu işler manuel görev olarak düşer.',
   subscribes: [
@@ -31,6 +32,7 @@ export const billingWorkerManifest = defineActor({
     'folio.room_charges.due',
     'fnb.order.charged',
     'minibar.consumed',
+    'laundry.charged',
     'payment.received',
     'payment.refunded',
     'payment.voided',

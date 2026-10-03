@@ -139,3 +139,16 @@ export function lockWaitlistEntries(tx, hotelId, waitlistIds) {
 export function lockFolios(tx, hotelId, folioIds) {
   return lockRows(tx, 'Folio', hotelId, folioIds);
 }
+
+/**
+ * Çamaşır siparişi (modül 19): durum geçişi ve sayım düzeltmesi aynı siparişte
+ * sıraya girer (aynı siparişi iki kişi aynı anda teslim edip ücreti iki kez
+ * yazmasın). Sıra: önce rezervasyon kilidi (gerekiyorsa), sonra sipariş.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} orderIds
+ */
+export function lockLaundryOrders(tx, hotelId, orderIds) {
+  return lockRows(tx, 'LaundryOrder', hotelId, orderIds);
+}
