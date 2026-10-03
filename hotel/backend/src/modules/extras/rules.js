@@ -1,4 +1,3 @@
-import { randomInt } from 'node:crypto';
 import { toDecimal, toMoneyString } from '@hotelos/core';
 import { MINIBAR_LATE_CHARGE_HOURS } from '@hotelos/hotel-contracts';
 
@@ -8,20 +7,8 @@ import { MINIBAR_LATE_CHARGE_HOURS } from '@hotelos/hotel-contracts';
  * kuruşa, yarım yukarı.
  */
 
-/** Fiş / sipariş numarasında kullanılan harfler: karışan karakterler (0/O, 1/I/L) yok. */
-const REFERENCE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
-export const REFERENCE_LENGTH = 6;
-
-/**
- * İnsanın okuyup söyleyebileceği numara: "MB-7K2Q9X", "LND-3XH8PA".
- * Otel içinde tekil (veritabanı kısıtı); çakışma olasılığı 31⁶'da bir.
- * @param {'MB' | 'LND'} prefix
- */
-export function newReference(prefix) {
-  let code = '';
-  for (let index = 0; index < REFERENCE_LENGTH; index += 1) code += REFERENCE_ALPHABET[randomInt(REFERENCE_ALPHABET.length)];
-  return `${prefix}-${code}`;
-}
+/** Fiş ("MB-7K2Q9X") ve sipariş ("LND-3XH8PA") numarası: ortak üretici (`lib/reference.js`). */
+export { REFERENCE_LENGTH, newReference } from '../../lib/reference.js';
 
 /**
  * Satır toplamları: satır = birim × adet; toplam = Σ satır.

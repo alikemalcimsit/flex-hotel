@@ -24,6 +24,7 @@ import { assignRoomInTransaction, roomConflictForStay } from '../rooms/service.j
 import { pendingStayCharges } from '../folios/service.js';
 import { stayPaymentStatus } from '../payments/service.js';
 import { openLaundryForStay } from '../extras/laundry.js';
+import { lostItemsForCheckOut } from '../lost-items/service.js';
 import { getHotelSettings } from '../settings/service.js';
 import { hasFolioActivity, lockStayFolios, stayBalances } from './folio.js';
 import {
@@ -593,11 +594,12 @@ export async function getCheckOutPreview(hotelId, reservationId, { now = new Dat
         })
       : { applies: false, fee: null };
   const keptNights = nights.filter((night) => !plan.releasedNights.includes(night.date));
-  const [balances, pending, payments, openLaundry] = await Promise.all([
+  const [balances, pending, payments, openLaundry, lostItems] = await Promise.all([
     stayBalances(prisma, hotelId, [stay.id]),
     pendingStayCharges(prisma, hotelId, stay, { keptNights, lateFee: late.fee }),
     stayPaymentStatus(prisma, hotelId, stay),
     openLaundryForStay(prisma, hotelId, stay.id),
+    lostItemsForCheckOut(prisma, hotelId, stay),
   ]);
   const folio = balances.get(stay.id) ?? null;
   const pendingWithoutLateFee = pending.own.filter((line) => line.source !== 'LATE_CHECK_OUT').map((line) => line.total);
@@ -628,6 +630,8 @@ export async function getCheckOutPreview(hotelId, reservationId, { now = new Dat
     pendingRefunds: payments.pendingRefunds,
     // Teslim edilmemiş çamaşır siparişleri (modül 19): ücret teslimde folyoya düşer.
     openLaundry,
+    // Kayıp eşya (modül 21): misafire eşleşmiş, teslim bekleyen; odasında bulunup henüz eşleşmemiş.
+    lostItems,
     currency: stay.currency,
     businessDate: toIsoDay(businessDate),
   };

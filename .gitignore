@@ -4,3 +4,6 @@ dist/
 dist-ssr/
 .DS_Store
 *.log
+
+# Sunucu diskindeki dosyalar (kayıp eşya fotoğrafları; üretimde FILE_STORAGE_DIR)
+hotel/backend/storage/

@@ -92,6 +92,12 @@ export const NAV_SECTIONS = Object.freeze([
         ],
       },
       {
+        label: 'Kayıp eşya',
+        to: '/kayip-esya',
+        icon: 'package',
+        permission: PERMISSIONS.LOST_ITEMS_VIEW,
+      },
+      {
         label: 'Mesajlar',
         to: '/mesajlar',
         icon: 'message',

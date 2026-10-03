@@ -16,6 +16,7 @@ import { webchatOrigins } from './modules/channels/service.js';
 import { registerWebchatNamespace, setWebchatTransport, webchatSessionSecret } from './modules/channels/webchat.js';
 import { startConciergeJobs } from './modules/concierge/jobs.js';
 import { startNotificationJobs } from './modules/notifications/jobs.js';
+import { startLostItemJobs } from './modules/lost-items/jobs.js';
 import { closeProviders } from './modules/notifications/providers/index.js';
 
 /**
@@ -85,6 +86,7 @@ const stopFolioJobs = startFolioJobs(app.log);
 const stopReservationJobs = startReservationJobs(app.log);
 const stopChannelJobs = startChannelJobs(app.log);
 const stopConciergeJobs = startConciergeJobs(app.log);
+const stopLostItemJobs = startLostItemJobs(app.log);
 
 // Açık socket bağlantıları kapatılmazsa HTTP sunucusu kapanmayı bekler ve
 // süreç yöneticisi (systemd) onu zorla öldürene kadar asılı kalır.
@@ -96,6 +98,7 @@ app.addHook('onClose', async () => {
   stopReservationJobs();
   stopChannelJobs();
   stopConciergeJobs();
+  stopLostItemJobs();
   if (!(await actorRegistry.idle(SHUTDOWN_DRAIN_MS))) {
     app.log.warn('Arka plan aktörleri kapanış süresinde bitmedi; kalan işler açılışta toplanacak');
   }

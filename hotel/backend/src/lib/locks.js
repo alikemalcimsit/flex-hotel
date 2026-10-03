@@ -152,3 +152,16 @@ export function lockFolios(tx, hotelId, folioIds) {
 export function lockLaundryOrders(tx, hotelId, orderIds) {
   return lockRows(tx, 'LaundryOrder', hotelId, orderIds);
 }
+
+/**
+ * Kayıp eşya (modül 21): eşleştirme, teslim, kapatma ve fotoğraf ekleme aynı
+ * eşyada sıraya girer (aynı eşya iki kişiye teslim edilmesin, fotoğraf sınırı
+ * aşılmasın). Başka kilitten sonra alınır (bu akışlar rezervasyon kilitlemez).
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} itemIds
+ */
+export function lockLostItems(tx, hotelId, itemIds) {
+  return lockRows(tx, 'LostItem', hotelId, itemIds);
+}

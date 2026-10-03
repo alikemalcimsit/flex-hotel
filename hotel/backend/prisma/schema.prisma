@@ -294,6 +294,50 @@ enum LaundryStatus {
   CANCELLED
 }
 
+/// Kayıp eşya (modül 21).
+enum LostItemCategory {
+  ELECTRONICS
+  JEWELRY
+  DOCUMENTS
+  CLOTHING
+  ACCESSORY
+  TOY
+  OTHER
+}
+
+enum LostItemStatus {
+  STORED
+  MATCHED
+  RETURNED
+  DISPOSED
+}
+
+enum LostItemReturnMethod {
+  IN_PERSON
+  SHIPPED
+}
+
+enum LostItemShippingPayer {
+  GUEST
+  HOTEL
+}
+
+enum LostItemDisposal {
+  DONATED
+  DESTROYED
+  POLICE
+  RECORD_ERROR
+}
+
+enum LostItemContactChannel {
+  PHONE
+  WHATSAPP
+  SMS
+  EMAIL
+  IN_PERSON
+  NOTE
+}
+
 enum WaitlistStatus {
   WAITING
   AVAILABLE
@@ -391,45 +435,48 @@ enum LogLevel {
 // ───────────── SİSTEM ─────────────
 
 model Hotel {
-  id                           String            @id @default(uuid())
-  name                         String
-  code                         String            @unique
-  timezone                     String            @default("Europe/Istanbul")
-  currency                     String            @default("TRY")
+  id                            String            @id @default(uuid())
+  name                          String
+  code                          String            @unique
+  timezone                      String            @default("Europe/Istanbul")
+  currency                      String            @default("TRY")
   /// Ülke kodu yazılmamış telefonların yorumlandığı kod (Türkiye: 90). Misafiri
   /// WhatsApp numarasından bulurken kullanılır (modül 7).
-  phoneCountryCode             String            @default("90")
-  address                      String?
-  phone                        String?
-  email                        String?
-  logoUrl                      String?
-  checkInTime                  String            @default("14:00")
-  checkOutTime                 String            @default("12:00")
-  defaultBoardType             BoardType         @default(BB)
-  cancellationPolicyDays       Int               @default(0)
-  cancellationPolicyPenaltyPct Decimal           @default(0) @db.Decimal(5, 2)
+  phoneCountryCode              String            @default("90")
+  address                       String?
+  phone                         String?
+  email                         String?
+  logoUrl                       String?
+  checkInTime                   String            @default("14:00")
+  checkOutTime                  String            @default("12:00")
+  defaultBoardType              BoardType         @default(BB)
+  cancellationPolicyDays        Int               @default(0)
+  cancellationPolicyPenaltyPct  Decimal           @default(0) @db.Decimal(5, 2)
   /// Kapasite aşımında rezervasyon reddedilir ya da yönetici onayına gider.
-  overbookingPolicy            OverbookingPolicy @default(REJECT)
+  overbookingPolicy             OverbookingPolicy @default(REJECT)
   /// Rol matrisi (modül 2) kaydedildiğinde katalogda olan izinler. Sonradan
   /// kataloğa eklenen izin burada yoktur: o izinde rollerin koddaki varsayılanı
   /// geçerli olur (yeni modülün izni, matrisi kaydetmiş otelde kimseye kapalı kalmasın).
-  permissionCatalog            String[]          @default([])
+  permissionCatalog             String[]          @default([])
   /// Erken giriş (giriş saatinden önce) ve geç çıkış (çıkış saatinden sonra)
   /// ücreti. Değer: FIXED ise tutar, PERCENT_OF_NIGHT ise yüzde (modül 6).
-  earlyCheckInFeeMode          StayFeeMode       @default(NONE)
-  earlyCheckInFeeValue         Decimal           @default(0) @db.Decimal(12, 2)
-  lateCheckOutFeeMode          StayFeeMode       @default(NONE)
-  lateCheckOutFeeValue         Decimal           @default(0) @db.Decimal(12, 2)
-  checkInIdentityPolicy        IdentityPolicy    @default(PRIMARY_GUEST)
+  earlyCheckInFeeMode           StayFeeMode       @default(NONE)
+  earlyCheckInFeeValue          Decimal           @default(0) @db.Decimal(12, 2)
+  lateCheckOutFeeMode           StayFeeMode       @default(NONE)
+  lateCheckOutFeeValue          Decimal           @default(0) @db.Decimal(12, 2)
+  checkInIdentityPolicy         IdentityPolicy    @default(PRIMARY_GUEST)
   /// Bu tutar (otel para biriminde) ve üstü ödeme ikinci bir yetkilinin onayına
   /// gider; onaylanana kadar bakiyeye girmez (modül 17). 0: onay yok.
-  largePaymentThreshold        Decimal           @default(0) @db.Decimal(12, 2)
+  largePaymentThreshold         Decimal           @default(0) @db.Decimal(12, 2)
   /// Ekspres çamaşır farkı (yüzde, modül 19): ekspres siparişte parçaların toplamına eklenir.
-  laundryExpressPct            Decimal           @default(50) @db.Decimal(5, 2)
-  settings                     Json              @default("{}")
-  createdAt                    DateTime          @default(now())
-  updatedAt                    DateTime          @updatedAt
-  deletedAt                    DateTime?
+  laundryExpressPct             Decimal           @default(50) @db.Decimal(5, 2)
+  /// Sahibi çıkmayan eşyanın saklama süresi (gün, modül 21); değerli eşya ayrı.
+  lostItemRetentionDays         Int               @default(90)
+  lostItemValuableRetentionDays Int               @default(365)
+  settings                      Json              @default("{}")
+  createdAt                     DateTime          @default(now())
+  updatedAt                     DateTime          @updatedAt
+  deletedAt                     DateTime?
 
   users                 User[]
   refreshTokens         RefreshToken[]
@@ -479,6 +526,8 @@ model Hotel {
   housekeepingTasks     HousekeepingTask[]
   maintenanceTickets    MaintenanceTicket[]
   lostItems             LostItem[]
+  lostItemPhotos        LostItemPhoto[]
+  lostItemNotes         LostItemNote[]
   reservationGroups     ReservationGroup[]
   reservationNights     ReservationNight[]
   waitlistEntries       WaitlistEntry[]
@@ -1187,6 +1236,7 @@ model Reservation {
   folioItems          FolioItem[]
   folioRoutes         FolioRoute[]
   payments            Payment[]
+  lostItems           LostItem[]
   minibarConsumptions MinibarConsumption[]
   laundryOrders       LaundryOrder[]
   roomSegments        RoomStaySegment[]
@@ -2064,23 +2114,116 @@ model MaintenanceTicket {
   room  Room? @relation(fields: [roomId], references: [id])
 }
 
+/// Bulunan eşya (modül 21). Etiket no (`LF-XXXXXX`) poşetin üstüne yazılır;
+/// otel içinde tekil. Eşleşen misafir `guestId` (adaydan seçildiyse konaklaması
+/// da). Teslim (`RETURNED`) ve kapatma (`DISPOSED`) izleri eksiksizdir (kısıt).
+/// Saklama süresi kolon olarak tutulmaz: otel ayarından ve `businessDate`'ten
+/// hesaplanır, ayar değişince bütün açık eşyalara uygulanır.
 model LostItem {
-  id          String    @id @default(uuid())
-  hotelId     String
-  description String
-  foundAt     DateTime  @default(now())
-  foundBy     String
-  roomId      String?
-  guestId     String?
-  status      String    @default("stored")
-  returnedAt  DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime?
+  id                String                 @id @default(uuid())
+  hotelId           String
+  /// Etiket no: "LF-7K2Q9X".
+  reference         String
+  /// Çift gönderime karşı (formun ürettiği kimlik).
+  requestId         String
+  description       String
+  category          LostItemCategory
+  /// Değerli eşya: kasada saklanır, daha uzun tutulur, elden teslimde kimlik görülür.
+  valuable          Boolean                @default(false)
+  /// Odada bulunduysa oda; ortak alanda bulunduysa `locationText` (ikisinden biri, kısıt).
+  roomId            String?
+  locationText      String?
+  foundAt           DateTime
+  /// Bulunduğu iş günü: saklama süresi ve tarih süzgeci bundan.
+  businessDate      DateTime               @db.Date
+  /// Bulan kişi (sistemde hesabı olmayan personel de olabilir).
+  foundByName       String
+  /// Eşyanın durduğu yer ("Kasa", "Depo raf B3").
+  storageLocation   String
+  status            LostItemStatus         @default(STORED)
+  guestId           String?
+  reservationId     String?
+  matchedAt         DateTime?
+  matchedBy         String?
+  returnMethod      LostItemReturnMethod?
+  receiverName      String?
+  receiverIdChecked Boolean                @default(false)
+  carrier           String?
+  trackingNumber    String?
+  shippingAddress   String?
+  shippingCost      Decimal?               @db.Decimal(12, 2)
+  shippingPayer     LostItemShippingPayer?
+  returnNote        String?
+  disposalMethod    LostItemDisposal?
+  disposalReason    String?
+  /// Teslim ya da kapatma anı ve yapan (fotoğraflar bundan bir ay sonra silinir).
+  closedAt          DateTime?
+  closedBy          String?
+  photosPurgedAt    DateTime?
+  recordedBy        String
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  deletedAt         DateTime?
 
-  hotel Hotel  @relation(fields: [hotelId], references: [id])
-  room  Room?  @relation(fields: [roomId], references: [id])
-  guest Guest? @relation(fields: [guestId], references: [id])
+  hotel       Hotel           @relation(fields: [hotelId], references: [id])
+  room        Room?           @relation(fields: [roomId], references: [id])
+  guest       Guest?          @relation(fields: [guestId], references: [id])
+  reservation Reservation?    @relation(fields: [reservationId], references: [id])
+  photos      LostItemPhoto[]
+  notes       LostItemNote[]
+
+  @@unique([hotelId, reference])
+  @@unique([hotelId, requestId])
+  // Açık liste: son bulunan önce.
+  @@index([hotelId, status, foundAt(sort: Desc), id])
+  // Süresi dolanlar: (değerli / normal) × bulunduğu gün eşiği.
+  @@index([hotelId, status, valuable, businessDate])
+  // Teslim edilen / kapatılan: son kapanan önce.
+  @@index([hotelId, status, closedAt(sort: Desc), id])
+  // Oda geçmişi ve tarih süzgeci.
+  @@index([hotelId, roomId, foundAt])
+  @@index([hotelId, businessDate])
+  // Çıkış penceresinin "teslim bekleyen eşyası var" uyarısı.
+  @@index([guestId, status])
+  @@index([reservationId, status])
+  // Açıklama araması ("siyah cüzdan"). Fotoğraf silme işinin kısmi index'i
+  // (`LostItem_photo_purge_idx`) migration'da.
+  @@index([description(ops: raw("gin_trgm_ops"))], map: "LostItem_description_trgm_idx", type: Gin)
+}
+
+/// Kayıp eşyanın fotoğrafı (modül 21). Dosya sunucu diskinde
+/// (`lost-items/<otel>/<id>.jpg` ve önizlemesi); yalnızca yetkili personel okur.
+model LostItemPhoto {
+  id          String   @id @default(uuid())
+  hotelId     String
+  itemId      String
+  contentType String
+  sizeBytes   Int
+  thumbBytes  Int
+  createdBy   String
+  createdAt   DateTime @default(now())
+
+  hotel Hotel    @relation(fields: [hotelId], references: [id])
+  item  LostItem @relation(fields: [itemId], references: [id])
+
+  @@index([itemId, createdAt])
+}
+
+/// Misafirle iletişim notu (modül 21): "aradım, açmadı", "kargo adresini yolladı".
+/// Silinmez, değişmez.
+model LostItemNote {
+  id        String                 @id @default(uuid())
+  hotelId   String
+  itemId    String
+  channel   LostItemContactChannel
+  text      String
+  createdBy String
+  createdAt DateTime               @default(now())
+
+  hotel Hotel    @relation(fields: [hotelId], references: [id])
+  item  LostItem @relation(fields: [itemId], references: [id])
+
+  @@index([itemId, createdAt])
 }
 
 /// Otelin AI asistanı ayarları (modül 8). Satır yoksa AI kapalıdır.
