@@ -102,7 +102,7 @@ export function folioTaxCategory(type, discountCategory) {
   return TAX_APPLIES_TO.includes(type) ? type : null;
 }
 
-/** Prisma `PaymentMethod` ile birebir (ödemeler modül 17'de yazılır; folyo gösterir). */
+/** Prisma `PaymentMethod` ile birebir (ödeme kuralları `payments.js`'te, modül 17). */
 export const PAYMENT_METHODS = Object.freeze(['CASH', 'CARD', 'TRANSFER', 'VIRTUAL_POS', 'AGENCY', 'VOUCHER']);
 
 export const PAYMENT_METHOD_LABELS = Object.freeze({
@@ -325,7 +325,8 @@ export const folioStayParamSchema = z.object({ reservationId: uuid('Geçersiz ko
  *
  * @param {{ status: string }} folio
  * @param {'post' | 'transfer' | 'split' | 'merge' | 'route' | 'close' | 'reopen' | 'edit'} action
- * @param {{ balanceZero?: boolean, pendingVoids?: number, lastOpenOfInHouseStay?: boolean }} [context]
+ * @param {{ balanceZero?: boolean, pendingVoids?: number, pendingPayments?: number, lastOpenOfInHouseStay?: boolean }} [context]
+ *   `pendingVoids`: onay bekleyen kalem ve ödeme iptalleri; `pendingPayments`: onay bekleyen ödeme / iade
  * @returns {string | null}
  */
 export function folioActionError(folio, action, context = {}) {
@@ -338,6 +339,7 @@ export function folioActionError(folio, action, context = {}) {
     // Önce yapısal engel: ödeme alınsa da kapanmayacak folyo için "tahsil edin" demek yanıltır.
     if (context.lastOpenOfInHouseStay) return 'İçerideki misafirin son açık folyosu kapatılamaz; kalemler buraya düşer';
     if (context.pendingVoids) return 'Folyoda onay bekleyen iptal var; karar verilince kapatın';
+    if (context.pendingPayments) return 'Folyoda onay bekleyen ödeme ya da iade var; karar verilince kapatın';
     if (context.balanceZero === false) return 'Bakiye sıfır değil; tahsilat ya da iade yapılmadan folyo kapanmaz';
   }
   return null;

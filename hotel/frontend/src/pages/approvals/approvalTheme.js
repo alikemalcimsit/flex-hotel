@@ -13,6 +13,7 @@ export const TYPE_ICONS = Object.freeze({
   BULK_PRICE_CHANGE: 'sliders',
   OVERBOOKING: 'bed',
   FOLIO_VOID: 'fileText',
+  PAYMENT_VOID: 'wallet',
   OTHER: 'clipboard',
 });
 

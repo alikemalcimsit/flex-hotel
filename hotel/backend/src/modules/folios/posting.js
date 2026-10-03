@@ -104,8 +104,10 @@ const POSTED_SELECT = Object.freeze({
 
 /**
  * Folyoların borç / ödenen / bakiye toplamlarını kalem ve ödemelerden yeniden
- * hesaplar (çağıran folyoları kilitlemiş olmalı). Ödeme folyo para birimine
- * kurla çevrilir, ödeme başına kuruşa yuvarlanır.
+ * hesaplar (çağıran folyoları kilitlemiş olmalı). Ödemenin folyoya giren
+ * tutarı (`folioAmount`: kurla çevrilmiş, ödeme başına kuruşa yuvarlanmış)
+ * toplanır; yalnızca işlenmiş (`POSTED`) satırlar — onay bekleyen ve
+ * reddedilen ödeme bakiyeye girmez. İade ve iptal kaydı eksi tutarlıdır.
  *
  * @param {import('@prisma/client').Prisma.TransactionClient} tx
  * @param {string[]} folioIds
@@ -124,8 +126,8 @@ export async function refreshFolioTotals(tx, folioIds) {
       SELECT fo."id",
              COALESCE((SELECT SUM(i."total") FROM "FolioItem" i
                        WHERE i."folioId" = fo."id" AND i."deletedAt" IS NULL), 0) AS "charges",
-             COALESCE((SELECT SUM(ROUND(p."amount" * COALESCE(p."exchangeRate", 1), 2)) FROM "Payment" p
-                       WHERE p."folioId" = fo."id" AND p."deletedAt" IS NULL), 0) AS "paid"
+             COALESCE((SELECT SUM(p."folioAmount") FROM "Payment" p
+                       WHERE p."folioId" = fo."id" AND p."status" = 'POSTED' AND p."deletedAt" IS NULL), 0) AS "paid"
       FROM "Folio" fo
       WHERE fo."id" = ANY(${ids}::text[])
     ) t

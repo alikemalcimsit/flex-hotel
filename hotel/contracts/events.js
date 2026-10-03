@@ -86,6 +86,15 @@ export const EVENT_LABELS = Object.freeze({
   'folio.reopened': 'Folyo yeniden açıldı',
   'fnb.order.charged': 'Restoran siparişi odaya yazıldı',
   'minibar.consumed': 'Minibar tüketimi girildi',
+
+  'payment.requested': 'Ödeme / iade onaya gitti',
+  'payment.received': 'Ödeme alındı',
+  'payment.refunded': 'İade yapıldı',
+  'payment.declined': 'Ödeme / iade reddedildi',
+  'payment.void_requested': 'Ödeme için iptal istendi',
+  'payment.voided': 'Ödeme iptal edildi',
+  'payment.void_declined': 'Ödeme iptali reddedildi',
+  'exchange_rate.updated': 'Döviz kuru girildi',
 });
 
 /**

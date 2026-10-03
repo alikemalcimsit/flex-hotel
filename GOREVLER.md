@@ -1430,13 +1430,102 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 17. Ödeme alma — arkadaşın
 **Gün sonu:** Resepsiyon nakit/kart/havale/döviz tahsilat giriyor; büyük tutarlar onaya düşüyor; kasa durumu anlık görünüyor.
-- [ ] Backend: Payment API (al, iade et, listele); ExchangeRate tablosu + günlük kur girişi
-- [ ] Backend: tutar eşiği parametresi; eşik üstü → `approval.requested`
-- [ ] Ekran: Ödeme al formu (folyo, yöntem, tutar, para birimi, kur, referans)
-- [ ] Ekran: Ön ödeme / depozito (rezervasyona bağlı)
-- [ ] Ekran: İade formu → onay kuyruğu
-- [ ] Ekran: Kasa görünümü (bugün yöntem bazında toplamlar)
-- [ ] Aktör: billing-worker'a `payment.received` → folyo bakiyesi güncelle kuralı
+- [x] Backend: Payment API (al, iade et, listele); ExchangeRate tablosu + günlük kur girişi
+- [x] Backend: tutar eşiği parametresi; eşik üstü → `approval.requested`
+- [x] Ekran: Ödeme al formu (folyo, yöntem, tutar, para birimi, kur, referans)
+- [x] Ekran: Ön ödeme / depozito (rezervasyona bağlı)
+- [x] Ekran: İade formu → onay kuyruğu
+- [x] Ekran: Kasa görünümü (bugün yöntem bazında toplamlar)
+- [x] Aktör: billing-worker'a `payment.received` → folyo bakiyesi güncelle kuralı
+
+> **📌 Modül 17 tamamlandı (3 Ekim 2026 — Ahmet).**
+>
+> **Veri** (migration `20261003090000_payments`):
+> - `Payment` genişledi: **tür** (`PAYMENT` tahsilat artı, `REFUND` iade eksi, `REVERSAL` iptal kaydı =
+>   asıl satırın tersi), **durum** (`PENDING` onay bekliyor / `POSTED` işlendi / `DECLINED` işlenmedi),
+>   **kaynak** (`DESK` resepsiyon, `ADVANCE` gelmeden önce ön ödeme, `CHECK_IN_DEPOSIT` giriş teminatı),
+>   doğduğu konaklama (`reservationId`, birleştirmede değişmez), **folyoya giren tutar**
+>   (`folioAmount` = ROUND(tutar × kur, 2) — kısıt), **kasanın günü** (`businessDate`), işlenme anı
+>   (`postedAt`), tekrar işleme anahtarı (`sourceKey`, otel başına tekil), not, iptal izi
+>   (`reversalOfId` tekil, `voidedAt/By/Reason`, bekleyen iptal onayı). Kısıtlar: işaret türe uyar,
+>   onaysız iade ve onaysız bekleyen satır olamaz, durum izleri eksiksiz.
+> - Yeni `ExchangeRate` (otel × döviz × gün tekil; 1 birim döviz = kur × otel parası).
+> - Otel: `largePaymentThreshold` (0 = onay yok; ayarlar → Genel parametreler → Ödeme onayı).
+> - Eski satırlar (yalnızca test verisi) silinmedi, dolduruldu.
+>
+> **Para kuralları:**
+> - **Bakiye** = Σ kalem − Σ işlenmiş ödemenin `folioAmount`'u (onay bekleyen ve reddedilen sayılmaz).
+>   `refreshFolioTotals` ve çıkışın `stayBalances`'ı buna göre güncellendi. Ödeme yazan her işlem folyoyu
+>   kilitler, toplamları aynı transaction'da yeniler.
+> - **Ödeme silinmez:** hatalı giriş "ödeme iptali" (onaylı, ters tutarlı iptal kaydı; kasa etkisi parayı
+>   alanın kasasına yazılır), misafire geri verilen para **iade** (her zaman onaylı). İade sınırı: folyonun
+>   işlenmiş net ödemesi − bekleyen iadeler (alınmamış para iade edilmez). İadesi yapılmış paranın
+>   ödemesi iptal edilemez (iade karşılıksız kalırdı).
+> - **Büyük ödeme:** folyo tutarı eşiğe eşit ya da büyükse satır "onay bekliyor" yazılır (`LARGE_PAYMENT`),
+>   **onaylanana kadar bakiyeye ve kasaya girmez**; reddedilir / süresi dolarsa hiç işlenmez. Kullanıcının
+>   kararı (3 Ekim 2026): "onaylanana kadar bekler". Onaylanınca kasanın günü onay günüdür.
+> - **Dört göz:** `LARGE_PAYMENT`, `REFUND`, yeni `PAYMENT_VOID` türlerinde isteyen kendi isteğini
+>   onaylayamaz (reddedebilir) — `FOLIO_VOID` ile aynı kural.
+> - **Döviz:** yalnızca nakit ve havaleyle (kart folyonun parasıyla). Kur formda yazılmaz: iş gününe kadar
+>   girilmiş en son kur, en fazla 3 gün eski (`EXCHANGE_RATE_STALE_DAYS`). Form gördüğü kuru gönderir;
+>   değiştiyse yazılmaz (`RATE_CHANGED`). Ödeme kendi kurunu saklar. Kur yalnızca iş günü için girilir.
+> - **Referans:** nakit dışı yöntemlerde zorunlu (slip / dekont / voucher / cari); kart numarasına benzeyen
+>   dizi referansa ve nota yazılamaz.
+> - **Birden fazla açık folyo:** konaklamaya ödeme folyo seçilmeden alınmaz (`FOLIO_REQUIRED`): tahmin
+>   edilirse toplam sıfırlanır ama pencereler ters bakiyeyle açık kalır. Giriş teminatı ana pencereye düşer.
+> - **Kapatma:** onay bekleyen ödeme / iade ya da ödeme iptali olan folyo kapanmaz (elle de, çıkışta da).
+>
+> **Giriş teminatı:** girişteki nakit / havale teminatı folyo aktörüyle ödeme olur (`CHECK_IN_DEPOSIT`,
+> anahtar konaklama + giriş anı: bir kez; alan = girişi yapan; eşik üstüyse onaya gider). Kart provizyonu
+> ödeme değildir. Giriş geri alınınca teminat ödemesi iptal kaydıyla düşer (onay bekleyenin isteği geri
+> çekilir). **Modül 6'da değişen:** girişin geri alınmasını yalnızca resepsiyonda alınan ödeme engeller;
+> ön ödeme ve giriş teminatı engellemez.
+>
+> **Olaylar** (`folios.changed` + yeni `cash.changed` kanalı): `payment.requested`, `.received`,
+> `.refunded`, `.declined`, `.void_requested`, `.voided`, `.void_declined` (bakiye değiştirenlerde
+> `stayEnded`), `exchange_rate.updated`.
+>
+> **API:** `POST /payments/quote` (kur, folyo tutarı, onaya gider mi), `POST /payments/folios/:folioId`
+> (201 işlendi / 202 onayda / 200 aynı istek), `POST /payments/stays/:reservationId` (ön ödeme; folyo yoksa
+> açılır), `POST /payments/stays/:reservationId/deposit` (teminatı elle işle), `POST /payments/folios/:folioId/refunds`
+> (202), `POST /payments/:paymentId/void` (202), `GET /payments/cash/summary`, `GET /payments/cash/movements`
+> (imleçli), `GET /folios/:folioId/payments` (imleçli; iade sınırı, bekleyen sayısı), `GET /exchange-rates/current`,
+> `/history`, `PUT /exchange-rates/today`. İzinler: `payment.receive` (resepsiyon, müdür, muhasebe),
+> `payment.refund` (aynı roller; onaylayamaz), `cash.view` (aynı roller), `exchange_rates.manage` (müdür, muhasebe).
+>
+> **Aktör (billing-worker):** giriş → teminat ödemesi; giriş geri alma → teminat iptali; `payment.received` /
+> `.refunded` / `.voided` → konaklaması bitmiş (çıkmış, iptal, gelmedi) folyonun bakiyesi sıfırlandıysa
+> **folyoyu kapatır** (`folio.closed` → fatura). Bakiye ödemeyle aynı transaction'da güncellenir; aktör
+> yalnızca kapanışı yapar. İçerideki misafirin ödemeleri aktörü ilgilendirmez (`accepts`: kapalıyken de görev açılmaz).
+>
+> **Ekranlar:** folyoda "Ödeme al" / "İade" (canlı kur ve onay önizlemesi, çift gönderim korumalı), ödeme
+> listesi (tür, durum, kaynak, döviz × kur, iptal edilen üstü çizili, "İptal iste", daha fazla), teminat şeridi
+> ("Teminatı işle" / provizyon hatırlatması); rezervasyon kartında "Ön ödeme al"; çıkış penceresinde bakiye
+> varken "Ödeme al" (tek açık folyoda; çok pencerede folyo ekranına yönlendirir) ve onay bekleyen ödeme satırı;
+> **Kasa** (`/kasa/gun`: gün seçimi, "yalnızca benim", yöntem × döviz tahsilat / iade / iptal / net, onay
+> bekleyenler, hareket listesi süzgeçli, canlı) ve **Döviz kurları** (`/kasa/kurlar`: güncel kurlar, günün
+> girişi, geçmiş); ayarlarda eşik; giriş geri alma penceresinde teminat notu.
+>
+> **Modül 15'ten düzeltilen:** olay kataloğu `staff.alert.raised` türü `FOLIO_ATTENTION`'ı tanımıyordu —
+> çıkıştan sonra kapanmayan folyo uyarısı atılamıyor, aktörün işi geri dönüyordu (canlıda da). Katalog ↔
+> sözleşme eşitliğine birim testi eklendi. Çıkış sonrası uyarı artık pencere başına bakiyeyi yazıyor
+> (toplam sıfır ama pencereler dengesizse ne yapılacağını söylüyor).
+>
+> **2500 kişi için:** kasa toplamı tek GROUP BY (`(hotelId, businessDate, postedAt, id)` index'i), hareketler
+> imleçli, bekleyenler `(hotelId, status, receivedAt)`, folyo ödemeleri `(folioId, receivedAt, id)`, teminat
+> `(reservationId, source)`, kur `DISTINCT ON` tekil index'le. Test: sözleşme 14 + kurallar 13 + aktör 6 birim;
+> ödeme entegrasyonu 18 (eşzamanlı 10 ödeme, aynı isteğin eşzamanlı iki gönderimi, otel sınırı dahil).
+>
+> **⚠️ Canlıya alırken:** eşik varsayılanı 0 (onay yok) — ayarlardan girilmeli. Kurlar personelce girilir.
+> Modül 15'in demo folyo temizliği hâlâ bekliyor (temizlik SQL'i artık `folioAmount` / `POSTED` ile).
+>
+> **Devir:**
+> - **Modül 16 (fatura):** `folio.closed` artık ödemeyle sıfırlanan bitmiş konaklamada da gelir (aktör).
+> - **Modül 18 (gece kapanışı):** kasa sayımı `getCashSummary(hotelId, { date })` (yöntem × döviz; nakit
+>   dövizi kendi para biriminde say), kişi bazında `receivedBy` (çekmece sahibi; iptal kaydı da asıl alanın).
+>   Kasanın günü işlendiği iş günüdür; gün kapanırken **onay bekleyen ödemeler** (para çekmecede, defterde
+>   değil) ayrıca raporlanmalı ya da kapanış onları bekletmeli. Kurlar gece kapanışında girilebilir (`setTodayRates`).
+> - **Modül 50 (sanal POS):** `VIRTUAL_POS` yöntemi ve işlem no referansı hazır; ödeme `receivePayment` ile.
 
 ### 18. Vardiya / kasa kapama (night audit) — Ali Kemal
 **Gün sonu:** Gece görevlisi sihirbazı adım adım geçip günü kapatıyor; oda ücretleri işleniyor, no-show'lar düşülüyor, kasa farkı raporlanıyor.

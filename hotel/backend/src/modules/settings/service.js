@@ -79,6 +79,7 @@ function toHotelDto(row) {
     lateCheckOutFeeMode: row.lateCheckOutFeeMode,
     lateCheckOutFeeValue: decimalToString(row.lateCheckOutFeeValue),
     checkInIdentityPolicy: row.checkInIdentityPolicy,
+    largePaymentThreshold: decimalToString(row.largePaymentThreshold),
     updatedAt: row.updatedAt.toISOString(),
   };
 }
@@ -261,6 +262,7 @@ export async function updateGeneralSettings(hotelId, input) {
           lateCheckOutFeeMode: data.lateCheckOutFeeMode,
           lateCheckOutFeeValue: data.lateCheckOutFeeMode === 'NONE' ? '0' : data.lateCheckOutFeeValue,
           checkInIdentityPolicy: data.checkInIdentityPolicy,
+          largePaymentThreshold: data.largePaymentThreshold,
         },
         'Otel kaydı bulunamadı',
       );

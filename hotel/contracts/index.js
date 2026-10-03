@@ -142,6 +142,7 @@ export * from './activity.js';
 export * from './actors.js';
 export * from './dashboard.js';
 export * from './folios.js';
+export * from './payments.js';
 export * from './events.js';
 export { displayPhone, internationalPhone } from './phone.js';
 export {

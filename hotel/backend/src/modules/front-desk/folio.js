@@ -14,8 +14,10 @@ import { folioBalance } from './rules.js';
  *   Silinmiş kalem ve ödeme (`deletedAt`) sayılmaz.
  * - Başka folyoya birleştirilmiş folyo (`TRANSFERRED`) sayılmaz: kalemleri
  *   birleştiği folyoda.
- * - Ödemenin `exchangeRate`'i ödeme para biriminden folyo para birimine çevirir
- *   (ödeme başına kuruşa yuvarlanır); boşsa ödeme folyo para birimindedir.
+ * - Ödemenin folyoya giren tutarı `folioAmount` (ödeme para biriminden kurla
+ *   çevrilmiş, ödeme başına kuruşa yuvarlanmış). İade ve iptal kaydı eksidir.
+ *   Yalnızca işlenmiş (`POSTED`) ödeme sayılır: onay bekleyen büyük ödeme
+ *   misafirin borcunu kapatmaz (modül 17).
  * - Denormalize `Folio.balance` kolonu listeler içindir; para-kritik yol (çıkış)
  *   kalemlerden yeniden hesaplar.
  *
@@ -26,13 +28,14 @@ import { folioBalance } from './rules.js';
  * @param {import('@prisma/client').PrismaClient | import('@prisma/client').Prisma.TransactionClient} client
  * @param {string} hotelId
  * @param {string[]} reservationIds
- * @returns {Promise<Map<string, { folios: number, charges: string, paid: string, balance: string }>>}
+ * @returns {Promise<Map<string, { folios: number, openFolios: number, charges: string, paid: string, balance: string }>>}
  */
 export async function stayBalances(client, hotelId, reservationIds) {
   if (reservationIds.length === 0) return new Map();
   const rows = await client.$queryRaw`
     SELECT f."reservationId" AS "reservationId",
            COUNT(*)::int AS "folios",
+           COUNT(*) FILTER (WHERE f."status" = 'OPEN')::int AS "openFolios",
            COALESCE(SUM(c."total"), 0)::text AS "charges",
            COALESCE(SUM(p."total"), 0)::text AS "paid"
     FROM "Folio" f
@@ -42,9 +45,9 @@ export async function stayBalances(client, hotelId, reservationIds) {
       WHERE i."folioId" = f."id" AND i."deletedAt" IS NULL
     ) c ON TRUE
     LEFT JOIN LATERAL (
-      SELECT SUM(ROUND(pay."amount" * COALESCE(pay."exchangeRate", 1), 2)) AS "total"
+      SELECT SUM(pay."folioAmount") AS "total"
       FROM "Payment" pay
-      WHERE pay."folioId" = f."id" AND pay."deletedAt" IS NULL
+      WHERE pay."folioId" = f."id" AND pay."status" = 'POSTED' AND pay."deletedAt" IS NULL
     ) p ON TRUE
     WHERE f."hotelId" = ${hotelId}
       AND f."reservationId" = ANY(${reservationIds}::text[])
@@ -54,7 +57,7 @@ export async function stayBalances(client, hotelId, reservationIds) {
   return new Map(
     rows.map((row) => [
       row.reservationId,
-      { folios: row.folios, charges: row.charges, paid: row.paid, balance: folioBalance(row) },
+      { folios: row.folios, openFolios: row.openFolios, charges: row.charges, paid: row.paid, balance: folioBalance(row) },
     ]),
   );
 }
@@ -78,9 +81,11 @@ export async function lockStayFolios(tx, hotelId, reservationId) {
  * olmamalı: geri alınan girişin kalemi sahipsiz kalırdı.
  *
  * Hareket: bu konaklamadan doğan kalemler (başka folyoya aktarılmış olsa da)
- * ve konaklamanın folyolarındaki ödemeler. **Erken giriş ücreti hareket
- * sayılmaz:** girişin kendi ücretidir; giriş geri alınınca folyo aktörü ters
- * kayıtla düşer (ücreti ve ters kaydı da sayılmaz).
+ * ve bu konaklama için resepsiyonda alınan ödemeler (reddedilen hariç).
+ * **Girişin kendi işleri hareket sayılmaz:** erken giriş ücreti ve girişte
+ * alınan teminat ödemesi; giriş geri alınınca folyo aktörü ikisini de ters
+ * kayıtla düşer (ters kayıtları da sayılmaz). **Ön ödeme de sayılmaz:**
+ * gelmeden önce alınmıştır, girişten bağımsız olarak rezervasyonundadır.
  *
  * @param {import('@prisma/client').Prisma.TransactionClient} client
  * @param {string} hotelId
@@ -100,9 +105,8 @@ export async function hasFolioActivity(client, hotelId, reservationId) {
       )
       OR EXISTS (
         SELECT 1 FROM "Payment" pay
-        JOIN "Folio" f ON f."id" = pay."folioId"
-        WHERE f."hotelId" = ${hotelId} AND f."reservationId" = ${reservationId}
-          AND f."deletedAt" IS NULL AND pay."deletedAt" IS NULL
+        WHERE pay."hotelId" = ${hotelId} AND pay."reservationId" = ${reservationId} AND pay."deletedAt" IS NULL
+          AND pay."source" = 'DESK' AND pay."status" <> 'DECLINED'
       )
     ) AS "active"`;
   return Boolean(row?.active);

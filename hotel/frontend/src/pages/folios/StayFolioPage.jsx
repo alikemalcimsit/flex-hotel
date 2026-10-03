@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FOLIO_ITEMS_PAGE_SIZE, PAYMENT_METHOD_LABELS, RESERVATION_STATUS_LABELS, folioActionError } from '@hotelos/hotel-contracts';
+import { FOLIO_ITEMS_PAGE_SIZE, PAYMENTS_PAGE_SIZE, RESERVATION_STATUS_LABELS, folioActionError } from '@hotelos/hotel-contracts';
 import { Alert, Badge, Button, EmptyState, Icon, Spinner } from '@hotelos/ui';
 import { ConfirmDialog } from '../../components/ConfirmDialog.jsx';
 import { PageHeader } from '../../components/PageHeader.jsx';
@@ -9,6 +9,7 @@ import { QueryFallback } from '../../components/QueryFallback.jsx';
 import { api, apiPost, withQuery } from '../../lib/api.js';
 import { FOLIO_STATUS_TONES, balanceTone, folioKeys, folioPath, folioStatusLabel, itemTypeLabel } from '../../lib/folios.js';
 import { formatDate, formatMoney, formatPercent } from '../../lib/format.js';
+import { absolute, cashKeys, methodLabel } from '../../lib/payments.js';
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 import { RESERVATION_STATUS_TONES } from '../../lib/reservations.js';
 import { FOLIOS_CHANNEL, RESERVATIONS_CHANNEL } from '../../lib/socket.js';
@@ -16,10 +17,11 @@ import { useLiveChannel } from '../../lib/useLiveChannel.js';
 import { toastError, toastSuccess } from '../../store/toast.js';
 import { EditPayerDialog, PostChargeDialog, ReopenFolioDialog, VoidItemDialog } from './FolioDialogs.jsx';
 import { FolioItemsTable } from './FolioItemsTable.jsx';
+import { FolioPayments } from './FolioPayments.jsx';
 import { MergeDialog, RoutingDialog, SplitDialog, TransferDialog } from './FolioMoveDialogs.jsx';
+import { PaymentDialog, VoidPaymentDialog } from './PaymentDialogs.jsx';
 
 const OFFLINE_REFRESH_MS = 60_000;
-const PAYMENTS_PAGE_SIZE = 50;
 
 /**
  * Konaklamanın hesabı tek ekranda (modül 15): folyolar (pencereler) sekme
@@ -27,7 +29,8 @@ const PAYMENTS_PAGE_SIZE = 50;
  *
  * İşlemler yetkiye göre: harcama işle, iptal iste (onaya gider), aktar, böl,
  * birleştir, yönlendir, kapat (`folio.post`); indirim ve yeniden açma
- * (`folio.adjust`). Başka personelin işlemi canlı yansır.
+ * (`folio.adjust`); ödeme al (`payment.receive`), iade ve ödeme iptali iste
+ * (`payment.refund`, onaya gider). Başka personelin işlemi canlı yansır.
  */
 export function StayFolioPage() {
   const { reservationId } = useParams();
@@ -56,6 +59,17 @@ export function StayFolioPage() {
     },
     onError: (error) => toastError(error.message),
   });
+  const recordDeposit = useMutation({
+    mutationFn: () => apiPost(`/payments/stays/${reservationId}/deposit`, {}),
+    onSuccess: (result) => {
+      if (result.skipped) toastSuccess(result.skipped);
+      else if (result.status === 'PENDING') toastSuccess('Teminat büyük ödeme onayına gönderildi');
+      else toastSuccess(`Teminat ödeme olarak işlendi (${formatMoney(result.amount, result.currency)})`);
+      refresh();
+      queryClient.invalidateQueries({ queryKey: cashKeys.all });
+    },
+    onError: (error) => toastError(error.message),
+  });
   const postNights = useMutation({
     mutationFn: () => apiPost(`/folios/stays/${reservationId}/room-charges`, {}),
     onSuccess: (result) => {
@@ -66,7 +80,7 @@ export function StayFolioPage() {
   });
 
   if (!stayQuery.data) return <QueryFallback query={stayQuery} errorTitle="Folyo yüklenemedi" />;
-  const { stay, folios, routes, roomCharges } = stayQuery.data;
+  const { stay, folios, routes, roomCharges, payments } = stayQuery.data;
   const requested = searchParams.get('folyo');
   const selected =
     folios.find((folio) => folio.id === requested) ?? folios.find((folio) => folio.status === 'OPEN') ?? folios[0] ?? null;
@@ -116,6 +130,14 @@ export function StayFolioPage() {
           Gece çalışması bunları kendiliğinden işler; beklemeden işleyebilirsiniz (işlenmiş gece yeniden işlenmez).
         </Alert>
       )}
+
+      <DepositNotice
+        deposit={payments?.deposit}
+        currency={stay.currency}
+        canRecord={can(PERMISSIONS.PAYMENT_RECEIVE)}
+        busy={recordDeposit.isPending}
+        onRecord={() => recordDeposit.mutate()}
+      />
 
       {folios.length === 0 ? (
         <EmptyState
@@ -172,7 +194,9 @@ function FolioTabs({ folios, selectedId, onSelect }) {
           >
             <span className="flex items-center gap-2 text-sm font-bold text-ink">
               {folio.name}
-              {folio.pendingVoids > 0 && <Icon name="clock" className="size-3.5 text-warning-ink" aria-label="İptal onayı bekliyor" />}
+              {(folio.pendingVoids > 0 || folio.pendingPayments > 0) && (
+                <Icon name="clock" className="size-3.5 text-warning-ink" title="Onay bekleyen iptal ya da ödeme var" />
+              )}
             </span>
             <span className="flex items-center gap-2">
               <Badge tone={FOLIO_STATUS_TONES[folio.status]}>{folioStatusLabel(folio.status)}</Badge>
@@ -228,6 +252,9 @@ function FolioPanel({ folio, stay, siblings, onChanged, onSelect }) {
   const can = useCan();
   const canPost = can(PERMISSIONS.FOLIO_POST);
   const canAdjust = can(PERMISSIONS.FOLIO_ADJUST);
+  const canReceive = can(PERMISSIONS.PAYMENT_RECEIVE);
+  const canRefund = can(PERMISSIONS.PAYMENT_REFUND);
+  const queryClient = useQueryClient();
   const [includeVoided, setIncludeVoided] = useState(true);
   const [selected, setSelected] = useState(() => new Set());
   const [dialog, setDialog] = useState(null);
@@ -240,10 +267,13 @@ function FolioPanel({ folio, stay, siblings, onChanged, onSelect }) {
     initialPageParam: null,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
   });
-  const payments = useQuery({
+  const payments = useInfiniteQuery({
     queryKey: folioKeys.payments(folio.id),
-    queryFn: () => api(withQuery(`/folios/${folio.id}/payments`, { limit: PAYMENTS_PAGE_SIZE })),
+    queryFn: ({ pageParam }) => api(withQuery(`/folios/${folio.id}/payments`, { cursor: pageParam ?? undefined, limit: PAYMENTS_PAGE_SIZE })),
+    initialPageParam: null,
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
   });
+  const refundable = payments.data?.pages[0]?.refundable ?? null;
 
   // Seçili kalem artık bu folyoda değilse (aktarıldı, iptal edildi) seçimden düşer.
   const loadedIds = items.data?.pages.flatMap((page) => page.items.map((item) => item.id)).join(',') ?? '';
@@ -266,6 +296,7 @@ function FolioPanel({ folio, stay, siblings, onChanged, onSelect }) {
   const closeBlocked = folioActionError(folio, 'close', {
     balanceZero: Number(folio.balance) === 0,
     pendingVoids: folio.pendingVoids,
+    pendingPayments: folio.pendingPayments,
     lastOpenOfInHouseStay: stay.status === 'CHECKED_IN' && !siblings.some((row) => row.id !== folio.id && row.status === 'OPEN'),
   });
   const selectedIds = [...selected];
@@ -273,6 +304,11 @@ function FolioPanel({ folio, stay, siblings, onChanged, onSelect }) {
     setSelected(new Set());
     onChanged();
   };
+  const paymentDone = () => {
+    onChanged();
+    queryClient.invalidateQueries({ queryKey: cashKeys.all });
+  };
+  const paymentTarget = { folioId: folio.id, name: folio.name, currency: folio.currency, balance: folio.balance, refundable };
 
   return (
     <section className="flex flex-col gap-5 rounded-card bg-surface p-5 shadow-card" aria-label={folio.name}>
@@ -293,9 +329,27 @@ function FolioPanel({ folio, stay, siblings, onChanged, onSelect }) {
 
       <Totals folio={folio} detail={detail} />
 
+      {open && (canReceive || canRefund) && (
+        <div className="flex flex-wrap items-center gap-2">
+          {canReceive && (
+            <Button icon="wallet" onClick={() => setDialog({ kind: 'payment' })}>Ödeme al</Button>
+          )}
+          {canRefund && (
+            <span title={refundable !== null && Number(refundable) <= 0 ? 'Bu folyoda iade edilecek ödeme yok' : undefined}>
+              <Button variant="outline" icon="rotateCcw" disabled={refundable === null || Number(refundable) <= 0} onClick={() => setDialog({ kind: 'refund' })}>
+                İade
+              </Button>
+            </span>
+          )}
+          {Number(folio.balance) < 0 && (
+            <span className="text-sm text-warning-ink">Misafirin {formatMoney(absolute(folio.balance), folio.currency)} alacağı var: iade edin ya da harcamalara saklayın.</span>
+          )}
+        </div>
+      )}
+
       {open && canPost && (
         <div className="flex flex-wrap items-center gap-2">
-          <Button icon="plus" onClick={() => setDialog({ kind: 'charge' })}>Harcama ekle</Button>
+          <Button variant="outline" icon="plus" onClick={() => setDialog({ kind: 'charge' })}>Harcama ekle</Button>
           <Button variant="outline" icon="arrowRight" disabled={selectedIds.length === 0} onClick={() => setDialog({ kind: 'transfer' })}>
             Aktar{selectedIds.length ? ` (${selectedIds.length})` : ''}
           </Button>
@@ -348,7 +402,7 @@ function FolioPanel({ folio, stay, siblings, onChanged, onSelect }) {
         onVoid={open && canPost ? (item) => setDialog({ kind: 'void', item }) : undefined}
       />
 
-      <Payments query={payments} currency={folio.currency} />
+      <FolioPayments query={payments} currency={folio.currency} onVoid={open && canRefund ? (payment) => setDialog({ kind: 'voidPayment', payment }) : undefined} />
 
       {dialog?.kind === 'charge' && <PostChargeDialog folio={folio} canDiscount={canAdjust} onClose={() => setDialog(null)} onDone={done} />}
       {dialog?.kind === 'void' && <VoidItemDialog folio={folio} item={dialog.item} currency={folio.currency} onClose={() => setDialog(null)} onDone={done} />}
@@ -367,6 +421,12 @@ function FolioPanel({ folio, stay, siblings, onChanged, onSelect }) {
       {dialog?.kind === 'merge' && <MergeDialog folio={folio} onClose={() => setDialog(null)} onDone={done} />}
       {dialog?.kind === 'payer' && <EditPayerDialog folio={folio} onClose={() => setDialog(null)} onDone={done} />}
       {dialog?.kind === 'reopen' && <ReopenFolioDialog folio={folio} onClose={() => setDialog(null)} onDone={done} />}
+      {(dialog?.kind === 'payment' || dialog?.kind === 'refund') && (
+        <PaymentDialog mode={dialog.kind} target={paymentTarget} onClose={() => setDialog(null)} onDone={paymentDone} />
+      )}
+      {dialog?.kind === 'voidPayment' && (
+        <VoidPaymentDialog payment={dialog.payment} folioCurrency={folio.currency} onClose={() => setDialog(null)} onDone={paymentDone} />
+      )}
       <ConfirmDialog
         open={dialog?.kind === 'close'}
         title={`${folio.name} kapatılsın mı?`}
@@ -450,39 +510,42 @@ function FragmentPair({ label, value }) {
 }
 
 /**
- * Ödemeler (modül 17 yazar; burada salt okunur).
- * @param {{ query: import('@tanstack/react-query').UseQueryResult, currency: string }} props
+ * Girişte alınan teminat (modül 17): nakit / havale teminatı ödeme olarak
+ * işlenir (folyo aktörü; kapalıysa personel düğmeyle). Kart provizyonu ödeme
+ * değildir: çıkışta kartla tahsil edilir.
+ * @param {{ deposit: any, currency: string, canRecord: boolean, busy: boolean, onRecord: () => void }} props
  */
-function Payments({ query, currency }) {
+function DepositNotice({ deposit, currency, canRecord, busy, onRecord }) {
+  if (!deposit) return null;
+  const label = `${methodLabel(deposit.method === 'CARD_PREAUTH' ? 'CARD' : deposit.method)} · ${formatMoney(deposit.amount, currency)}${deposit.reference ? ` · ${deposit.reference}` : ''}`;
+  if (deposit.recorded === null) {
+    return (
+      <Alert tone="info" title={`Kart provizyonu: ${formatMoney(deposit.amount, currency)}${deposit.reference ? ` (${deposit.reference})` : ''}`}>
+        Provizyon ödeme değildir; bakiyeye girmez. Çıkışta tutarı kartla tahsil edip provizyonu kapatın.
+      </Alert>
+    );
+  }
+  if (deposit.recorded === 'POSTED') return null;
+  if (deposit.recorded === 'PENDING') {
+    return (
+      <Alert tone="info" title="Giriş teminatı onay bekliyor">
+        {label} — büyük ödeme eşiğini aştığı için ikinci bir yetkilinin onayını bekliyor; onaylanınca bakiyeye girer.
+      </Alert>
+    );
+  }
   return (
-    <div className="flex flex-col gap-2">
-      <h2 className="text-base font-bold text-ink">Ödemeler</h2>
-      {query.isPending ? (
-        <Spinner className="py-2" />
-      ) : query.isError ? (
-        <p className="text-sm text-sec-strong">{query.error.message}</p>
-      ) : query.data.payments.length === 0 ? (
-        <p className="text-sm text-ink-muted">Bu folyoya ödeme işlenmemiş.</p>
-      ) : (
-        <ul className="divide-y divide-line rounded-item border border-line text-sm">
-          {query.data.payments.map((payment) => (
-            <li key={payment.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
-              <span>
-                <span className="font-semibold">{PAYMENT_METHOD_LABELS[payment.method] ?? payment.method}</span>
-                <span className="ml-2 text-xs text-ink-muted">
-                  {formatDate(payment.receivedAt)} · {payment.receivedBy}
-                  {payment.reference ? ` · ${payment.reference}` : ''}
-                </span>
-              </span>
-              <span className="font-bold tabular-nums">
-                {formatMoney(payment.converted, currency)}
-                {payment.currency !== currency && <span className="ml-1 text-xs font-normal text-ink-muted">({formatMoney(payment.amount, payment.currency)})</span>}
-              </span>
-            </li>
-          ))}
-          {query.data.nextCursor && <li className="px-4 py-2 text-xs text-ink-muted">İlk {PAYMENTS_PAGE_SIZE} ödeme gösteriliyor.</li>}
-        </ul>
-      )}
-    </div>
+    <Alert
+      tone="warning"
+      title="Girişte alınan teminat ödeme olarak işlenmedi"
+      action={
+        canRecord && (
+          <Button size="sm" icon="wallet" onClick={onRecord} disabled={busy}>
+            {busy ? 'İşleniyor…' : 'Teminatı işle'}
+          </Button>
+        )
+      }
+    >
+      {label}. Folyo aktörü kapalı ya da henüz çalışmadı; beklemeden işleyebilirsiniz (ikinci kez işlenmez).
+    </Alert>
   );
 }

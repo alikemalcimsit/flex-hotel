@@ -55,6 +55,8 @@ async function main() {
       defaultBoardType: 'BB',
       cancellationPolicyDays: 3,
       cancellationPolicyPenaltyPct: 50,
+      // Modül 17: bu tutar ve üstü ödeme ikinci bir yetkilinin onayına gider.
+      largePaymentThreshold: 50000,
     },
   });
   const hotelId = hotel.id;
@@ -427,9 +429,10 @@ const DEMO_EXTRAS = Object.freeze([
  * Folyolar (modül 15). Uydurma kalem yazılmaz: içerideki demo konaklamalara
  * folyo servisinin kendisiyle dün geceye kadarki oda ücretleri (gece
  * çalışmasının yapacağının aynısı, vergisiyle) ve birkaç harcama işlenir.
- * Çıkmış konaklamalara folyo yazılmaz: ödeme (modül 17) olmadan "kapanmış
- * folyo" uydurma olurdu. Tekrar çalıştırmak güvenli (geceler tekrar işlenmez,
- * harcama zaten varsa eklenmez).
+ * Çıkmış konaklamalara folyo yazılmaz: geçmişe dönük ödeme ve kapanış
+ * uydurulmaz. Ödeme yazılmaz: kasa gerçek tahsilatla dolar (modül 17), kurlar
+ * da personel tarafından girilir. Tekrar çalıştırmak güvenli (geceler tekrar
+ * işlenmez, harcama zaten varsa eklenmez).
  *
  * @param {string} hotelId
  */

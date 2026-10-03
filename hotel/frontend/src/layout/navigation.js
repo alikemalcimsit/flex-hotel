@@ -66,6 +66,17 @@ export const NAV_SECTIONS = Object.freeze([
       { label: 'Oda planı', to: '/oda-plani', icon: 'calendar' },
       // Konaklamaların hesabı (modül 15): kat hizmetleri görmez.
       { label: 'Folyolar', to: '/folyolar', icon: 'fileText', permission: PERMISSIONS.FOLIO_VIEW },
+      // Tahsilat ve döviz kuru (modül 17): kasayı gören ya da kuru giren.
+      {
+        label: 'Kasa',
+        to: '/kasa',
+        icon: 'wallet',
+        anyPermission: [PERMISSIONS.CASH_VIEW, PERMISSIONS.EXCHANGE_RATES_MANAGE],
+        children: [
+          { label: 'Günlük kasa', to: '/kasa/gun', icon: 'banknote', permission: PERMISSIONS.CASH_VIEW },
+          { label: 'Döviz kurları', to: '/kasa/kurlar', icon: 'coins' },
+        ],
+      },
       {
         label: 'Mesajlar',
         to: '/mesajlar',

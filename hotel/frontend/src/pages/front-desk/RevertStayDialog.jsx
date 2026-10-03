@@ -86,7 +86,13 @@ export function RevertStayDialog({ kind, stay, onClose }) {
           {stay.guest.name}
           {stay.room ? `, oda ${stay.room.number}` : ''}.{' '}
           {isCheckIn
-            ? `Rezervasyon onaylıya döner, oda boşalır. ${stay.depositMethod ? 'Alınan teminatı iade edin.' : ''}`
+            ? `Rezervasyon onaylıya döner, oda boşalır. ${
+                stay.depositMethod === 'CARD_PREAUTH'
+                  ? 'Kart provizyonunu iptal edin.'
+                  : stay.depositMethod
+                    ? 'Girişte işlenen teminat ödemesi iptal kaydıyla düşer: parayı misafire geri verin (yeniden girişte teminat yeniden alınır).'
+                    : ''
+              }`
             : 'Çıkışta bırakılan geceler geri gelmez; misafir kalacaksa rezervasyonu uzatın.'}
         </Alert>
         {serverError && <Alert tone="danger" title="Geri alınamadı">{serverError.message}</Alert>}

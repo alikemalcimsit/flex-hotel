@@ -119,6 +119,27 @@ enum PaymentMethod {
   VOUCHER
 }
 
+/// Ödeme satırının türü (modül 17): tahsilat (artı), iade (eksi), iptal kaydı (asıl satırın tersi).
+enum PaymentKind {
+  PAYMENT
+  REFUND
+  REVERSAL
+}
+
+/// Onay bekleyen satır bakiyeye girmez; reddedilen ya da süresi dolan hiç işlenmez.
+enum PaymentStatus {
+  PENDING
+  POSTED
+  DECLINED
+}
+
+/// Ödeme nereden geldi: resepsiyon, gelmeden önce ön ödeme, girişte alınan teminat.
+enum PaymentSource {
+  DESK
+  ADVANCE
+  CHECK_IN_DEPOSIT
+}
+
 enum HousekeepingType {
   CHECKOUT_CLEAN
   STAYOVER
@@ -367,6 +388,9 @@ model Hotel {
   lateCheckOutFeeMode          StayFeeMode       @default(NONE)
   lateCheckOutFeeValue         Decimal           @default(0) @db.Decimal(12, 2)
   checkInIdentityPolicy        IdentityPolicy    @default(PRIMARY_GUEST)
+  /// Bu tutar (otel para biriminde) ve üstü ödeme ikinci bir yetkilinin onayına
+  /// gider; onaylanana kadar bakiyeye girmez (modül 17). 0: onay yok.
+  largePaymentThreshold        Decimal           @default(0) @db.Decimal(12, 2)
   settings                     Json              @default("{}")
   createdAt                    DateTime          @default(now())
   updatedAt                    DateTime          @updatedAt
@@ -411,6 +435,7 @@ model Hotel {
   roomChargeRuns        RoomChargeRun[]
   invoices              Invoice[]
   payments              Payment[]
+  exchangeRates         ExchangeRate[]
   nightAudits           NightAudit[]
   housekeepingTasks     HousekeepingTask[]
   maintenanceTickets    MaintenanceTicket[]
@@ -1120,6 +1145,7 @@ model Reservation {
   folios            Folio[]
   folioItems        FolioItem[]
   folioRoutes       FolioRoute[]
+  payments          Payment[]
   roomSegments      RoomStaySegment[]
   conversations     Conversation[]
   guestRequests     GuestRequest[]
@@ -1666,27 +1692,93 @@ model Invoice {
   folio Folio @relation(fields: [folioId], references: [id])
 }
 
+/// Ödeme satırı (modül 17). Silinmez: hatalı giriş iptal kaydıyla (`REVERSAL`,
+/// ters tutar), misafire geri verilen para iadeyle (`REFUND`, eksi tutar)
+/// düzeltilir. Bakiyeye yalnızca işlenmiş (`POSTED`) satırlar girer.
 model Payment {
-  id           String        @id @default(uuid())
-  hotelId      String
-  folioId      String
-  method       PaymentMethod
-  amount       Decimal       @db.Decimal(12, 2)
-  currency     String        @default("TRY")
-  exchangeRate Decimal?      @db.Decimal(12, 6)
-  receivedBy   String
-  receivedAt   DateTime      @default(now())
-  approvalId   String?
-  reference    String?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  deletedAt    DateTime?
+  id              String        @id @default(uuid())
+  hotelId         String
+  folioId         String
+  /// Ödemenin alındığı konaklama (folyo birleşse de değişmez; giriş teminatını bulmak için).
+  reservationId   String
+  kind            PaymentKind   @default(PAYMENT)
+  /// Onay bekleyen (eşik üstü ödeme, iade) bakiyeye girmez; reddedilen hiç işlenmez.
+  status          PaymentStatus @default(POSTED)
+  source          PaymentSource @default(DESK)
+  method          PaymentMethod
+  /// Ödemenin kendi para birimindeki tutarı. Tahsilatta artı, iadede eksi;
+  /// iptal kaydında asıl satırın tersi.
+  amount          Decimal       @db.Decimal(12, 2)
+  currency        String        @default("TRY")
+  /// Ödeme para biriminden folyo para birimine kur (1 birim = kur). Aynı para biriminde boş.
+  exchangeRate    Decimal?      @db.Decimal(12, 6)
+  /// Folyoya giren tutar: ROUND(tutar × kur, 2) (kısıt). Bakiye bunu toplar.
+  folioAmount     Decimal       @db.Decimal(12, 2)
+  /// Kasanın günü: işlendiği iş günü (onay bekleyende isteğin günü; onaylanınca onay günü).
+  businessDate    DateTime      @db.Date
+  reference       String?
+  note            String?
+  /// Tekrar işleme anahtarı (otel başına tekil): elle istek, giriş teminatı, iptal.
+  sourceKey       String?
+  /// Personelin girdiği an ve kişi (ya da aktör).
+  receivedBy      String
+  receivedAt      DateTime      @default(now())
+  /// Bakiyeye girdiği an (onaysızda girişle aynı; onaylıda onay anı).
+  postedAt        DateTime?
+  /// Bu satırı onaya bağlayan onay (eşik üstü ödeme ya da iade).
+  approvalId      String?
+  declinedAt      DateTime?
+  /// İptal kaydıysa asıl satır (tekil: bir satır bir kez iptal edilir).
+  reversalOfId    String?       @unique
+  voidedAt        DateTime?
+  voidedBy        String?
+  voidReason      String?
+  /// İptal onayı: bekliyorsa `voidRequestedAt` dolu, karar verilince temizlenir.
+  voidApprovalId  String?
+  voidRequestedAt DateTime?
+  voidRequestedBy String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime?
 
-  hotel    Hotel     @relation(fields: [hotelId], references: [id])
-  folio    Folio     @relation(fields: [folioId], references: [id])
-  approval Approval? @relation(fields: [approvalId], references: [id])
+  hotel       Hotel       @relation(fields: [hotelId], references: [id])
+  folio       Folio       @relation(fields: [folioId], references: [id])
+  reservation Reservation @relation(fields: [reservationId], references: [id])
+  approval    Approval?   @relation(fields: [approvalId], references: [id])
+  reversalOf  Payment?    @relation("PaymentReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversal    Payment?    @relation("PaymentReversal")
 
-  @@index([folioId])
+  @@unique([hotelId, sourceKey])
+  // Folyonun ödemeleri (girildiği sırayla, imleçli).
+  @@index([folioId, receivedAt, id])
+  // Kasa: günün işlenen hareketleri (son işlenen önce, imleçli) ve toplamları.
+  @@index([hotelId, businessDate, postedAt, id])
+  // Onay bekleyenler (kasa görünümünün "bekleyen" kutusu).
+  @@index([hotelId, status, receivedAt])
+  // Konaklamanın giriş teminatı (giriş geri alınınca düşer).
+  @@index([reservationId, source])
+  @@index([approvalId])
+}
+
+/// Günlük döviz kuru (modül 17): 1 birim döviz = `rate` × otel para birimi.
+/// Otel × döviz × gün tekil; yalnızca iş günü için girilir (aynı gün yeniden
+/// girilirse güncellenir, denetim izi eski değeri tutar). Ödeme kendi kurunu
+/// saklar: kur sonradan değişse de geçmiş ödeme değişmez.
+model ExchangeRate {
+  id        String   @id @default(uuid())
+  hotelId   String
+  currency  String
+  date      DateTime @db.Date
+  rate      Decimal  @db.Decimal(12, 6)
+  enteredBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+
+  @@unique([hotelId, currency, date])
+  // Günün kurları ve geçmiş (son gün önce).
+  @@index([hotelId, date])
 }
 
 model NightAudit {

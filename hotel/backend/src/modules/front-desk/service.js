@@ -22,6 +22,7 @@ import { sameGuestName } from '../reservations/rules.js';
 import { getReservation, reservationSearchConditions } from '../reservations/service.js';
 import { assignRoomInTransaction, roomConflictForStay } from '../rooms/service.js';
 import { pendingStayCharges } from '../folios/service.js';
+import { stayPaymentStatus } from '../payments/service.js';
 import { getHotelSettings } from '../settings/service.js';
 import { hasFolioActivity, lockStayFolios, stayBalances } from './folio.js';
 import {
@@ -590,9 +591,13 @@ export async function getCheckOutPreview(hotelId, reservationId, { now = new Dat
           lastNightAmount: nights.at(-1)?.amount ?? null,
         })
       : { applies: false, fee: null };
-  const folio = (await stayBalances(prisma, hotelId, [stay.id])).get(stay.id) ?? null;
   const keptNights = nights.filter((night) => !plan.releasedNights.includes(night.date));
-  const pending = await pendingStayCharges(prisma, hotelId, stay, { keptNights, lateFee: late.fee });
+  const [balances, pending, payments] = await Promise.all([
+    stayBalances(prisma, hotelId, [stay.id]),
+    pendingStayCharges(prisma, hotelId, stay, { keptNights, lateFee: late.fee }),
+    stayPaymentStatus(prisma, hotelId, stay),
+  ]);
+  const folio = balances.get(stay.id) ?? null;
   const pendingWithoutLateFee = pending.own.filter((line) => line.source !== 'LATE_CHECK_OUT').map((line) => line.total);
 
   return {
@@ -614,9 +619,11 @@ export async function getCheckOutPreview(hotelId, reservationId, { now = new Dat
     // Geç çıkış ücreti uygulanırsa ödenecek; personel ücreti uygulamazsa `dueWithoutLateFee`.
     due: amountDue(folio, [pending.ownTotal]),
     dueWithoutLateFee: amountDue(folio, pendingWithoutLateFee),
-    deposit: stay.depositMethod
-      ? { method: stay.depositMethod, amount: money(stay.depositAmount), reference: stay.depositReference }
-      : null,
+    // `recorded`: nakit / havale teminatı ödeme olarak işlendi mi (modül 17); kart provizyonunda `null`.
+    deposit: payments.deposit,
+    // Onay bekleyen ödeme / iade (modül 17): bakiyeye henüz girmedi; onaylanınca ödenecek düşer.
+    pendingPayments: payments.pendingPayments,
+    pendingRefunds: payments.pendingRefunds,
     currency: stay.currency,
     businessDate: toIsoDay(businessDate),
   };
