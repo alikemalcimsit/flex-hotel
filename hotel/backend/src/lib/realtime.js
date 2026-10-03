@@ -1,7 +1,9 @@
 import {
   APPROVAL_EVENTS,
+  CASH_EVENTS,
   FOLIO_EVENTS,
   LIVE_VIEW_EVENTS,
+  PAYMENT_EVENTS,
   MANUAL_TASK_EVENTS,
   MESSAGING_CHANGED_EVENTS,
   NOTIFICATIONS_CHANGED_EVENTS,
@@ -72,8 +74,11 @@ export const MANUAL_TASKS_CHANNEL = 'manual-tasks.changed';
 /** Aktör paneli kanalı: bir yönetici aktörü açıp kapatınca diğer açık paneller tazelenir. */
 export const ACTORS_CHANNEL = 'actors.changed';
 
-/** Folyo ekranı, folyo listesi ve bakiyeler (modül 15). */
+/** Folyo ekranı, folyo listesi ve bakiyeler (modül 15); ödemeler de bakiyeyi değiştirir (17). */
 export const FOLIOS_CHANNEL = 'folios.changed';
+
+/** Kasa görünümü ve kur ekranı (modül 17). */
+export const CASH_CHANNEL = 'cash.changed';
 
 /**
  * Aktivite akışı kanalı (modül 10). Olaydan değil aktivite satırından beslenir
@@ -95,7 +100,8 @@ const CHANNEL_EVENTS = Object.freeze({
   [RESERVATIONS_CHANNEL]: RESERVATIONS_CHANGED_EVENTS,
   [MANUAL_TASKS_CHANNEL]: MANUAL_TASK_EVENTS,
   [ACTORS_CHANNEL]: ['actor.setting.changed'],
-  [FOLIOS_CHANNEL]: FOLIO_EVENTS,
+  [FOLIOS_CHANNEL]: [...FOLIO_EVENTS, ...PAYMENT_EVENTS],
+  [CASH_CHANNEL]: CASH_EVENTS,
 });
 
 /** @param {string} hotelId */

@@ -58,6 +58,22 @@ export function requirePermission(permission) {
 }
 
 /**
+ * İzinlerden **biri** yeterli (ör. kur listesini ödeme alan da, kasayı gören
+ * de, kuru giren de okur). Denetim izine ilk izin yazılır.
+ *
+ * @param {...string} permissions `PERMISSIONS` içinden değerler
+ * @returns {(request: import('fastify').FastifyRequest) => Promise<void>} Fastify preHandler
+ */
+export function requireAnyPermission(...permissions) {
+  return async function anyPermissionPreHandler(request) {
+    request.requiredPermission = permissions[0];
+    const auth = request.auth;
+    if (!auth) throw new UnauthorizedError();
+    if (!permissions.some((permission) => auth.permissions.includes(permission))) throw new ForbiddenError();
+  };
+}
+
+/**
  * Gövdeye bağlı yetki (ör. rezervasyonda elle fiyat): route'un izni yetmez,
  * istek belirli bir şey isterse ek izin gerekir. `request.auth`'taki etkin
  * izinlerden okunur — `requirePermission` ile aynı kaynak.

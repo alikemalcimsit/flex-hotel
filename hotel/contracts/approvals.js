@@ -25,6 +25,7 @@ export const APPROVAL_TYPES = Object.freeze([
   'BULK_PRICE_CHANGE',
   'OVERBOOKING',
   'FOLIO_VOID',
+  'PAYMENT_VOID',
   'OTHER',
 ]);
 
@@ -34,16 +35,19 @@ export const APPROVAL_TYPE_LABELS = Object.freeze({
   BULK_PRICE_CHANGE: 'Toplu fiyat değişimi',
   OVERBOOKING: 'Kapasite aşımı (overbooking)',
   FOLIO_VOID: 'Folyo kalemi iptali',
+  PAYMENT_VOID: 'Ödeme iptali',
   OTHER: 'Diğer',
 });
 
 /**
  * Dört göz kuralı: bu türlerde isteyen kişi kendi isteğini **onaylayamaz**.
- * Kalem iptali paranın izini değiştirir (nakit alınmış bir harcamayı iptal
- * edip farkı cebe atmak klasik kasa açığıdır); ikinci bir yetkili görmeli.
- * Reddetmek (isteği geri çekmek) serbesttir: iş yapılmaz, zarar yok.
+ * Hepsi paranın izini değiştirir: nakit alınmış bir harcamayı ya da ödemeyi
+ * iptal edip farkı cebe atmak, kendine iade yazmak klasik kasa açığıdır;
+ * büyük ödemede yazım hatası (100.000 yerine 10.000) misafiri "ödendi" diye
+ * çıkarır. İkinci bir yetkili görmeli. Reddetmek (isteği geri çekmek)
+ * serbesttir: iş yapılmaz, zarar yok.
  */
-export const APPROVAL_SELF_DECISION_FORBIDDEN_TYPES = Object.freeze(['FOLIO_VOID']);
+export const APPROVAL_SELF_DECISION_FORBIDDEN_TYPES = Object.freeze(['FOLIO_VOID', 'PAYMENT_VOID', 'REFUND', 'LARGE_PAYMENT']);
 
 /**
  * Bu kişi bu onayı kendi isteği olduğu için onaylayamıyor mu? Onaylayamıyorsa sebep.

@@ -96,6 +96,8 @@ const generalSettingsBase = z.object({
   lateCheckOutFeeMode: z.enum(STAY_FEE_MODES, { error: 'Geçersiz ücret türü' }).optional(),
   lateCheckOutFeeValue: decimalField({ scale: 2, min: 0, max: 1_000_000, label: 'Geç çıkış ücreti' }).optional(),
   checkInIdentityPolicy: z.enum(IDENTITY_POLICIES, { error: 'Geçersiz kimlik politikası' }).optional(),
+  // İsteğe bağlı (modül 17): bu tutar ve üstü ödeme ikinci bir yetkilinin onayına gider. 0: onay yok.
+  largePaymentThreshold: decimalField({ scale: 2, min: 0, max: 100_000_000, label: 'Büyük ödeme eşiği' }).optional(),
   // İsteğe bağlı: gönderilmezse değişmez. Başta "+" yazılabilir.
   phoneCountryCode: z
     .string({ error: 'Ülke kodu metin olmalı' })

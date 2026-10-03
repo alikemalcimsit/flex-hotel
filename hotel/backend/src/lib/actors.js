@@ -20,6 +20,7 @@ import { whatsappGatewayService } from '../modules/channels/whatsapp.js';
 import { createLlmDeps } from '../modules/concierge/llm.js';
 import { conciergeService, routerService } from '../modules/concierge/service.js';
 import * as folioService from '../modules/folios/service.js';
+import * as paymentService from '../modules/payments/service.js';
 import { enqueueTriggerNotifications } from '../modules/notifications/service.js';
 import { raiseStaffAlert } from '../modules/notifications/staff-alerts.js';
 import { requestApprovalStandalone } from '../modules/approvals/service.js';
@@ -220,6 +221,9 @@ export function registerActors() {
           reverseReservationFees: folioService.reverseReservationFees,
           runRoomCharges: folioService.runRoomCharges,
           postExternalCharge: folioService.postExternalCharge,
+          recordCheckInDeposit: paymentService.recordCheckInDeposit,
+          reverseCheckInDeposits: paymentService.reverseCheckInDeposits,
+          closeFolioIfSettled: folioService.closeFolioIfSettled,
         },
         deps,
       ),

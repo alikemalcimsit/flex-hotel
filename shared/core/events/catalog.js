@@ -49,6 +49,16 @@ const folioEvent = hotelScoped.extend({
   reservationId: z.string().uuid(),
 });
 
+/** Ödeme olaylarının ortak gövdesi (modül 17): hangi ödeme, hangi folyoda, hangi konaklamanın. */
+const paymentEvent = folioEvent.extend({ paymentId: z.string().uuid() });
+
+/**
+ * Bakiyeyi değiştiren ödeme olayları: folyonun konaklaması bitmiş mi (çıkmış,
+ * iptal, gelmedi). Folyo aktörü yalnızca bunlarda "bakiye sıfırlandıysa kapat"
+ * işine bakar; içerideki misafirin her ödemesi için iş açmaz.
+ */
+const balanceChange = { stayEnded: z.boolean().default(false) };
+
 /**
  * Dış kaynaktan (restoran siparişi, minibar tüketimi) folyoya işlenecek
  * harcama. Konaklama biliniyorsa `reservationId`; bilinmiyorsa oda (`roomId`,
@@ -421,6 +431,7 @@ export const EVENT_CATALOG = Object.freeze({
       'APPROVAL_DECIDED',
       'WAITLIST_AVAILABLE',
       'CHECKOUT_OPEN_BALANCE',
+      'FOLIO_ATTENTION',
       'AI_HANDOFF',
       'AI_BUDGET',
     ]),
@@ -543,6 +554,65 @@ export const EVENT_CATALOG = Object.freeze({
   'fnb.order.charged': externalCharge,
   /** Kat görevlisi odada minibar tüketimi girdi. */
   'minibar.consumed': externalCharge,
+
+  /* ── Ödeme (modül 17) ──
+     Folyo ekranı (bakiye) ve kasa görünümü bunlarla canlı tazelenir
+     (`PAYMENT_EVENTS`). Tutar folyonun para biriminde (`amount`, iade ve
+     iptal kaydında eksi); socket'e yalnızca kimlikler çıkar. Folyo aktörü
+     işlenen ödemeden sonra çıkmış misafirin bakiyesi sıfırlandıysa folyoyu
+     kapatır; gece kapanışı (18) kasayı veritabanından okur. */
+
+  /** Ödeme ya da iade onaya gitti (eşik üstü ödeme, her iade): bakiyeye henüz girmedi. */
+  'payment.requested': paymentEvent.extend({ kind: z.enum(['PAYMENT', 'REFUND']), approvalId: z.string().uuid() }),
+  /** Ödeme işlendi (doğrudan ya da onaylanınca): bakiye düştü. */
+  'payment.received': paymentEvent.extend({
+    ...balanceChange,
+    method: z.string().min(1),
+    source: z.string().min(1),
+    amount: moneyText,
+    currency: z.string().length(3),
+    approvalId: z.string().uuid().nullable().default(null),
+  }),
+  /** İade işlendi (onaylandı): bakiye arttı, para misafire döndü. */
+  'payment.refunded': paymentEvent.extend({
+    ...balanceChange,
+    method: z.string().min(1),
+    amount: moneyText,
+    currency: z.string().length(3),
+    approvalId: z.string().uuid(),
+  }),
+  /**
+   * Onay bekleyen ödeme / iade işlenmedi: reddedildi, süresi doldu ya da
+   * onaylandığında folyo kapanmıştı (yalnızca yarışla).
+   */
+  'payment.declined': paymentEvent.extend({
+    kind: z.enum(['PAYMENT', 'REFUND']),
+    approvalId: z.string().uuid(),
+    outcome: z.enum(['DENIED', 'EXPIRED', 'FOLIO_CLOSED']),
+  }),
+  /** Hatalı ödeme girişi için iptal istendi (onaya gitti). */
+  'payment.void_requested': paymentEvent.extend({ approvalId: z.string().uuid() }),
+  /**
+   * Ödeme iptal edildi: iptal kaydı (ters tutar) işlendi. Onaylı iptalde
+   * `approvalId` dolu; sistemin geri alması (giriş geri alındı → teminat) boş.
+   */
+  'payment.voided': paymentEvent.extend({
+    ...balanceChange,
+    reversalId: z.string().uuid(),
+    amount: moneyText,
+    currency: z.string().length(3),
+    approvalId: z.string().uuid().nullable().default(null),
+  }),
+  /** Ödeme iptali reddedildi ya da süresi doldu: ödeme olduğu gibi kalır. */
+  'payment.void_declined': paymentEvent.extend({
+    approvalId: z.string().uuid(),
+    outcome: z.enum(['DENIED', 'EXPIRED', 'FOLIO_CLOSED']),
+  }),
+  /** Günün döviz kurları girildi / düzeltildi. */
+  'exchange_rate.updated': hotelScoped.extend({
+    date: isoDay,
+    currencies: z.array(z.string().length(3)).min(1).max(20),
+  }),
 });
 
 /** @typedef {keyof typeof EVENT_CATALOG} EventName */
@@ -683,6 +753,15 @@ export const MANUAL_TASK_EVENTS = Object.freeze(['manual_task.created', 'manual_
 export const FOLIO_EVENTS = Object.freeze(
   Object.keys(EVENT_CATALOG).filter((name) => name.startsWith('folio.') && name !== 'folio.room_charges.due'),
 );
+
+/**
+ * Ödeme olayları (modül 17): folyo ekranı (bakiye, ödemeler) ve kasa
+ * görünümü bunlarla tazelenir (canlı yayın: `folios.changed`, `cash.changed`).
+ */
+export const PAYMENT_EVENTS = Object.freeze(Object.keys(EVENT_CATALOG).filter((name) => name.startsWith('payment.')));
+
+/** Kasa görünümünü ve kur ekranını etkileyen olaylar (canlı yayın: `cash.changed`). */
+export const CASH_EVENTS = Object.freeze([...PAYMENT_EVENTS, 'exchange_rate.updated']);
 
 /** Onay kuyruğunu etkileyen event'ler (canlı yayın: `approvals.changed`). */
 export const APPROVAL_EVENTS = Object.freeze([

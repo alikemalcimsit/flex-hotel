@@ -4,6 +4,7 @@ import {
   folioItemsQuerySchema,
   folioListQuerySchema,
   folioParamSchema,
+  folioPaymentsQuerySchema,
   folioRoutesSchema,
   folioStayParamSchema,
   mergeFoliosSchema,
@@ -17,6 +18,7 @@ import {
 } from '@hotelos/hotel-contracts';
 import { PERMISSIONS, assertRequestPermission, requirePermission } from '../../lib/permissions.js';
 import { withHotelContext } from '../../lib/tenant.js';
+import * as payments from '../payments/service.js';
 import * as service from './service.js';
 
 /**
@@ -103,12 +105,13 @@ export async function folioRoutes(app) {
     data: await service.listFolioItems(request.hotelId, request.params.folioId, request.query),
   }));
 
+  // Ödemeler modül 17'nin (yazma uçları `/payments`); folyoyu gören ödemelerini de görür.
   app.get(
     '/:folioId/payments',
-    { ...view, schema: { params: folioParamSchema, querystring: folioItemsQuerySchema.pick({ cursor: true, limit: true }) } },
+    { ...view, schema: { params: folioParamSchema, querystring: folioPaymentsQuerySchema } },
     async (request) => ({
       success: true,
-      data: await service.listFolioPayments(request.hotelId, request.params.folioId, request.query),
+      data: await payments.listFolioPayments(request.hotelId, request.params.folioId, request.query),
     }),
   );
 

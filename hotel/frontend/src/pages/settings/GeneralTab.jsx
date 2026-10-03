@@ -45,6 +45,7 @@ export function GeneralTab() {
     lateCheckOutFeeMode: 'NONE',
     lateCheckOutFeeValue: '0',
     checkInIdentityPolicy: 'PRIMARY_GUEST',
+    largePaymentThreshold: '0',
   });
   const [errors, setErrors] = useState({});
 
@@ -64,6 +65,7 @@ export function GeneralTab() {
       lateCheckOutFeeMode: hotel.lateCheckOutFeeMode ?? 'NONE',
       lateCheckOutFeeValue: hotel.lateCheckOutFeeValue ?? '0',
       checkInIdentityPolicy: hotel.checkInIdentityPolicy ?? 'PRIMARY_GUEST',
+      largePaymentThreshold: hotel.largePaymentThreshold ?? '0',
     });
     setErrors({});
   }, [hotel]);
@@ -259,6 +261,27 @@ export function GeneralTab() {
           {feeSummary(form.lateCheckOutFeeMode, form.lateCheckOutFeeValue, `${hotel.checkOutTime} sonrası çıkış`, 'son gecenin', hotel.currency)}{' '}
           Resepsiyon ücreti gerekçesiyle uygulamayabilir (denetim izine yazılır). Kimlik bilgisi Kimlik Bildirim
           Sistemi'ne gider; {form.checkInIdentityPolicy === 'ALL_ADULTS' ? 'bütün yetişkinlerin' : 'en az rezervasyon sahibinin'} belgesi girilmeden giriş yapılmaz.
+        </Alert>
+      </Card>
+
+      <Card
+        title="Ödeme onayı"
+        description="Bu tutar ve üstündeki ödeme (otelin para birimindeki karşılığı) ikinci bir yetkilinin onayına gider; onaylanana kadar bakiyeye ve kasaya girmez. İade her zaman onaya gider."
+      >
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Input
+            label={`Büyük ödeme eşiği (${hotel.currency})`}
+            name="largePaymentThreshold"
+            inputMode="decimal"
+            value={form.largePaymentThreshold}
+            onChange={setField('largePaymentThreshold')}
+            error={errors.largePaymentThreshold}
+          />
+        </div>
+        <Alert tone="info" title="Özet" className="mt-5">
+          {Number(form.largePaymentThreshold) > 0
+            ? `${form.largePaymentThreshold.replace('.', ',')} ${hotel.currency} ve üstü ödemeler onaya gider; isteyen kişi kendi isteğini onaylayamaz.`
+            : 'Eşik 0: ödemeler onaysız işlenir (iade ve ödeme iptali yine onaya gider).'}
         </Alert>
       </Card>
 

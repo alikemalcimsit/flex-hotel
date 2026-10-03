@@ -33,6 +33,18 @@ const dotted = (day) => day.split('-').reverse().join('.');
  */
 const priced = (value, currency = '') => (value ? `${value}${currency ? ` ${currency}` : ''}` : '');
 
+/** Ödeme olarak işlenen giriş teminatı yöntemleri (kart provizyonu ödeme değil). */
+const DEPOSIT_PAYMENT_METHODS = Object.freeze(['CASH', 'TRANSFER']);
+
+/** @param {{ deposit?: { method?: string } | null }} payload */
+const hasPaidDeposit = (payload) => DEPOSIT_PAYMENT_METHODS.includes(payload.deposit?.method ?? '');
+
+/** Bakiyeyi değiştiren ödeme olayları: konaklaması bitmiş folyoda "sıfırlandıysa kapat". */
+const PAYMENT_EVENTS = Object.freeze(['payment.received', 'payment.refunded', 'payment.voided']);
+
+/** @param {string} text */
+const capitalized = (text) => text.charAt(0).toLocaleUpperCase('tr') + text.slice(1);
+
 /**
  * Folyo aktörü.
  *
@@ -51,6 +63,9 @@ class BillingWorker extends BaseWorker {
    *   reverseReservationFees: (hotelId: string, reservationId: string, input: { occurredAt: Date }) => Promise<{ reversed: number }>,
    *   runRoomCharges: (hotelId: string, input: { night: string }) => Promise<{ night: string, stays: number, items: number, total: string }>,
    *   postExternalCharge: (hotelId: string, charge: object, options: { source: 'FNB_ORDER' | 'MINIBAR', eventId: string }) => Promise<{ reservationId: string, items: number, total: string }>,
+   *   recordCheckInDeposit: (hotelId: string, reservationId: string) => Promise<{ skipped?: string, status?: string, amount?: string, currency?: string }>,
+   *   reverseCheckInDeposits: (hotelId: string, reservationId: string, input: { reason: string, occurredAt: Date }) => Promise<{ reversed: number, withdrawn: number }>,
+   *   closeFolioIfSettled: (hotelId: string, folioId: string) => Promise<{ closed: boolean, reason?: string, balance?: string }>,
    * }} service
    * @param {object} deps BaseWorker bağımlılıkları
    */
@@ -61,7 +76,10 @@ class BillingWorker extends BaseWorker {
     super(
       billingWorkerManifest,
       {
-        /** Misafir girdi: folyo açılır, erken giriş ücreti işlenir. */
+        /**
+         * Misafir girdi: folyo açılır, erken giriş ücreti işlenir; nakit / havale
+         * teminatı ödeme olarak işlenir (eşik üstüyse onaya gider).
+         */
         'guest.checked_in': async (payload, envelope) => {
           const result = await run(() =>
             service.openStayOnCheckIn(payload.hotelId, payload.reservationId, {
@@ -72,7 +90,14 @@ class BillingWorker extends BaseWorker {
           if (result.skipped) return { message: result.skipped };
           const parts = [result.opened ? 'Folyo açıldı' : 'Folyo zaten açıktı'];
           if (result.feePosted) parts.push(`erken giriş ücreti işlendi (${result.feePosted})`);
-          return { message: parts.join(', '), meta: { feePosted: result.feePosted ?? null } };
+          let deposit = null;
+          if (hasPaidDeposit(payload)) {
+            deposit = await run(() => service.recordCheckInDeposit(payload.hotelId, payload.reservationId));
+            if (deposit.status === 'POSTED') parts.push(`teminat ödeme olarak işlendi (${priced(deposit.amount, deposit.currency)})`);
+            else if (deposit.status === 'PENDING') parts.push(`teminat (${priced(deposit.amount, deposit.currency)}) büyük ödeme onayına gitti`);
+            else if (deposit.skipped) parts.push(deposit.skipped.toLocaleLowerCase('tr'));
+          }
+          return { message: parts.join(', '), meta: { feePosted: result.feePosted ?? null, deposit: deposit?.status ?? null } };
         },
 
         /**
@@ -95,15 +120,16 @@ class BillingWorker extends BaseWorker {
           return { message: parts.join(', '), meta: { closed: result.closed, open: result.open } };
         },
 
-        /** Yanlış giriş geri alındı: o girişin erken giriş ücreti düşer. */
+        /** Yanlış giriş geri alındı: o girişin erken giriş ücreti ve teminat ödemesi düşer. */
         'guest.check_in_reverted': async (payload, envelope) => {
-          const result = await run(() =>
-            service.reverseCheckInFees(payload.hotelId, payload.reservationId, {
-              reason: payload.reason,
-              occurredAt: occurredAt(envelope),
-            }),
-          );
-          return { message: result.reversed ? 'Erken giriş ücreti ters kayıtla düşüldü' : 'Düşülecek ücret yoktu' };
+          const input = { reason: payload.reason, occurredAt: occurredAt(envelope) };
+          const fees = await run(() => service.reverseCheckInFees(payload.hotelId, payload.reservationId, input));
+          const deposits = await run(() => service.reverseCheckInDeposits(payload.hotelId, payload.reservationId, input));
+          const parts = [];
+          if (fees.reversed) parts.push('erken giriş ücreti ters kayıtla düşüldü');
+          if (deposits.reversed) parts.push('teminat ödemesi iptal kaydıyla düşüldü (para misafire geri verilmeli)');
+          if (deposits.withdrawn) parts.push('onay bekleyen teminatın isteği geri çekildi');
+          return { message: parts.length ? capitalized(parts.join(', ')) : 'Düşülecek ücret ya da teminat yoktu' };
         },
 
         /** Yanlış çıkış geri alındı: folyo yeniden açılır, geç çıkış ücreti düşer. */
@@ -162,9 +188,39 @@ class BillingWorker extends BaseWorker {
           const result = await run(() => service.postExternalCharge(payload.hotelId, payload, { source: 'MINIBAR', eventId: envelope.id }));
           return { message: `Minibar tüketimi ${payload.reference} folyoya işlendi (${result.total})`, meta: result };
         },
+
+        /**
+         * Ödeme / iade / ödeme iptali işlendi: konaklaması bitmiş misafirin
+         * folyosu sıfırlandıysa kapanır (fatura modülü `folio.closed`'u dinler).
+         * Bakiye ödemeyle aynı transaction'da güncellendi; burada yalnızca kapanış.
+         */
+        ...Object.fromEntries(
+          PAYMENT_EVENTS.map((name) => [
+            name,
+            async (payload) => {
+              const result = await run(() => service.closeFolioIfSettled(payload.hotelId, payload.folioId));
+              return {
+                message: result.closed ? 'Bakiye sıfırlandı; folyo kapandı' : `Folyo açık kaldı: ${(result.reason ?? '').toLocaleLowerCase('tr')}`,
+                meta: result,
+              };
+            },
+          ]),
+        ),
       },
       deps,
     );
+  }
+
+  /**
+   * Ödeme olaylarından yalnızca konaklaması bitmiş folyonunkiler ilgilendirir
+   * (içerideki misafirin her ödemesi için iş — ve aktör kapalıyken manuel
+   * görev — açılmaz).
+   * @param {string} eventName
+   * @param {any} payload
+   */
+  accepts(eventName, payload) {
+    if (PAYMENT_EVENTS.includes(eventName)) return payload?.stayEnded === true;
+    return true;
   }
 
   /**
@@ -175,16 +231,19 @@ class BillingWorker extends BaseWorker {
    */
   describeFallback(eventName, payload) {
     switch (eventName) {
-      case 'guest.checked_in':
-        return payload.earlyCheckInFee
-          ? `Folyo açılacak, erken giriş ücreti (${payload.earlyCheckInFee}) işlenecek`
-          : 'Misafir girdi: folyo açılacak';
+      case 'guest.checked_in': {
+        const parts = [
+          payload.earlyCheckInFee ? `Folyo açılacak, erken giriş ücreti (${payload.earlyCheckInFee}) işlenecek` : 'Misafir girdi: folyo açılacak',
+        ];
+        if (hasPaidDeposit(payload)) parts.push(`teminat (${payload.deposit.amount}) ödeme olarak işlenecek (Folyo → Teminatı işle)`);
+        return parts.join('; ');
+      }
       case 'guest.checked_out':
         return payload.lateCheckOutFee
           ? `Çıkış: kalan oda ücretleri ve geç çıkış ücreti (${payload.lateCheckOutFee}) işlenecek, folyo kapatılacak`
           : 'Çıkış: kalan oda ücretleri işlenecek, folyo kapatılacak';
       case 'guest.check_in_reverted':
-        return 'Giriş geri alındı: erken giriş ücreti folyodan düşülecek';
+        return 'Giriş geri alındı: erken giriş ücreti ve teminat ödemesi (varsa) folyodan düşülecek';
       case 'guest.check_out_reverted':
         return 'Çıkış geri alındı: folyo yeniden açılacak, geç çıkış ücreti düşülecek';
       case 'reservation.cancelled':
@@ -199,6 +258,10 @@ class BillingWorker extends BaseWorker {
         return `Restoran siparişi ${payload.reference} folyoya elle işlenecek`;
       case 'minibar.consumed':
         return `Minibar tüketimi ${payload.reference} folyoya elle işlenecek`;
+      case 'payment.received':
+      case 'payment.refunded':
+      case 'payment.voided':
+        return 'Ödemeden sonra bakiye sıfırsa folyo kapatılacak (Folyo → Folyoyu kapat)';
       default:
         return super.describeFallback(eventName, payload);
     }

@@ -147,19 +147,20 @@ describe('folyo yönetimi (entegrasyon)', { skip }, () => {
   async function assertTotalsConsistent(folioId) {
     const folio = await db.folio.findUnique({ where: { id: folioId } });
     const items = await db.folioItem.findMany({ where: { folioId } });
-    const payments = await db.payment.findMany({ where: { folioId } });
+    const payments = await db.payment.findMany({ where: { folioId, status: 'POSTED' } });
     const charges = items.reduce((acc, item) => acc.plus(String(item.total)), core.toDecimal(0));
-    const paid = payments.reduce((acc, pay) => acc.plus(String(pay.amount)), core.toDecimal(0));
+    const paid = payments.reduce((acc, pay) => acc.plus(String(pay.folioAmount)), core.toDecimal(0));
     assert.equal(core.toMoneyString(String(folio.chargesTotal)), core.toMoneyString(charges), 'borç = Σ kalem');
     assert.equal(core.toMoneyString(String(folio.paymentsTotal)), core.toMoneyString(paid), 'ödenen = Σ ödeme');
     assert.equal(core.toMoneyString(String(folio.balance)), core.toMoneyString(charges.minus(paid)), 'bakiye = borç − ödenen');
   }
 
-  /** Ödeme (modül 17'nin yazacağı): folyo kilidi + toplamların yenilenmesi sözleşmesiyle. */
+  /** Ödeme (modül 17'nin servisiyle: folyo kilidi, toplamların yenilenmesi). */
   async function pay(folioId, amount) {
-    await db.payment.create({ data: { hotelId, folioId, method: 'CARD', amount, receivedBy: DESK } });
-    const { refreshFolioTotals } = await import('./posting.js');
-    await db.$transaction((tx) => refreshFolioTotals(tx, [folioId]));
+    const payments = await import('../payments/service.js');
+    const body = contracts.receivePaymentSchema.parse({ requestId: randomUUID(), method: 'CASH', amount });
+    const result = await desk(() => payments.receivePayment(hotelId, folioId, body));
+    assert.equal(result.payment.status, 'POSTED');
   }
 
   const charge = (folioId, overrides = {}) =>

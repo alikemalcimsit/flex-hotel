@@ -30,6 +30,9 @@ function makeHarness({ service = {}, isEnabled = async () => true } = {}) {
       reverseReservationFees: record('reverseReservationFees', { reversed: 1 }),
       runRoomCharges: record('runRoomCharges', { night: '2026-09-29', stays: 212, items: 214, total: '245000.00' }),
       postExternalCharge: record('postExternalCharge', { reservationId: RESERVATION, items: 2, total: '91.00' }),
+      recordCheckInDeposit: record('recordCheckInDeposit', { status: 'POSTED', amount: '500.00', currency: 'TRY' }),
+      reverseCheckInDeposits: record('reverseCheckInDeposits', { reversed: 1, withdrawn: 0 }),
+      closeFolioIfSettled: record('closeFolioIfSettled', { closed: true }),
       ...service,
     },
     {
@@ -49,7 +52,7 @@ const stay = { hotelId: HOTEL, reservationId: RESERVATION, roomTypeId: '44444444
 const envelope = (name, id = 'evt-1', extra = {}) => ({ id, name, correlationId: 'zincir', hop: 1, ...extra });
 
 describe('manifest', () => {
-  it('giriş / çıkış, geri alma, iptal, gece ve dış harcama olaylarını dinler', () => {
+  it('giriş / çıkış, geri alma, iptal, gece, dış harcama ve ödeme olaylarını dinler', () => {
     assert.deepEqual(
       [...billingWorkerManifest.subscribes].sort(),
       [
@@ -60,6 +63,9 @@ describe('manifest', () => {
         'guest.checked_in',
         'guest.checked_out',
         'minibar.consumed',
+        'payment.received',
+        'payment.refunded',
+        'payment.voided',
         'reservation.cancelled',
         'reservation.no_show',
         'reservation.reinstated',
@@ -206,5 +212,62 @@ describe('dış harcamalar', () => {
     await worker.handle(charge, envelope('minibar.consumed'));
     assert.equal(attempts, 2);
     assert.equal(calls.manualTasks.length, 0);
+  });
+});
+
+describe('ödeme (modül 17)', () => {
+  const FOLIO = '66666666-6666-4666-8666-666666666666';
+  const payment = (extra = {}) => ({ hotelId: HOTEL, folioId: FOLIO, reservationId: RESERVATION, paymentId: '77777777-7777-4777-8777-777777777777', ...extra });
+
+  it('girişte nakit teminat ödeme olarak işlenir (folyo açıldıktan sonra)', async () => {
+    const { worker, calls } = makeHarness();
+    await worker.handle({ ...stay, earlyCheckInFee: null, deposit: { method: 'CASH', amount: '500.00', reference: null } }, envelope('guest.checked_in'));
+    assert.deepEqual(calls.service.map((call) => call.name), ['openStayOnCheckIn', 'recordCheckInDeposit']);
+    assert.deepEqual(calls.service[1].args, [HOTEL, RESERVATION]);
+    assert.match(calls.activity[0].message, /^Folyo açıldı, .*teminat ödeme olarak işlendi \(500\.00 TRY\)$/);
+  });
+
+  it('eşik üstü teminat onaya gittiğini söyler; kart provizyonu ödeme değildir', async () => {
+    const pending = makeHarness({ service: { recordCheckInDeposit: async () => ({ status: 'PENDING', amount: '90000.00', currency: 'TRY' }) } });
+    await pending.worker.handle({ ...stay, deposit: { method: 'TRANSFER', amount: '90000.00' } }, envelope('guest.checked_in'));
+    assert.match(pending.calls.activity[0].message, /teminat \(90000\.00 TRY\) büyük ödeme onayına gitti/);
+
+    const card = makeHarness();
+    await card.worker.handle({ ...stay, deposit: { method: 'CARD_PREAUTH', amount: '2000.00' } }, envelope('guest.checked_in'));
+    assert.deepEqual(card.calls.service.map((call) => call.name), ['openStayOnCheckIn']);
+  });
+
+  it('giriş geri alınınca ücret ve teminat ödemesi düşer (olayın anıyla)', async () => {
+    const { worker, calls } = makeHarness();
+    const at = '2026-10-03T10:15:00.000Z';
+    await worker.handle({ ...stay, reason: 'Yanlış oda' }, envelope('guest.check_in_reverted', 'evt-r', { occurredAt: at }));
+    assert.deepEqual(calls.service.map((call) => call.name), ['reverseCheckInFees', 'reverseCheckInDeposits']);
+    assert.equal(calls.service[1].args[2].occurredAt.toISOString(), at);
+    assert.match(calls.activity[0].message, /^Erken giriş ücreti ters kayıtla düşüldü, teminat ödemesi iptal kaydıyla düşüldü/);
+  });
+
+  it('bitmiş konaklamanın ödemesinden sonra folyo sıfırlandıysa kapanır', async () => {
+    const { worker, calls } = makeHarness();
+    await worker.handle(payment({ stayEnded: true }), envelope('payment.received'));
+    assert.deepEqual(calls.service[0], { name: 'closeFolioIfSettled', args: [HOTEL, FOLIO] });
+    assert.equal(calls.activity[0].message, 'Bakiye sıfırlandı; folyo kapandı');
+
+    const open = makeHarness({ service: { closeFolioIfSettled: async () => ({ closed: false, reason: 'Bakiye sıfır değil', balance: '120.00' }) } });
+    await open.worker.handle(payment({ stayEnded: true }), envelope('payment.refunded'));
+    assert.equal(open.calls.activity[0].message, 'Folyo açık kaldı: bakiye sıfır değil');
+  });
+
+  it('içerideki misafirin ödemeleri aktörü ilgilendirmez (kapalıyken görev de açılmaz)', () => {
+    const { worker } = makeHarness();
+    assert.equal(worker.accepts('payment.received', payment({ stayEnded: false })), false);
+    assert.equal(worker.accepts('payment.voided', payment({ stayEnded: true })), true);
+    assert.equal(worker.accepts('guest.checked_in', stay), true);
+  });
+
+  it('aktör kapalıyken giriş görevi teminatın da işleneceğini söyler', async () => {
+    const { worker, calls } = makeHarness({ isEnabled: async () => false });
+    await worker.handle({ ...stay, earlyCheckInFee: null, deposit: { method: 'CASH', amount: '500.00' } }, envelope('guest.checked_in'));
+    assert.equal(calls.service.length, 0);
+    assert.match(calls.manualTasks[0].title, /folyo açılacak; teminat \(500\.00\) ödeme olarak işlenecek/);
   });
 });

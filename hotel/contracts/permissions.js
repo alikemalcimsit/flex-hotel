@@ -66,6 +66,15 @@ export const PERMISSIONS = Object.freeze({
   /** İndirim uygulamak, kapanmış folyoyu yeniden açmak. Yönetim / muhasebe işi. */
   FOLIO_ADJUST: 'folio.adjust',
 
+  /** Ödeme almak: tahsilat, ön ödeme / depozito (modül 17). Eşik üstü ödeme onaya gider. */
+  PAYMENT_RECEIVE: 'payment.receive',
+  /** İade ve ödeme iptali (hatalı giriş) istemek. Her ikisi de ikinci bir yetkilinin onayına gider. */
+  PAYMENT_REFUND: 'payment.refund',
+  /** Kasa görünümü: günün yöntem bazında tahsilat / iade toplamları ve hareketleri. */
+  CASH_VIEW: 'cash.view',
+  /** Günlük döviz kurunu girmek. Döviz ödemeleri bu kurla çevrilir. */
+  EXCHANGE_RATES_MANAGE: 'exchange_rates.manage',
+
   /** Aktör paneli (modül 12): aktörlerin durumu, bildirgesi, LLM harcaması. */
   ACTORS_VIEW: 'actors.view',
   /** Aktörü bu otelde açmak / kapatmak (kapalı aktörün işi personele düşer). */
@@ -105,6 +114,10 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.FOLIO_VIEW]: 'Folyoları görüntüle',
   [PERMISSIONS.FOLIO_POST]: 'Folyoya harcama işle, aktar, böl, birleştir',
   [PERMISSIONS.FOLIO_ADJUST]: 'İndirim uygula, kapanmış folyoyu yeniden aç',
+  [PERMISSIONS.PAYMENT_RECEIVE]: 'Ödeme al (tahsilat, ön ödeme)',
+  [PERMISSIONS.PAYMENT_REFUND]: 'İade / ödeme iptali iste (onaya gider)',
+  [PERMISSIONS.CASH_VIEW]: 'Kasayı görüntüle',
+  [PERMISSIONS.EXCHANGE_RATES_MANAGE]: 'Günlük döviz kurunu gir',
   [PERMISSIONS.ACTORS_VIEW]: 'Aktör panelini görüntüle',
   [PERMISSIONS.ACTORS_MANAGE]: 'Aktörleri aç / kapat',
 });
@@ -156,6 +169,11 @@ export const PERMISSION_GROUPS = Object.freeze([
     key: 'folios',
     label: 'Folyo',
     permissions: [PERMISSIONS.FOLIO_VIEW, PERMISSIONS.FOLIO_POST, PERMISSIONS.FOLIO_ADJUST],
+  },
+  {
+    key: 'payments',
+    label: 'Ödeme ve kasa',
+    permissions: [PERMISSIONS.PAYMENT_RECEIVE, PERMISSIONS.PAYMENT_REFUND, PERMISSIONS.CASH_VIEW, PERMISSIONS.EXCHANGE_RATES_MANAGE],
   },
   { key: 'monitoring', label: 'İzleme', permissions: [PERMISSIONS.ACTIVITY_VIEW, PERMISSIONS.AUDIT_VIEW] },
   { key: 'actors', label: 'Aktörler', permissions: [PERMISSIONS.ACTORS_VIEW, PERMISSIONS.ACTORS_MANAGE] },
@@ -211,6 +229,10 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.FOLIO_VIEW,
     PERMISSIONS.FOLIO_POST,
     PERMISSIONS.FOLIO_ADJUST,
+    PERMISSIONS.PAYMENT_RECEIVE,
+    PERMISSIONS.PAYMENT_REFUND,
+    PERMISSIONS.CASH_VIEW,
+    PERMISSIONS.EXCHANGE_RATES_MANAGE,
   ]),
   FRONT_DESK: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,
@@ -227,6 +249,10 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     // Resepsiyon hesabı görür, harcama işler; indirim ve yeniden açma yönetimde.
     PERMISSIONS.FOLIO_VIEW,
     PERMISSIONS.FOLIO_POST,
+    // Tahsilat ve kendi kasası resepsiyonun işi; iade / iptal isteyebilir (onaylayamaz).
+    PERMISSIONS.PAYMENT_RECEIVE,
+    PERMISSIONS.PAYMENT_REFUND,
+    PERMISSIONS.CASH_VIEW,
   ]),
   HOUSEKEEPING: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,
@@ -248,6 +274,11 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.FOLIO_VIEW,
     PERMISSIONS.FOLIO_POST,
     PERMISSIONS.FOLIO_ADJUST,
+    // Tahsilat, kasa mutabakatı ve günlük kur muhasebenin işi.
+    PERMISSIONS.PAYMENT_RECEIVE,
+    PERMISSIONS.PAYMENT_REFUND,
+    PERMISSIONS.CASH_VIEW,
+    PERMISSIONS.EXCHANGE_RATES_MANAGE,
   ]),
   FNB: Object.freeze([PERMISSIONS.ROOMS_VIEW, PERMISSIONS.REQUESTS_VIEW, PERMISSIONS.REQUESTS_MANAGE]),
 });

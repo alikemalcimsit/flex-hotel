@@ -210,7 +210,19 @@ describe('check-in / check-out (entegrasyon)', { skip }, () => {
     }
     for (const amount of extras) await item({ type: 'MINIBAR', source: 'MANUAL', description: 'Minibar', amount });
     for (const amount of payments) {
-      await db.payment.create({ data: { hotelId, folioId: folio.id, method: 'CARD', amount, receivedBy: 'test' } });
+      await db.payment.create({
+        data: {
+          hotelId,
+          folioId: folio.id,
+          reservationId: reservation.id,
+          method: 'CARD',
+          amount,
+          folioAmount: amount,
+          businessDate: new Date(day(0)),
+          postedAt: new Date(),
+          receivedBy: 'test',
+        },
+      });
     }
     return folio;
   }

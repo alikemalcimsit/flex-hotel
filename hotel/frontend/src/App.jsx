@@ -67,6 +67,10 @@ const GuestRequestsPage = lazy(() =>
 );
 const FoliosPage = lazy(() => import('./pages/folios/FoliosPage.jsx').then((m) => ({ default: m.FoliosPage })));
 const StayFolioPage = lazy(() => import('./pages/folios/StayFolioPage.jsx').then((m) => ({ default: m.StayFolioPage })));
+const CashPage = lazy(() => import('./pages/cash/CashPage.jsx').then((m) => ({ default: m.CashPage })));
+const CashIndex = lazy(() => import('./pages/cash/CashPage.jsx').then((m) => ({ default: m.CashIndex })));
+const CashDayTab = lazy(() => import('./pages/cash/CashDayTab.jsx').then((m) => ({ default: m.CashDayTab })));
+const ExchangeRatesTab = lazy(() => import('./pages/cash/ExchangeRatesTab.jsx').then((m) => ({ default: m.ExchangeRatesTab })));
 const ReservationsPage = lazy(() =>
   import('./pages/reservations/ReservationsPage.jsx').then((m) => ({ default: m.ReservationsPage })),
 );
@@ -113,6 +117,12 @@ function RequireRole({ role, children }) {
 function RequirePermission({ permission, children }) {
   const can = useCan();
   return can(permission) ? children : <Navigate to="/" replace />;
+}
+
+/** İzinlerden biri yeterli (ör. kasa bölümü: kasayı gören ya da kuru giren). */
+function RequireAnyPermission({ permissions, children }) {
+  const can = useCan();
+  return permissions.some((permission) => can(permission)) ? children : <Navigate to="/" replace />;
 }
 
 /** Manuel görevler: işin modülüne yetkili olan kendi görevlerini görür (modül 12). */
@@ -212,6 +222,25 @@ export default function App() {
                 </RequirePermission>
               }
             />
+            <Route
+              path="kasa"
+              element={
+                <RequireAnyPermission permissions={[PERMISSIONS.CASH_VIEW, PERMISSIONS.EXCHANGE_RATES_MANAGE]}>
+                  <CashPage />
+                </RequireAnyPermission>
+              }
+            >
+              <Route index element={<CashIndex />} />
+              <Route
+                path="gun"
+                element={
+                  <RequirePermission permission={PERMISSIONS.CASH_VIEW}>
+                    <CashDayTab />
+                  </RequirePermission>
+                }
+              />
+              <Route path="kurlar" element={<ExchangeRatesTab />} />
+            </Route>
             {/* Konuşma adreste: yenileyince açık kalır, bağlantı paylaşılabilir. */}
             <Route
               path="mesajlar/:conversationId?"

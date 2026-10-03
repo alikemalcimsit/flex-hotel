@@ -15,7 +15,6 @@ import {
 import { prisma, prismaUnfiltered } from '../../db.js';
 import { recordAudit } from '../../lib/audit.js';
 import { getBusinessDate } from '../../lib/business-date.js';
-import { encodeCursor, newerThan, parseCursor } from '../../lib/cursor.js';
 import { ConflictError, NotFoundError, ValidationError, rethrowPrismaError } from '../../lib/errors.js';
 import { lockFolios, lockReservations } from '../../lib/locks.js';
 import { buildPage, toSkipTake } from '../../lib/pagination.js';
@@ -25,6 +24,7 @@ import { findActiveStaffByEmail } from '../../lib/staff.js';
 import { writeWithEvents } from '../../lib/write.js';
 import { requestApproval } from '../approvals/service.js';
 import { raiseStaffAlert } from '../notifications/staff-alerts.js';
+import { stayPaymentStatus } from '../payments/service.js';
 import { guestFullName } from '../reservations/guests.js';
 import { getActiveTaxes, getHotelSettings } from '../settings/service.js';
 import {
@@ -56,8 +56,11 @@ import { balanceIsZero, chargeLine, linesTotal, nextWindow, resolvePostingFolio 
  *   işler; giriş / çıkış / iptal geri alınınca kendi işlediği ücreti ters
  *   kayıtla düşer. Aktör kapalıysa bu işler manuel göreve düşer; personel aynı
  *   işi folyo ekranından yapar (aynı fonksiyonlar, aynı tekrar işleme anahtarı).
- * - **Ödeme** (modül 17) `Payment` yazar; folyo kilidini alıp
- *   `refreshFolioTotals` çağırmalıdır (toplamlar kilit altında tutarlı kalır).
+ * - **Ödeme** (modül 17, `payments/service.js`) `Payment` yazar; folyo
+ *   kilidini alıp `refreshFolioTotals` çağırır (toplamlar kilit altında
+ *   tutarlı kalır). Onay bekleyen ödeme / iade ve ödeme iptali folyonun
+ *   kapanmasını engeller; ödemeden sonra bitmiş konaklamanın sıfırlanan
+ *   folyosunu aktör kapatır (`closeFolioIfSettled`).
  *
  * ### Para kuralları
  *
@@ -351,11 +354,14 @@ async function readStayForPosting(tx, hotelId, reservationId) {
  * @param {string} reservationId
  */
 export async function getStayFolios(hotelId, reservationId) {
-  const stay = await prisma.reservation.findFirst({ where: { id: reservationId, hotelId }, select: STAY_HEADER_SELECT });
+  const stay = await prisma.reservation.findFirst({
+    where: { id: reservationId, hotelId },
+    select: { ...STAY_HEADER_SELECT, checkedInAt: true, depositMethod: true, depositAmount: true, depositReference: true },
+  });
   if (!stay) throw new NotFoundError('Konaklama bulunamadı');
   const businessDate = await businessDay(hotelId);
 
-  const [folios, routes, counts, pending] = await Promise.all([
+  const [folios, routes, counts, pending, payments] = await Promise.all([
     prisma.folio.findMany({ where: { hotelId, reservationId }, select: FOLIO_SELECT, orderBy: { window: 'asc' } }),
     prisma.folioRoute.findMany({
       where: { hotelId, reservationId },
@@ -371,8 +377,10 @@ export async function getStayFolios(hotelId, reservationId) {
       WHERE f."hotelId" = ${hotelId} AND f."reservationId" = ${reservationId} AND i."deletedAt" IS NULL
       GROUP BY i."folioId"`,
     pendingRoomCharges(hotelId, stay, businessDate),
+    stayPaymentStatus(prisma, hotelId, stay),
   ]);
   const countBy = new Map(counts.map((row) => [row.folioId, row]));
+  const paymentVoids = await pendingPaymentVoids(prisma, hotelId, folios.map((folio) => folio.id));
 
   return {
     stay: stayHeader(stay),
@@ -380,11 +388,53 @@ export async function getStayFolios(hotelId, reservationId) {
     folios: folios.map((folio) => ({
       ...toFolioDto(folio),
       items: countBy.get(folio.id)?.items ?? 0,
-      pendingVoids: countBy.get(folio.id)?.pendingVoids ?? 0,
+      // Onay bekleyen kalem ve ödeme iptalleri; onay bekleyen ödeme / iade ayrı.
+      pendingVoids: (countBy.get(folio.id)?.pendingVoids ?? 0) + (paymentVoids.get(folio.id) ?? 0),
+      pendingPayments: payments.pendingByFolio.get(folio.id) ?? 0,
     })),
     routes: routes.map((route) => ({ type: route.type, folio: folioRef(route.folio) })),
     roomCharges: pending,
+    // Ödeme (modül 17): onay bekleyen ödeme / iade toplamları, girişte alınan teminatın ödeme durumu.
+    payments: {
+      pendingPayments: payments.pendingPayments,
+      pendingRefunds: payments.pendingRefunds,
+      deposit: payments.deposit,
+    },
   };
+}
+
+/**
+ * Folyoların onay bekleyen ödeme iptali sayısı.
+ * @param {import('@prisma/client').Prisma.TransactionClient | typeof prisma} client
+ * @param {string} hotelId
+ * @param {string[]} folioIds
+ * @returns {Promise<Map<string, number>>}
+ */
+async function pendingPaymentVoids(client, hotelId, folioIds) {
+  if (folioIds.length === 0) return new Map();
+  const rows = await client.payment.groupBy({
+    by: ['folioId'],
+    where: { hotelId, folioId: { in: folioIds }, voidRequestedAt: { not: null } },
+    _count: { _all: true },
+  });
+  return new Map(rows.map((row) => [row.folioId, row._count._all]));
+}
+
+/**
+ * Folyoların onay bekleyen ödeme / iade sayısı (kapatmayı engeller).
+ * @param {import('@prisma/client').Prisma.TransactionClient | typeof prisma} client
+ * @param {string} hotelId
+ * @param {string[]} folioIds
+ * @returns {Promise<Map<string, number>>}
+ */
+async function pendingPaymentCounts(client, hotelId, folioIds) {
+  if (folioIds.length === 0) return new Map();
+  const rows = await client.payment.groupBy({
+    by: ['folioId'],
+    where: { hotelId, folioId: { in: folioIds }, status: 'PENDING' },
+    _count: { _all: true },
+  });
+  return new Map(rows.map((row) => [row.folioId, row._count._all]));
 }
 
 /**
@@ -503,48 +553,6 @@ export async function listFolioItems(hotelId, folioId, query) {
   return {
     items: page.map((row) => toItemDto(row, folio.reservationId)),
     nextCursor: rows.length > query.limit && last ? itemCursor(last) : null,
-  };
-}
-
-/**
- * Folyonun ödemeleri (modül 17 yazar; burada gösterilir), kronolojik, imleçli.
- * @param {string} hotelId
- * @param {string} folioId
- * @param {{ cursor?: string, limit: number }} query
- */
-export async function listFolioPayments(hotelId, folioId, query) {
-  await findFolio(hotelId, folioId);
-  const cursor = parseCursor(query.cursor);
-  const rows = await prisma.payment.findMany({
-    where: { folioId, hotelId, ...(cursor ? newerThan('receivedAt', cursor) : {}) },
-    select: {
-      id: true,
-      method: true,
-      amount: true,
-      currency: true,
-      exchangeRate: true,
-      reference: true,
-      receivedBy: true,
-      receivedAt: true,
-    },
-    orderBy: [{ receivedAt: 'asc' }, { id: 'asc' }],
-    take: query.limit + 1,
-  });
-  const page = rows.slice(0, query.limit);
-  const last = page.at(-1);
-  return {
-    payments: page.map((row) => ({
-      id: row.id,
-      method: row.method,
-      amount: money(row.amount),
-      currency: row.currency,
-      exchangeRate: row.exchangeRate === null ? null : String(row.exchangeRate),
-      converted: money(toDecimal(String(row.amount)).times(row.exchangeRate === null ? 1 : String(row.exchangeRate))),
-      reference: row.reference ?? null,
-      receivedBy: row.receivedBy,
-      receivedAt: iso(row.receivedAt),
-    })),
-    nextCursor: rows.length > query.limit && last ? encodeCursor({ at: last.receivedAt, id: last.id }) : null,
   };
 }
 
@@ -1284,14 +1292,17 @@ export async function closeFolio(hotelId, folioId) {
 async function closeLocked(tx, stage, { hotelId, folioId, actorLabel }) {
   const totals = (await refreshFolioTotals(tx, [folioId])).get(folioId);
   const folio = await findFolio(hotelId, folioId, tx);
-  const [stay, openSiblings, pendingVoids] = await Promise.all([
+  const [stay, openSiblings, pendingVoids, paymentVoids, pendingPayments] = await Promise.all([
     tx.reservation.findFirst({ where: { id: folio.reservationId, hotelId }, select: { status: true } }),
     tx.folio.count({ where: { hotelId, reservationId: folio.reservationId, status: 'OPEN', id: { not: folioId } } }),
     tx.folioItem.count({ where: { hotelId, folioId, voidRequestedAt: { not: null } } }),
+    tx.payment.count({ where: { hotelId, folioId, voidRequestedAt: { not: null } } }),
+    tx.payment.count({ where: { hotelId, folioId, status: 'PENDING' } }),
   ]);
   assertFolio(folio, 'close', {
     balanceZero: balanceIsZero(totals?.balance ?? money(folio.balance)),
-    pendingVoids,
+    pendingVoids: pendingVoids + paymentVoids,
+    pendingPayments,
     lastOpenOfInHouseStay: stay?.status === 'CHECKED_IN' && openSiblings === 0,
   });
   const routed = await tx.folioRoute.findMany({ where: { hotelId, folioId }, select: { reservationId: true } });
@@ -1315,6 +1326,43 @@ async function closeLocked(tx, stage, { hotelId, folioId, actorLabel }) {
   for (const reservationId of new Set(routed.map((route) => route.reservationId))) {
     await stage('folio.routes.changed', { hotelId, reservationId });
   }
+}
+
+/** Konaklaması bitmiş sayılan durumlar: folyo ödemeyle sıfırlanınca kendiliğinden kapanır. */
+const ENDED_STAY_STATUSES = Object.freeze(['CHECKED_OUT', 'CANCELLED', 'NO_SHOW']);
+
+/**
+ * Ödemeden sonra (folyo aktörü, modül 17): konaklaması bitmiş (çıkmış, iptal,
+ * gelmedi) misafirin folyosu bakiyesi sıfırlandıysa kapanır (`folio.closed` →
+ * fatura). Kapatma kuralları aynı (`closeLocked`): bekleyen iptal ya da onay
+ * bekleyen ödeme varsa kapanmaz. İçerideki misafirin folyosuna dokunulmaz.
+ *
+ * @param {string} hotelId
+ * @param {string} folioId
+ * @returns {Promise<{ closed: boolean, reason?: string, balance?: string }>}
+ */
+export async function closeFolioIfSettled(hotelId, folioId) {
+  const seed = await prisma.folio.findFirst({ where: { id: folioId, hotelId }, select: { reservationId: true } });
+  if (!seed) return { closed: false, reason: 'Folyo bulunamadı' };
+  return writeWithEvents(async (tx, stage) => {
+    await lockReservations(tx, hotelId, [seed.reservationId]);
+    await lockFolios(tx, hotelId, [folioId]);
+    const folio = await findFolio(hotelId, folioId, tx);
+    if (folio.status !== 'OPEN') return { closed: false, reason: 'Folyo açık değil' };
+    const stay = await tx.reservation.findFirst({ where: { id: folio.reservationId, hotelId }, select: { status: true } });
+    if (!ENDED_STAY_STATUSES.includes(stay?.status ?? '')) return { closed: false, reason: 'Konaklama sürüyor; folyo açık kalır' };
+    const totals = (await refreshFolioTotals(tx, [folioId])).get(folioId);
+    const balance = totals?.balance ?? money(folio.balance);
+    if (!balanceIsZero(balance)) return { closed: false, reason: 'Bakiye sıfır değil', balance };
+    const [itemVoids, paymentVoids, pendingPayments] = await Promise.all([
+      tx.folioItem.count({ where: { hotelId, folioId, voidRequestedAt: { not: null } } }),
+      tx.payment.count({ where: { hotelId, folioId, voidRequestedAt: { not: null } } }),
+      tx.payment.count({ where: { hotelId, folioId, status: 'PENDING' } }),
+    ]);
+    if (itemVoids + paymentVoids + pendingPayments > 0) return { closed: false, reason: 'Folyoda onay bekleyen iş var' };
+    await closeLocked(tx, stage, { hotelId, folioId, actorLabel: currentActor() });
+    return { closed: true };
+  });
 }
 
 /**
@@ -1596,38 +1644,44 @@ export async function settleStayOnCheckOut(hotelId, reservationId, { lateCheckOu
       feePosted = items[0]?.total ?? null;
     }
 
-    const open = await tx.folio.findMany({ where: { hotelId, reservationId, status: 'OPEN' }, select: { id: true }, orderBy: { window: 'asc' } });
-    await lockFolios(tx, hotelId, open.map((folio) => folio.id));
-    const totals = await refreshFolioTotals(tx, open.map((folio) => folio.id));
-    const pendingByFolio = new Map(
-      (
-        await tx.folioItem.groupBy({
-          by: ['folioId'],
-          where: { hotelId, folioId: { in: open.map((folio) => folio.id) }, voidRequestedAt: { not: null } },
-          _count: { _all: true },
-        })
-      ).map((row) => [row.folioId, row._count._all]),
-    );
+    const open = await tx.folio.findMany({
+      where: { hotelId, reservationId, status: 'OPEN' },
+      select: { id: true, window: true, payerName: true },
+      orderBy: { window: 'asc' },
+    });
+    const openIds = open.map((folio) => folio.id);
+    await lockFolios(tx, hotelId, openIds);
+    const totals = await refreshFolioTotals(tx, openIds);
+    // Bekleyen kalem / ödeme iptali ya da onay bekleyen ödeme / iade olan folyo kapanmaz.
+    const [itemVoids, paymentVoids, pendingPayments] = await Promise.all([
+      tx.folioItem.groupBy({
+        by: ['folioId'],
+        where: { hotelId, folioId: { in: openIds }, voidRequestedAt: { not: null } },
+        _count: { _all: true },
+      }),
+      pendingPaymentVoids(tx, hotelId, openIds),
+      pendingPaymentCounts(tx, hotelId, openIds),
+    ]);
+    const blockedIds = new Set([...itemVoids.map((row) => row.folioId), ...paymentVoids.keys(), ...pendingPayments.keys()]);
     const closed = [];
     const remaining = [];
     for (const folio of open) {
       const balance = totals.get(folio.id)?.balance ?? '0.00';
-      if (balanceIsZero(balance) && !pendingByFolio.get(folio.id)) {
+      if (balanceIsZero(balance) && !blockedIds.has(folio.id)) {
         await closeLocked(tx, stage, { hotelId, folioId: folio.id, actorLabel: currentActor() });
         closed.push(folio.id);
       } else {
-        remaining.push({ folioId: folio.id, balance });
+        remaining.push({ folioId: folio.id, name: folioDisplayName(folio), balance, blocked: blockedIds.has(folio.id) });
       }
     }
     if (remaining.length > 0 && !openBalance) {
-      const due = toMoneyString(remaining.reduce((acc, row) => acc.plus(row.balance), toDecimal(0)));
       await raiseStaffAlert(tx, stage, {
         hotelId,
         kind: 'FOLIO_ATTENTION',
         severity: 'WARNING',
         permission: PERMISSIONS.FOLIO_POST,
-        title: `${stay.confirmationCode}: çıkıştan sonra folyoda bakiye kaldı`,
-        body: `Açık bakiye ${due} ${stay.currency}. Folyoyu kontrol edin; tahsilat ya da iade gerekiyor.`,
+        title: `${stay.confirmationCode}: çıkıştan sonra folyo kapanmadı`,
+        body: remainingFoliosNote(remaining, stay.currency),
         link: `/folyolar/${stay.id}`,
         entityType: 'Reservation',
         entityId: stay.id,
@@ -1636,6 +1690,25 @@ export async function settleStayOnCheckOut(hotelId, reservationId, { lateCheckOu
     }
     return { roomItems: rooms.items.length, feePosted, closed: closed.length, open: remaining.length };
   });
+}
+
+/**
+ * Çıkıştan sonra kapanmayan folyoların açıklaması (zil): pencere başına bakiye;
+ * toplam sıfırsa pencereler dengesizdir (ör. misafirin ödemesi ana pencereye,
+ * şirketin harcaması diğerine düştü) — kalem aktararak düzeltilir.
+ *
+ * @param {Array<{ name: string, balance: string, blocked: boolean }>} remaining
+ * @param {string} currency
+ */
+function remainingFoliosNote(remaining, currency) {
+  const lines = remaining.map((row) => `${row.name}: ${row.balance} ${currency}${row.blocked ? ' (onay bekleyen iş var)' : ''}`);
+  const net = remaining.reduce((acc, row) => acc.plus(row.balance), toDecimal(0));
+  const hint = remaining.every((row) => balanceIsZero(row.balance))
+    ? 'Onay bekleyen iptal / ödeme karara bağlanınca folyoyu kapatın.'
+    : net.isZero()
+      ? 'Toplam sıfır ama pencereler dengesiz: kalemleri ödemenin düştüğü folyoya aktarın ya da doğru folyoda iade / tahsilat yapın.'
+      : 'Tahsilat ya da iade gerekiyor.';
+  return `${lines.join('; ')}. ${hint}`;
 }
 
 /**

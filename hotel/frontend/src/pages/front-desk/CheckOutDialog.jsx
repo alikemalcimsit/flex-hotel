@@ -8,10 +8,12 @@ import { api, apiPost } from '../../lib/api.js';
 import { folioKeys, folioPath } from '../../lib/folios.js';
 import { frontDeskKeys } from '../../lib/front-desk.js';
 import { formatDate, formatMoney } from '../../lib/format.js';
+import { cashKeys } from '../../lib/payments.js';
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 import { reservationKeys } from '../../lib/reservations.js';
 import { validateWith } from '../../lib/validate.js';
 import { toastSuccess } from '../../store/toast.js';
+import { PaymentDialog } from '../folios/PaymentDialogs.jsx';
 
 /** Bu kodlarla dönen hata önizlemeyi tazeler (tutar, tarih ya da durum değişti). */
 const REFRESH_CODES = new Set(['STALE_WRITE', 'INVALID_STATUS', 'FEE_CHANGED', 'EARLY_DEPARTURE', 'BALANCE_DUE']);
@@ -22,8 +24,10 @@ const REFRESH_CODES = new Set(['STALE_WRITE', 'INVALID_STATUS', 'FEE_CHANGED', '
  * Ekran çıkıştan önce her şeyi gösterir: erken ayrılışta bırakılacak geceler ve
  * yeni tutar, geç çıkış ücreti, folyo bakiyesi, çıkışta folyoya işlenecek
  * tutarlar (kalan geceler, geç çıkış — vergileriyle; modül 15), girişte alınan
- * teminat (iade hatırlatması). Bakiye kapanmamışsa çıkış olmaz; tahsilat ödeme
- * ekranında (modül 17) yapılır. Yetkili kişi gerekçe yazarak bakiyeyle çıkış
+ * teminat (iade hatırlatması). Bakiye kapanmamışsa çıkış olmaz; ödeme buradan
+ * alınır (modül 17: konaklamanın ilk açık folyosuna; eşik üstüyse onaya gider,
+ * onaylanana kadar ödenecekten düşmez), iade folyo ekranından (onaylı). Yetkili
+ * kişi gerekçe yazarak bakiyeyle çıkış
  * yapabilir. Yönlendirmeyle başka folyoya (ör. grup hesabı) düşecek tutar
  * misafirin borcu değildir; ayrıca gösterilir.
  *
@@ -34,6 +38,8 @@ export function CheckOutDialog({ reservationId, onClose, onDone }) {
   const can = useCan();
   const canOpenBalance = can(PERMISSIONS.STAYS_OPEN_BALANCE);
   const canViewFolio = can(PERMISSIONS.FOLIO_VIEW);
+  const canReceive = can(PERMISSIONS.PAYMENT_RECEIVE);
+  const [paying, setPaying] = useState(false);
   const preview = useQuery({
     queryKey: frontDeskKeys.checkOut(reservationId),
     queryFn: () => api(`/front-desk/stays/${reservationId}/check-out`),
@@ -123,7 +129,26 @@ export function CheckOutDialog({ reservationId, onClose, onDone }) {
   }
 
   const blockedByBalance = balanceOpen && !(allowOpenBalance && canOpenBalance);
+  // Birden fazla açık folyoda (pencere) para doğru pencereye düşmeli: ödeme folyo ekranından alınır.
+  const multiWindow = (folio?.openFolios ?? 0) > 1;
   const blockedByEarly = early && !confirmEarly;
+
+  // Ödeme formu çıkış penceresinin yerine açılır (iki pencere üst üste değil); kapanınca hesap tazelenir.
+  if (paying) {
+    return (
+      <PaymentDialog
+        mode="payment"
+        target={{ reservationId: reservation.id, name: reservation.guest.name, currency, balance: due }}
+        onClose={() => setPaying(false)}
+        onDone={() => {
+          queryClient.invalidateQueries({ queryKey: folioKeys.all });
+          queryClient.invalidateQueries({ queryKey: cashKeys.all });
+          setServerError(null);
+          preview.refetch();
+        }}
+      />
+    );
+  }
 
   return (
     <Modal
@@ -204,6 +229,9 @@ export function CheckOutDialog({ reservationId, onClose, onDone }) {
             {pendingLines.map((line) => (
               <PendingRow key={`${line.source}-${line.label}`} label={`İşlenecek: ${line.label}`} value={formatMoney(line.total, currency)} />
             ))}
+            {Number(data.pendingPayments) !== 0 && (
+              <PendingRow label="Onay bekleyen ödeme (henüz düşülmedi)" value={formatMoney(data.pendingPayments, currency)} />
+            )}
             <dt className="font-bold text-ink">{Number(due) < 0 ? 'İade edilecek' : 'Ödenecek'}</dt>
             <dd className={`text-right font-bold tabular-nums ${balanceOpen ? 'text-sec-strong' : 'text-success-ink'}`}>
               {formatMoney(String(due).replace('-', ''), currency)}
@@ -216,8 +244,22 @@ export function CheckOutDialog({ reservationId, onClose, onDone }) {
             </p>
           )}
           {balanceOpen && (
-            <Alert tone="danger" title={Number(due) > 0 ? 'Ödenmemiş bakiye var' : 'Misafire iade yapılacak'}>
-              Hesap kapanmadan çıkış yapılmaz. Tahsilatı / iadeyi kasadan yapıp tekrar deneyin.
+            <Alert
+              tone="danger"
+              title={Number(due) > 0 ? 'Ödenmemiş bakiye var' : 'Misafire iade yapılacak'}
+              action={
+                Number(due) > 0 && canReceive && !multiWindow && (
+                  <Button size="sm" icon="wallet" onClick={() => setPaying(true)} disabled={busy}>
+                    Ödeme al
+                  </Button>
+                )
+              }
+            >
+              {Number(due) > 0
+                ? multiWindow
+                  ? `Hesap kapanmadan çıkış yapılmaz. Konaklamanın ${folio.openFolios} açık folyosu var: ödemeyi folyo ekranından ilgili folyoya alın.`
+                  : 'Hesap kapanmadan çıkış yapılmaz. Ödemeyi alın; hesap tazelenir.'
+                : 'Hesap kapanmadan çıkış yapılmaz. İadeyi folyo ekranından isteyin (onaya gider).'}
             </Alert>
           )}
           {balanceOpen && canOpenBalance && (
@@ -248,8 +290,12 @@ export function CheckOutDialog({ reservationId, onClose, onDone }) {
         {deposit && (
           <Alert tone="info" title={`Girişte teminat alındı: ${DEPOSIT_METHOD_LABELS[deposit.method]} · ${formatMoney(deposit.amount, currency)}`}>
             {deposit.method === 'CARD_PREAUTH'
-              ? 'Kart provizyonunu kapatmayı unutmayın.'
-              : 'Teminatı iade edin ya da hesaba mahsup edin.'}
+              ? 'Provizyon ödeme değildir: tutarı kartla tahsil edip provizyonu kapatın.'
+              : deposit.recorded === 'POSTED'
+                ? 'Teminat ödeme olarak işlendi, hesaptan düşüldü; misafirin alacağı kalırsa iade edin.'
+                : deposit.recorded === 'PENDING'
+                  ? 'Teminat ödemesi onay bekliyor; onaylanınca hesaptan düşer.'
+                  : 'Teminat henüz ödeme olarak işlenmedi: folyo ekranından "Teminatı işle".'}
             {deposit.reference ? ` Referans: ${deposit.reference}` : ''}
           </Alert>
         )}

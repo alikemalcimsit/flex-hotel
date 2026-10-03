@@ -1,7 +1,7 @@
 import { defineActor } from '@hotelos/actor-kit';
 
 /**
- * Folyo aktörü (modül 15): konaklamanın hesabını sistemin kendi olaylarından
+ * Folyo aktörü (modül 15, 17): konaklamanın hesabını sistemin kendi olaylarından
  * yürütür.
  *
  * Kapatılırsa hiçbir şey kaybolmaz — yapacağı işler "manuel görevler"
@@ -17,8 +17,9 @@ export const billingWorkerManifest = defineActor({
   description:
     'Misafir giriş yapınca folyoyu açar ve erken giriş ücretini, her gece oda ücretlerini, çıkışta kalan geceleri ' +
     've geç çıkış ücretini işler; bakiyesi kapanan folyoyu kapatır. İptal / gelmedi ücretini, restoran ve minibar ' +
-    'harcamalarını folyoya yazar. Giriş, çıkış ya da iptal geri alınınca kendi işlediği ücreti ters kayıtla düşer. ' +
-    'Kapalıyken bu işler manuel görev olarak düşer.',
+    'harcamalarını folyoya yazar. Girişte alınan nakit / havale teminatını ödeme olarak işler. Giriş, çıkış ya da ' +
+    'iptal geri alınınca kendi işlediği ücreti ve teminatı ters kayıtla düşer. Çıkmış misafirin folyosu ödemeyle ' +
+    'sıfırlanınca folyoyu kapatır (fatura). Kapalıyken bu işler manuel görev olarak düşer.',
   subscribes: [
     'guest.checked_in',
     'guest.checked_out',
@@ -30,6 +31,9 @@ export const billingWorkerManifest = defineActor({
     'folio.room_charges.due',
     'fnb.order.charged',
     'minibar.consumed',
+    'payment.received',
+    'payment.refunded',
+    'payment.voided',
   ],
   publishes: [
     'folio.opened',
@@ -39,6 +43,9 @@ export const billingWorkerManifest = defineActor({
     'folio.closed',
     'folio.reopened',
     'folio.routes.changed',
+    'payment.received',
+    'payment.requested',
+    'payment.voided',
   ],
   retry: { attempts: 3, backoffMs: 400 },
   fallbackModule: 'Folyo',
