@@ -287,6 +287,13 @@ export function CheckOutDialog({ reservationId, onClose, onDone }) {
           )}
         </section>
 
+        {data.openLaundry?.length > 0 && (
+          <Alert tone="warning" title={`Teslim edilmemiş ${data.openLaundry.length} çamaşır siparişi var`}>
+            {data.openLaundry.map((order) => `${order.reference} (${formatMoney(order.total, currency)})`).join(', ')}. Ücret teslimde folyoya
+            düşer; çıkıştan sonra teslim edilirse ve folyo kapanmışsa elle işlenir. Önce teslim edin ya da iptal edin.
+          </Alert>
+        )}
+
         {deposit && (
           <Alert tone="info" title={`Girişte teminat alındı: ${DEPOSIT_METHOD_LABELS[deposit.method]} · ${formatMoney(deposit.amount, currency)}`}>
             {deposit.method === 'CARD_PREAUTH'

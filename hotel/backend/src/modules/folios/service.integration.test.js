@@ -567,7 +567,7 @@ describe('folyo yönetimi (entegrasyon)', { skip }, () => {
           { source: 'MINIBAR', eventId: 'evt-mb' },
         ),
       );
-      assert.deepEqual(result, { reservationId: stay.id, items: 2, total: '151.00' });
+      assert.deepEqual(result, { reservationId: stay.id, items: 2, total: '151.00', late: false });
       // Aynı olay yeniden gelirse ikinci kez yazılmaz.
       await as('billing-worker', () =>
         folios.postExternalCharge(

@@ -554,6 +554,29 @@ export const EVENT_CATALOG = Object.freeze({
   'fnb.order.charged': externalCharge,
   /** Kat görevlisi odada minibar tüketimi girdi. */
   'minibar.consumed': externalCharge,
+  /** Çamaşır siparişi misafire teslim edildi: ücreti folyoya (modül 19). */
+  'laundry.charged': externalCharge,
+
+  /* ── Minibar ve çamaşırhane ekranları (modül 19) ──
+     Kayıt ve pano ekranları bunlarla canlı tazelenir (`EXTRAS_EVENTS`).
+     Folyoya giden ücret yukarıdaki `minibar.consumed` / `laundry.charged`. */
+
+  /** Odanın minibar sayımı girildi (folyoya giden ya da kayıp). */
+  'minibar.recorded': hotelScoped.extend({
+    consumptionId: z.string().uuid(),
+    roomId: z.string().uuid(),
+    reservationId: z.string().uuid().nullable(),
+    chargeTarget: z.enum(['IN_HOUSE', 'LATE', 'NONE']),
+  }),
+  /** Çamaşır siparişi açıldı, sayımı düzeldi ya da durumu değişti. */
+  'laundry.order.changed': hotelScoped.extend({
+    orderId: z.string().uuid(),
+    roomId: z.string().uuid(),
+    reservationId: z.string().uuid(),
+    status: z.enum(['RECEIVED', 'IN_PROCESS', 'READY', 'DELIVERED', 'CANCELLED']),
+  }),
+  /** Minibar / çamaşır fiyat listesi ya da ekspres farkı değişti. */
+  'extras.catalog.changed': hotelScoped.extend({ catalog: z.enum(['MINIBAR', 'LAUNDRY', 'SETTINGS']) }),
 
   /* ── Ödeme (modül 17) ──
      Folyo ekranı (bakiye) ve kasa görünümü bunlarla canlı tazelenir
@@ -762,6 +785,9 @@ export const PAYMENT_EVENTS = Object.freeze(Object.keys(EVENT_CATALOG).filter((n
 
 /** Kasa görünümünü ve kur ekranını etkileyen olaylar (canlı yayın: `cash.changed`). */
 export const CASH_EVENTS = Object.freeze([...PAYMENT_EVENTS, 'exchange_rate.updated']);
+
+/** Minibar / çamaşırhane ekranlarını etkileyen olaylar (canlı yayın: `extras.changed`, modül 19). */
+export const EXTRAS_EVENTS = Object.freeze(['minibar.recorded', 'laundry.order.changed', 'extras.catalog.changed']);
 
 /** Onay kuyruğunu etkileyen event'ler (canlı yayın: `approvals.changed`). */
 export const APPROVAL_EVENTS = Object.freeze([

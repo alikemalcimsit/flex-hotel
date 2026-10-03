@@ -62,6 +62,7 @@ describe('manifest', () => {
         'guest.check_out_reverted',
         'guest.checked_in',
         'guest.checked_out',
+        'laundry.charged',
         'minibar.consumed',
         'payment.received',
         'payment.refunded',
@@ -269,5 +270,38 @@ describe('ödeme (modül 17)', () => {
     await worker.handle({ ...stay, earlyCheckInFee: null, deposit: { method: 'CASH', amount: '500.00' } }, envelope('guest.checked_in'));
     assert.equal(calls.service.length, 0);
     assert.match(calls.manualTasks[0].title, /folyo açılacak; teminat \(500\.00\) ödeme olarak işlenecek/);
+  });
+});
+
+describe('çamaşır ve geç kalem (modül 19)', () => {
+  const laundry = { hotelId: HOTEL, reservationId: RESERVATION, roomId: ROOM, reference: 'LND-3XH8PA', items: [{ description: 'Gömlek — Yıkama + ütü', unitPrice: '120.00', quantity: 2 }] };
+
+  it('teslim edilen çamaşır olay kimliğiyle çamaşırhane kalemi olarak işlenir', async () => {
+    const { worker, calls } = makeHarness({ service: { postExternalCharge: async (...args) => (calls.service.push({ args }), { reservationId: RESERVATION, items: 1, total: '240.00' }) } });
+    await worker.handle(laundry, envelope('laundry.charged', 'evt-l'));
+    assert.deepEqual(calls.service[0].args.slice(2), [{ source: 'LAUNDRY', eventId: 'evt-l' }]);
+    assert.equal(calls.activity[0].message, 'Çamaşır siparişi LND-3XH8PA folyoya işlendi (240.00)');
+  });
+
+  it('çıkmış misafirin açık folyosuna yazılan kalem izde geç kalem diye görünür', async () => {
+    const { worker, calls } = makeHarness({ service: { postExternalCharge: async () => ({ reservationId: RESERVATION, items: 2, total: '91.00', late: true }) } });
+    await worker.handle({ ...laundry, reference: 'MB-7K2Q9X' }, envelope('minibar.consumed'));
+    assert.match(calls.activity[0].message, /MB-7K2Q9X folyoya işlendi \(91\.00; çıkış sonrası geç kalem\)/);
+  });
+
+  it('folyosu kapalı misafirin çamaşırı tekrar denenmeden folyo görevine düşer', async () => {
+    const { worker, calls } = makeHarness({
+      service: {
+        postExternalCharge: async () => {
+          const error = new Error('Misafir çıkış yaptı ve folyosu kapalı; folyoyu yeniden açıp harcamayı elle işleyin ya da kayıp yazın.');
+          error.statusCode = 409;
+          throw error;
+        },
+      },
+    });
+    await worker.handle(laundry, envelope('laundry.charged'));
+    assert.equal(calls.manualTasks.length, 1);
+    assert.equal(calls.manualTasks[0].title, 'Çamaşır siparişi LND-3XH8PA folyoya elle işlenecek');
+    assert.match(calls.manualTasks[0].description, /folyosu kapalı/);
   });
 });

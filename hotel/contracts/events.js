@@ -95,6 +95,11 @@ export const EVENT_LABELS = Object.freeze({
   'payment.voided': 'Ödeme iptal edildi',
   'payment.void_declined': 'Ödeme iptali reddedildi',
   'exchange_rate.updated': 'Döviz kuru girildi',
+
+  'laundry.charged': 'Çamaşır siparişi odaya yazıldı',
+  'minibar.recorded': 'Minibar sayımı girildi',
+  'laundry.order.changed': 'Çamaşır siparişi değişti',
+  'extras.catalog.changed': 'Minibar / çamaşır fiyat listesi değişti',
 });
 
 /**

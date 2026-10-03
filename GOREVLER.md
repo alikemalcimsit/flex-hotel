@@ -1554,13 +1554,71 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 >   (`[coalesce(roomSince, checkIn), checkOut)` → `roomId`). Oda ücreti ve
 >   kat hizmeti raporu `reservation.roomId`'ye tek başına bakmamalı.
 >   `modules/plan/rules.js` → `summarizeDays` aynı hesabı yapıyor (örnek).
+
+### 19. Çamaşırhane & minibar — arkadaşın
 **Gün sonu:** Kat görevlisi odadan tüketilen minibar ürünlerini giriyor, çamaşır siparişi alınıyor; ikisi de folyoya otomatik yansıyor.
-- [ ] Backend: MinibarItem, MinibarConsumption, LaundryOrder tabloları + API
-- [ ] Backend: tüketim kaydı → `minibar.consumed` event → folyo kalemi
-- [ ] Ekran: Minibar ürün listesi + fiyat
-- [ ] Ekran: Oda bazlı tüketim girişi (mobil; oda seç, ürün + adet)
-- [ ] Ekran: Çamaşır siparişi (oda, parça listesi, teslim tarihi, durum)
-- [ ] Ekran: Günlük minibar / çamaşır raporu
+- [x] Backend: MinibarItem, MinibarConsumption, LaundryOrder tabloları + API
+- [x] Backend: tüketim kaydı → `minibar.consumed` event → folyo kalemi
+- [x] Ekran: Minibar ürün listesi + fiyat
+- [x] Ekran: Oda bazlı tüketim girişi (mobil; oda seç, ürün + adet)
+- [x] Ekran: Çamaşır siparişi (oda, parça listesi, teslim tarihi, durum)
+- [x] Ekran: Günlük minibar / çamaşır raporu
+
+> **📌 Modül 19 tamamlandı (4 Ekim 2026 — Ahmet).** (Başlık modül 5 commit'inde yanlışlıkla silinmişti; geri kondu.)
+>
+> **Veri** (migration `20261004090000_minibar_laundry`):
+> - `MinibarItem` (kod otel içinde tekil — kısmi index; kategori, fiyat, odadaki standart adet, satışta / pasif, sıra),
+>   `MinibarConsumption` (oda sayım **fişi**: kime yazıldı — `IN_HOUSE` / `LATE` / `NONE` kayıp, fiş no `MB-XXXXXX`,
+>   iş günü, toplam, kayıp gerekçesi, istek kimliği, folyoya giden olay `eventId`) + satırlar (ürünün o anki adı / fiyatı).
+> - `LaundryItem` (parça × hizmet: yıkama + ütü / kuru temizleme / yalnız ütü), `LaundryOrder` (sipariş no `LND-XXXXXX`,
+>   durum alındı → yıkamada → hazır → teslim / iptal, ekspres + sipariş anındaki yüzde, ara toplam + fark = toplam,
+>   teslim zamanı, alındığı / teslim edildiği iş günü, teslimde folyoya giden olay `chargeEventId`, iptal izi) + satırlar.
+> - Otel: `laundryExpressPct` (varsayılan %50). Folyo kalem kaynağı: `LAUNDRY`. Kısıtlar: satır = fiyat × adet, toplam
+>   tutarlı, kayıpsa konaklama yok + gerekçe var, durum izleri eksiksiz.
+>
+> **Kararlar (kullanıcı, 4 Ekim 2026):** çamaşır **teslimde** folyoya (iptal edilen hiç işlenmez); çıkıştan sonra bulunan
+> minibar **açık folyoya geç kalem**, folyo kapandıysa folyo yetkilisine görev.
+>
+> **Minibar:** oda numarasıyla açılır; ekran odadaki misafiri ve **son 24 saatte odadan ayrılanları** (çıkış yapan ya da
+> başka odaya taşınan — `RoomStaySegment`) gösterir. Fiş odadaki / ayrılan misafire yazılırsa `minibar.consumed` ile
+> folyoya gider (folyo aktörü; minibar vergisiyle, olay iki kez gelse de tek kalem). Kimse yoksa **kayıp** (gerekçe
+> zorunlu, folyoya gitmez). Seçilen misafir bu arada değiştiyse fiş yazılmaz (`STAY_CHANGED`; rezervasyon → oda kilidi).
+> Aynı odaya son 24 saatteki sayımlar uyarı olarak görünür (çift giriş). Fiş silinmez, değişmez: düzeltme folyodaki kalem
+> iptaliyle. Fişin durumu: işlendi / işleniyor / personele düştü (açık görev) / kayıp — ek kolon tutulmaz, kalemin anahtarı
+> ve görevden okunur (sayfa başına iki sorgu).
+>
+> **Çamaşırhane:** sipariş içerideki misafir adına (kilit altında doğrulanır), teslim zamanı ileride ve en fazla 7 gün.
+> Sayım düzeltmesi alındı / yıkamada iken; siparişteki parça **eski fiyatını korur**, yeni parça güncel fiyatla. Durum
+> ileri atlanabilir, geri dönülmez; her geçiş satır kilidi + sürüm damgasıyla (aynı siparişi iki kişi teslim edip ücreti
+> iki kez yazamaz — test edildi). Teslimde `laundry.charged`: parça satırları + **ekspres farkı ayrı satır**. Çıkış
+> penceresi teslim edilmemiş siparişi uyarır.
+>
+> **Folyo (modül 15'te değişen):** `postExternalCharge` çamaşırı (`LAUNDRY`) işler; konaklama açıkça verilmiş ve misafir
+> çıkmışsa **açık folyosuna geç kalem**; açık folyosu yoksa yeni folyo açmaz, `FOLIO_CLOSED` → aktörde görev.
+>
+> **API** (`/extras`): `GET /rooms/lookup`, `GET /minibar/items/active`, `GET /laundry/items/active`,
+> `POST|GET /minibar/consumptions` (201 / aynı istek 200; günün fişleri imleçli), `GET|POST /laundry/orders` (görünüm:
+> açık / geciken / teslim / iptal; oda no, sipariş no, misafir adı araması; sayfalı), `GET /laundry/orders/:id`,
+> `PUT /laundry/orders/:id/lines`, `POST /laundry/orders/:id/status`, `GET /report`, `GET|POST|PUT|DELETE
+> /minibar/items` ve `/laundry/items`, `GET|PUT /laundry/settings`. İzinler: `extras.view` (kat, resepsiyon, müdür,
+> muhasebe), `minibar.post` ve `laundry.post` (kat, resepsiyon, müdür), `extras.manage` (müdür, muhasebe).
+> Olaylar: `minibar.recorded`, `laundry.order.changed`, `extras.catalog.changed` (kanal `extras.changed`), `laundry.charged`.
+>
+> **Ekranlar** (`/ek-hizmetler`): **Minibar girişi** (telefon için: oda aç, büyük +/− düğmeleri, kime yazılsın, son
+> sayımlar uyarısı, alt şeritte anlık toplam), **Minibar kayıtları** (gün, folyo durumu, folyoya bağlantı), **Çamaşırhane**
+> panosu (görünümler, arama, geciken kırmızı, yeni sipariş / sayım / adım / teslim / iptal diyalogları, canlı),
+> **Günlük rapor** (minibar yazılan / geç / kayıp, ürün ve personel; çamaşır alınan / teslim geliri / hizmet / geciken),
+> **Fiyat listeleri** (minibar, çamaşır, ekspres farkı).
+>
+> **2500 kişi için:** fişler `(hotelId, businessDate, recordedAt, id)` imleçli; oda sayımları `(roomId, recordedAt)`;
+> pano `(hotelId, status, dueAt, id)` ve `(hotelId, status, statusChangedAt, id)`; rapor tek GROUP BY'larla; sipariş no
+> araması tekil index'le tam eşleşme; giriş ekranının ürün listesi satıştaki ürün sınırıyla (120 / 150); canlı tazeleme
+> seyreltilmiş. Test: kurallar 9 + sözleşme 9 + aktör 3 birim; entegrasyon 11.
+>
+> **Devir:**
+> - **Modül 14 (housekeeping):** oda temizliği görevine "minibar sayıldı" adımı bağlanabilir (`minibar.recorded`).
+> - **Modül 44 (stok):** fiş satırları minibar stok çıkışıdır (`MinibarConsumptionLine`, kayıplar dahil).
+> - **Modül 39 / 41 (restoran, oda servisi):** geç kalem kuralı `postExternalCharge`'da hazır (konaklama ver).
 
 ### 20. Teknik servis / arıza-bakım — Ali Kemal
 **Gün sonu:** "204 klima bozuk" kaydı açılıyor, teknisyene gidiyor, oda gerekirse bakıma alınıyor, çözülünce kapanıyor.

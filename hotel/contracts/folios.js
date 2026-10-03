@@ -68,6 +68,7 @@ export const FOLIO_ITEM_SOURCES = Object.freeze([
   'NO_SHOW',
   'FNB_ORDER',
   'MINIBAR',
+  'LAUNDRY',
   'REVERSAL',
 ]);
 
@@ -80,6 +81,7 @@ export const FOLIO_ITEM_SOURCE_LABELS = Object.freeze({
   NO_SHOW: 'Gelmedi ücreti',
   FNB_ORDER: 'Restoran siparişi',
   MINIBAR: 'Minibar tüketimi',
+  LAUNDRY: 'Çamaşırhane siparişi',
   REVERSAL: 'İptal kaydı',
 });
 
