@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from './App.jsx';
+import { useAuthStore } from './store/auth.js';
 import './index.css';
 
 /**
@@ -30,6 +31,20 @@ const queryClient = new QueryClient({
       retry: false,
     },
   },
+});
+
+/**
+ * Oturum kapanınca ya da başka biri girince önbellek boşalır. Resepsiyon
+ * bilgisayarı ortak kullanılır: önceki kişinin misafir listesi, folyosu ya da
+ * kayıp eşya fotoğrafları bir sonraki kişiye (izni olmasa da) bir an bile
+ * görünmemeli.
+ */
+let cachedFor = useAuthStore.getState().user?.email ?? null;
+useAuthStore.subscribe((state) => {
+  const actor = state.user?.email ?? null;
+  if (actor === cachedFor) return;
+  cachedFor = actor;
+  queryClient.clear();
 });
 
 ReactDOM.createRoot(document.getElementById('root')).render(

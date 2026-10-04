@@ -68,6 +68,16 @@ export const AUDIT_ENTITY_LABELS = Object.freeze({
   Approval: 'Onay',
   User: 'Kullanıcı',
   RolePermission: 'Rol izinleri',
+  Folio: 'Folyo',
+  FolioItem: 'Folyo kalemi',
+  RoomChargeRun: 'Gece oda ücreti çalışması',
+  Payment: 'Ödeme',
+  ExchangeRate: 'Döviz kuru',
+  MinibarItem: 'Minibar ürünü',
+  MinibarConsumption: 'Minibar fişi',
+  LaundryItem: 'Çamaşır fiyatı',
+  LaundryOrder: 'Çamaşır siparişi',
+  LostItem: 'Kayıp eşya',
 });
 
 export const AUDIT_ENTITIES = Object.freeze(Object.keys(AUDIT_ENTITY_LABELS));

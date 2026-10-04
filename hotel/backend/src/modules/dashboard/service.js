@@ -14,6 +14,7 @@ import { getFrontDeskSummary } from '../front-desk/service.js';
 import { planDays, summarizeDays } from '../plan/rules.js';
 import { loadSummarySource } from '../plan/service.js';
 import { getAvailabilityCalendar } from '../rooms/service.js';
+import { soldNightSql } from '../rooms/sql.js';
 import { getActiveTaxes, getHotelSettings } from '../settings/service.js';
 import { dayRow, guestMix, includedRoomTaxRate, revenueByDay, roomStates, roomTypeRows, weekWindow } from './rules.js';
 
@@ -54,7 +55,7 @@ const cache = createReadCache({ ttlMs: CACHE_TTL_MS, maxEntries: CACHE_MAX_ENTRI
 
 /**
  * Pencerenin gece gelirleri (gün × para birimi). Sayılan gece kuralı oda
- * planınınkiyle aynıdır (`summarizeDays` → `countsNight`).
+ * planınınkiyle aynıdır (`countsSoldNight` / SQL'i `soldNightSql`).
  *
  * @param {string} hotelId
  * @param {{ from: Date, to: Date }} window
@@ -76,8 +77,7 @@ function loadNightRevenue(hotelId, { from, to }, businessDate) {
       AND n."date" < ${sqlTimestamp(to)}
       AND n."deletedAt" IS NULL
       AND r."deletedAt" IS NULL
-      AND (r."status" IN ('PENDING', 'CONFIRMED', 'CHECKED_IN')
-           OR (r."status" = 'CHECKED_OUT' AND n."date" < ${sqlTimestamp(businessDate)}))
+      AND ${soldNightSql(sqlTimestamp(businessDate))}
     GROUP BY n."date", r."currency"`;
 }
 

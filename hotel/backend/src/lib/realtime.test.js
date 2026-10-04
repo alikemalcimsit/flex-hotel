@@ -98,6 +98,7 @@ describe('registerRealtimeBridge', () => {
       'folioId',
       'waitlistId',
       'taskId',
+      'itemId',
       'actorName',
       'spreadMs',
     ].sort());

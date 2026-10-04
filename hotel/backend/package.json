@@ -13,7 +13,8 @@
     "db:generate": "prisma generate",
     "db:migrate": "dotenv -e ../../.env -- prisma migrate dev",
     "db:seed": "node --env-file-if-exists=../../.env prisma/seed.js",
-    "db:studio": "dotenv -e ../../.env -- prisma studio"
+    "db:studio": "dotenv -e ../../.env -- prisma studio",
+    "mcp:reporting": "node --env-file-if-exists=../../.env scripts/reporting-mcp.js"
   },
   "prisma": {
     "seed": "node --env-file-if-exists=../../.env prisma/seed.js"
@@ -29,6 +30,7 @@
     "@hotelos/core": "*",
     "@hotelos/hotel-contracts": "*",
     "@hotelos/llm": "*",
+    "@hotelos/mcp-server": "*",
     "@hotelos/notification-worker": "*",
     "@hotelos/reservation-worker": "*",
     "@hotelos/room-worker": "*",

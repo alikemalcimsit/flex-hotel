@@ -73,6 +73,9 @@ const CashDayTab = lazy(() => import('./pages/cash/CashDayTab.jsx').then((m) => 
 const ExchangeRatesTab = lazy(() => import('./pages/cash/ExchangeRatesTab.jsx').then((m) => ({ default: m.ExchangeRatesTab })));
 const ExtrasPage = lazy(() => import('./pages/extras/ExtrasPage.jsx').then((m) => ({ default: m.ExtrasPage })));
 const ExtrasIndex = lazy(() => import('./pages/extras/ExtrasPage.jsx').then((m) => ({ default: m.ExtrasIndex })));
+const LostItemsPage = lazy(() => import('./pages/lost-items/LostItemsPage.jsx').then((m) => ({ default: m.LostItemsPage })));
+const LostItemDetailPage = lazy(() => import('./pages/lost-items/LostItemDetailPage.jsx').then((m) => ({ default: m.LostItemDetailPage })));
+const RevenueReportPage = lazy(() => import('./pages/reports/RevenueReportPage.jsx').then((m) => ({ default: m.RevenueReportPage })));
 const MinibarEntryTab = lazy(() => import('./pages/extras/MinibarEntryTab.jsx').then((m) => ({ default: m.MinibarEntryTab })));
 const MinibarRecordsTab = lazy(() => import('./pages/extras/MinibarRecordsTab.jsx').then((m) => ({ default: m.MinibarRecordsTab })));
 const LaundryTab = lazy(() => import('./pages/extras/LaundryTab.jsx').then((m) => ({ default: m.LaundryTab })));
@@ -300,6 +303,30 @@ export default function App() {
                 }
               />
             </Route>
+            <Route
+              path="kayip-esya"
+              element={
+                <RequirePermission permission={PERMISSIONS.LOST_ITEMS_VIEW}>
+                  <LostItemsPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="raporlar/gelir"
+              element={
+                <RequirePermission permission={PERMISSIONS.REPORTS_VIEW}>
+                  <RevenueReportPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="kayip-esya/:id"
+              element={
+                <RequirePermission permission={PERMISSIONS.LOST_ITEMS_VIEW}>
+                  <LostItemDetailPage />
+                </RequirePermission>
+              }
+            />
             {/* Konuşma adreste: yenileyince açık kalır, bağlantı paylaşılabilir. */}
             <Route
               path="mesajlar/:conversationId?"

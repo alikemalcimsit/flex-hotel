@@ -294,6 +294,18 @@ export function CheckOutDialog({ reservationId, onClose, onDone }) {
           </Alert>
         )}
 
+        {data.lostItems?.matched?.length > 0 && (
+          <Alert tone="warning" title={`Misafirin teslim bekleyen ${data.lostItems.matched.length} kayıp eşyası var`}>
+            {data.lostItems.matched.map((item) => `${item.reference} ${item.description} (${item.storageLocation})`).join(', ')}. Çıkışta teslim edip
+            kayıp eşya ekranından "Teslim et" ile kapatın.
+          </Alert>
+        )}
+        {data.lostItems?.foundInRoom?.length > 0 && (
+          <Alert tone="info" title={`Odasında bulunmuş, sahibi belirlenmemiş ${data.lostItems.foundInRoom.length} eşya`}>
+            {data.lostItems.foundInRoom.map((item) => `${item.reference} ${item.description}`).join(', ')}. Misafire sorun; onunsa kayıp eşya ekranından eşleştirip teslim edin.
+          </Alert>
+        )}
+
         {deposit && (
           <Alert tone="info" title={`Girişte teminat alındı: ${DEPOSIT_METHOD_LABELS[deposit.method]} · ${formatMoney(deposit.amount, currency)}`}>
             {deposit.method === 'CARD_PREAUTH'

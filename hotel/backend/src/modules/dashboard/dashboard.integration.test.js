@@ -214,11 +214,11 @@ describe('günlük durum ekranı (modül 13, entegrasyon)', { skip }, () => {
     assert.equal(today.revpar, '396.83', 'net gelir / 9 satılabilir oda');
     assert.deepEqual(today.otherCurrencies, []);
 
-    // Dün gece (gerçekleşen): R2 + R3 + R4 (çıkmadan önceki gece) + R8 (gelmese de onaylı).
+    // Dün gece (gerçekleşen): R2 + R3 + R4 (çıkmadan önceki gece). R8 gelmedi: onaylı olsa da oda boş kaldı.
     assert.equal(data.yesterday.date, iso(-1));
-    assert.equal(data.yesterday.sold, 4);
-    assert.equal(data.yesterday.grossRevenue, '3600.00');
-    assert.equal(data.yesterday.revenue, '3214.29');
+    assert.equal(data.yesterday.sold, 3);
+    assert.equal(data.yesterday.grossRevenue, '2900.00');
+    assert.equal(data.yesterday.revenue, '2589.29');
 
     // Ön büro: gelecekler R1 + R5 + R8 (R8 dünden kalma), gidecek R3; R4 bugün çıktı; içeride R2 + R3.
     assert.deepEqual(data.arrivals, { expected: 3, unassigned: 2, checkedIn: 0, late: 1 });
@@ -276,10 +276,11 @@ describe('günlük durum ekranı (modül 13, entegrasyon)', { skip }, () => {
     assert.equal(week.includedTaxRate, '12');
 
     const expected = [
-      // gün, satılan, brüt gelir — R4 geçmiş gecelerde sayılır, erken çıkıştan sonraki gecelerde sayılmaz
+      // gün, satılan, brüt gelir — R4 geçmiş gecelerde sayılır, erken çıkıştan sonraki gecelerde sayılmaz;
+      // R8 dün gelmedi: dün boş, bugün (oda hâlâ tutuluyor) eldeki
       [iso(-3), 1, '800.00'],
       [iso(-2), 2, '1700.00'],
-      [iso(-1), 4, '3600.00'],
+      [iso(-1), 3, '2900.00'],
       [iso(0), 4, '4000.00'],
       [iso(1), 1, '1000.00'],
       [iso(2), 0, '0.00'],
@@ -289,8 +290,8 @@ describe('günlük durum ekranı (modül 13, entegrasyon)', { skip }, () => {
       week.days.map((row) => [row.date, row.sold, row.grossRevenue]),
       expected,
     );
-    assert.equal(week.days[2].revenue, '3214.29');
-    assert.equal(week.days[2].adr, '803.57');
+    assert.equal(week.days[2].revenue, '2589.29');
+    assert.equal(week.days[2].adr, '863.10');
     assert.equal(week.days[5].adr, null, 'satış olmayan günde ADR yok');
 
     // Oda planı ekranı aynı günler için aynı doluluğu gösterir.

@@ -193,3 +193,25 @@ describe('hız sınırı', () => {
     }
   });
 });
+
+describe('kayıp eşya fotoğrafı gövde sınırı (modül 21)', () => {
+  const url = '/lost-items/6f1c1d3e-8b7a-4a52-9a4e-1c2b3d4e5f60/photos';
+  /** @param {number} bytes base64 metnin uzunluğu */
+  const payload = (bytes) => JSON.stringify({ contentType: 'image/jpeg', image: 'A'.repeat(bytes), thumbnail: 'AAAA' });
+
+  it('varsayılan 1 MB sınırının üstündeki fotoğraf gövdesini kabul eder (oturum denetimine kadar gelir)', async () => {
+    const response = await app.inject({ method: 'POST', url, headers: { 'content-type': 'application/json' }, payload: payload(1_900_000) });
+    assert.notEqual(response.statusCode, 413);
+    assert.equal(response.statusCode, 401);
+  });
+
+  it('sınırı aşan gövdeyi okumadan reddeder', async () => {
+    const response = await app.inject({ method: 'POST', url, headers: { 'content-type': 'application/json' }, payload: payload(3_000_000) });
+    assert.equal(response.statusCode, 413);
+  });
+
+  it('başka uçların sınırı değişmez', async () => {
+    const response = await app.inject({ method: 'POST', url: '/lost-items', headers: { 'content-type': 'application/json' }, payload: payload(1_900_000) });
+    assert.equal(response.statusCode, 413);
+  });
+});

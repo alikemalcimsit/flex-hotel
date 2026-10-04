@@ -132,6 +132,34 @@ export async function api(path, options = {}) {
 }
 
 /**
+ * Yetki isteyen dosya (ör. kayıp eşya fotoğrafı). `<img src>` oturum başlığı
+ * gönderemez; dosya oturumla çekilip `Blob` olarak döner (token süresi
+ * dolmuşsa bir kez yenilenir). Sunucunun önbellek başlığı geçerlidir: aynı
+ * fotoğraf ikinci kez ağdan inmez.
+ *
+ * @param {string} path
+ * @param {{ signal?: AbortSignal }} [options]
+ * @returns {Promise<Blob>}
+ */
+export async function apiBlob(path, { signal } = {}) {
+  const send = async () => {
+    try {
+      return await fetch(`${API_URL}${path}`, { signal: signal ?? AbortSignal.timeout(REQUEST_TIMEOUT_MS), headers: authHeader() });
+    } catch (error) {
+      if (error?.name === 'AbortError') throw error;
+      throw new ApiError('Dosya indirilemedi. Bağlantıyı kontrol edin.', { code: 'NETWORK' });
+    }
+  };
+  let response = await send();
+  if (response.status === 401 && (await refreshAccessToken())) response = await send();
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new ApiError(body?.error ?? `Dosya açılamadı (HTTP ${response.status})`, { code: body?.code, status: response.status });
+  }
+  return response.blob();
+}
+
+/**
  * Sorgu parametrelerini yolun sonuna ekler; boş/undefined olanları atar.
  * @param {string} path
  * @param {Record<string, unknown>} [params]

@@ -1,5 +1,5 @@
 import { addDays, DAY_MS, eachNight, nightCount, toIsoDay, toUtcDayStart } from '@hotelos/core';
-import { consumesInventory, INVENTORY_REMOVING_BLOCK_TYPE, openSliceStart } from '../rooms/rules.js';
+import { consumesInventory, countsSoldNight, INVENTORY_REMOVING_BLOCK_TYPE, openSliceStart } from '../rooms/rules.js';
 
 /**
  * Oda planının (rack chart) saf çekirdeği — veritabanı, HTTP veya Prisma bilmez.
@@ -162,20 +162,18 @@ export function buildRoomSegments({ rooms, reservations, blocks, segments = [], 
 }
 
 /**
- * Bir konaklama verilen gecede odayı/satışı tüketiyor mu?
- *
- * Bekleyen, onaylı ve içerideki konaklama her gecesinde tüketir. Çıkış yapmış
- * konaklama yalnızca **geçmiş** gecelerde (misafir gerçekten kaldı) sayılır:
- * erken çıkışta rezervasyonun çıkış tarihi güncellenmemiş olabilir ve ileriki
- * geceleri dolu göstermek yanlış olur.
+ * Bir konaklama verilen geceyi satılmış (dolu) sayar mı — tanım
+ * `countsSoldNight`'ta (günlük durum, gelir raporu ve forecast'la ortak):
+ * iş günü ve sonrası opsiyonlu, kesin ve içerideki konaklama; geçmiş gecede
+ * yalnızca gerçekleşen (içeride ya da çıkmış) konaklama. Gelmeyen misafirin
+ * geçmiş gecesi dolu sayılmaz; çıkmış konaklamanın ileriki geceleri de.
  *
  * @param {{ status: string }} reservation
  * @param {number} nightTime gece başlangıcı (ms)
  * @param {number} businessTime iş günü başlangıcı (ms)
  */
 function countsNight(reservation, nightTime, businessTime) {
-  if (consumesInventory(reservation)) return true;
-  return reservation.status === CHECKED_OUT && nightTime < businessTime;
+  return countsSoldNight(reservation, nightTime < businessTime);
 }
 
 /**
@@ -187,8 +185,9 @@ function countsNight(reservation, nightTime, businessTime) {
  *   Çıkış yapmış konaklamalar da sayılır: öğlen "8 çıkıştan 5'i yapıldı" okunmalı,
  *   sayı gün içinde azalmamalı.
  * - `stayovers`: o gece kalan ama o gün girmeyen konaklama.
- * - `sold`: o geceyi tüketen konaklama (dolu + oda bekleyen). Geçmiş gecelerde
- *   çıkış yapmış konaklamalar da dahil — dünün doluluğu sonradan düşmez.
+ * - `sold`: o geceyi satılmış sayan konaklama (dolu + oda bekleyen; bkz.
+ *   `countsSoldNight`). Geçmiş gecelerde yalnızca gerçekleşen konaklama:
+ *   çıkış yapan dahil (dünün doluluğu sonradan düşmez), gelmeyen hariç.
  * - `sellable`: toplam oda − arızalı (hizmet dışı odalar satışta sayılır).
  * - `occupancyPct`: sold / sellable.
  *

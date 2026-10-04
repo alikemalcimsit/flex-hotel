@@ -2,6 +2,7 @@ import {
   APPROVAL_EVENTS,
   CASH_EVENTS,
   EXTRAS_EVENTS,
+  LOST_ITEM_EVENTS,
   FOLIO_EVENTS,
   LIVE_VIEW_EVENTS,
   PAYMENT_EVENTS,
@@ -84,6 +85,9 @@ export const CASH_CHANNEL = 'cash.changed';
 /** Minibar kayıtları, çamaşır panosu ve fiyat listeleri (modül 19). */
 export const EXTRAS_CHANNEL = 'extras.changed';
 
+/** Kayıp eşya listesi ve eşya ekranı (modül 21). */
+export const LOST_ITEMS_CHANNEL = 'lost-items.changed';
+
 /**
  * Aktivite akışı kanalı (modül 10). Olaydan değil aktivite satırından beslenir
  * (bkz. `registerActivityBridge`); yalnızca akış ekranı açık paneller abone olur.
@@ -107,6 +111,7 @@ const CHANNEL_EVENTS = Object.freeze({
   [FOLIOS_CHANNEL]: [...FOLIO_EVENTS, ...PAYMENT_EVENTS],
   [CASH_CHANNEL]: CASH_EVENTS,
   [EXTRAS_CHANNEL]: EXTRAS_EVENTS,
+  [LOST_ITEMS_CHANNEL]: LOST_ITEM_EVENTS,
 });
 
 /** @param {string} hotelId */
@@ -209,6 +214,8 @@ export function registerRealtimeBridge(io, logger = console) {
         folioId: payload.folioId ?? null,
         waitlistId: payload.waitlistId ?? null,
         taskId: payload.taskId ?? null,
+        // Kayıp eşya (modül 21): eşya ekranı yalnızca kendi eşyasının haberiyle tazelenir.
+        itemId: payload.itemId ?? null,
         actorName: payload.actorName ?? null,
         // Zil: uyarı kimliği, türü ve kime gittiği (içerik yok).
         alertId: payload.alertId ?? null,

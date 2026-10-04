@@ -578,6 +578,26 @@ export const EVENT_CATALOG = Object.freeze({
   /** Minibar / çamaşır fiyat listesi ya da ekspres farkı değişti. */
   'extras.catalog.changed': hotelScoped.extend({ catalog: z.enum(['MINIBAR', 'LAUNDRY', 'SETTINGS']) }),
 
+  /* ── Kayıp eşya (modül 21) ──
+     Liste ve eşya ekranı bunlarla canlı tazelenir (`LOST_ITEM_EVENTS`).
+     Yükte yalnızca kimlikler: açıklama ve misafir bilgisi socket'e çıkmaz. */
+
+  /** Bulunan eşya kaydedildi. */
+  'lost_item.recorded': hotelScoped.extend({
+    itemId: z.string().uuid(),
+    roomId: z.string().uuid().nullable(),
+    valuable: z.boolean(),
+  }),
+  /** Eşya değişti: bilgi, fotoğraf, eşleşme, iletişim notu, teslim ya da kapatma. */
+  'lost_item.changed': hotelScoped.extend({
+    itemId: z.string().uuid(),
+    status: z.enum(['STORED', 'MATCHED', 'RETURNED', 'DISPOSED']),
+    change: z.enum(['UPDATED', 'PHOTO_ADDED', 'PHOTO_REMOVED', 'MATCHED', 'UNMATCHED', 'CONTACTED', 'RETURNED', 'DISPOSED', 'PHOTOS_PURGED']),
+    guestId: z.string().uuid().nullable().default(null),
+  }),
+  /** Saklama süreleri değişti ("süresi dolan" listesi yeniden hesaplanır). */
+  'lost_items.settings.changed': hotelScoped,
+
   /* ── Ödeme (modül 17) ──
      Folyo ekranı (bakiye) ve kasa görünümü bunlarla canlı tazelenir
      (`PAYMENT_EVENTS`). Tutar folyonun para biriminde (`amount`, iade ve
@@ -788,6 +808,9 @@ export const CASH_EVENTS = Object.freeze([...PAYMENT_EVENTS, 'exchange_rate.upda
 
 /** Minibar / çamaşırhane ekranlarını etkileyen olaylar (canlı yayın: `extras.changed`, modül 19). */
 export const EXTRAS_EVENTS = Object.freeze(['minibar.recorded', 'laundry.order.changed', 'extras.catalog.changed']);
+
+/** Kayıp eşya ekranlarını etkileyen olaylar (canlı yayın: `lost-items.changed`, modül 21). */
+export const LOST_ITEM_EVENTS = Object.freeze(['lost_item.recorded', 'lost_item.changed', 'lost_items.settings.changed']);
 
 /** Onay kuyruğunu etkileyen event'ler (canlı yayın: `approvals.changed`). */
 export const APPROVAL_EVENTS = Object.freeze([

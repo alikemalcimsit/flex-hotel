@@ -100,6 +100,10 @@ export const EVENT_LABELS = Object.freeze({
   'minibar.recorded': 'Minibar sayımı girildi',
   'laundry.order.changed': 'Çamaşır siparişi değişti',
   'extras.catalog.changed': 'Minibar / çamaşır fiyat listesi değişti',
+
+  'lost_item.recorded': 'Bulunan eşya kaydedildi',
+  'lost_item.changed': 'Kayıp eşya güncellendi',
+  'lost_items.settings.changed': 'Kayıp eşya saklama süresi değişti',
 });
 
 /**
