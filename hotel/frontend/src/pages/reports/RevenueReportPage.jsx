@@ -289,8 +289,8 @@ function Definitions({ report }) {
     <details className="rounded-card bg-surface p-4 text-sm text-ink-soft shadow-soft">
       <summary className="cursor-pointer font-semibold text-ink">Rakamlar nasıl hesaplanıyor?</summary>
       <ul className="mt-2 list-disc space-y-1 pl-5">
-        <li>Satılan oda gecesi: opsiyonlu, kesin ve içerideki konaklamaların geceleri; çıkış yapanın yalnızca kaldığı geceler. İptal ve gelmeyen sayılmaz.</li>
-        <li>Satılabilir oda: kayıtlı oda − o gece arızalı oda (hizmet dışı oda satılabilir sayılır).</li>
+        <li>Satılan oda gecesi: {fullDate(report.businessDate)} ve sonrası opsiyonlu, kesin ve içerideki konaklamaların geceleri; öncesinde yalnızca misafirin gerçekten kaldığı geceler. İptal, gelmeyen (henüz "gelmedi" işaretlenmemiş olsa da) ve erken çıkışta bırakılan geceler sayılmaz.</li>
+        <li>Satılabilir oda: o gece kayıtlı oda − arızalı oda (hizmet dışı oda satılabilir sayılır; sonradan silinen oda silindiği güne kadar sayılır).</li>
         <li>Oda geliri vergiler hariçtir. {fullDate(report.businessDate)} öncesi folyoya işlenen gerçekleşen gelir (fiyat düzeltmeleri, oda indirimleri ve iptaller işlendiği güne); bugün ve sonrası rezervasyonun gece fiyatından eldeki gelir (dahil vergi %{report.includedTaxRate} ayrılarak).</li>
         <li>ADR = oda geliri / satılan gece; RevPAR = oda geliri / satılabilir oda. Erken giriş / geç çıkış ücretleri ve iptal / gelmeme gelirleri ayrı sütundadır, ADR'ye girmez.</li>
         <li>Geçen yıl: haftanın aynı günü (364 gün önce). Oranlar dönem toplamlarından hesaplanır.</li>

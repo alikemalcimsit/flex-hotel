@@ -1,5 +1,7 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import { prisma } from '../../db.js';
+import { AppError } from '../../lib/errors.js';
+import { soldNightSql } from '../rooms/sql.js';
 
 /**
  * Gelir raporlarının SQL'leri (modül 23).
@@ -23,9 +25,6 @@ export const REPORT_STATEMENT_TIMEOUT_MS = 20_000;
 /** İşlemin sorgu süresinin üstündeki payı. */
 const TRANSACTION_SLACK_MS = 5_000;
 
-/** Sayılan gece: opsiyonlu, kesin, içeride; çıkmışsa yalnızca geçmiş geceler (oda planıyla aynı). */
-const COUNTED_STATUSES = Prisma.sql`('PENDING', 'CONFIRMED', 'CHECKED_IN')`;
-
 /** @type {PrismaClient | null} */
 let reportingClient = null;
 
@@ -44,18 +43,41 @@ function client() {
  * @param {{ timeoutMs?: number }} [options]
  * @returns {Promise<T>}
  */
-export function readOnly(work, { timeoutMs = REPORT_STATEMENT_TIMEOUT_MS } = {}) {
-  return client().$transaction(
-    async (tx) => {
-      // İşlemin ilk ifadesi olmalı: bundan sonra INSERT / UPDATE / DELETE / DDL reddedilir.
-      // REPEATABLE READ: işlemdeki bütün sorgular aynı anlık görüntüyü okur (özet turu arada
-      // yazsa da özet işareti ile özet satırları ya da canlı satırlar birbirini tutar).
-      await tx.$executeRawUnsafe('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
-      await tx.$executeRawUnsafe(`SET LOCAL statement_timeout = ${Math.trunc(timeoutMs)}`);
-      return work(tx);
-    },
-    { timeout: timeoutMs + TRANSACTION_SLACK_MS },
-  );
+export async function readOnly(work, { timeoutMs = REPORT_STATEMENT_TIMEOUT_MS } = {}) {
+  try {
+    return await client().$transaction(
+      async (tx) => {
+        // İşlemin ilk ifadesi olmalı: bundan sonra INSERT / UPDATE / DELETE / DDL reddedilir.
+        // REPEATABLE READ: işlemdeki bütün sorgular aynı anlık görüntüyü okur (özet turu arada
+        // yazsa da özet işareti ile özet satırları ya da canlı satırlar birbirini tutar).
+        await tx.$executeRawUnsafe('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
+        await tx.$executeRawUnsafe(`SET LOCAL statement_timeout = ${Math.trunc(timeoutMs)}`);
+        return work(tx);
+      },
+      { timeout: timeoutMs + TRANSACTION_SLACK_MS },
+    );
+  } catch (error) {
+    // Süre sınırı "beklenmeyen hata" değil: kullanıcı (ya da ajan) aralığı daraltabilir.
+    if (isStatementTimeout(error)) throw new ReportTimeoutError();
+    throw error;
+  }
+}
+
+/** PostgreSQL `query_canceled` (statement_timeout). */
+const STATEMENT_TIMEOUT_PG_CODE = '57014';
+
+/** @param {unknown} error */
+function isStatementTimeout(error) {
+  const known = /** @type {{ meta?: { code?: string }, message?: string }} */ (error);
+  if (String(known?.meta?.code ?? '') === STATEMENT_TIMEOUT_PG_CODE) return true;
+  return /canceling statement due to statement timeout/i.test(typeof known?.message === 'string' ? known.message : '');
+}
+
+/** Rapor sorgusu süre sınırını aştı (503: geçici; aralık daraltılınca düzelir). */
+export class ReportTimeoutError extends AppError {
+  constructor() {
+    super('Rapor süre sınırı içinde hesaplanamadı. Daha kısa bir tarih aralığıyla tekrar deneyin.', { statusCode: 503, code: 'REPORT_TIMEOUT' });
+  }
 }
 
 /** Uygulama kapanırken ayrı rapor bağlantısını bırakır. */
@@ -65,8 +87,12 @@ export async function disconnectReporting() {
 }
 
 /**
- * Günlük satılabilir oda: kayıtlı oda − o gece arızalı (envanterden düşen)
- * oda. Oda sayısı bugünkü kayıttır (oda planı ve günlük durum ekranıyla aynı).
+ * Günlük satılabilir oda: o gece kayıtlı oda − o gece arızalı (envanterden
+ * düşen) oda. Bugün ve sonrası için oda planı ve günlük durumla aynı (bugünkü
+ * kayıt). Sonradan silinen oda silindiği güne kadar sayılır: tadilatta
+ * kaldırılan odanın geçmiş satışı varken geçmiş doluluk %100'ü aşmasın,
+ * oda silinince geçen yılın rakamları değişmesin. (Odanın kayıt tarihine
+ * bakılmaz: sisteme sonradan girilen otelde geçmiş satış odadan eskidir.)
  *
  * @param {Prisma.TransactionClient} tx
  * @param {string} hotelId
@@ -81,12 +107,16 @@ export function loadSellable(tx, hotelId, from, to) {
     ),
     rooms AS (
       SELECT COUNT(*)::int AS total FROM "Room" WHERE "hotelId" = ${hotelId} AND "deletedAt" IS NULL
+    ),
+    -- Aralıkta ya da sonra silinen odalar (az sayıda): silindikleri güne kadar sayılır.
+    removed AS (
+      SELECT "deletedAt" FROM "Room" WHERE "hotelId" = ${hotelId} AND "deletedAt" >= ${from}::timestamp
     )
     SELECT to_char(days.day, 'YYYY-MM-DD') AS "day",
-           rooms.total AS "rooms",
+           rooms.total + (SELECT COUNT(*)::int FROM removed WHERE removed."deletedAt" >= days.day + 1) AS "rooms",
            (SELECT COUNT(DISTINCT b."roomId")::int
               FROM "RoomBlock" b
-              JOIN "Room" r ON r."id" = b."roomId" AND r."deletedAt" IS NULL
+              JOIN "Room" r ON r."id" = b."roomId" AND (r."deletedAt" IS NULL OR r."deletedAt" >= days.day + 1)
              WHERE b."hotelId" = ${hotelId} AND b."deletedAt" IS NULL AND b."type" = 'OUT_OF_ORDER'
                AND date_trunc('day', b."startDate") <= days.day
                AND (b."endDate" IS NULL OR date_trunc('day', b."endDate") > days.day)) AS "outOfOrder"
@@ -96,7 +126,9 @@ export function loadSellable(tx, hotelId, from, to) {
 
 /**
  * Satılan geceler ve rezervasyondaki brüt gece fiyatı: gün × oda tipi ×
- * kaynak × para birimi.
+ * kaynak × para birimi. Satılan gece tanımı oda planı ve günlük durumla ortak
+ * (`soldNightSql`): iş günü ve sonrası eldeki, geçmiş gecede yalnızca
+ * gerçekleşen konaklama (gelmeyen misafirin gecesi satılmış sayılmaz).
  *
  * @param {Prisma.TransactionClient} tx
  * @param {string} hotelId
@@ -121,8 +153,7 @@ export function loadNights(tx, hotelId, from, to, businessDate) {
       AND n."date" < (${to}::date + 1)::timestamp
       AND n."deletedAt" IS NULL
       AND r."deletedAt" IS NULL
-      AND (r."status"::text IN ${COUNTED_STATUSES}
-           OR (r."status" = 'CHECKED_OUT' AND n."date" < ${businessDate}::timestamp))
+      AND ${soldNightSql(Prisma.sql`${businessDate}::timestamp`)}
     GROUP BY 1, 2, 3, 4`;
 }
 

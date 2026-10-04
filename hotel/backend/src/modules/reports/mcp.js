@@ -27,6 +27,7 @@ const SERVER_VERSION = '1.0.0';
 const INSTRUCTIONS =
   'Otelin doluluk ve oda geliri raporları. Tarihler YYYY-AA-GG, aralık en fazla 366 gün. ' +
   'Gelir vergiler hariçtir; geçmiş günler folyoya işlenen gerçekleşen gelir, bugün ve sonrası eldeki rezervasyon. ' +
+  'Satılan gece: bugün ve sonrası eldeki rezervasyon; geçmişte yalnızca misafirin gerçekten kaldığı geceler (gelmeyen sayılmaz). ' +
   'ADR = oda geliri / satılan gece; RevPAR = oda geliri / satılabilir oda. Geçen yıl: haftanın aynı günü (364 gün önce). ' +
   'Oranlar dönem toplamlarından hesaplanır; değişimler yüzde, doluluk farkı yüzde puanı.';
 

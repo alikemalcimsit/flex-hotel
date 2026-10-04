@@ -207,6 +207,36 @@ describe('gelir raporları (entegrasyon)', { skip }, () => {
     assert.equal(result.includedTaxRate, '10');
   });
 
+  it('gelmeyen misafirin geçmiş gecesi satılmış sayılmaz (özet de); silinen oda silindiği güne kadar satılabilir', async () => {
+    // Hiç gelmedi, "gelmedi" de işaretlenmedi: geçmiş geceleri boş kaldı, bugünden sonrası hâlâ eldeki.
+    await stay({ room: 0, status: 'CONFIRMED', nights: [[-2, '1100'], [-1, '1100'], [0, '1100'], [1, '1100']] });
+    const live = await report({ from: shift(-2), to: shift(1) });
+    assert.deepEqual([-2, -1, 0, 1].map((offset) => dayRow(live, offset).sold), [0, 0, 1, 1]);
+    assert.equal(dayRow(live, 0).roomRevenue, '1000.00');
+
+    // Aynı kural özette (kapanmış gün).
+    await stay({ room: 1, status: 'CONFIRMED', nights: [[-40, '1100']] });
+    await stay({ room: 2, nights: [[-40, '1100']] });
+    await stats.refreshHotelStats(hotelId);
+    service.clearReportCache();
+    assert.equal(await db.revenueStatDay.count({ where: { hotelId, day: dayDate(-40) } }), 1, 'gün özetten okunuyor');
+    assert.equal(dayRow(await report({ from: shift(-40), to: shift(-40) }), -40).sold, 1);
+
+    // 101 numaralı oda -7 gecesi arızalıydı; -5 günü öğleden sonra silindi.
+    await db.roomBlock.create({ data: { hotelId, roomId: rooms[9].id, type: 'OUT_OF_ORDER', startDate: dayDate(-7), endDate: dayDate(-6), reason: 'Su kaçağı', createdBy: 'test' } });
+    await db.room.update({ where: { id: rooms[9].id }, data: { deletedAt: new Date(dayDate(-5).getTime() + 14 * 3_600_000) } });
+    service.clearReportCache();
+    const removed = await report({ from: shift(-7), to: shift(-4) });
+    assert.deepEqual([-7, -6, -5, -4].map((offset) => dayRow(removed, offset).sellable), [9, 10, 9, 9]);
+  });
+
+  it('süre sınırını aşan rapor sorgusu anlamlı hatayla döner (503, aralığı daraltın)', async () => {
+    await assert.rejects(
+      queries.readOnly((tx) => tx.$queryRaw`SELECT pg_sleep(1)`, { timeoutMs: 50 }),
+      (error) => error instanceof queries.ReportTimeoutError && error.statusCode === 503 && /Daha kısa/.test(error.message),
+    );
+  });
+
   it('geçen yıl haftanın aynı günü (364 gün); haftalık kova; kırılımlar geçen yılla', async () => {
     const now = await stay({ room: 0, nights: [[-7, '1100']], source: 'OTA' });
     await post(now, { offset: -7, net: '1200', tax: '120' });

@@ -258,6 +258,20 @@ describe('summarizeDays — çıkış yapmış konaklamalar ve yapılan işlemle
     assert.equal(summary[2].free, 10);
   });
 
+  it('gelmeyen misafirin geçmiş geceleri dolu sayılmaz; bugünden sonrası eldeki', () => {
+    // 14'te gelecekti, hiç gelmedi, "gelmedi" de işaretlenmedi (hâlâ kesin).
+    const summary = summarizeDays({
+      ...base,
+      reservations: [{ id: 'ns', roomId: 'r1', checkIn: day('2026-09-14'), checkOut: day('2026-09-18'), status: 'CONFIRMED' }],
+    });
+    assert.equal(summary[0].sold, 0, '14 gecesi oda boş kaldı');
+    assert.equal(summary[1].sold, 0, '15 gecesi oda boş kaldı');
+    assert.equal(summary[1].free, 10);
+    assert.equal(summary[0].arrivals, 1, 'beklenen giriş yine sayılır (gelmeyen takibi)');
+    assert.equal(summary[0].arrivalsDone, 0);
+    assert.equal(summary[2].sold, 1, '16 gecesi (bugün) oda hâlâ tutuluyor');
+  });
+
   it('bugünkü çıkışlar yapıldıkça sayı azalmaz, yapılan ayrıca sayılır', () => {
     const summary = summarizeDays({
       ...base,

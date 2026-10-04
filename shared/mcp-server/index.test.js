@@ -51,14 +51,20 @@ describe('salt okunur MCP sunucusu', () => {
       server(async () => {
         calls += 1;
         if (calls === 1) throw new Error('relation "Secret" does not exist');
+        if (calls === 2) throw Object.assign(new Error('pg: connection reset'), { statusCode: 500 });
+        if (calls === 3) throw Object.assign(new Error('Daha kısa bir tarih aralığıyla tekrar deneyin.'), { statusCode: 503 });
         throw Object.assign(new Error('Rapor en fazla 2028-10-04 tarihine kadar alınır'), { statusCode: 422 });
       }),
     );
     try {
-      const hidden = await client.callTool({ name: 'echo_range', arguments: { from: 'a', to: 'b' } });
+      const call = () => client.callTool({ name: 'echo_range', arguments: { from: 'a', to: 'b' } });
+      const hidden = await call();
       assert.equal(hidden.isError, true);
       assert.doesNotMatch(hidden.content[0].text, /Secret|relation/);
-      const shown = await client.callTool({ name: 'echo_range', arguments: { from: 'a', to: 'b' } });
+      // Diğer 5xx de gizlenir; 503 (geçici, ne yapılacağını söyler) gösterilir.
+      assert.doesNotMatch((await call()).content[0].text, /pg:/);
+      assert.match((await call()).content[0].text, /Daha kısa/);
+      const shown = await call();
       assert.match(shown.content[0].text, /2028-10-04/);
     } finally {
       await close();

@@ -45,11 +45,16 @@ function describeIssues(error) {
     .slice(0, MAX_ERROR_TEXT);
 }
 
+/** Geçici durum (yoğunluk, süre sınırı): mesajı kullanıcı için yazılmıştır, ne yapılacağını söyler. */
+const SERVICE_UNAVAILABLE = 503;
+
 /**
- * Hata beklenen mi (kullanıcıya / modele mesajı gösterilir)?
+ * Hata beklenen mi (kullanıcıya / modele mesajı gösterilir)? 4xx ve 503;
+ * diğer 5xx iç ayrıntı taşıyabilir, gizlenir.
  * @param {any} error
  */
-const isExpected = (error) => Number.isInteger(error?.statusCode) && error.statusCode >= 400 && error.statusCode < 500;
+const isExpected = (error) =>
+  Number.isInteger(error?.statusCode) && ((error.statusCode >= 400 && error.statusCode < 500) || error.statusCode === SERVICE_UNAVAILABLE);
 
 /**
  * @param {string} text

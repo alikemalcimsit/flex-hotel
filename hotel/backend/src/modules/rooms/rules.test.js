@@ -8,6 +8,7 @@ import {
   buildAvailabilityCalendar,
   compareRoomsNaturally,
   consumesInventory,
+  countsSoldNight,
   findNewOverbooking,
   fitsCapacity,
   freeRoomsForStay,
@@ -168,6 +169,31 @@ describe('rezervasyonların envantere etkisi', () => {
     const cal = calendar({ reservations: [reservation({ roomId: 'r201' })] });
     assert.equal(freeOn(cal, STD, '2026-10-15'), 3, 'Standart envanteri serbest kalır');
     assert.equal(freeOn(cal, DLX, '2026-10-15'), 1, 'Deluxe odası işgal edildi');
+  });
+});
+
+describe('satılmış gece (doluluk, ADR, RevPAR tanımı)', () => {
+  const sold = (status, past) => countsSoldNight({ status }, past);
+
+  it('bugün ve sonrası: opsiyonlu, kesin ve içerideki konaklama (eldeki)', () => {
+    assert.deepEqual(
+      ['PENDING', 'CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT', 'CANCELLED', 'NO_SHOW'].map((status) => sold(status, false)),
+      [true, true, true, false, false, false],
+    );
+  });
+
+  it('geçmiş gece: yalnızca gerçekleşen konaklama — gelmeyen misafirin gecesi dolu sayılmaz', () => {
+    // Gelmedi işaretlenmemiş (hâlâ kesin / opsiyonlu) rezervasyon o gece odayı doldurmadı, gelir de işlenmedi.
+    assert.deepEqual(
+      ['PENDING', 'CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT', 'CANCELLED', 'NO_SHOW'].map((status) => sold(status, true)),
+      [false, false, true, true, false, false],
+    );
+  });
+
+  it('envanter tanımından farkı yalnızca geçmiş gecelerde', () => {
+    for (const status of ['PENDING', 'CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT', 'CANCELLED', 'NO_SHOW']) {
+      assert.equal(sold(status, false), consumesInventory({ status }), status);
+    }
   });
 });
 

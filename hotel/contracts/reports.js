@@ -5,10 +5,13 @@ import { z } from './locale.js';
  *
  * Tanımlar (otelcilik karşılıkları; günlük durum ekranıyla — modül 13 — aynı):
  *
- * - **Satılan oda (room nights sold):** o geceyi tüketen konaklama gecesi —
- *   opsiyonlu, kesin ve içerideki konaklamanın her gecesi; çıkmış konaklamanın
- *   yalnızca geçmiş geceleri (erken çıkışta bırakılan geceler sayılmaz).
- * - **Satılabilir oda:** o gün kayıtlı oda − arızalı (envanterden düşen) oda.
+ * - **Satılan oda (room nights sold):** bugün ve sonrası opsiyonlu, kesin ve
+ *   içerideki konaklamanın geceleri (eldeki); geçmiş gecelerde yalnızca
+ *   gerçekleşen konaklama — içeride ya da çıkmış. Gelmeyen misafirin gecesi
+ *   ("gelmedi" işaretlenmemiş olsa da) ve erken çıkışta bırakılan geceler
+ *   sayılmaz (backend `countsSoldNight`; oda planı ve günlük durumla ortak).
+ * - **Satılabilir oda:** o gece kayıtlı oda − arızalı (envanterden düşen) oda;
+ *   sonradan silinen oda silindiği güne kadar sayılır.
  * - **Doluluk** = satılan / satılabilir. **ADR** = oda geliri / satılan.
  *   **RevPAR** = oda geliri / satılabilir. Oranlar toplamlardan hesaplanır
  *   (günlük oranların ortalaması alınmaz).

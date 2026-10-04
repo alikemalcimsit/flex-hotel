@@ -1752,8 +1752,10 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 > düzeltmeleri, oda indirimleri, iptaller dahil; iptal işlendiği güne düşer), bugün ve sonrası **rezervasyonun gece
 > fiyatından eldeki**; geçen yıl **haftanın aynı günü** (364 gün önce).
 >
-> **Tanımlar** (`contracts/reports.js`; günlük durum ekranıyla aynı): satılan gece = opsiyonlu + kesin + içerideki
-> konaklamanın geceleri, çıkmışın yalnızca kaldığı geceler; satılabilir = kayıtlı oda − arızalı oda; ADR = oda geliri /
+> **Tanımlar** (`contracts/reports.js`; oda planı ve günlük durumla ortak — `countsSoldNight` / `soldNightSql`):
+> satılan gece = bugün ve sonrası opsiyonlu + kesin + içerideki konaklamanın geceleri (eldeki), geçmişte yalnızca
+> gerçekleşen (içeride ya da çıkmış) konaklamanın geceleri — gelmeyen misafirin gecesi "gelmedi" işaretlenmemiş olsa da
+> dolu sayılmaz; satılabilir = o gece kayıtlı oda − arızalı oda (silinen oda silindiği güne kadar); ADR = oda geliri /
 > satılan gece; RevPAR = oda geliri / satılabilir; gelir vergiler hariç (eldekinden dahil oda vergisi ayrılır). Erken
 > giriş / geç çıkış ücreti ve iptal / gelmeme geliri ayrı sütun, ADR'ye girmez; F&B, minibar, çamaşır oda geliri değil.
 > Oranlar dönem toplamlarından (oranların ortalaması alınmaz). Başka para birimindeki rezervasyon karışmaz, sayısı bildirilir.
@@ -1786,6 +1788,12 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 >
 > **Test:** kurallar 10 + MCP sunucusu 3 birim; entegrasyon 7 (sınıflama, eldeki gelir, arıza, geçen yıl, kırılım, para
 > birimi, otel sınırı, salt okunur işlem, MCP, özet = canlı, onarma).
+>
+> **Gözden geçirme (5 Ekim 2026):** (1) gelmeyen ama "gelmedi" işaretlenmemiş rezervasyonun geçmiş geceleri dolu
+> sayılıyordu (otomatik gelmedi modül 18'de; o güne kadar geçmiş doluluk şişer, ADR düşerdi) — tanım oda planı, günlük
+> durum (dün + haftalık seri) ve raporda ortak düzeltildi; (2) sonradan silinen oda geçmiş günlerde satılabilirden
+> düşüyordu (geçmiş doluluk %100'ü aşabilirdi); (3) süre sınırını aşan rapor "beklenmeyen hata" yerine 503 + "daha kısa
+> aralık" (MCP'de de görünür).
 >
 > **Devir:** modül 24 (doğal dil raporlama) MCP araçlarını `connectInProcess(createReportingMcpServer({ hotelId }))` ile
 > kullanır; modül 25 (forecast) eldeki geceyi aynı sorgudan alabilir; modül 18 (gece kapanışı) iş günü dönünce özeti

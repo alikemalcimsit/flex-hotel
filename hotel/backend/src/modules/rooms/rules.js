@@ -47,6 +47,30 @@ export function consumesInventory(reservation) {
   return INVENTORY_CONSUMING_STATUSES.includes(reservation.status);
 }
 
+/** Gerçekleşmiş konaklama durumları: misafir geldi (içeride ya da çıktı). */
+export const STAYED_STATUSES = Object.freeze(['CHECKED_IN', 'CHECKED_OUT']);
+
+/**
+ * Konaklama bir geceyi **satılmış (dolu)** sayar mı — doluluk, ADR ve
+ * RevPAR'ın tek tanımı (oda planı özeti, günlük durum, gelir raporu,
+ * forecast). SQL karşılığı `rooms/sql.js` → `soldNightSql`.
+ *
+ * - İş günü ve sonrası (eldeki): envanteri tüketen konaklama — opsiyonlu,
+ *   kesin, içeride. Gelmesi gereken ama henüz gelmemiş misafirin odası
+ *   gelmedi işaretlenene kadar tutulur.
+ * - Geçmiş gece (gerçekleşen): yalnızca misafirin gerçekten kaldığı
+ *   konaklama — içeride ya da çıkmış. Gelmeyen (henüz "gelmedi"
+ *   işaretlenmemiş) rezervasyon geçmiş geceyi doldurmaz: o gece oda boş kaldı,
+ *   gelir de işlenmedi. Erken çıkışta bırakılan geceler zaten silinir.
+ *
+ * @param {{ status: string }} reservation
+ * @param {boolean} past gece iş gününden önce mi
+ * @returns {boolean}
+ */
+export function countsSoldNight(reservation, past) {
+  return past ? STAYED_STATUSES.includes(reservation.status) : consumesInventory(reservation);
+}
+
 /**
  * Konaklamanın **açık dilimi** — misafirin şu anki `roomId` odasında kaldığı
  * gecelerin başlangıcı.
