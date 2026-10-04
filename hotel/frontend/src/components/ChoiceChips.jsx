@@ -1,6 +1,7 @@
 /**
  * Hızlı seçim çipleri — tek dokunuşla doldurulan sık değerler (iptal sebebi,
- * uyandırma saati). Seçili çipe tekrar basmak seçimi kaldırır.
+ * uyandırma saati). Seçili çipe tekrar basmak seçimi kaldırır; `required` ise
+ * (seçimsiz kalamayan alan: teslim şekli, grafik ölçüsü) seçim yerinde kalır.
  *
  * @param {{
  *   label: string,
@@ -8,10 +9,11 @@
  *   value: string,
  *   onChange: (value: string) => void,
  *   disabled?: boolean,
+ *   required?: boolean,
  *   className?: string,
  * }} props
  */
-export function ChoiceChips({ label, options, value, onChange, disabled = false, className = '' }) {
+export function ChoiceChips({ label, options, value, onChange, disabled = false, required = false, className = '' }) {
   return (
     <div className={`flex flex-wrap gap-1.5 ${className}`} role="group" aria-label={label}>
       {options.map((option) => {
@@ -22,7 +24,10 @@ export function ChoiceChips({ label, options, value, onChange, disabled = false,
             type="button"
             disabled={disabled}
             aria-pressed={selected}
-            onClick={() => onChange(selected ? '' : option.value)}
+            onClick={() => {
+              if (selected && required) return;
+              onChange(selected ? '' : option.value);
+            }}
             className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors duration-150 disabled:opacity-50 ${
               selected
                 ? 'border-ink bg-ink text-white'

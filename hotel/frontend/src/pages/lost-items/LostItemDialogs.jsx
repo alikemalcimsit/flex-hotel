@@ -290,7 +290,7 @@ export function ReturnDialog({ item, onClose, onDone }) {
       <form id="return-form" className="flex flex-col gap-4" onSubmit={submit} noValidate>
         {mutation.error && !mutation.error.fields && <Alert tone="danger" title="Kaydedilemedi">{errorText(mutation.error)}</Alert>}
         {!item.guest && <Alert tone="info" title="Eşya bir misafirle eşleşmemiş">Teslim alan kişinin adı kayda geçer.</Alert>}
-        <ChoiceChips label="Teslim şekli" options={METHOD_OPTIONS} value={values.method} onChange={set('method')} />
+        <ChoiceChips label="Teslim şekli" required options={METHOD_OPTIONS} value={values.method} onChange={set('method')} />
         {shipped ? (
           <>
             <div className="grid gap-4 sm:grid-cols-2">

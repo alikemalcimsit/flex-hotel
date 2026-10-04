@@ -98,6 +98,12 @@ export const NAV_SECTIONS = Object.freeze([
         permission: PERMISSIONS.LOST_ITEMS_VIEW,
       },
       {
+        label: 'Gelir raporları',
+        to: '/raporlar/gelir',
+        icon: 'chart',
+        permission: PERMISSIONS.REPORTS_VIEW,
+      },
+      {
         label: 'Mesajlar',
         to: '/mesajlar',
         icon: 'message',

@@ -1738,13 +1738,58 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 23. Gelir raporları — arkadaşın
 **Gün sonu:** Doluluk, ADR, RevPAR raporları tarih aralığına göre tablo + grafik olarak çıkıyor; geçen yılla karşılaştırma var.
-- [ ] Backend: MCP server paketi (read-only DB bağlantısı; tool'lar: `get_occupancy`, `get_revenue`, `run_report_query` parametrik/güvenli)
-- [ ] Backend: rapor SQL'leri (günlük/haftalık/aylık doluluk, ADR, RevPAR, kaynak bazlı, oda tipi bazlı)
-- [ ] Ekran: Rapor sayfası (tarih aralığı, gruplama seçici)
-- [ ] Ekran: Doluluk raporu (tablo + çizgi grafik)
-- [ ] Ekran: ADR / RevPAR raporu
-- [ ] Ekran: Kaynak ve oda tipi kırılımı (pasta / çubuk)
-- [ ] Ekran: Geçen yıl karşılaştırma sütunu
+- [x] Backend: MCP server paketi (read-only DB bağlantısı; tool'lar: `get_occupancy`, `get_revenue`, `run_report_query` parametrik/güvenli)
+- [x] Backend: rapor SQL'leri (günlük/haftalık/aylık doluluk, ADR, RevPAR, kaynak bazlı, oda tipi bazlı)
+- [x] Ekran: Rapor sayfası (tarih aralığı, gruplama seçici)
+- [x] Ekran: Doluluk raporu (tablo + çizgi grafik)
+- [x] Ekran: ADR / RevPAR raporu
+- [x] Ekran: Kaynak ve oda tipi kırılımı (pasta / çubuk)
+- [x] Ekran: Geçen yıl karşılaştırma sütunu
+
+> **📌 Modül 23 tamamlandı (4 Ekim 2026 — Ahmet).**
+>
+> **Kararlar (kullanıcı, 4 Ekim 2026):** geçmiş günlerin oda geliri **folyoya işlenen** gerçekleşen gelirden (fiyat
+> düzeltmeleri, oda indirimleri, iptaller dahil; iptal işlendiği güne düşer), bugün ve sonrası **rezervasyonun gece
+> fiyatından eldeki**; geçen yıl **haftanın aynı günü** (364 gün önce).
+>
+> **Tanımlar** (`contracts/reports.js`; günlük durum ekranıyla aynı): satılan gece = opsiyonlu + kesin + içerideki
+> konaklamanın geceleri, çıkmışın yalnızca kaldığı geceler; satılabilir = kayıtlı oda − arızalı oda; ADR = oda geliri /
+> satılan gece; RevPAR = oda geliri / satılabilir; gelir vergiler hariç (eldekinden dahil oda vergisi ayrılır). Erken
+> giriş / geç çıkış ücreti ve iptal / gelmeme geliri ayrı sütun, ADR'ye girmez; F&B, minibar, çamaşır oda geliri değil.
+> Oranlar dönem toplamlarından (oranların ortalaması alınmaz). Başka para birimindeki rezervasyon karışmaz, sayısı bildirilir.
+>
+> **Veri:** migration `20261006090000_revenue_reports` (`FolioItem (hotelId, serviceDate)` index'i) ve
+> `20261006100000_revenue_day_stats` (`RevenueDayStat` gün × oda tipi × kaynak × para birimi özeti, `RevenueStatDay`
+> işareti). Geçmiş günler özetten okunur; son 14 gün, eldeki rezervasyon ve özeti çıkmamış gün canlı (rapor her zaman
+> doğru, özet yalnızca hızlandırır). Saatlik iş: son 31 kapanmış günü yeniden hesaplar, eski günleri 62'lik parçalarla
+> doldurur, doldurulacak yoksa en eski parçayı yeniden hesaplar (kendini onarma).
+>
+> **Ölçüm** (`scripts/perf-revenue.mjs`, 1500 oda, 4 yıl / 550 bin rezervasyon, 1,1 M gece, 405 bin folyo kalemi):
+> bir yıllık rapor soğuk **3,9 sn → 0,43 sn**, ±30 gün **0,66 → 0,23 sn**; rakamlar özetle ve canlıyla birebir aynı.
+> Özet turu otel başına ≤ 2 sn. Canlı sorgu otelin bütün geçmişini taradığı için (rezervasyon + folyo kalemi) özet şarttı.
+>
+> **MCP** (`shared/mcp-server`, `@modelcontextprotocol/sdk`): genel salt okunur sunucu (yalnızca `readOnly` araç,
+> girdinin tam şemayla doğrulanması, iç hatanın modele sızmaması) + otelin araçları (`modules/reports/mcp.js`):
+> `get_occupancy`, `get_revenue`, `run_report_query` (yalnızca adı verilen 4 hazır rapor; serbest SQL yok). Sunucu tek
+> otele bağlı (otel parametresi yok). Bütün sorgular `SET TRANSACTION READ ONLY` + süre sınırıyla; `REPORTING_DATABASE_URL`
+> ile yalnızca okuma yetkili kullanıcı verilebilir (`.env.example`'da komutlar). Aynı süreçteki ajan `connectInProcess`,
+> süreç dışı istemci `npm run mcp:reporting -w @hotelos/hotel-backend` (stdio).
+>
+> **API:** `GET /reports/revenue?from&to&groupBy` (en fazla 366 gün, en ileri iş günü + 730 gün; tek cevapta kovalar,
+> toplam, oda tipi ve kaynak kırılımı, geçen yıl). İzin `reports.view` (müdür, muhasebe).
+>
+> **Ekran** (`/raporlar/gelir`): hazır aralıklar (bu ay, geçen ay, son 30 gün, önümüzdeki 30 gün, yılbaşından bugüne,
+> son 12 ay) + özel aralık, gün / hafta / ay; dört gösterge (doluluk, ADR, RevPAR, oda geliri — geçen yıl ve değişim);
+> çizgi grafik (bu dönem vurgulu, geçen yıl gri bağlam, eldeki dönem gölgeli, imleç ipucu, uç değerler; tek eksen, tek
+> ölçü); tablo görünümü (toplam satırıyla); oda tipi ve kaynak kırılımı (tek renk pay çubuğu, gece, ADR, geçen yıl);
+> "rakamlar nasıl hesaplanıyor" açıklaması. Telefonda taşma yok, eksen yazıları genişliğe göre seyrelir.
+>
+> **Test:** kurallar 10 + MCP sunucusu 3 birim; entegrasyon 7 (sınıflama, eldeki gelir, arıza, geçen yıl, kırılım, para
+> birimi, otel sınırı, salt okunur işlem, MCP, özet = canlı, onarma).
+>
+> **Devir:** modül 24 (doğal dil raporlama) MCP araçlarını `connectInProcess(createReportingMcpServer({ hotelId }))` ile
+> kullanır; modül 25 (forecast) eldeki geceyi aynı sorgudan alabilir; modül 18 (gece kapanışı) iş günü dönünce özeti
+> tetikleyebilir (`refreshHotelStats`).
 
 ### 24. Doğal dil raporlama — Ali Kemal
 **Gün sonu:** Müdür "geçen ayın haftalık doluluğunu göster" yazıyor, tablo ve grafik geliyor; rapor kaydedilebiliyor.

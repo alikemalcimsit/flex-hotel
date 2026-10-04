@@ -17,6 +17,8 @@ import { registerWebchatNamespace, setWebchatTransport, webchatSessionSecret } f
 import { startConciergeJobs } from './modules/concierge/jobs.js';
 import { startNotificationJobs } from './modules/notifications/jobs.js';
 import { startLostItemJobs } from './modules/lost-items/jobs.js';
+import { startReportJobs } from './modules/reports/jobs.js';
+import { disconnectReporting } from './modules/reports/queries.js';
 import { closeProviders } from './modules/notifications/providers/index.js';
 
 /**
@@ -87,6 +89,7 @@ const stopReservationJobs = startReservationJobs(app.log);
 const stopChannelJobs = startChannelJobs(app.log);
 const stopConciergeJobs = startConciergeJobs(app.log);
 const stopLostItemJobs = startLostItemJobs(app.log);
+const stopReportJobs = startReportJobs(app.log);
 
 // Açık socket bağlantıları kapatılmazsa HTTP sunucusu kapanmayı bekler ve
 // süreç yöneticisi (systemd) onu zorla öldürene kadar asılı kalır.
@@ -99,6 +102,7 @@ app.addHook('onClose', async () => {
   stopChannelJobs();
   stopConciergeJobs();
   stopLostItemJobs();
+  stopReportJobs();
   if (!(await actorRegistry.idle(SHUTDOWN_DRAIN_MS))) {
     app.log.warn('Arka plan aktörleri kapanış süresinde bitmedi; kalan işler açılışta toplanacak');
   }
@@ -106,6 +110,8 @@ app.addHook('onClose', async () => {
   closeProviders();
   stopRealtimeBridge();
   stopActivityBridge();
+  // Ayrı rapor bağlantısı (REPORTING_DATABASE_URL) açıldıysa bırakılır.
+  await disconnectReporting();
   await new Promise((resolve) => {
     io.close(() => resolve());
   });

@@ -4,5 +4,12 @@
   "private": true,
   "type": "module",
   "main": "index.js",
-  "description": "Read-only raporlama MCP server'ı (report-agent kullanır)"
+  "description": "Read-only raporlama MCP server'ı (report-agent kullanır)",
+  "scripts": {
+    "test": "node --test \"*.test.js\""
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.0",
+    "zod": "^4.5.4"
+  }
 }

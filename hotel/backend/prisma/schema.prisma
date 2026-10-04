@@ -528,6 +528,8 @@ model Hotel {
   lostItems             LostItem[]
   lostItemPhotos        LostItemPhoto[]
   lostItemNotes         LostItemNote[]
+  revenueDayStats       RevenueDayStat[]
+  revenueStatDays       RevenueStatDay[]
   reservationGroups     ReservationGroup[]
   reservationNights     ReservationNight[]
   waitlistEntries       WaitlistEntry[]
@@ -1724,6 +1726,8 @@ model FolioItem {
   @@index([folioId, serviceDate, postedAt, id])
   // Konaklamanın gece ücretleri ve tek seferlik ücretleri (erken giriş, iptal...).
   @@index([reservationId, source, serviceDate])
+  // Gelir raporu (modül 23): otelin işlenen geliri hizmet gününe göre.
+  @@index([hotelId, serviceDate])
 }
 
 /// Konaklamanın yönlendirmesi (modül 15): bu tipteki sistem kalemleri (oda
@@ -2225,6 +2229,44 @@ model LostItemNote {
   item  LostItem @relation(fields: [itemId], references: [id])
 
   @@index([itemId, createdAt])
+}
+
+/// Gelir raporunun kapanmış gün özeti (modül 23): gün × oda tipi × kaynak ×
+/// para birimi. Rapor bu tablodan okur; canlı sorgu yalnızca son günleri ve
+/// eldeki rezervasyonu tarar (geçmiş büyüdükçe rapor yavaşlamasın). Satırlar
+/// zamanlanmış işle yeniden hesaplanır (`modules/reports/stats.js`); kaynak
+/// veri (gece, folyo kalemi) değişmez — bu tablo yalnızca özetidir.
+model RevenueDayStat {
+  id            String            @id @default(uuid())
+  hotelId       String
+  day           DateTime          @db.Date
+  /// Oda tipi kimliği (ilişki yok: silinmiş oda tipinin geçmiş satışı da kalır).
+  roomTypeId    String
+  source        ReservationSource
+  currency      String
+  sold          Int
+  roomRevenue   Decimal           @db.Decimal(14, 2)
+  discounts     Decimal           @db.Decimal(14, 2)
+  fees          Decimal           @db.Decimal(14, 2)
+  cancellations Decimal           @db.Decimal(14, 2)
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+
+  @@unique([hotelId, day, roomTypeId, source, currency])
+}
+
+/// Özeti hesaplanmış gün (satışı olmayan gün de işaretlenir). Rapor işaretli
+/// günü özetten, işaretsiz günü canlı okur.
+model RevenueStatDay {
+  hotelId    String
+  day        DateTime @db.Date
+  computedAt DateTime
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+
+  @@id([hotelId, day])
+  // Kendini onarma turu: en eski hesaplanan gün önce.
+  @@index([hotelId, computedAt])
 }
 
 /// Otelin AI asistanı ayarları (modül 8). Satır yoksa AI kapalıdır.

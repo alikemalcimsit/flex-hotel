@@ -33,6 +33,8 @@ import { registerFolioSubscribers } from './modules/folios/subscribers.js';
 import { exchangeRateRoutes, paymentRoutes } from './modules/payments/routes.js';
 import { extrasRoutes } from './modules/extras/routes.js';
 import { lostItemRoutes } from './modules/lost-items/routes.js';
+import { reportRoutes } from './modules/reports/routes.js';
+import { reportCacheStats } from './modules/reports/service.js';
 import { registerPaymentSubscribers } from './modules/payments/subscribers.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { messagingChannelRoutes, webchatWidgetRoutes, webhookRoutes } from './modules/channels/routes.js';
@@ -268,6 +270,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
         reservationCache: reservationCacheStats(),
         frontDeskCache: frontDeskCacheStats(),
         dashboardCache: dashboardCacheStats(),
+        reportCache: reportCacheStats(),
         // Arka planda çalışan aktörlerin (AI ajanları, kanal geçitleri) iş sırası.
         actorBacklog: Object.fromEntries(
           actorRegistry
@@ -301,6 +304,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   await app.register(exchangeRateRoutes, { prefix: '/exchange-rates' });
   await app.register(extrasRoutes, { prefix: '/extras' });
   await app.register(lostItemRoutes, { prefix: '/lost-items' });
+  await app.register(reportRoutes, { prefix: '/reports' });
   await app.register(manualTaskRoutes, { prefix: '/manual-tasks' });
   await app.register(conciergeRoutes, { prefix: '/ai' });
   await app.register(messagingChannelRoutes, { prefix: '/messaging-channels' });

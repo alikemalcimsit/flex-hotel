@@ -93,6 +93,9 @@ export const PERMISSIONS = Object.freeze({
   /** Sahibi çıkmayan eşyayı kapatmak (bağış, imha, polis) ve saklama sürelerini ayarlamak. */
   LOST_ITEMS_MANAGE: 'lost_items.manage',
 
+  /** Gelir raporları (modül 23): doluluk, ADR, RevPAR, oda geliri, kırılımlar, geçen yıl. */
+  REPORTS_VIEW: 'reports.view',
+
   /** Aktör paneli (modül 12): aktörlerin durumu, bildirgesi, LLM harcaması. */
   ACTORS_VIEW: 'actors.view',
   /** Aktörü bu otelde açmak / kapatmak (kapalı aktörün işi personele düşer). */
@@ -144,6 +147,7 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.LOST_ITEMS_RECORD]: 'Bulunan eşya kaydet',
   [PERMISSIONS.LOST_ITEMS_RELEASE]: 'Kayıp eşyayı misafirle eşleştir, teslim et',
   [PERMISSIONS.LOST_ITEMS_MANAGE]: 'Sahibi çıkmayan eşyayı kapat, saklama süresini ayarla',
+  [PERMISSIONS.REPORTS_VIEW]: 'Gelir raporlarını görüntüle (doluluk, ADR, RevPAR)',
   [PERMISSIONS.ACTORS_VIEW]: 'Aktör panelini görüntüle',
   [PERMISSIONS.ACTORS_MANAGE]: 'Aktörleri aç / kapat',
 });
@@ -211,6 +215,7 @@ export const PERMISSION_GROUPS = Object.freeze([
     label: 'Kayıp eşya',
     permissions: [PERMISSIONS.LOST_ITEMS_VIEW, PERMISSIONS.LOST_ITEMS_RECORD, PERMISSIONS.LOST_ITEMS_RELEASE, PERMISSIONS.LOST_ITEMS_MANAGE],
   },
+  { key: 'reports', label: 'Raporlar', permissions: [PERMISSIONS.REPORTS_VIEW] },
   { key: 'monitoring', label: 'İzleme', permissions: [PERMISSIONS.ACTIVITY_VIEW, PERMISSIONS.AUDIT_VIEW] },
   { key: 'actors', label: 'Aktörler', permissions: [PERMISSIONS.ACTORS_VIEW, PERMISSIONS.ACTORS_MANAGE] },
 ]);
@@ -277,6 +282,7 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.LOST_ITEMS_RECORD,
     PERMISSIONS.LOST_ITEMS_RELEASE,
     PERMISSIONS.LOST_ITEMS_MANAGE,
+    PERMISSIONS.REPORTS_VIEW,
   ]),
   FRONT_DESK: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,
@@ -341,6 +347,8 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     // Ek hizmet geliri ve fiyat listesi muhasebenin de işi.
     PERMISSIONS.EXTRAS_VIEW,
     PERMISSIONS.EXTRAS_MANAGE,
+    // Gelir raporları muhasebenin aylık işi.
+    PERMISSIONS.REPORTS_VIEW,
   ]),
   FNB: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,

@@ -180,7 +180,7 @@ export function LostItemFormDialog({ item, onClose, onSaved }) {
           </div>
         </div>
 
-        <ChoiceChips label="Bulunduğu yer" options={PLACE_OPTIONS} value={values.place} onChange={set('place')} />
+        <ChoiceChips label="Bulunduğu yer" required options={PLACE_OPTIONS} value={values.place} onChange={set('place')} />
         {values.place === 'ROOM' ? (
           <RoomPicker label="Oda" value={values.room} onChange={set('room')} error={errors.roomId} />
         ) : (
