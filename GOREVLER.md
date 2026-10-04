@@ -1653,11 +1653,67 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 21. Kayıp eşya — arkadaşın
 **Gün sonu:** Bulunan eşyalar fotoğraflı kayıt altında; misafirle eşleştirilip teslim edildiği izleniyor.
-- [ ] Backend: LostItem API (kaydet, ara, eşleştir, teslim et)
-- [ ] Ekran: Bulunan eşya formu (açıklama, oda, bulan, tarih, fotoğraf)
-- [ ] Ekran: Liste + arama (tarih, oda, açıklama)
-- [ ] Ekran: Misafirle eşleştir (o tarihte o odada kim kalmış), iletişim notu
-- [ ] Ekran: Teslim edildi / kargo bilgisi
+- [x] Backend: LostItem API (kaydet, ara, eşleştir, teslim et)
+- [x] Ekran: Bulunan eşya formu (açıklama, oda, bulan, tarih, fotoğraf)
+- [x] Ekran: Liste + arama (tarih, oda, açıklama)
+- [x] Ekran: Misafirle eşleştir (o tarihte o odada kim kalmış), iletişim notu
+- [x] Ekran: Teslim edildi / kargo bilgisi
+
+> **📌 Modül 21 tamamlandı (4 Ekim 2026 — Ahmet).**
+>
+> **Veri** (migration `20261005090000_lost_items`; başlangıç şemasındaki kullanılmayan `LostItem` taslağı yeniden
+> kuruldu — tabloda kayıt varsa göç durur):
+> - `LostItem`: etiket no `LF-XXXXXX` (poşete yazılır, otel içinde tekil), açıklama, kategori, **değerli**, oda ya da
+>   yazılı yer (biri zorunlu), bulunma anı + iş günü, bulan (hesabı olmayan personel de olabilir), saklandığı yer,
+>   durum (depoda → sahibi bulundu → teslim edildi / kapatıldı), eşleşen misafir + konaklama, teslim (elden: teslim
+>   alan + kimlik görüldü; kargo: firma, takip no, adres, ücret, ödeyen), kapatma (bağış / imha / polis / hatalı kayıt
+>   + gerekçe), kapanış izi, fotoğrafların silindiği an, istek kimliği. Kısıtlar: yer, eşleşme / teslim / kapatma izleri.
+> - `LostItemPhoto` (dosya sunucu diskinde, kayıt veritabanında), `LostItemNote` (iletişim notu; silinmez).
+> - Otel: `lostItemRetentionDays` (90), `lostItemValuableRetentionDays` (365).
+>
+> **Kararlar (kullanıcı, 3 Ekim 2026):** fotoğraflar **sunucu diskinde**; saklama **90 gün, değerli eşya 1 yıl**
+> (ayarlanır), süresi dolan "süresi dolan" listesine düşer, yönetici gerekçeyle kapatır; kapanan eşyanın fotoğrafları
+> **30 gün sonra** silinir.
+>
+> **Fotoğraf:** tarayıcı uzun kenarı 1600 px'e küçültür, JPEG'e çevirir (EXIF / konum düşer) ve 320 px önizleme
+> üretir; sunucu türü dosyanın imzasından, boyutu sınırdan doğrular (1,5 MB / 150 KB; route gövde sınırı yalnızca bu
+> uçta yükseltildi). Dosya `FILE_STORAGE_DIR` altında (`lost-items/<otel>/<id>.jpg`), statik sunulmaz: yalnızca yetkili
+> oturumla API'den okunur, tarayıcı önbelleğine özel. Eşya başına en fazla 4 fotoğraf (kilit altında). Yazılamayan
+> kaydın dosyası geri silinir. Saatlik iş kapanıştan 30 gün sonra fotoğrafları siler (kısmi index'le).
+>
+> **Eşleştirme:** eşya odada bulunduysa o sırada odada kalan (`IN_ROOM`) ve son 7 günde odadan ayrılanlar (çıkış ya da
+> oda değişimi — `RoomStaySegment`), ayrılış yakınlığına göre; refakatçiler dahil; eşyadan sonra gelen aday değil.
+> Ortak alanda bulunan eşyada misafir araması (ad, telefon, e-posta). Konaklama verildiyse misafir o konaklamanın
+> misafiri olmalı. Eşleşme gerekçeyle kaldırılır (nota da düşer). Misafirin telefonu / e-postası ve kargo adresi
+> yalnızca teslim yetkisine gösterilir.
+>
+> **Teslim / kapatma:** değerli eşya elden **kimlik görülmeden verilmez**; her geçiş satır kilidi + sürüm damgasıyla
+> (aynı eşya iki kişiye teslim edilemez — test edildi). Kapanmış kayıt değişmez; iletişim notu her durumda yazılır.
+> Çıkış penceresi misafire eşleşmiş eşyayı ve odasında bulunup eşleşmemiş eşyayı uyarır (kayıp eşyayı görebilene).
+>
+> **API** (`/lost-items`): `GET /` (görünüm: saklananlar / teslim bekleyen / süresi dolan / teslim edilen / kapatılan;
+> arama: etiket no, oda no, açıklama, yer, misafir; kategori, değerli, tarih; sayfalı), `GET /summary`, `GET|PUT
+> /settings`, `GET /owners`, `POST /` (201 / aynı istek 200), `GET|PUT /:id`, `GET /:id/candidates`,
+> `POST|GET|DELETE /:id/photos[/:photoId]`, `POST /:id/match|unmatch|notes|return|dispose`. İzinler:
+> `lost_items.view` (müdür, resepsiyon, kat, F&B), `lost_items.record` (aynı), `lost_items.release` (müdür,
+> resepsiyon), `lost_items.manage` (müdür). Olaylar: `lost_item.recorded`, `lost_item.changed`,
+> `lost_items.settings.changed` (kanal `lost-items.changed`; yükte yalnızca kimlikler).
+>
+> **Ekranlar** (`/kayip-esya`): liste (sayaçlar, görünümler, arama, süzgeçler, önizlemeler, canlı), eşya ekranı
+> (etiket no, galeri, bilgiler, sahibi, sonuç, iletişim notları), kayıt / düzeltme formu (telefonda kamera), sahibini
+> bul, teslim, kapatma, saklama süreleri.
+>
+> **2500 kişi için:** liste `(hotelId, status, foundAt, id)` / `(hotelId, status, closedAt, id)`; süresi dolanlar
+> `(hotelId, status, valuable, businessDate)` eşiğiyle (süre kolonu yok); açıklama ve yer trigram; etiket no tekil;
+> adaylar oda + tarih index'leriyle sınırlı tarama; sayfa başına kapak fotoğrafları tek sorgu; sayım sınırlı.
+> Ek: oturum kapanınca / kişi değişince panelin sorgu önbelleği boşalır (ortak resepsiyon bilgisayarı).
+> Test: kurallar 9 + dosya deposu 4 + sözleşme 13 + gövde sınırı 3 birim; entegrasyon 16.
+>
+> **Canlıya alırken:** sunucuda `FILE_STORAGE_DIR` uygulama klasörünün dışında (ör. `/home/public_html/storage`,
+> sahibi www) ve yedeğe dahil edilmeli.
+>
+> **Devir:** modül 9 (bildirim) misafire "eşyanız bulundu" şablonu bağlayabilir (`lost_item.changed` / MATCHED);
+> modül 22 (misafir kartı) misafirin eşyalarını `guestId` index'iyle gösterebilir.
 
 ### 22. CRM & misafir kartı — Ali Kemal
 **Gün sonu:** Her misafirin tek profili var: geçmiş konaklamalar, tercihler, toplam harcama, notlar; mükerrer kayıtlar birleştirilebiliyor.

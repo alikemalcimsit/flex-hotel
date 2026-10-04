@@ -65,7 +65,10 @@ export async function frontDeskRoutes(app) {
 
   app.get('/stays/:reservationId/check-out', { ...manage, schema: params }, async (request) => ({
     success: true,
-    data: await service.getCheckOutPreview(request.hotelId, request.params.reservationId),
+    data: await service.getCheckOutPreview(request.hotelId, request.params.reservationId, {
+      // Kayıp eşya uyarısı (modül 21) yalnızca kayıp eşyaları görebilene: açıklama ve saklandığı yer taşır.
+      includeLostItems: request.auth.permissions.includes(PERMISSIONS.LOST_ITEMS_VIEW),
+    }),
   }));
 
   app.post('/stays/:reservationId/check-out', { ...manage, schema: { ...params, body: checkOutSchema } }, async (request) => {

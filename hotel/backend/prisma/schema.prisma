@@ -2189,6 +2189,7 @@ model LostItem {
   // Açıklama araması ("siyah cüzdan"). Fotoğraf silme işinin kısmi index'i
   // (`LostItem_photo_purge_idx`) migration'da.
   @@index([description(ops: raw("gin_trgm_ops"))], map: "LostItem_description_trgm_idx", type: Gin)
+  @@index([locationText(ops: raw("gin_trgm_ops"))], map: "LostItem_locationText_trgm_idx", type: Gin)
 }
 
 /// Kayıp eşyanın fotoğrafı (modül 21). Dosya sunucu diskinde

@@ -117,12 +117,13 @@ async function businessDay(hotelId, at) {
 
 /**
  * Eşyaların kapak fotoğrafı ve fotoğraf sayısı (sayfa başına tek sorgu).
+ * @param {string} hotelId
  * @param {string[]} itemIds
  */
-async function photoSummary(itemIds) {
+async function photoSummary(hotelId, itemIds) {
   if (itemIds.length === 0) return new Map();
   const photos = await prisma.lostItemPhoto.findMany({
-    where: { itemId: { in: itemIds } },
+    where: { hotelId, itemId: { in: itemIds } },
     select: { id: true, itemId: true },
     orderBy: [{ itemId: 'asc' }, { createdAt: 'asc' }],
   });
@@ -319,13 +320,18 @@ export async function listLostItems(hotelId, query, { includeContact }) {
   for (const token of searchTokens(query.search)) and.push(await tokenFilter(hotelId, token));
 
   const where = { hotelId, AND: and };
-  // Kapanmış kayıtlar son kapanan önce ((hotelId, status, closedAt) index'i); açıklar son bulunan önce.
-  const orderBy = ['RETURNED', 'DISPOSED'].includes(query.view) ? [{ closedAt: 'desc' }, { id: 'desc' }] : [{ foundAt: 'desc' }, { id: 'desc' }];
+  // Kapanmış kayıtlar son kapanan önce ((hotelId, status, closedAt) index'i); açıklar son bulunan önce;
+  // süresi dolanlar en eski önce (kapatma sırası; aynı index geriye taranır).
+  const orderBy = ['RETURNED', 'DISPOSED'].includes(query.view)
+    ? [{ closedAt: 'desc' }, { id: 'desc' }]
+    : query.view === 'EXPIRED'
+      ? [{ foundAt: 'asc' }, { id: 'asc' }]
+      : [{ foundAt: 'desc' }, { id: 'desc' }];
   const [rows, counted] = await Promise.all([
     prisma.lostItem.findMany({ where, orderBy, ...toSkipTake(query), select: ITEM_SELECT }),
     prisma.lostItem.count({ where, take: RESERVATION_COUNT_CAP + 1 }),
   ]);
-  const photos = await photoSummary(rows.map((row) => row.id));
+  const photos = await photoSummary(hotelId, rows.map((row) => row.id));
   const totalCapped = counted > RESERVATION_COUNT_CAP;
   const page = buildPage(
     rows.map((row) => toItemDto(row, { retention, today, includeContact, photos: photos.get(row.id) })),
@@ -708,7 +714,9 @@ export async function addContactNote(hotelId, id, { channel, text }) {
   await writeWithEvents(async (tx, stage) => {
     const item = await tx.lostItem.findFirst({ where: { id, hotelId }, select: { id: true, status: true, guestId: true } });
     if (!item) throw new NotFoundError('Kayıp eşya kaydı bulunamadı');
-    await tx.lostItemNote.create({ data: { hotelId, itemId: id, channel, text, createdBy: actor } });
+    const note = await tx.lostItemNote.create({ data: { hotelId, itemId: id, channel, text, createdBy: actor }, select: { id: true } });
+    // Not kendisi değişmez bir iz; denetim kaydı aktivite akışında da görünsün diye.
+    await recordAudit(tx, { hotelId, entity: 'LostItem', entityId: id, action: 'UPDATE', before: {}, after: { noteId: note.id, channel } });
     await stage('lost_item.changed', { hotelId, itemId: id, status: item.status, change: 'CONTACTED', guestId: item.guestId });
   });
   return { channel, channelLabel: LOST_ITEM_CONTACT_CHANNEL_LABELS[channel] };

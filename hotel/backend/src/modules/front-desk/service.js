@@ -575,9 +575,9 @@ export async function checkIn(hotelId, reservationId, input, { now = new Date() 
  *
  * @param {string} hotelId
  * @param {string} reservationId
- * @param {{ now?: Date }} [options]
+ * @param {{ now?: Date, includeLostItems?: boolean }} [options] `includeLostItems`: kayıp eşya uyarısı (görme izni olana)
  */
-export async function getCheckOutPreview(hotelId, reservationId, { now = new Date() } = {}) {
+export async function getCheckOutPreview(hotelId, reservationId, { now = new Date(), includeLostItems = true } = {}) {
   const { hotel, businessDate, clock } = await loadClock(hotelId, now);
   const stay = await readStay(prisma, hotelId, reservationId);
   const nights = nightRows(stay.nights);
@@ -599,7 +599,7 @@ export async function getCheckOutPreview(hotelId, reservationId, { now = new Dat
     pendingStayCharges(prisma, hotelId, stay, { keptNights, lateFee: late.fee }),
     stayPaymentStatus(prisma, hotelId, stay),
     openLaundryForStay(prisma, hotelId, stay.id),
-    lostItemsForCheckOut(prisma, hotelId, stay),
+    includeLostItems ? lostItemsForCheckOut(prisma, hotelId, stay) : null,
   ]);
   const folio = balances.get(stay.id) ?? null;
   const pendingWithoutLateFee = pending.own.filter((line) => line.source !== 'LATE_CHECK_OUT').map((line) => line.total);

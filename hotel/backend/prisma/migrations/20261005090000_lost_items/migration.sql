@@ -128,6 +128,9 @@ CREATE INDEX "LostItem_reservationId_status_idx" ON "LostItem"("reservationId", 
 CREATE INDEX "LostItem_description_trgm_idx" ON "LostItem" USING GIN ("description" gin_trgm_ops);
 
 -- CreateIndex
+CREATE INDEX "LostItem_locationText_trgm_idx" ON "LostItem" USING GIN ("locationText" gin_trgm_ops);
+
+-- CreateIndex
 CREATE UNIQUE INDEX "LostItem_hotelId_reference_key" ON "LostItem"("hotelId", "reference");
 
 -- CreateIndex
