@@ -76,6 +76,9 @@ const ExtrasIndex = lazy(() => import('./pages/extras/ExtrasPage.jsx').then((m) 
 const LostItemsPage = lazy(() => import('./pages/lost-items/LostItemsPage.jsx').then((m) => ({ default: m.LostItemsPage })));
 const LostItemDetailPage = lazy(() => import('./pages/lost-items/LostItemDetailPage.jsx').then((m) => ({ default: m.LostItemDetailPage })));
 const RevenueReportPage = lazy(() => import('./pages/reports/RevenueReportPage.jsx').then((m) => ({ default: m.RevenueReportPage })));
+const BudgetPage = lazy(() => import('./pages/budget/BudgetPage.jsx').then((m) => ({ default: m.BudgetPage })));
+const ExpenseActualsPage = lazy(() => import('./pages/budget/ExpenseActualsPage.jsx').then((m) => ({ default: m.ExpenseActualsPage })));
+const VariancePage = lazy(() => import('./pages/budget/VariancePage.jsx').then((m) => ({ default: m.VariancePage })));
 const MinibarEntryTab = lazy(() => import('./pages/extras/MinibarEntryTab.jsx').then((m) => ({ default: m.MinibarEntryTab })));
 const MinibarRecordsTab = lazy(() => import('./pages/extras/MinibarRecordsTab.jsx').then((m) => ({ default: m.MinibarRecordsTab })));
 const LaundryTab = lazy(() => import('./pages/extras/LaundryTab.jsx').then((m) => ({ default: m.LaundryTab })));
@@ -316,6 +319,31 @@ export default function App() {
               element={
                 <RequirePermission permission={PERMISSIONS.REPORTS_VIEW}>
                   <RevenueReportPage />
+                </RequirePermission>
+              }
+            />
+            <Route path="butce" element={<Navigate to="/butce/plan" replace />} />
+            <Route
+              path="butce/plan"
+              element={
+                <RequirePermission permission={PERMISSIONS.BUDGET_VIEW}>
+                  <BudgetPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="butce/gerceklesen"
+              element={
+                <RequirePermission permission={PERMISSIONS.BUDGET_VIEW}>
+                  <ExpenseActualsPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="butce/sapma"
+              element={
+                <RequirePermission permission={PERMISSIONS.BUDGET_VIEW}>
+                  <VariancePage />
                 </RequirePermission>
               }
             />

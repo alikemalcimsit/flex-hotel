@@ -98,6 +98,13 @@ export const PERMISSIONS = Object.freeze({
   /** Gelir raporları (modül 23): doluluk, ADR, RevPAR, oda geliri, kırılımlar, geçen yıl. */
   REPORTS_VIEW: 'reports.view',
 
+  /** Bütçe (modül 27): bütçeyi ve sapma raporunu görmek. */
+  BUDGET_VIEW: 'budget.view',
+  /** Taslağı düzenlemek, gider kalemleri ve gerçekleşenleri, AI yorumu istemek. */
+  BUDGET_MANAGE: 'budget.manage',
+  /** Bütçeyi onaylamak (kilit) ve revize açmak. */
+  BUDGET_APPROVE: 'budget.approve',
+
   /** Aktör paneli (modül 12): aktörlerin durumu, bildirgesi, LLM harcaması. */
   ACTORS_VIEW: 'actors.view',
   /** Aktörü bu otelde açmak / kapatmak (kapalı aktörün işi personele düşer). */
@@ -151,6 +158,9 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.LOST_ITEMS_RELEASE]: 'Kayıp eşyayı misafirle eşleştir, teslim et',
   [PERMISSIONS.LOST_ITEMS_MANAGE]: 'Sahibi çıkmayan eşyayı kapat, saklama süresini ayarla',
   [PERMISSIONS.REPORTS_VIEW]: 'Gelir raporlarını görüntüle (doluluk, ADR, RevPAR)',
+  [PERMISSIONS.BUDGET_VIEW]: 'Bütçeyi ve sapma raporunu görüntüle',
+  [PERMISSIONS.BUDGET_MANAGE]: 'Bütçe taslağını, gider kalemlerini ve gerçekleşen giderleri düzenle',
+  [PERMISSIONS.BUDGET_APPROVE]: 'Bütçeyi onayla ve revize aç',
   [PERMISSIONS.ACTORS_VIEW]: 'Aktör panelini görüntüle',
   [PERMISSIONS.ACTORS_MANAGE]: 'Aktörleri aç / kapat',
 });
@@ -219,6 +229,7 @@ export const PERMISSION_GROUPS = Object.freeze([
     permissions: [PERMISSIONS.LOST_ITEMS_VIEW, PERMISSIONS.LOST_ITEMS_RECORD, PERMISSIONS.LOST_ITEMS_RELEASE, PERMISSIONS.LOST_ITEMS_MANAGE],
   },
   { key: 'reports', label: 'Raporlar', permissions: [PERMISSIONS.REPORTS_VIEW] },
+  { key: 'budget', label: 'Bütçe', permissions: [PERMISSIONS.BUDGET_VIEW, PERMISSIONS.BUDGET_MANAGE, PERMISSIONS.BUDGET_APPROVE] },
   { key: 'monitoring', label: 'İzleme', permissions: [PERMISSIONS.ACTIVITY_VIEW, PERMISSIONS.AUDIT_VIEW] },
   { key: 'actors', label: 'Aktörler', permissions: [PERMISSIONS.ACTORS_VIEW, PERMISSIONS.ACTORS_MANAGE] },
 ]);
@@ -287,6 +298,10 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.LOST_ITEMS_MANAGE,
     PERMISSIONS.REPORTS_VIEW,
     PERMISSIONS.FORECAST_MANAGE,
+    // Bütçeyi müdür onaylar.
+    PERMISSIONS.BUDGET_VIEW,
+    PERMISSIONS.BUDGET_MANAGE,
+    PERMISSIONS.BUDGET_APPROVE,
   ]),
   FRONT_DESK: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,
@@ -353,6 +368,9 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.EXTRAS_MANAGE,
     // Gelir raporları muhasebenin aylık işi.
     PERMISSIONS.REPORTS_VIEW,
+    // Bütçeyi muhasebe hazırlar ve gerçekleşen giderleri girer; onay müdürün.
+    PERMISSIONS.BUDGET_VIEW,
+    PERMISSIONS.BUDGET_MANAGE,
   ]),
   FNB: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,

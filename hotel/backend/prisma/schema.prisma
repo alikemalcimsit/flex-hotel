@@ -305,6 +305,20 @@ enum LostItemCategory {
   OTHER
 }
 
+/// Bütçe sürümü (modül 27): taslak düzenlenir; onaylı kilitlidir; revize onaylanınca eskisi saklanır.
+enum BudgetStatus {
+  DRAFT
+  APPROVED
+  SUPERSEDED
+}
+
+/// AI sapma yorumunun durumu (modül 27).
+enum BudgetCommentaryStatus {
+  PENDING
+  READY
+  FAILED
+}
+
 enum LostItemStatus {
   STORED
   MATCHED
@@ -534,6 +548,11 @@ model Hotel {
   lostItemNotes         LostItemNote[]
   revenueDayStats       RevenueDayStat[]
   revenueStatDays       RevenueStatDay[]
+  budgets               Budget[]
+  budgetLines           BudgetLine[]
+  budgetExpenseItems    BudgetExpenseItem[]
+  budgetExpenseActuals  BudgetExpenseActual[]
+  budgetCommentaries    BudgetCommentary[]
   reservationGroups     ReservationGroup[]
   reservationNights     ReservationNight[]
   waitlistEntries       WaitlistEntry[]
@@ -2360,4 +2379,125 @@ model MessagingChannel {
   hotel Hotel @relation(fields: [hotelId], references: [id])
 
   @@unique([hotelId, channel])
+}
+
+/// Yılın bütçe sürümü (modül 27). Yıl başına en fazla bir taslak ve bir onaylı
+/// (kısmi tekil index'ler, migration). Onaylı sürüm kilitlidir; değişiklik için
+/// revize taslağı açılır (satırları kopyalanır), revize onaylanınca önceki
+/// onaylı "eski sürüm" olur. Silinmez: sapma raporu geçmişte neye göre
+/// çıktığını gösterebilmeli.
+model Budget {
+  id           String       @id @default(uuid())
+  hotelId      String
+  year         Int
+  /// Yılın içinde 1'den artan sürüm numarası.
+  version      Int
+  status       BudgetStatus @default(DRAFT)
+  /// Revize gerekçesi (ilk sürümde boş).
+  reason       String?
+  createdBy    String
+  approvedAt   DateTime?
+  approvedBy   String?
+  supersededAt DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  hotel        Hotel              @relation(fields: [hotelId], references: [id])
+  lines        BudgetLine[]
+  commentaries BudgetCommentary[]
+
+  @@unique([hotelId, year, version])
+  // Yılın sürümleri (en yeni önce) ve yılın onaylı / taslak sürümü.
+  @@index([hotelId, year, status])
+}
+
+/// Bütçe satırı: kalem × ay plan değeri. Kalem sistem kalemi kodu
+/// (ROOM_REVENUE, OCCUPANCY...) ya da gider kaleminin kimliği. Doluluk yüzde
+/// (0–100), diğerleri otelin para biriminde, vergiler hariç.
+model BudgetLine {
+  id            String   @id @default(uuid())
+  hotelId       String
+  budgetId      String
+  item          String
+  expenseItemId String?
+  month         Int
+  amount        Decimal  @db.Decimal(14, 2)
+  createdAt     DateTime @default(now())
+
+  hotel       Hotel              @relation(fields: [hotelId], references: [id])
+  budget      Budget             @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  expenseItem BudgetExpenseItem? @relation(fields: [expenseItemId], references: [id], onDelete: Restrict)
+
+  @@unique([budgetId, item, month])
+  @@index([expenseItemId])
+  @@index([hotelId])
+}
+
+/// Otelin gider kalemleri (bütçe sürümlerinden bağımsız: gerçekleşen de
+/// bunlara bağlı). Kaldırılan kalem arşivlenir; eski bütçelerde görünmeye devam eder.
+model BudgetExpenseItem {
+  id         String    @id @default(uuid())
+  hotelId    String
+  label      String
+  sortOrder  Int
+  archivedAt DateTime?
+  createdBy  String
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  hotel   Hotel                 @relation(fields: [hotelId], references: [id])
+  lines   BudgetLine[]
+  actuals BudgetExpenseActual[]
+
+  // Etkin kalemler sırasıyla (bütçe ızgarası, Excel şablonu).
+  @@index([hotelId, archivedAt, sortOrder])
+}
+
+/// Giderin gerçekleşeni (ay ay elle; satın alma ve ön muhasebe — modül 45 /
+/// 47 — gelince oradan hesaplanır). Bütçe sürümünden bağımsızdır.
+model BudgetExpenseActual {
+  id            String   @id @default(uuid())
+  hotelId       String
+  expenseItemId String
+  year          Int
+  month         Int
+  amount        Decimal  @db.Decimal(14, 2)
+  enteredBy     String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  hotel       Hotel             @relation(fields: [hotelId], references: [id])
+  expenseItem BudgetExpenseItem @relation(fields: [expenseItemId], references: [id], onDelete: Restrict)
+
+  @@unique([expenseItemId, year, month])
+  // Yılın gerçekleşenleri (sapma raporu).
+  @@index([hotelId, year])
+}
+
+/// AI sapma yorumu (modül 27): bir dönem için istenir, ajan (budget-agent)
+/// yazar. Aynı dönem için aynı anda tek bekleyen istek (kısmi tekil index).
+model BudgetCommentary {
+  id            String                 @id @default(uuid())
+  hotelId       String
+  budgetId      String
+  year          Int
+  month         Int
+  /// MONTH | YTD
+  scope         String
+  status        BudgetCommentaryStatus @default(PENDING)
+  text          String?
+  failureReason String?
+  model         String?
+  requestedBy   String
+  requestedAt   DateTime               @default(now())
+  completedAt   DateTime?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+
+  hotel  Hotel  @relation(fields: [hotelId], references: [id])
+  budget Budget @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+
+  // Dönemin son yorumu.
+  @@index([hotelId, year, month, scope, requestedAt(sort: Desc)])
+  @@index([budgetId])
 }

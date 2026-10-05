@@ -1879,11 +1879,60 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 27. Bütçe yönetimi — arkadaşın
 **Gün sonu:** Yıllık bütçe ay ay giriliyor; gerçekleşenle sapma raporu çıkıyor; AI sapmayı yorumluyor.
-- [ ] Backend: Budget, BudgetLine tabloları + API (yıl, ay, kalem, plan tutarı)
-- [ ] Backend: gerçekleşen tutarları folyo / ödeme / satın alma verisinden hesaplama
-- [ ] Ekran: Bütçe giriş tablosu (satır kalem, sütun ay; Excel'den yükleme)
-- [ ] Ekran: Sapma raporu (plan, gerçek, fark, fark %; renkli)
-- [ ] report-agent'a `explain_variance` tool'u → yorum paragrafı
+- [x] Backend: Budget, BudgetLine tabloları + API (yıl, ay, kalem, plan tutarı)
+- [x] Backend: gerçekleşen tutarları folyo / ödeme / satın alma verisinden hesaplama
+- [x] Ekran: Bütçe giriş tablosu (satır kalem, sütun ay; Excel'den yükleme)
+- [x] Ekran: Sapma raporu (plan, gerçek, fark, fark %; renkli)
+- [x] report-agent'a `explain_variance` tool'u → yorum paragrafı
+
+> **📌 Modül 27 tamamlandı (5 Ekim 2026 — Ahmet).**
+>
+> **Kararlar (kullanıcı, 5 Ekim 2026):** kapsam gelir + doluluk / ADR hedefleri + gider (gelirin ve hedeflerin
+> gerçekleşeni sistemden; giderin gerçekleşeni şimdilik elle — modül 45 satın alma / 47 ön muhasebe gelince otomatik);
+> AI yorumu şimdi, mevcut AI altyapısıyla; Excel otele göre şablon indir → doldur → yükle; bütçe taslak → onaylı (kilit),
+> değişiklik revizeyle (önceki onaylı "eski sürüm" olarak saklanır).
+>
+> **Veri** (migration `20261008090000_budgets`): `Budget` (yıl × sürüm; DRAFT / APPROVED / SUPERSEDED; yıl başına tek
+> taslak ve tek onaylı — kısmi tekil index), `BudgetLine` (kalem × ay plan; doluluk 0–100), `BudgetExpenseItem`
+> (otelin gider kalemleri; etkin ad tekil, kaldırılan arşivlenir — açık taslaklardan düşer, onaylılarda kalır),
+> `BudgetExpenseActual` (gider gerçekleşeni, hücre sürümlü), `BudgetCommentary` (AI yorumu; dönem başına tek bekleyen).
+> CHECK'ler: ay, tutar, onay izi, yorum izi. İlk bütçede USALI'ye göre önerilen 7 gider kalemi eklenir.
+>
+> **Gerçekleşen** (yalnızca kapanmış günler): oda geliri, ek ücret, iptal geliri, satılan / satılabilir oda **gelir
+> raporunun hesabından** (rapor ile bütçe aynı ayın oda gelirini hiçbir zaman farklı göstermez); restoran / minibar /
+> çamaşır / diğer gelir folyo kaleminin türünden (indirim kendi vergi kategorisinin gelirinden düşer, vergi kalemi gelir
+> değil); tahsilat kasa tanımıyla (işlenmiş ödeme − iade ± iptal kaydı; onay bekleyen sayılmaz); gider elle.
+>
+> **Sapma:** ay ya da yılbaşından seçilen aya; içinde bulunulan ayın planı kapanmış gün oranında (ekranda işaretli);
+> doluluk hedefi satılabilir odayla, ADR hedefi planlanan geceyle ağırlıklı; gelirde fazlası / giderde azı olumlu (renk +
+> işaret); gelir, gider ve brüt faaliyet kârı toplamı; planı olup gerçekleşeni girilmemiş gider "eksik"; oda geliri
+> sapması doluluk etkisi ve fiyat etkisine ayrılır (girilen plan hedeflerle tutmuyorsa fark ayrıca). Plan yılın onaylı
+> bütçesinden, yoksa taslaktan (işaretli).
+>
+> **AI:** `explain_variance` (raporlama MCP sunucusu; modül 24 ajanı da kullanır) + `budget-agent` (olay güdümlü:
+> `budget.commentary.requested` → yorum → `budget.commentary.completed`). Model otelin ana modeli (concierge ile aynı
+> ayar), günlük AI bütçesi ve kullanım kaydı ortak. Ajan kapalı / anahtar yok / bütçe doldu → istek "yazılamadı" ile
+> kapanır (askıda kalmaz; 5 dk zaman aşımı son güvence); rapor yorumsuz da eksiksiz. Modele kişisel veri gitmez.
+>
+> **API** (`/budgets`): yıl görünümü, aç, revize, satırları kaydet (sürümlü), onayla; gider kalemleri (ekle / ad / kaldır);
+> gerçekleşen gider (hücre sürümlü, gelecek ay girilmez); sapma; yorum iste / oku. İzinler `budget.view` (müdür,
+> muhasebe), `budget.manage` (müdür, muhasebe), `budget.approve` (müdür). Canlı kanal `budget.changed`.
+>
+> **Ekran** (`/butce/plan`, `/butce/gerceklesen`, `/butce/sapma`; yıl adres çubuğunda): ızgara (gelir / hedef / nakit /
+> gider grupları, gelir ve gider ara toplamı, brüt faaliyet kârı, Türkçe sayı biçimi, hücre hatası ay adıyla); Excel
+> şablonu indir / yükle (kod sütunuyla eşleşir; yüklenen değer kaydedilmemiş değişiklik olarak gelir, 1 MB sınırı);
+> onay ve revize pencereleri; canlı tazeleme kaydedilmemiş girişi silmez (başkası kaydettiyse uyarı); gider gerçekleşeni
+> ızgarası; sapma tablosu + oda geliri ayrıştırma kartı + AI yorum kartı. Telefonda sayfa taşmaz, tablolar kendi içinde kayar.
+>
+> **Ölçüm** (`scripts/perf-budget.mjs`, 1500 oda, 4 yıl): yılbaşından bu yana sapma soğuk ~0,46 sn (yılın sistem
+> gerçekleşeni bir kez okunur, önbellekten ay / kapsam değişimi anında).
+>
+> **Test:** kurallar 11 + sözleşme 6 + ajan 7 birim; entegrasyon 9 (ilk bütçe, satır / sürüm / kilit / boş onay, revize,
+> gider kalemi, gerçekleşen gider, sapma — sınıflama, tahsilat, hedefler, ayrıştırma, eksik gider, otel sınırı, raporla
+> aynı oda geliri —, ay içi orantı, AI yorumu sahte modelle uçtan uca + tek bekleyen + boş dönem, MCP ve izinler).
+>
+> **Devir:** modül 45 / 47 gelince `BudgetExpenseActual` yerine gider gerçekleşeni oradan hesaplanır (kalem eşlemesi
+> gerekir); modül 24 `explain_variance`'ı MCP'den çağırır.
 
 ---
 

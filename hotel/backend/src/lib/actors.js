@@ -1,4 +1,5 @@
 import { actorRegistry } from '@hotelos/actor-kit';
+import { budgetAgentManifest, createBudgetAgent } from '@hotelos/budget-agent';
 import { conciergeAgentManifest, createConciergeAgent } from '@hotelos/concierge-agent';
 import {
   NOTIFICATION_CHANNEL_LABELS,
@@ -17,7 +18,9 @@ import { createWhatsAppGateway } from '@hotelos/whatsapp-gateway';
 import { prismaUnfiltered } from '../db.js';
 import { webchatGatewayService, webchatTransport } from '../modules/channels/webchat.js';
 import { whatsappGatewayService } from '../modules/channels/whatsapp.js';
+import { completeCommentary, explainVariance } from '../modules/budget/variance.js';
 import { createLlmDeps } from '../modules/concierge/llm.js';
+import { getAiSettingsCached } from '../modules/concierge/settings.js';
 import { conciergeService, routerService } from '../modules/concierge/service.js';
 import * as folioService from '../modules/folios/service.js';
 import * as paymentService from '../modules/payments/service.js';
@@ -161,7 +164,18 @@ export const isActorEnabled = (hotelId, actorName) => deps.isEnabled(hotelId, ac
 const OPTIONAL_ACTORS = Object.freeze([
   { manifest: routerAgentManifest, reason: 'Sunucuda OPENAI_API_KEY tanımlı değil; ajan çalışmıyor' },
   { manifest: conciergeAgentManifest, reason: 'Sunucuda OPENAI_API_KEY tanımlı değil; ajan çalışmıyor' },
+  { manifest: budgetAgentManifest, reason: 'Sunucuda OPENAI_API_KEY tanımlı değil; ajan çalışmıyor' },
 ]);
+
+/**
+ * Bütçe yorum ajanının servisi (modül 27). Model otelin ana modeli
+ * (concierge ile aynı ayar): fiyatı ve günlük AI bütçesi aynı yerden denetlenir.
+ */
+const budgetAgentService = {
+  model: async (hotelId) => (await getAiSettingsCached(hotelId)).conciergeModel || null,
+  explainVariance,
+  completeCommentary,
+};
 
 /**
  * Yönetim panelinin aktör listesi (modül 12): kayıtlı aktörler ve kayıtlı
@@ -280,6 +294,7 @@ export function registerAiAgents({ client } = {}) {
   actorRegistry.register(createRouterAgent(routerService, { ...deps, llm }));
   actorRegistry.register(createConciergeAgent(conciergeService, { ...deps, llm, parseArguments: parseToolArguments }));
   registerAutoResponder({ name: 'concierge-agent' });
+  actorRegistry.register(createBudgetAgent(budgetAgentService, { ...deps, llm }));
   // Sonradan (testte) kaydedildiyse de bus'a bağlansın; bağlama tekrar edilebilir.
   actorRegistry.bindAll(eventBus);
   return true;

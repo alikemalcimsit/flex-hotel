@@ -57,6 +57,8 @@ export const CASH_CHANNEL = 'cash.changed';
 export const EXTRAS_CHANNEL = 'extras.changed';
 /** Kayıp eşya (modül 21): kayıt, fotoğraf, eşleşme, teslim, saklama süresi. */
 export const LOST_ITEMS_CHANNEL = 'lost-items.changed';
+/** Bütçe (modül 27): sürüm, gider kalemi, gerçekleşen gider, AI yorumu. */
+export const BUDGET_CHANNEL = 'budget.changed';
 
 /**
  * Kanal aboneliği sayacı. Aynı kanalı birden fazla bileşen dinleyebilir
