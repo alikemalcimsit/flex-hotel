@@ -58,6 +58,8 @@ export const PERMISSIONS = Object.freeze({
 
   /** Günlük durum ekranı (modül 13): doluluk, gelecek / gidecek, oda geliri, ADR. */
   DASHBOARD_VIEW: 'dashboard.view',
+  /** Tahminin kritik gün eşikleri (modül 25; tahminin kendisi günlük durumla görülür). */
+  FORECAST_MANAGE: 'forecast.manage',
 
   /** Folyoları ve kalemlerini görmek (modül 15). Kat hizmetleri görmez. */
   FOLIO_VIEW: 'folio.view',
@@ -132,6 +134,7 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.ACTIVITY_VIEW]: 'Aktivite akışını ve zincirleri görüntüle',
   [PERMISSIONS.AUDIT_VIEW]: 'Denetim kaydını görüntüle',
   [PERMISSIONS.DASHBOARD_VIEW]: 'Günlük durumu görüntüle (doluluk, gelir)',
+  [PERMISSIONS.FORECAST_MANAGE]: 'Tahminin kritik gün eşiklerini ayarla',
   [PERMISSIONS.FOLIO_VIEW]: 'Folyoları görüntüle',
   [PERMISSIONS.FOLIO_POST]: 'Folyoya harcama işle, aktar, böl, birleştir',
   [PERMISSIONS.FOLIO_ADJUST]: 'İndirim uygula, kapanmış folyoyu yeniden aç',
@@ -194,7 +197,7 @@ export const PERMISSION_GROUPS = Object.freeze([
     label: 'Yönetim',
     permissions: [PERMISSIONS.USERS_VIEW, PERMISSIONS.USERS_MANAGE, PERMISSIONS.ROLES_MANAGE],
   },
-  { key: 'dashboard', label: 'Günlük durum', permissions: [PERMISSIONS.DASHBOARD_VIEW] },
+  { key: 'dashboard', label: 'Günlük durum', permissions: [PERMISSIONS.DASHBOARD_VIEW, PERMISSIONS.FORECAST_MANAGE] },
   {
     key: 'folios',
     label: 'Folyo',
@@ -283,6 +286,7 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.LOST_ITEMS_RELEASE,
     PERMISSIONS.LOST_ITEMS_MANAGE,
     PERMISSIONS.REPORTS_VIEW,
+    PERMISSIONS.FORECAST_MANAGE,
   ]),
   FRONT_DESK: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,

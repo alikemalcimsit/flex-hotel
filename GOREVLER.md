@@ -1809,11 +1809,64 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 25. Günlük durum — forecast — arkadaşın
 **Gün sonu:** Dashboard'da önümüzdeki 30 günün doluluk ve gelir tahmini görünüyor; riskli günler işaretli.
-- [ ] Backend: MCP `get_forecast` (mevcut rezervasyonlar + geçen yıl aynı dönem trendi)
-- [ ] Backend: kritik gün tespiti (doluluk < %30 veya > %95)
-- [ ] Ekran: 30 günlük doluluk grafiği (gerçek + tahmin ayrımı)
-- [ ] Ekran: Gelir tahmini kartı
-- [ ] Ekran: Kritik günler listesi
+- [x] Backend: MCP `get_forecast` (mevcut rezervasyonlar + geçen yıl aynı dönem trendi)
+- [x] Backend: kritik gün tespiti (doluluk < %30 veya > %95)
+- [x] Ekran: 30 günlük doluluk grafiği (gerçek + tahmin ayrımı)
+- [x] Ekran: Gelir tahmini kartı
+- [x] Ekran: Kritik günler listesi
+
+> **📌 Modül 25 tamamlandı (5 Ekim 2026 — Ahmet).**
+>
+> **Kararlar (kullanıcı, 5 Ekim 2026):** tahmin **pickup yöntemiyle** — eldeki + karşılaştırma günlerinin **aynı gün
+> kala** gerçekleşen net satışı (yeni satış − iptal − gelmeyen − erken çıkış); karşılaştırma önce geçen yılın aynı
+> dönemi (haftanın aynı günü 364 gün önce ± 1 hafta), yoksa son 8 haftanın aynı günleri, o da yoksa tahmin = eldeki.
+> Kritik gün eşikleri **otel ayarı** (varsayılan %30 / %95; müdür tahmin kartından değiştirir, izin `forecast.manage`).
+>
+> **Tanımlar** (`contracts/forecast.js`): "o gün kala eldeki" = o anda açılmış, iptal / gelmedi işaretlenmemiş
+> rezervasyonun gecesi (rezervasyonun açılış anı esas; düzenlemede gece satırları yeniden yazıldığı için gecenin değil).
+> Pickup satılabilir odaya oranlanır (otelin oda sayısı değişse de taşınır), en az 2 örnek gerekir; artı pickup
+> satılabilir odayı aşmaz, eksi pickup sıfırın altına indirmez. Sistemde kaydın olmadığı "o gün kala" anı karşılaştırılmaz
+> (yoksa eldeki sıfır, pickup gerçekleşenin tamamı sanılırdı). Gelir tahmini = eldeki gece fiyatları (dahil vergi ayrılmış)
+> + beklenen gece × o günün eldeki ADR'si (o gün satış yoksa pencerenin, o da yoksa geçen yılın ADR'si). Eldeki, geçen
+> yıl ve satılabilir oda gelir raporunun hesabından (aynı tanımlar; başka para birimi pickup'a da karışmaz). Kritik:
+> fazla satış (eldeki > satılabilir), tahmin > yüksek eşik, tahmin < düşük eşik — düşük doluluk tahmin ister
+> (karşılaştırma verisi yokken uzak günün az eldekisi "riskli" sayılmaz; yüksek ve fazla satış eldekiyle de
+> işaretlenir). Eşik değişikliği açık günlük durum ekranlarına canlı yansır. Günlük durumun "bu gece" doluluk kartı
+> da artık sabit %40 değil otelin düşük eşiğiyle uyarır (tek eşik).
+>
+> **Veri:** migration `20261007090000_forecast_thresholds` (`Hotel.forecastLowOccupancyPct / forecastHighOccupancyPct`
+> + CHECK 0–100, aradaki fark ≥ 5). Yeni tablo yok: tahmin `ReservationNight (hotelId, date)` ve
+> `Reservation (hotelId, createdAt, id)` index'lerinden okunur.
+>
+> **API:** `GET /forecast?days=1..30` (`dashboard.view`; eşikler ve sürümleri cevapta), `PUT /forecast/settings`
+> (`forecast.manage` — müdür; sürüm kontrollü `expectedUpdatedAt`, denetim kaydı, `forecast.settings.changed`).
+> Cevap otel × iş günü × canlı sürüm anahtarıyla bir dakika önbellekte (rezervasyon / ayar değişince yeni anahtar).
+> MCP: raporlama sunucusuna `get_forecast` (modül 24 ajanı da kullanır).
+>
+> **Ölçüm** (`scripts/perf-forecast.mjs`, 1500 oda, 4 yıl): 30 günlük tahmin soğuk **0,97 sn → 0,42–0,46 sn**
+> (geçen yılın örneği yeten günlerde son haftalar okunmuyor; eldeki ile karşılaştırma okuması paralel). Önbellekli
+> cevap anında.
+>
+> **Ekran** (günlük durum, "Önümüzdeki 30 gün"): eldeki rezervasyon dolu çubuk, tahmin kesikli çizgi (içi boş nokta),
+> eşikler kesikli yatay çizgi, kritik günler eksenin üstünde şekil + renk (▼ düşük, ▲ yüksek, ! fazla satış); imleç /
+> klavye ipucu (eldeki, tahmin, beklenen ±, gelir, geçen yıl, kaynak); tablo görünümü; tahminin kaynağı notu ("30 gün
+> geçen yılın aynı döneminden" / veri yoksa açıklama). Gelir tahmini kartı (tahmini oda geliri = eldeki + beklenen,
+> geçen yıl aynı dönem ve değişim, tahmini doluluk ve ADR). Kritik günler listesi (tür, eldeki → tahmin, ne yapılabilir,
+> oda planında aç). Eşik penceresi (yalnız `forecast.manage`). Telefonda taşma / yazı çakışması yok.
+>
+> **Gözden geçirmede ayrıca:** modül 19 (ekspres çamaşır farkı) ve modül 21 (kayıp eşya saklama süreleri) ayar
+> uçlarına da sürüm kontrolü eklendi — iki kişi aynı anda kaydederse ikincisi ilkini sessizce ezmiyordu. Üç grafik
+> (haftalık doluluk, gelir raporu, tahmin) ortak `useElementWidth` kancasını kullanır.
+>
+> **Test:** kurallar 13 + sözleşme 2 birim; entegrasyon 5 (geçen yıl pickup'ı — sonradan açılan / sonradan iptal edilen,
+> başka para birimi, otel sınırı; son haftalar ve kaydı olmayan an; veri yokken tahmin = eldeki, kritik günler, fazla
+> satış; eşik izni, doğrulama, denetim, eski sürümle kayıt 409, önbelleğin olayla tazelenmesi; MCP).
+>
+> **Bilinen sınır:** sonradan uzatılan konaklamanın eklenen gecesi rezervasyonun açılış anından beri eldeymiş sayılır
+> (pickup bir miktar az görünür). Rol matrisini kaydetmiş otelde yeni `forecast.manage` izni müdüre elle verilir.
+>
+> **Devir:** modül 18 (gece kapanışı) otomatik "gelmedi" işaretleyince geçmiş geceler ve pickup örnekleri kendiliğinden
+> düzelir; modül 24 `get_forecast`'ı MCP'den çağırır.
 
 ### 26. Rapor tasarımcısı + Excel — Ali Kemal
 **Gün sonu:** Kullanıcı kendi raporunu kolon seçerek kuruyor, Excel indiriyor; Excel'den toplu misafir / fiyat yükleyebiliyor.

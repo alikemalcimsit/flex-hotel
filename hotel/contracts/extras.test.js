@@ -61,10 +61,12 @@ describe('fiyat listesi', () => {
     assert.equal(minibarItemInputSchema.safeParse({ code: 'A B', name: 'Su', category: 'DRINK', price: '45' }).success, false);
   });
 
-  it('ekspres farkı 0-300, en fazla 2 ondalık', () => {
-    assert.equal(laundrySettingsSchema.parse({ expressPct: '50' }).expressPct, '50');
-    assert.equal(laundrySettingsSchema.safeParse({ expressPct: '301' }).success, false);
-    assert.equal(laundrySettingsSchema.safeParse({ expressPct: '12.345' }).success, false);
+  it('ekspres farkı 0-300, en fazla 2 ondalık; sürüm damgası zorunlu', () => {
+    const expectedUpdatedAt = '2026-10-05T09:00:00.000Z';
+    assert.equal(laundrySettingsSchema.parse({ expressPct: '50', expectedUpdatedAt }).expressPct, '50');
+    assert.equal(laundrySettingsSchema.safeParse({ expressPct: '301', expectedUpdatedAt }).success, false);
+    assert.equal(laundrySettingsSchema.safeParse({ expressPct: '12.345', expectedUpdatedAt }).success, false);
+    assert.equal(laundrySettingsSchema.safeParse({ expressPct: '50' }).success, false, 'sürümsüz kayıt ezebilirdi');
   });
 });
 

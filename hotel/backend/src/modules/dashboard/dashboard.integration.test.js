@@ -196,6 +196,7 @@ describe('günlük durum ekranı (modül 13, entegrasyon)', { skip }, () => {
     assert.equal(data.currency, 'TRY');
     assert.equal(data.totalRooms, 10);
     assert.equal(data.includedTaxRate, '12', 'oda fiyatındaki dahil vergiler: KDV + konaklama');
+    assert.deepEqual([data.thresholds.lowPct, data.thresholds.highPct], [30, 95], 'doluluk kartı tahminle aynı otel eşiğini kullanır');
 
     // Bu gece: R1 + R2 + R5 (opsiyonlu) + R8 (dünden). R3 bugün çıkıyor, R4 erken çıktı, iptal / gelmedi sayılmaz.
     const today = data.today;

@@ -157,6 +157,15 @@ describe('minibar ve çamaşırhane (entegrasyon)', { skip }, () => {
       const audit = await db.auditLog.count({ where: { hotelId, entity: 'MinibarItem' } });
       assert.equal(audit, 3);
     });
+
+    it('ekspres farkı sürüm kontrollü: aynı anda açılmış ikinci form ilk kaydı ezmez', async () => {
+      const { updatedAt } = await catalog.getLaundrySettings(hotelId);
+      const save = (expressPct) =>
+        as('mudur@test.local', () => catalog.updateLaundrySettings(hotelId, contracts.laundrySettingsSchema.parse({ expressPct, expectedUpdatedAt: updatedAt })));
+      assert.equal((await save('40')).expressPct, '40');
+      await rejectsWith(save('60'), 'STALE_WRITE');
+      assert.equal((await catalog.getLaundrySettings(hotelId)).expressPct, '40');
+    });
   });
 
   describe('minibar', () => {

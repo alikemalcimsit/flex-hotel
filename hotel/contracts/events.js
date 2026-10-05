@@ -104,6 +104,8 @@ export const EVENT_LABELS = Object.freeze({
   'lost_item.recorded': 'Bulunan eşya kaydedildi',
   'lost_item.changed': 'Kayıp eşya güncellendi',
   'lost_items.settings.changed': 'Kayıp eşya saklama süresi değişti',
+
+  'forecast.settings.changed': 'Tahmin kritik gün eşikleri değişti',
 });
 
 /**

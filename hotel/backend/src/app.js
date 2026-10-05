@@ -25,6 +25,8 @@ import { actorRoutes } from './modules/actors/routes.js';
 import { approvalRoutes } from './modules/approvals/routes.js';
 import { dashboardRoutes } from './modules/dashboard/routes.js';
 import { dashboardCacheStats } from './modules/dashboard/service.js';
+import { forecastRoutes } from './modules/forecast/routes.js';
+import { forecastCacheStats } from './modules/forecast/service.js';
 import { manualTaskRoutes } from './modules/manual-tasks/routes.js';
 import { approvalCacheStats } from './modules/approvals/service.js';
 import { registerApprovalSubscribers, setApprovalSubscriberLogger } from './modules/approvals/subscribers.js';
@@ -271,6 +273,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
         frontDeskCache: frontDeskCacheStats(),
         dashboardCache: dashboardCacheStats(),
         reportCache: reportCacheStats(),
+        forecastCache: forecastCacheStats(),
         // Arka planda çalışan aktörlerin (AI ajanları, kanal geçitleri) iş sırası.
         actorBacklog: Object.fromEntries(
           actorRegistry
@@ -305,6 +308,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   await app.register(extrasRoutes, { prefix: '/extras' });
   await app.register(lostItemRoutes, { prefix: '/lost-items' });
   await app.register(reportRoutes, { prefix: '/reports' });
+  await app.register(forecastRoutes, { prefix: '/forecast' });
   await app.register(manualTaskRoutes, { prefix: '/manual-tasks' });
   await app.register(conciergeRoutes, { prefix: '/ai' });
   await app.register(messagingChannelRoutes, { prefix: '/messaging-channels' });

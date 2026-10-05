@@ -25,9 +25,6 @@ export const DASHBOARD_WEEK_MAX_OFFSET_DAYS = 366;
 /** Günlük durumdaki açık arıza listesi (fazlası oda listesinde). */
 export const DASHBOARD_FAULT_LIST_LIMIT = 10;
 
-/** Doluluk eşikleri: ekranda renk (yüksek doluluk iyi, çok düşük dikkat). */
-export const OCCUPANCY_LOW_PCT = 40;
-
 /**
  * Haftalık seri: `from` verilmezse bugünden başlar. Pencere iş gününden en
  * fazla `DASHBOARD_WEEK_MAX_OFFSET_DAYS` uzakta olabilir (sunucu denetler;

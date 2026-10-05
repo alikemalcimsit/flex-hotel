@@ -15,6 +15,7 @@ import { planDays, summarizeDays } from '../plan/rules.js';
 import { loadSummarySource } from '../plan/service.js';
 import { getAvailabilityCalendar } from '../rooms/service.js';
 import { soldNightSql } from '../rooms/sql.js';
+import { getForecastSettings } from '../forecast/service.js';
 import { getActiveTaxes, getHotelSettings } from '../settings/service.js';
 import { dayRow, guestMix, includedRoomTaxRate, revenueByDay, roomStates, roomTypeRows, weekWindow } from './rules.js';
 
@@ -240,7 +241,7 @@ export async function getDashboardToday(hotelId, { now = new Date() } = {}) {
     const tomorrow = addDays(businessDate, 1);
     // Dün gece (gerçekleşen) + bu gece: tek pencere, tek sorgu seti.
     const window = { from: yesterday, to: tomorrow };
-    const [hotel, taxes, source, frontDesk, rooms, revenueRows, faults, guests, lateArrivals, availability] = await Promise.all([
+    const [hotel, taxes, source, frontDesk, rooms, revenueRows, faults, guests, lateArrivals, availability, thresholds] = await Promise.all([
       getHotelSettings(hotelId),
       getActiveTaxes(hotelId),
       loadSummarySource(hotelId, window),
@@ -251,6 +252,7 @@ export async function getDashboardToday(hotelId, { now = new Date() } = {}) {
       loadGuestMix(hotelId, businessDate),
       countLateArrivals(hotelId, businessDate),
       getAvailabilityCalendar(hotelId, { from: businessDate, to: tomorrow }),
+      getForecastSettings(hotelId),
     ]);
     const [lastNight, tonight] = summarizeDays({ ...source, from: yesterday, days: 2, businessDate });
     const revenue = revenueByDay(revenueRows, [lastNight.date, tonight.date], hotel.currency);
@@ -261,6 +263,8 @@ export async function getDashboardToday(hotelId, { now = new Date() } = {}) {
       totalRooms: source.totalRooms,
       /** Gelir, ADR ve RevPAR'dan ayrılan dahil vergi oranı (yüzde). */
       includedTaxRate: taxRate.toString(),
+      /** Doluluk eşikleri (otel ayarı, modül 25): bu gecenin kartı ve tahminin kritik günleri aynı eşikle renklenir. */
+      thresholds,
       today: dayRow(tonight, revenue.get(tonight.date), taxRate),
       yesterday: dayRow(lastNight, revenue.get(lastNight.date), taxRate),
       arrivals: { ...frontDesk.arrivals, late: lateArrivals },

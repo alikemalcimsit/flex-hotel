@@ -1,7 +1,8 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { Button, Card, Spinner } from '@hotelos/ui';
 import { formatMoney } from '../../lib/format.js';
 import { longDay, shortDay } from '../../lib/dashboard.js';
+import { useElementWidth } from '../../lib/useElementWidth.js';
 import { QueryError } from '../activity/shared.jsx';
 
 /** Grafiğin çizim alanı (px). Yükseklik x ekseni şeridini de içerir: kartta iç kaydırma çıkmaz. */
@@ -21,25 +22,6 @@ const RING = 2;
 const TOOLTIP_WIDTH = 208;
 /** Günler arası bundan darsa (telefon) eksende yalnızca gün numarası yazar; etiketler çakışmasın. */
 const COMPACT_STEP_PX = 48;
-
-/**
- * Kabın genişliğini izler: grafik gerçek piksellerle çizilir (viewBox
- * esnetmesi yazıları bozardı).
- * @returns {[React.RefObject<HTMLDivElement>, number]}
- */
-function useWidth() {
-  const ref = useRef(null);
-  const [width, setWidth] = useState(0);
-  useLayoutEffect(() => {
-    const element = ref.current;
-    if (!element) return undefined;
-    setWidth(element.clientWidth);
-    const observer = new ResizeObserver(([entry]) => setWidth(Math.round(entry.contentRect.width)));
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
-  return [ref, width];
-}
 
 /**
  * Haftalık doluluk (modül 13): 7 günün doluluk yüzdesi tek çizgi. Bugün
@@ -76,7 +58,7 @@ export function WeekOccupancyChart({ query }) {
 
 /** @param {{ week: any }} props */
 function Plot({ week }) {
-  const [ref, width] = useWidth();
+  const [ref, width] = useElementWidth();
   const [active, setActive] = useState(/** @type {number | null} */ (null));
   const days = week.days;
   const todayIndex = days.findIndex((day) => day.date === week.businessDate);

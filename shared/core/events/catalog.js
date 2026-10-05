@@ -598,6 +598,11 @@ export const EVENT_CATALOG = Object.freeze({
   /** Saklama süreleri değişti ("süresi dolan" listesi yeniden hesaplanır). */
   'lost_items.settings.changed': hotelScoped,
 
+  /* ── Tahmin (modül 25) ── */
+
+  /** Kritik gün eşikleri değişti (tahmin ekranı yeniden işaretler). */
+  'forecast.settings.changed': hotelScoped,
+
   /* ── Ödeme (modül 17) ──
      Folyo ekranı (bakiye) ve kasa görünümü bunlarla canlı tazelenir
      (`PAYMENT_EVENTS`). Tutar folyonun para biriminde (`amount`, iade ve
@@ -811,6 +816,9 @@ export const EXTRAS_EVENTS = Object.freeze(['minibar.recorded', 'laundry.order.c
 
 /** Kayıp eşya ekranlarını etkileyen olaylar (canlı yayın: `lost-items.changed`, modül 21). */
 export const LOST_ITEM_EVENTS = Object.freeze(['lost_item.recorded', 'lost_item.changed', 'lost_items.settings.changed']);
+
+/** Tahmin (modül 25): eşik değişince açık günlük durum ekranları yeniden işaretler (`inventory.changed` kanalı). */
+export const FORECAST_EVENTS = Object.freeze(['forecast.settings.changed']);
 
 /** Onay kuyruğunu etkileyen event'ler (canlı yayın: `approvals.changed`). */
 export const APPROVAL_EVENTS = Object.freeze([

@@ -2,6 +2,7 @@ import {
   APPROVAL_EVENTS,
   CASH_EVENTS,
   EXTRAS_EVENTS,
+  FORECAST_EVENTS,
   LOST_ITEM_EVENTS,
   FOLIO_EVENTS,
   LIVE_VIEW_EVENTS,
@@ -99,7 +100,8 @@ export const ACTIVITY_CHANNEL = 'activity.changed';
  * dinler; gelen kutusu açık olmayan panel envanter haberleriyle uğraşmaz.
  */
 const CHANNEL_EVENTS = Object.freeze({
-  [INVENTORY_CHANNEL]: LIVE_VIEW_EVENTS,
+  // Günlük durum bu kanalı dinler: tahminin eşikleri değişince açık ekranlar da yeniden işaretler.
+  [INVENTORY_CHANNEL]: [...LIVE_VIEW_EVENTS, ...FORECAST_EVENTS],
   [MESSAGING_CHANNEL]: MESSAGING_CHANGED_EVENTS,
   [REQUESTS_CHANNEL]: REQUESTS_CHANGED_EVENTS,
   [NOTIFICATIONS_CHANNEL]: NOTIFICATIONS_CHANGED_EVENTS,

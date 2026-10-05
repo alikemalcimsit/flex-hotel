@@ -324,8 +324,10 @@ export const lostItemListQuerySchema = listQuerySchema.extend({
   message: 'Bitiş tarihi başlangıçtan önce olamaz',
 });
 
+/** `expectedUpdatedAt`: otel kaydının okunan sürümü (iki kişi aynı anda kaydederse ikincisi ezmez). */
 export const lostItemSettingsSchema = z
   .object({
+    expectedUpdatedAt,
     retentionDays: retentionDays('Saklama süresi'),
     valuableRetentionDays: retentionDays('Değerli eşya saklama süresi'),
   })

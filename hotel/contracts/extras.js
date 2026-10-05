@@ -235,7 +235,9 @@ export const catalogListQuerySchema = listQuerySchema.extend({
 });
 
 /** Çamaşırhane ayarı: ekspres farkı (yüzde). */
+/** `expectedUpdatedAt`: otel kaydının okunan sürümü (iki kişi aynı anda kaydederse ikincisi ezmez). */
 export const laundrySettingsSchema = z.object({
+  expectedUpdatedAt,
   expressPct: decimalField({ scale: 2, min: 0, max: LAUNDRY_MAX_EXPRESS_PCT, label: 'Ekspres farkı' }),
 });
 

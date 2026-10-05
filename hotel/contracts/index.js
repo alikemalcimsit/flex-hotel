@@ -146,6 +146,7 @@ export * from './payments.js';
 export * from './extras.js';
 export * from './lost-items.js';
 export * from './reports.js';
+export * from './forecast.js';
 export * from './events.js';
 export { displayPhone, internationalPhone } from './phone.js';
 export {

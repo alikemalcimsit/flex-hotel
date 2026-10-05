@@ -231,12 +231,20 @@ function ExpressSettings() {
       toastSuccess('Ekspres farkı kaydedildi');
       queryClient.invalidateQueries({ queryKey: extrasKeys.all });
     },
-    onError: (failure) => toastError(failure.message),
+    onError: (failure) => {
+      if (failure?.code === 'STALE_WRITE') {
+        // Başkası bu arada değiştirdi: güncel değer forma gelsin, kullanıcı yeniden karar versin.
+        toastError('Ekspres farkı bu arada başkası tarafından değiştirildi; güncel değer yüklendi, tekrar kaydedin.');
+        queryClient.invalidateQueries({ queryKey: extrasKeys.laundrySettings });
+        return;
+      }
+      toastError(failure.message);
+    },
   });
 
   function submit(event) {
     event.preventDefault();
-    const result = validateWith(laundrySettingsSchema, { expressPct: value.replace(',', '.') });
+    const result = validateWith(laundrySettingsSchema, { expressPct: value.replace(',', '.'), expectedUpdatedAt: settings.data?.updatedAt });
     if (!result.ok) {
       setError(result.errors.expressPct ?? 'Geçersiz');
       return;

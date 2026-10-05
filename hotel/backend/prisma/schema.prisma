@@ -473,6 +473,10 @@ model Hotel {
   /// Sahibi çıkmayan eşyanın saklama süresi (gün, modül 21); değerli eşya ayrı.
   lostItemRetentionDays         Int               @default(90)
   lostItemValuableRetentionDays Int               @default(365)
+  /// Tahminin kritik gün eşikleri (yüzde, modül 25): tahmini doluluk düşüğün
+  /// altında ya da yüksekin üstündeyse gün işaretlenir.
+  forecastLowOccupancyPct       Int               @default(30)
+  forecastHighOccupancyPct      Int               @default(95)
   settings                      Json              @default("{}")
   createdAt                     DateTime          @default(now())
   updatedAt                     DateTime          @updatedAt
