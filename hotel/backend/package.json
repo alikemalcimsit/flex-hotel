@@ -26,6 +26,7 @@
     "@fastify/rate-limit": "^10.3.0",
     "@hotelos/actor-kit": "*",
     "@hotelos/billing-worker": "*",
+    "@hotelos/budget-agent": "*",
     "@hotelos/concierge-agent": "*",
     "@hotelos/core": "*",
     "@hotelos/hotel-contracts": "*",

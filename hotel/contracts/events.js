@@ -104,6 +104,14 @@ export const EVENT_LABELS = Object.freeze({
   'lost_item.recorded': 'Bulunan eşya kaydedildi',
   'lost_item.changed': 'Kayıp eşya güncellendi',
   'lost_items.settings.changed': 'Kayıp eşya saklama süresi değişti',
+
+  'forecast.settings.changed': 'Tahmin kritik gün eşikleri değişti',
+
+  'budget.changed': 'Bütçe değişti',
+  'budget.expense_items.changed': 'Bütçe gider kalemleri değişti',
+  'budget.actuals.changed': 'Gerçekleşen giderler girildi',
+  'budget.commentary.requested': 'Bütçe AI yorumu istendi',
+  'budget.commentary.completed': 'Bütçe AI yorumu tamamlandı',
 });
 
 /**

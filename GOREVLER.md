@@ -1809,11 +1809,64 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 25. Günlük durum — forecast — arkadaşın
 **Gün sonu:** Dashboard'da önümüzdeki 30 günün doluluk ve gelir tahmini görünüyor; riskli günler işaretli.
-- [ ] Backend: MCP `get_forecast` (mevcut rezervasyonlar + geçen yıl aynı dönem trendi)
-- [ ] Backend: kritik gün tespiti (doluluk < %30 veya > %95)
-- [ ] Ekran: 30 günlük doluluk grafiği (gerçek + tahmin ayrımı)
-- [ ] Ekran: Gelir tahmini kartı
-- [ ] Ekran: Kritik günler listesi
+- [x] Backend: MCP `get_forecast` (mevcut rezervasyonlar + geçen yıl aynı dönem trendi)
+- [x] Backend: kritik gün tespiti (doluluk < %30 veya > %95)
+- [x] Ekran: 30 günlük doluluk grafiği (gerçek + tahmin ayrımı)
+- [x] Ekran: Gelir tahmini kartı
+- [x] Ekran: Kritik günler listesi
+
+> **📌 Modül 25 tamamlandı (5 Ekim 2026 — Ahmet).**
+>
+> **Kararlar (kullanıcı, 5 Ekim 2026):** tahmin **pickup yöntemiyle** — eldeki + karşılaştırma günlerinin **aynı gün
+> kala** gerçekleşen net satışı (yeni satış − iptal − gelmeyen − erken çıkış); karşılaştırma önce geçen yılın aynı
+> dönemi (haftanın aynı günü 364 gün önce ± 1 hafta), yoksa son 8 haftanın aynı günleri, o da yoksa tahmin = eldeki.
+> Kritik gün eşikleri **otel ayarı** (varsayılan %30 / %95; müdür tahmin kartından değiştirir, izin `forecast.manage`).
+>
+> **Tanımlar** (`contracts/forecast.js`): "o gün kala eldeki" = o anda açılmış, iptal / gelmedi işaretlenmemiş
+> rezervasyonun gecesi (rezervasyonun açılış anı esas; düzenlemede gece satırları yeniden yazıldığı için gecenin değil).
+> Pickup satılabilir odaya oranlanır (otelin oda sayısı değişse de taşınır), en az 2 örnek gerekir; artı pickup
+> satılabilir odayı aşmaz, eksi pickup sıfırın altına indirmez. Sistemde kaydın olmadığı "o gün kala" anı karşılaştırılmaz
+> (yoksa eldeki sıfır, pickup gerçekleşenin tamamı sanılırdı). Gelir tahmini = eldeki gece fiyatları (dahil vergi ayrılmış)
+> + beklenen gece × o günün eldeki ADR'si (o gün satış yoksa pencerenin, o da yoksa geçen yılın ADR'si). Eldeki, geçen
+> yıl ve satılabilir oda gelir raporunun hesabından (aynı tanımlar; başka para birimi pickup'a da karışmaz). Kritik:
+> fazla satış (eldeki > satılabilir), tahmin > yüksek eşik, tahmin < düşük eşik — düşük doluluk tahmin ister
+> (karşılaştırma verisi yokken uzak günün az eldekisi "riskli" sayılmaz; yüksek ve fazla satış eldekiyle de
+> işaretlenir). Eşik değişikliği açık günlük durum ekranlarına canlı yansır. Günlük durumun "bu gece" doluluk kartı
+> da artık sabit %40 değil otelin düşük eşiğiyle uyarır (tek eşik).
+>
+> **Veri:** migration `20261007090000_forecast_thresholds` (`Hotel.forecastLowOccupancyPct / forecastHighOccupancyPct`
+> + CHECK 0–100, aradaki fark ≥ 5). Yeni tablo yok: tahmin `ReservationNight (hotelId, date)` ve
+> `Reservation (hotelId, createdAt, id)` index'lerinden okunur.
+>
+> **API:** `GET /forecast?days=1..30` (`dashboard.view`; eşikler ve sürümleri cevapta), `PUT /forecast/settings`
+> (`forecast.manage` — müdür; sürüm kontrollü `expectedUpdatedAt`, denetim kaydı, `forecast.settings.changed`).
+> Cevap otel × iş günü × canlı sürüm anahtarıyla bir dakika önbellekte (rezervasyon / ayar değişince yeni anahtar).
+> MCP: raporlama sunucusuna `get_forecast` (modül 24 ajanı da kullanır).
+>
+> **Ölçüm** (`scripts/perf-forecast.mjs`, 1500 oda, 4 yıl): 30 günlük tahmin soğuk **0,97 sn → 0,42–0,46 sn**
+> (geçen yılın örneği yeten günlerde son haftalar okunmuyor; eldeki ile karşılaştırma okuması paralel). Önbellekli
+> cevap anında.
+>
+> **Ekran** (günlük durum, "Önümüzdeki 30 gün"): eldeki rezervasyon dolu çubuk, tahmin kesikli çizgi (içi boş nokta),
+> eşikler kesikli yatay çizgi, kritik günler eksenin üstünde şekil + renk (▼ düşük, ▲ yüksek, ! fazla satış); imleç /
+> klavye ipucu (eldeki, tahmin, beklenen ±, gelir, geçen yıl, kaynak); tablo görünümü; tahminin kaynağı notu ("30 gün
+> geçen yılın aynı döneminden" / veri yoksa açıklama). Gelir tahmini kartı (tahmini oda geliri = eldeki + beklenen,
+> geçen yıl aynı dönem ve değişim, tahmini doluluk ve ADR). Kritik günler listesi (tür, eldeki → tahmin, ne yapılabilir,
+> oda planında aç). Eşik penceresi (yalnız `forecast.manage`). Telefonda taşma / yazı çakışması yok.
+>
+> **Gözden geçirmede ayrıca:** modül 19 (ekspres çamaşır farkı) ve modül 21 (kayıp eşya saklama süreleri) ayar
+> uçlarına da sürüm kontrolü eklendi — iki kişi aynı anda kaydederse ikincisi ilkini sessizce ezmiyordu. Üç grafik
+> (haftalık doluluk, gelir raporu, tahmin) ortak `useElementWidth` kancasını kullanır.
+>
+> **Test:** kurallar 13 + sözleşme 2 birim; entegrasyon 5 (geçen yıl pickup'ı — sonradan açılan / sonradan iptal edilen,
+> başka para birimi, otel sınırı; son haftalar ve kaydı olmayan an; veri yokken tahmin = eldeki, kritik günler, fazla
+> satış; eşik izni, doğrulama, denetim, eski sürümle kayıt 409, önbelleğin olayla tazelenmesi; MCP).
+>
+> **Bilinen sınır:** sonradan uzatılan konaklamanın eklenen gecesi rezervasyonun açılış anından beri eldeymiş sayılır
+> (pickup bir miktar az görünür). Rol matrisini kaydetmiş otelde yeni `forecast.manage` izni müdüre elle verilir.
+>
+> **Devir:** modül 18 (gece kapanışı) otomatik "gelmedi" işaretleyince geçmiş geceler ve pickup örnekleri kendiliğinden
+> düzelir; modül 24 `get_forecast`'ı MCP'den çağırır.
 
 ### 26. Rapor tasarımcısı + Excel — Ali Kemal
 **Gün sonu:** Kullanıcı kendi raporunu kolon seçerek kuruyor, Excel indiriyor; Excel'den toplu misafir / fiyat yükleyebiliyor.
@@ -1826,11 +1879,60 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 27. Bütçe yönetimi — arkadaşın
 **Gün sonu:** Yıllık bütçe ay ay giriliyor; gerçekleşenle sapma raporu çıkıyor; AI sapmayı yorumluyor.
-- [ ] Backend: Budget, BudgetLine tabloları + API (yıl, ay, kalem, plan tutarı)
-- [ ] Backend: gerçekleşen tutarları folyo / ödeme / satın alma verisinden hesaplama
-- [ ] Ekran: Bütçe giriş tablosu (satır kalem, sütun ay; Excel'den yükleme)
-- [ ] Ekran: Sapma raporu (plan, gerçek, fark, fark %; renkli)
-- [ ] report-agent'a `explain_variance` tool'u → yorum paragrafı
+- [x] Backend: Budget, BudgetLine tabloları + API (yıl, ay, kalem, plan tutarı)
+- [x] Backend: gerçekleşen tutarları folyo / ödeme / satın alma verisinden hesaplama
+- [x] Ekran: Bütçe giriş tablosu (satır kalem, sütun ay; Excel'den yükleme)
+- [x] Ekran: Sapma raporu (plan, gerçek, fark, fark %; renkli)
+- [x] report-agent'a `explain_variance` tool'u → yorum paragrafı
+
+> **📌 Modül 27 tamamlandı (5 Ekim 2026 — Ahmet).**
+>
+> **Kararlar (kullanıcı, 5 Ekim 2026):** kapsam gelir + doluluk / ADR hedefleri + gider (gelirin ve hedeflerin
+> gerçekleşeni sistemden; giderin gerçekleşeni şimdilik elle — modül 45 satın alma / 47 ön muhasebe gelince otomatik);
+> AI yorumu şimdi, mevcut AI altyapısıyla; Excel otele göre şablon indir → doldur → yükle; bütçe taslak → onaylı (kilit),
+> değişiklik revizeyle (önceki onaylı "eski sürüm" olarak saklanır).
+>
+> **Veri** (migration `20261008090000_budgets`): `Budget` (yıl × sürüm; DRAFT / APPROVED / SUPERSEDED; yıl başına tek
+> taslak ve tek onaylı — kısmi tekil index), `BudgetLine` (kalem × ay plan; doluluk 0–100), `BudgetExpenseItem`
+> (otelin gider kalemleri; etkin ad tekil, kaldırılan arşivlenir — açık taslaklardan düşer, onaylılarda kalır),
+> `BudgetExpenseActual` (gider gerçekleşeni, hücre sürümlü), `BudgetCommentary` (AI yorumu; dönem başına tek bekleyen).
+> CHECK'ler: ay, tutar, onay izi, yorum izi. İlk bütçede USALI'ye göre önerilen 7 gider kalemi eklenir.
+>
+> **Gerçekleşen** (yalnızca kapanmış günler): oda geliri, ek ücret, iptal geliri, satılan / satılabilir oda **gelir
+> raporunun hesabından** (rapor ile bütçe aynı ayın oda gelirini hiçbir zaman farklı göstermez); restoran / minibar /
+> çamaşır / diğer gelir folyo kaleminin türünden (indirim kendi vergi kategorisinin gelirinden düşer, vergi kalemi gelir
+> değil); tahsilat kasa tanımıyla (işlenmiş ödeme − iade ± iptal kaydı; onay bekleyen sayılmaz); gider elle.
+>
+> **Sapma:** ay ya da yılbaşından seçilen aya; içinde bulunulan ayın planı kapanmış gün oranında (ekranda işaretli);
+> doluluk hedefi satılabilir odayla, ADR hedefi planlanan geceyle ağırlıklı; gelirde fazlası / giderde azı olumlu (renk +
+> işaret); gelir, gider ve brüt faaliyet kârı toplamı; planı olup gerçekleşeni girilmemiş gider "eksik"; oda geliri
+> sapması doluluk etkisi ve fiyat etkisine ayrılır (girilen plan hedeflerle tutmuyorsa fark ayrıca). Plan yılın onaylı
+> bütçesinden, yoksa taslaktan (işaretli).
+>
+> **AI:** `explain_variance` (raporlama MCP sunucusu; modül 24 ajanı da kullanır) + `budget-agent` (olay güdümlü:
+> `budget.commentary.requested` → yorum → `budget.commentary.completed`). Model otelin ana modeli (concierge ile aynı
+> ayar), günlük AI bütçesi ve kullanım kaydı ortak. Ajan kapalı / anahtar yok / bütçe doldu → istek "yazılamadı" ile
+> kapanır (askıda kalmaz; 5 dk zaman aşımı son güvence); rapor yorumsuz da eksiksiz. Modele kişisel veri gitmez.
+>
+> **API** (`/budgets`): yıl görünümü, aç, revize, satırları kaydet (sürümlü), onayla; gider kalemleri (ekle / ad / kaldır);
+> gerçekleşen gider (hücre sürümlü, gelecek ay girilmez); sapma; yorum iste / oku. İzinler `budget.view` (müdür,
+> muhasebe), `budget.manage` (müdür, muhasebe), `budget.approve` (müdür). Canlı kanal `budget.changed`.
+>
+> **Ekran** (`/butce/plan`, `/butce/gerceklesen`, `/butce/sapma`; yıl adres çubuğunda): ızgara (gelir / hedef / nakit /
+> gider grupları, gelir ve gider ara toplamı, brüt faaliyet kârı, Türkçe sayı biçimi, hücre hatası ay adıyla); Excel
+> şablonu indir / yükle (kod sütunuyla eşleşir; yüklenen değer kaydedilmemiş değişiklik olarak gelir, 1 MB sınırı);
+> onay ve revize pencereleri; canlı tazeleme kaydedilmemiş girişi silmez (başkası kaydettiyse uyarı); gider gerçekleşeni
+> ızgarası; sapma tablosu + oda geliri ayrıştırma kartı + AI yorum kartı. Telefonda sayfa taşmaz, tablolar kendi içinde kayar.
+>
+> **Ölçüm** (`scripts/perf-budget.mjs`, 1500 oda, 4 yıl): yılbaşından bu yana sapma soğuk ~0,46 sn (yılın sistem
+> gerçekleşeni bir kez okunur, önbellekten ay / kapsam değişimi anında).
+>
+> **Test:** kurallar 11 + sözleşme 6 + ajan 7 birim; entegrasyon 9 (ilk bütçe, satır / sürüm / kilit / boş onay, revize,
+> gider kalemi, gerçekleşen gider, sapma — sınıflama, tahsilat, hedefler, ayrıştırma, eksik gider, otel sınırı, raporla
+> aynı oda geliri —, ay içi orantı, AI yorumu sahte modelle uçtan uca + tek bekleyen + boş dönem, MCP ve izinler).
+>
+> **Devir:** modül 45 / 47 gelince `BudgetExpenseActual` yerine gider gerçekleşeni oradan hesaplanır (kalem eşlemesi
+> gerekir); modül 24 `explain_variance`'ı MCP'den çağırır.
 
 ---
 

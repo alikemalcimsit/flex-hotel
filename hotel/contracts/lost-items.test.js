@@ -72,10 +72,13 @@ describe('lostItemReturnSchema', () => {
 });
 
 describe('lostItemSettingsSchema / lostItemListQuerySchema', () => {
-  it('değerli eşya süresi normalden kısa olamaz; sınırlar uygulanır', () => {
-    assert.equal(lostItemSettingsSchema.safeParse({ retentionDays: 90, valuableRetentionDays: 30 }).success, false);
-    assert.equal(lostItemSettingsSchema.safeParse({ retentionDays: 3, valuableRetentionDays: 30 }).success, false);
-    assert.deepEqual(lostItemSettingsSchema.parse({ retentionDays: '60', valuableRetentionDays: '60' }), { retentionDays: 60, valuableRetentionDays: 60 });
+  it('değerli eşya süresi normalden kısa olamaz; sınırlar uygulanır; sürüm damgası zorunlu', () => {
+    const expectedUpdatedAt = '2026-10-05T09:00:00.000Z';
+    assert.equal(lostItemSettingsSchema.safeParse({ expectedUpdatedAt, retentionDays: 90, valuableRetentionDays: 30 }).success, false);
+    assert.equal(lostItemSettingsSchema.safeParse({ expectedUpdatedAt, retentionDays: 3, valuableRetentionDays: 30 }).success, false);
+    const parsed = lostItemSettingsSchema.parse({ expectedUpdatedAt, retentionDays: '60', valuableRetentionDays: '60' });
+    assert.deepEqual([parsed.retentionDays, parsed.valuableRetentionDays, parsed.expectedUpdatedAt.toISOString()], [60, 60, expectedUpdatedAt]);
+    assert.equal(lostItemSettingsSchema.safeParse({ retentionDays: 60, valuableRetentionDays: 60 }).success, false, 'sürümsüz kayıt ezebilirdi');
   });
 
   it('tarih aralığı ters olamaz; "valuable=false" hayır okunur', () => {

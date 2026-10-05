@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import { runWithContext } from '@hotelos/core';
 import {
+  budgetVarianceQuerySchema,
+  FORECAST_DAYS,
+  forecastQuerySchema,
   REPORT_BREAKDOWN_LABELS,
   REPORT_GROUPINGS,
   REPORT_QUERY_DESCRIPTIONS,
@@ -8,10 +11,12 @@ import {
   reportRangeSchema,
 } from '@hotelos/hotel-contracts';
 import { createReadOnlyMcpServer } from '@hotelos/mcp-server';
+import { explainVariance } from '../budget/variance.js';
+import { getForecast } from '../forecast/service.js';
 import { getRevenueReport } from './service.js';
 
 /**
- * Otelin raporlama MCP araçları (modül 23). Tüketici: report-agent (modül 24),
+ * Otelin raporlama MCP araçları (modül 23; `get_forecast` modül 25, `explain_variance` modül 27). Tüketici: report-agent (modül 24),
  * ya da stdio üzerinden bir masaüstü MCP istemcisi (`scripts/reporting-mcp.js`).
  *
  * - Sunucu **tek bir otele bağlıdır** (`hotelId` oluşturulurken verilir);
@@ -29,7 +34,9 @@ const INSTRUCTIONS =
   'Gelir vergiler hariçtir; geçmiş günler folyoya işlenen gerçekleşen gelir, bugün ve sonrası eldeki rezervasyon. ' +
   'Satılan gece: bugün ve sonrası eldeki rezervasyon; geçmişte yalnızca misafirin gerçekten kaldığı geceler (gelmeyen sayılmaz). ' +
   'ADR = oda geliri / satılan gece; RevPAR = oda geliri / satılabilir oda. Geçen yıl: haftanın aynı günü (364 gün önce). ' +
-  'Oranlar dönem toplamlarından hesaplanır; değişimler yüzde, doluluk farkı yüzde puanı.';
+  'Oranlar dönem toplamlarından hesaplanır; değişimler yüzde, doluluk farkı yüzde puanı. ' +
+  'Tahmin (get_forecast) = eldeki + geçen yılın aynı günlerinin aynı gün kala gerçekleşen net satışı (yoksa son haftalar); ' +
+  'her gün için kaynağı (basis) ve kritik gün işareti (alert) verilir.';
 
 const runQueryInput = z
   .object({
@@ -99,6 +106,8 @@ const breakdownView = (report, key) => ({
 export function createReportingMcpServer({ hotelId, actor = 'mcp:raporlama', logger }) {
   // Her çağrı otel ve aktör bağlamında (denetim izi ve log'larda kim olduğu belli olsun).
   const report = (input) => runWithContext({ actor }, () => getRevenueReport(hotelId, input));
+  const forecast = (input) => runWithContext({ actor }, () => getForecast(hotelId, input));
+  const variance = (input) => runWithContext({ actor }, () => explainVariance(hotelId, input));
 
   return createReadOnlyMcpServer({
     name: 'hotelos-reporting',
@@ -121,6 +130,24 @@ export function createReportingMcpServer({ hotelId, actor = 'mcp:raporlama', log
         input: reportRangeSchema,
         readOnly: true,
         handler: async (input) => revenueView(await report(input)),
+      },
+      {
+        name: 'get_forecast',
+        title: 'Doluluk ve gelir tahmini',
+        description: `Bugünden itibaren en fazla ${FORECAST_DAYS} günün eldeki rezervasyonu, tahmini doluluk ve oda geliri (vergiler hariç), geçen yılın aynı günü, kritik günler (düşük / yüksek doluluk, fazla satış) ve eşikler.`,
+        input: forecastQuerySchema,
+        readOnly: true,
+        handler: async (input) => forecast(input),
+      },
+      {
+        name: 'explain_variance',
+        title: 'Bütçe sapması',
+        description:
+          'Seçilen ayın (scope MONTH) ya da yılbaşından o aya kadarın (YTD) bütçe sapması: gelir, gider ve brüt faaliyet kârı plan / gerçekleşen, ' +
+          'en büyük sapmalar (tone: GOOD olumlu, BAD olumsuz), oda gelirinin doluluk ve fiyat etkisi, doluluk / ADR hedefleri ve eksik veri notları.',
+        input: budgetVarianceQuerySchema,
+        readOnly: true,
+        handler: async (input) => variance(input),
       },
       {
         name: 'run_report_query',

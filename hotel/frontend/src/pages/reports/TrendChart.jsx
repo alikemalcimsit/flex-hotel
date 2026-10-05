@@ -1,5 +1,6 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { METRIC_VALUE, axisLabel, bucketLabel, formatChange, fullDate } from '../../lib/reports.js';
+import { useElementWidth } from '../../lib/useElementWidth.js';
 
 /** Çizim alanı (px); yükseklik x ekseni şeridini de içerir. */
 const HEIGHT = 280;
@@ -20,21 +21,6 @@ const NARROW_PX = 480;
 /** Bu dönem: vurgulanan seri; geçen yıl: bağlam (gri, ince). */
 const CURRENT_COLOR = 'var(--color-info)';
 const LAST_YEAR_COLOR = 'var(--color-ink-muted)';
-
-/** @returns {[React.RefObject<HTMLDivElement>, number]} */
-function useWidth() {
-  const ref = useRef(null);
-  const [width, setWidth] = useState(0);
-  useLayoutEffect(() => {
-    const element = ref.current;
-    if (!element) return undefined;
-    setWidth(element.clientWidth);
-    const observer = new ResizeObserver(([entry]) => setWidth(Math.round(entry.contentRect.width)));
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
-  return [ref, width];
-}
 
 /**
  * Yuvarlak eksen adımı (1, 2, 2.5, 5 × 10ⁿ).
@@ -115,7 +101,7 @@ const onePlace = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 1, maxi
  * @param {{ report: any, metric: 'OCCUPANCY' | 'ADR' | 'REVPAR' | 'ROOM_REVENUE' }} props
  */
 export function TrendChart({ report, metric }) {
-  const [ref, width] = useWidth();
+  const [ref, width] = useElementWidth();
   const [active, setActive] = useState(/** @type {number | null} */ (null));
   const buckets = report.buckets;
   const spec = METRIC_VALUE[metric];

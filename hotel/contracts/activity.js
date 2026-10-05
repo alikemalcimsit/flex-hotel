@@ -78,6 +78,10 @@ export const AUDIT_ENTITY_LABELS = Object.freeze({
   LaundryItem: 'Çamaşır fiyatı',
   LaundryOrder: 'Çamaşır siparişi',
   LostItem: 'Kayıp eşya',
+  Budget: 'Bütçe',
+  BudgetExpenseItem: 'Bütçe gider kalemi',
+  BudgetExpenseActual: 'Gerçekleşen gider',
+  BudgetCommentary: 'Bütçe AI yorumu',
 });
 
 export const AUDIT_ENTITIES = Object.freeze(Object.keys(AUDIT_ENTITY_LABELS));

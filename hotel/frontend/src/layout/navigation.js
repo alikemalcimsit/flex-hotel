@@ -103,6 +103,13 @@ export const NAV_SECTIONS = Object.freeze([
         icon: 'chart',
         permission: PERMISSIONS.REPORTS_VIEW,
       },
+      // Bütçe ve sapma (modül 27): müdür ve muhasebe.
+      {
+        label: 'Bütçe',
+        to: '/butce/plan',
+        icon: 'wallet',
+        permission: PERMISSIONS.BUDGET_VIEW,
+      },
       {
         label: 'Mesajlar',
         to: '/mesajlar',

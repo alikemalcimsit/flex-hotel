@@ -181,21 +181,21 @@ export async function deleteCatalogItem(kind, hotelId, id) {
 
 /** @param {string} hotelId */
 export async function getLaundrySettings(hotelId) {
-  const hotel = await prisma.hotel.findFirst({ where: { id: hotelId }, select: { laundryExpressPct: true, currency: true } });
+  const hotel = await prisma.hotel.findFirst({ where: { id: hotelId }, select: { laundryExpressPct: true, currency: true, updatedAt: true } });
   if (!hotel) throw new NotFoundError('Otel kaydı bulunamadı');
-  return { expressPct: toDecimal(String(hotel.laundryExpressPct)).toString(), currency: hotel.currency };
+  return { expressPct: toDecimal(String(hotel.laundryExpressPct)).toString(), currency: hotel.currency, updatedAt: hotel.updatedAt.toISOString() };
 }
 
 /**
- * Ekspres farkı (yüzde). Açık siparişler sipariş anındaki yüzdeyi korur.
+ * Ekspres farkı (yüzde; sürüm kontrollü). Açık siparişler sipariş anındaki yüzdeyi korur.
  * @param {string} hotelId
- * @param {{ expressPct: string }} input
+ * @param {{ expressPct: string, expectedUpdatedAt: Date }} input
  */
-export async function updateLaundrySettings(hotelId, { expressPct }) {
+export async function updateLaundrySettings(hotelId, { expressPct, expectedUpdatedAt }) {
   await writeWithEvents(async (tx, stage) => {
     const before = await tx.hotel.findFirst({ where: { id: hotelId }, select: { laundryExpressPct: true } });
     if (!before) throw new NotFoundError('Otel kaydı bulunamadı');
-    await tx.hotel.update({ where: { id: hotelId }, data: { laundryExpressPct: expressPct } });
+    await updateWithVersionCheck(tx, 'hotel', { id: hotelId }, expectedUpdatedAt, { laundryExpressPct: expressPct }, 'Otel kaydı bulunamadı');
     await recordAudit(tx, {
       hotelId,
       entity: 'Hotel',

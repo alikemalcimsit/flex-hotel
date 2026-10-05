@@ -97,43 +97,55 @@ export async function getRevenueReport(hotelId, { from, to, groupBy }, { now = n
   const latest = shiftDay(businessDate, REPORT_MAX_FUTURE_DAYS);
   if (to > latest) throw new ValidationError(`Rapor en fazla ${dotted(latest)} tarihine kadar alınır (eldeki rezervasyon)`, { field: 'to' });
 
-  return cache.get(JSON.stringify(['revenue', hotelId, businessDate, from, to, groupBy]), async () => {
-    const hotel = await getHotelSettings(hotelId);
-    const lyFrom = shiftDay(from, -REPORT_LAST_YEAR_OFFSET_DAYS);
-    const lyTo = shiftDay(to, -REPORT_LAST_YEAR_OFFSET_DAYS);
+  return cache.get(JSON.stringify(['revenue', hotelId, businessDate, from, to, groupBy]), () =>
+    computeRevenueReport(hotelId, { from, to, groupBy, businessDate }),
+  );
+}
 
-    const { current, lastYear, roomTypes, includedTaxRate } = await readOnly(async (tx) => {
-      const [taxes, types] = [await loadTaxes(tx, hotelId), await loadRoomTypes(tx, hotelId)];
-      const rate = includedRoomTaxRate(taxes.map((tax) => ({ ...tax, rate: String(tax.rate) })));
-      const period = { businessDate, currency: hotel.currency, includedTaxRate: rate };
-      return {
-        current: await loadPeriod(tx, hotelId, { ...period, from, to }),
-        lastYear: await loadPeriod(tx, hotelId, { ...period, from: lyFrom, to: lyTo }),
-        roomTypes: types,
-        includedTaxRate: rate,
-      };
-    });
+/**
+ * Raporun önbelleksiz hesabı. Kendi önbelleğini canlı sürümle anahtarlayan
+ * tüketici (tahmin, modül 25) bunu çağırır: rapor önbelleğinin bir dakikalık
+ * gecikmesi ekrandaki eldekiyle ayrışmasın.
+ *
+ * @param {string} hotelId
+ * @param {{ from: string, to: string, groupBy: 'DAY' | 'WEEK' | 'MONTH', businessDate: string }} query
+ */
+export async function computeRevenueReport(hotelId, { from, to, groupBy, businessDate }) {
+  const hotel = await getHotelSettings(hotelId);
+  const lyFrom = shiftDay(from, -REPORT_LAST_YEAR_OFFSET_DAYS);
+  const lyTo = shiftDay(to, -REPORT_LAST_YEAR_OFFSET_DAYS);
 
-    const days = daysBetween(from, to);
-    const typeLabel = new Map(roomTypes.map((type) => [type.id, `${type.name} (${type.code})`]));
+  const { current, lastYear, roomTypes, includedTaxRate } = await readOnly(async (tx) => {
+    const [taxes, types] = [await loadTaxes(tx, hotelId), await loadRoomTypes(tx, hotelId)];
+    const rate = includedRoomTaxRate(taxes.map((tax) => ({ ...tax, rate: String(tax.rate) })));
+    const period = { businessDate, currency: hotel.currency, includedTaxRate: rate };
     return {
-      from,
-      to,
-      groupBy,
-      businessDate,
-      currency: hotel.currency,
-      includedTaxRate: toDecimal(includedTaxRate).toString(),
-      lastYear: { from: lyFrom, to: lyTo, offsetDays: REPORT_LAST_YEAR_OFFSET_DAYS },
-      totals: rangeTotals(days, current.totals, lastYear.totals),
-      buckets: bucketRows({ days, groupBy, current: current.totals, lastYear: lastYear.totals }),
-      breakdowns: {
-        roomType: breakdownRows({ current: current.roomTypes, lastYear: lastYear.roomTypes, label: (key) => typeLabel.get(key) ?? 'Silinmiş oda tipi' }),
-        source: breakdownRows({ current: current.sources, lastYear: lastYear.sources, label: (key) => RESERVATION_SOURCE_LABELS[key] ?? key }),
-      },
-      otherCurrencyNights: current.otherCurrencyNights,
-      generatedAt: new Date().toISOString(),
+      current: await loadPeriod(tx, hotelId, { ...period, from, to }),
+      lastYear: await loadPeriod(tx, hotelId, { ...period, from: lyFrom, to: lyTo }),
+      roomTypes: types,
+      includedTaxRate: rate,
     };
   });
+
+  const days = daysBetween(from, to);
+  const typeLabel = new Map(roomTypes.map((type) => [type.id, `${type.name} (${type.code})`]));
+  return {
+    from,
+    to,
+    groupBy,
+    businessDate,
+    currency: hotel.currency,
+    includedTaxRate: toDecimal(includedTaxRate).toString(),
+    lastYear: { from: lyFrom, to: lyTo, offsetDays: REPORT_LAST_YEAR_OFFSET_DAYS },
+    totals: rangeTotals(days, current.totals, lastYear.totals),
+    buckets: bucketRows({ days, groupBy, current: current.totals, lastYear: lastYear.totals }),
+    breakdowns: {
+      roomType: breakdownRows({ current: current.roomTypes, lastYear: lastYear.roomTypes, label: (key) => typeLabel.get(key) ?? 'Silinmiş oda tipi' }),
+      source: breakdownRows({ current: current.sources, lastYear: lastYear.sources, label: (key) => RESERVATION_SOURCE_LABELS[key] ?? key }),
+    },
+    otherCurrencyNights: current.otherCurrencyNights,
+    generatedAt: new Date().toISOString(),
+  };
 }
 
 /** Sağlık ucu için. */

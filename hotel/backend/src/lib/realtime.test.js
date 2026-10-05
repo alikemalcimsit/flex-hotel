@@ -64,6 +64,17 @@ describe('registerRealtimeBridge', () => {
     assert.equal(io.emitted[0].payload.roomId, ROOM_ID);
   });
 
+  it('tahmin eşikleri değişince günlük durum kanalına haber düşer (açık ekranlar yeniden işaretler)', async () => {
+    const io = fakeIo();
+    realtime.registerRealtimeBridge(io);
+
+    await eventBus.dispatch(eventBus.createEnvelope('forecast.settings.changed', { hotelId: HOTEL_ID }));
+
+    assert.equal(io.emitted.length, 1);
+    assert.equal(io.emitted[0].channel, realtime.INVENTORY_CHANNEL);
+    assert.equal(io.emitted[0].payload.event, 'forecast.settings.changed');
+  });
+
   it('ekranın gösterdiği veriyi taşımaz (yalnızca "şu değişti" haberi)', async () => {
     const io = fakeIo();
     realtime.registerRealtimeBridge(io);

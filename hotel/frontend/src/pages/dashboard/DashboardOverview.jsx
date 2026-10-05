@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { BOARD_TYPE_LABELS, OCCUPANCY_LOW_PCT, ROOM_BLOCK_TYPE_LABELS } from '@hotelos/hotel-contracts';
+import { BOARD_TYPE_LABELS, ROOM_BLOCK_TYPE_LABELS } from '@hotelos/hotel-contracts';
 import { Alert, Badge, Card, EmptyState, Icon, Spinner } from '@hotelos/ui';
 import { api, withQuery } from '../../lib/api.js';
 import { useManualTaskScope, useManualTaskSummary } from '../../lib/actors.js';
@@ -18,6 +18,7 @@ import { READINESS, frontDeskKeys } from '../../lib/front-desk.js';
 import { useInboxSummary, useRequestSummary } from '../../lib/frontOffice.js';
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 import { QueryError } from '../activity/shared.jsx';
+import { ForecastSection } from './ForecastSection.jsx';
 import { WeekOccupancyChart } from './WeekOccupancyChart.jsx';
 
 /** Ana sayfadaki gelecek / gidecek kısa listesinin satır sayısı (tamamı ön büroda). */
@@ -26,8 +27,9 @@ const SHORT_LIST_SIZE = 5;
 /**
  * Günlük durum (modül 13): müdürün sabah baktığı tek ekran — doluluk (dünle
  * kıyaslı), kalan oda, gelecek / gidecek, oda durumu, vergiler hariç oda
- * geliri, ADR ve RevPAR, haftalık doluluk, oda tipine göre bu gece,
- * konaklayan misafirler, bekleyen işler, bugünün kısa listeleri.
+ * geliri, ADR ve RevPAR, haftalık doluluk, önümüzdeki 30 günün tahmini ve
+ * kritik günleri (modül 25), oda tipine göre bu gece, konaklayan misafirler,
+ * bekleyen işler, bugünün kısa listeleri.
  *
  * Sayılar sunucudan hesaplanmış gelir (tanımlar oda planıyla aynı); ekran
  * yalnızca gösterir. Rezervasyon, giriş / çıkış ve oda durumu değişince
@@ -82,6 +84,7 @@ export function DashboardOverview() {
             <WeekOccupancyChart query={weekQuery} />
             <PendingWork faults={data.faults} can={can} />
           </div>
+          <ForecastSection />
           <div className="grid gap-5 lg:grid-cols-2">
             <RoomTypesTonight rows={data.roomTypes} />
             <GuestsTonight guests={data.guests} />
@@ -142,7 +145,7 @@ function KpiGrid({ data, can }) {
         label="Doluluk (bu gece)"
         value={`%${today.occupancyPct}`}
         valueHint={`Dün gece %${yesterday.occupancyPct} · ${pointsDiff(today.occupancyPct, yesterday.occupancyPct)}`}
-        tone={today.available < 0 ? 'danger' : today.occupancyPct < OCCUPANCY_LOW_PCT ? 'warning' : 'neutral'}
+        tone={today.available < 0 ? 'danger' : today.occupancyPct < data.thresholds.lowPct ? 'warning' : 'neutral'}
         lines={[
           `${today.sold} / ${today.sellable} satılabilir oda${today.pendingSold > 0 ? ` · ${today.pendingSold} opsiyonlu` : ''}`,
           today.available > 0

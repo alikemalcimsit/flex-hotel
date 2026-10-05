@@ -338,7 +338,7 @@ describe('gelir raporları (entegrasyon)', { skip }, () => {
     const { client, close } = await mcpServer.connectInProcess(mcp.createReportingMcpServer({ hotelId, logger: { error() {} } }));
     try {
       const { tools } = await client.listTools();
-      assert.deepEqual(tools.map((tool) => tool.name).sort(), ['get_occupancy', 'get_revenue', 'run_report_query']);
+      assert.deepEqual(tools.map((tool) => tool.name).sort(), ['explain_variance', 'get_forecast', 'get_occupancy', 'get_revenue', 'run_report_query']);
       assert.ok(tools.every((tool) => tool.annotations.readOnlyHint === true));
       assert.ok(!('hotelId' in tools[0].inputSchema.properties), 'otel parametresi yok');
 

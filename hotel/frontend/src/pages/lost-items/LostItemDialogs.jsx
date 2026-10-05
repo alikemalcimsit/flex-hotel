@@ -401,7 +401,7 @@ export function RetentionDialog({ onClose, onDone }) {
   );
 }
 
-/** @param {{ initial: { retentionDays: number, valuableRetentionDays: number }, onClose: () => void, onDone: () => void }} props */
+/** @param {{ initial: { retentionDays: number, valuableRetentionDays: number, updatedAt: string }, onClose: () => void, onDone: () => void }} props */
 function RetentionForm({ initial, onClose, onDone }) {
   const [values, setValues] = useState({ retentionDays: String(initial.retentionDays), valuableRetentionDays: String(initial.valuableRetentionDays) });
   const [errors, setErrors] = useState({});
@@ -415,14 +415,18 @@ function RetentionForm({ initial, onClose, onDone }) {
   });
   function submit(event) {
     event.preventDefault();
-    const checked = validateWith(lostItemSettingsSchema, values);
+    const checked = validateWith(lostItemSettingsSchema, { ...values, expectedUpdatedAt: initial.updatedAt });
     if (!checked.ok) return setErrors(checked.errors);
     setErrors({});
     mutation.mutate(checked.data);
   }
   return (
     <form className="flex flex-col gap-4" onSubmit={submit} noValidate>
-      {mutation.error && <Alert tone="danger" title="Kaydedilemedi">{mutation.error.message}</Alert>}
+      {mutation.error && (
+        <Alert tone="danger" title="Kaydedilemedi">
+          {mutation.error.code === 'STALE_WRITE' ? 'Süreler bu arada başkası tarafından değiştirildi; pencereyi kapatıp yeniden açın.' : mutation.error.message}
+        </Alert>
+      )}
       <p className="text-sm text-ink-soft">
         Sahibi çıkmayan eşya bu süre dolunca "süresi dolan" listesine düşer; yönetici gerekçeyle kapatır. Süreler {LOST_ITEM_MIN_RETENTION_DAYS}–{LOST_ITEM_MAX_RETENTION_DAYS} gün.
       </p>

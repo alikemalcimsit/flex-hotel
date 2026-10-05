@@ -242,7 +242,13 @@ describe('kayıp eşya (entegrasyon)', { skip }, () => {
     let summary = await service.getLostItemSummary(hotelId);
     assert.deepEqual([summary.open, summary.matched, summary.expired], [3, 0, 1]);
 
-    await desk(() => service.updateLostItemSettings(hotelId, { retentionDays: 30, valuableRetentionDays: 60 }));
+    const { updatedAt } = await service.getLostItemSettings(hotelId);
+    await desk(() => service.updateLostItemSettings(hotelId, { retentionDays: 30, valuableRetentionDays: 60, expectedUpdatedAt: new Date(updatedAt) }));
+    // Eski sürümle ikinci kayıt reddedilir (ilkini sessizce ezmez).
+    await assert.rejects(
+      desk(() => service.updateLostItemSettings(hotelId, { retentionDays: 45, valuableRetentionDays: 90, expectedUpdatedAt: new Date(updatedAt) })),
+      (error) => error.code === 'STALE_WRITE',
+    );
     summary = await service.getLostItemSummary(hotelId);
     assert.equal(summary.expired, 2);
     const event = await db.eventLog.findFirst({ where: { hotelId, name: 'lost_items.settings.changed' } });

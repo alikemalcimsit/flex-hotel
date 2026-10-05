@@ -1,7 +1,9 @@
 import {
   APPROVAL_EVENTS,
   CASH_EVENTS,
+  BUDGET_EVENTS,
   EXTRAS_EVENTS,
+  FORECAST_EVENTS,
   LOST_ITEM_EVENTS,
   FOLIO_EVENTS,
   LIVE_VIEW_EVENTS,
@@ -88,6 +90,9 @@ export const EXTRAS_CHANNEL = 'extras.changed';
 /** Kayıp eşya listesi ve eşya ekranı (modül 21). */
 export const LOST_ITEMS_CHANNEL = 'lost-items.changed';
 
+/** Bütçe ve sapma raporu (modül 27): sürüm, gider kalemi, gerçekleşen, AI yorumu. */
+export const BUDGET_CHANNEL = 'budget.changed';
+
 /**
  * Aktivite akışı kanalı (modül 10). Olaydan değil aktivite satırından beslenir
  * (bkz. `registerActivityBridge`); yalnızca akış ekranı açık paneller abone olur.
@@ -99,7 +104,8 @@ export const ACTIVITY_CHANNEL = 'activity.changed';
  * dinler; gelen kutusu açık olmayan panel envanter haberleriyle uğraşmaz.
  */
 const CHANNEL_EVENTS = Object.freeze({
-  [INVENTORY_CHANNEL]: LIVE_VIEW_EVENTS,
+  // Günlük durum bu kanalı dinler: tahminin eşikleri değişince açık ekranlar da yeniden işaretler.
+  [INVENTORY_CHANNEL]: [...LIVE_VIEW_EVENTS, ...FORECAST_EVENTS],
   [MESSAGING_CHANNEL]: MESSAGING_CHANGED_EVENTS,
   [REQUESTS_CHANNEL]: REQUESTS_CHANGED_EVENTS,
   [NOTIFICATIONS_CHANNEL]: NOTIFICATIONS_CHANGED_EVENTS,
@@ -112,6 +118,7 @@ const CHANNEL_EVENTS = Object.freeze({
   [CASH_CHANNEL]: CASH_EVENTS,
   [EXTRAS_CHANNEL]: EXTRAS_EVENTS,
   [LOST_ITEMS_CHANNEL]: LOST_ITEM_EVENTS,
+  [BUDGET_CHANNEL]: BUDGET_EVENTS,
 });
 
 /** @param {string} hotelId */

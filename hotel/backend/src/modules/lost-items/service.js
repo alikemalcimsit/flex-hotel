@@ -20,6 +20,7 @@ import { lockLostItems } from '../../lib/locks.js';
 import { buildPage, toSkipTake } from '../../lib/pagination.js';
 import { newReference, referenceFromToken } from '../../lib/reference.js';
 import { MATCH_NOTHING, containsText, isFuzzyToken, matchGuestIds, matchRoomIdsByNumber, searchTokens } from '../../lib/search.js';
+import { updateWithVersionCheck } from '../../lib/versioned-update.js';
 import { writeWithEvents } from '../../lib/write.js';
 import { guestFullName, searchGuests } from '../reservations/guests.js';
 import { getHotelSettings } from '../settings/service.js';
@@ -815,20 +816,34 @@ export async function disposeLostItem(hotelId, id, { expectedUpdatedAt, method, 
 
 /* ─────────────── Ayarlar ─────────────── */
 
-/** @param {string} hotelId */
+/**
+ * Saklama süreleri ve otel kaydının sürümü (ayar penceresi geri yollar).
+ * @param {string} hotelId
+ */
 export async function getLostItemSettings(hotelId) {
-  return loadRetention(prisma, hotelId);
+  const [retention, hotel] = await Promise.all([
+    loadRetention(prisma, hotelId),
+    prisma.hotel.findFirst({ where: { id: hotelId }, select: { updatedAt: true } }),
+  ]);
+  return { ...retention, updatedAt: hotel.updatedAt.toISOString() };
 }
 
 /**
- * Saklama süreleri. Bütün açık eşyalara hemen uygulanır (süre kolonu yok).
+ * Saklama süreleri (sürüm kontrollü). Bütün açık eşyalara hemen uygulanır (süre kolonu yok).
  * @param {string} hotelId
- * @param {{ retentionDays: number, valuableRetentionDays: number }} input
+ * @param {{ retentionDays: number, valuableRetentionDays: number, expectedUpdatedAt: Date }} input
  */
-export async function updateLostItemSettings(hotelId, { retentionDays, valuableRetentionDays }) {
+export async function updateLostItemSettings(hotelId, { retentionDays, valuableRetentionDays, expectedUpdatedAt }) {
   await writeWithEvents(async (tx, stage) => {
     const before = await loadRetention(tx, hotelId);
-    await tx.hotel.update({ where: { id: hotelId }, data: { lostItemRetentionDays: retentionDays, lostItemValuableRetentionDays: valuableRetentionDays } });
+    await updateWithVersionCheck(
+      tx,
+      'hotel',
+      { id: hotelId },
+      expectedUpdatedAt,
+      { lostItemRetentionDays: retentionDays, lostItemValuableRetentionDays: valuableRetentionDays },
+      'Otel kaydı bulunamadı',
+    );
     await recordAudit(tx, {
       hotelId,
       entity: 'Hotel',

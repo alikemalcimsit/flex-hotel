@@ -598,6 +598,39 @@ export const EVENT_CATALOG = Object.freeze({
   /** Saklama süreleri değişti ("süresi dolan" listesi yeniden hesaplanır). */
   'lost_items.settings.changed': hotelScoped,
 
+  /* ── Tahmin (modül 25) ── */
+
+  /** Kritik gün eşikleri değişti (tahmin ekranı yeniden işaretler). */
+  'forecast.settings.changed': hotelScoped,
+
+  /* ── Bütçe (modül 27) ──
+     Bütçe ve sapma ekranı bunlarla canlı tazelenir (`BUDGET_EVENTS`); yükte
+     yalnızca kimlik ve dönem. AI yorumu: istek → budget-agent → tamamlandı. */
+
+  /** Bütçe sürümü değişti: açıldı (ilk / revize), satırları kaydedildi, onaylandı. */
+  'budget.changed': hotelScoped.extend({
+    budgetId: z.string().uuid(),
+    year: z.number().int(),
+    change: z.enum(['CREATED', 'REVISED', 'LINES_SAVED', 'APPROVED']),
+  }),
+  /** Gider kalemi eklendi, adı değişti ya da arşivlendi. */
+  'budget.expense_items.changed': hotelScoped,
+  /** Gerçekleşen giderler girildi. */
+  'budget.actuals.changed': hotelScoped.extend({ year: z.number().int() }),
+  /** Dönem için AI sapma yorumu istendi (budget-agent dinler). */
+  'budget.commentary.requested': hotelScoped.extend({
+    commentaryId: z.string().uuid(),
+    budgetId: z.string().uuid(),
+    year: z.number().int(),
+    month: z.number().int().min(1).max(12),
+    scope: z.enum(['MONTH', 'YTD']),
+  }),
+  /** Yorum yazıldı ya da yazılamadı. */
+  'budget.commentary.completed': hotelScoped.extend({
+    commentaryId: z.string().uuid(),
+    status: z.enum(['READY', 'FAILED']),
+  }),
+
   /* ── Ödeme (modül 17) ──
      Folyo ekranı (bakiye) ve kasa görünümü bunlarla canlı tazelenir
      (`PAYMENT_EVENTS`). Tutar folyonun para biriminde (`amount`, iade ve
@@ -811,6 +844,18 @@ export const EXTRAS_EVENTS = Object.freeze(['minibar.recorded', 'laundry.order.c
 
 /** Kayıp eşya ekranlarını etkileyen olaylar (canlı yayın: `lost-items.changed`, modül 21). */
 export const LOST_ITEM_EVENTS = Object.freeze(['lost_item.recorded', 'lost_item.changed', 'lost_items.settings.changed']);
+
+/** Tahmin (modül 25): eşik değişince açık günlük durum ekranları yeniden işaretler (`inventory.changed` kanalı). */
+export const FORECAST_EVENTS = Object.freeze(['forecast.settings.changed']);
+
+/** Bütçe (modül 27): bütçe ve sapma ekranı bunlarla tazelenir (`budget.changed` kanalı). */
+export const BUDGET_EVENTS = Object.freeze([
+  'budget.changed',
+  'budget.expense_items.changed',
+  'budget.actuals.changed',
+  'budget.commentary.requested',
+  'budget.commentary.completed',
+]);
 
 /** Onay kuyruğunu etkileyen event'ler (canlı yayın: `approvals.changed`). */
 export const APPROVAL_EVENTS = Object.freeze([
