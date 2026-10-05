@@ -12,7 +12,10 @@ import { randomUUID } from 'node:crypto';
  * - Aynı çalıştırma aynı veriyi üretir (sabit tohum); tarihler bugüne göre kayar.
  * - Kapsam: ~52 oda, 1000 misafir, 13 ay geçmiş + 75 gün ileri rezervasyon
  *   (mevsimli doluluk ve fiyat), folyo kalemleri, ödemeler, iptal / gelmeyen,
- *   onaylı bütçe + kapanmış aylar için gerçekleşen giderler.
+ *   onaylı bütçe + kapanmış aylar için gerçekleşen giderler, 10 acente
+ *   (9 satıştaki kontrat, stop-sale; biri pasif / kontratı sonlanmış) ve
+ *   acente rezervasyonları kontrat fiyatıyla, cariye aktarılan ödemeleriyle.
+ * - Acenteler `createdBy = demo@hotel.local` ile tanınır; `--reset` onları da siler.
  */
 
 if (process.env.DEMO_CONFIRM !== 'DEMO') {
@@ -46,7 +49,8 @@ const addDays = (iso, n) => core.toIsoDay(new Date(midnight(iso).getTime() + n *
 const at = (iso, hourUtc) => new Date(`${iso}T${String(hourUtc).padStart(2, '0')}:00:00.000Z`);
 const money = (n) => (Math.round(n * 100) / 100).toFixed(2);
 
-const existingDemo = await prisma.reservation.count({ where: { hotelId, confirmationCode: { startsWith: CODE_PREFIX } } });
+const existingDemo =
+  (await prisma.reservation.count({ where: { hotelId, confirmationCode: { startsWith: CODE_PREFIX } } })) + (await prisma.agency.count({ where: { hotelId, createdBy: ACTOR } }));
 if (process.argv.includes('--reset')) {
   await prisma.$transaction(
     async (tx) => {
@@ -59,6 +63,10 @@ if (process.argv.includes('--reset')) {
         `DELETE FROM "Guest" g WHERE g."hotelId" = $1 AND 'demo' = ANY(g."tags") AND NOT EXISTS (SELECT 1 FROM "Reservation" r WHERE r."guestId" = g."id")`,
         hotelId,
       );
+      // Demo acenteler: başka rezervasyonu olmayanlar kontratlarıyla (fiyat ve stop-sale satırları kontratla gider) silinir.
+      const orphan = `(SELECT a."id" FROM "Agency" a WHERE a."hotelId" = $1 AND a."createdBy" = $2 AND NOT EXISTS (SELECT 1 FROM "Reservation" r WHERE r."agencyId" = a."id"))`;
+      await tx.$executeRawUnsafe(`DELETE FROM "Contract" WHERE "hotelId" = $1 AND "agencyId" IN ${orphan}`, hotelId, ACTOR);
+      await tx.$executeRawUnsafe(`DELETE FROM "Agency" WHERE "id" IN ${orphan}`, hotelId, ACTOR);
     },
     { timeout: 120_000 },
   );
@@ -189,6 +197,88 @@ for (const room of rooms) {
   }
 }
 
+// ── Acenteler ve kontratlar (modül 29) ──────────────────────────────────
+// Kontrat fiyatı: oda tipi taban fiyatı × ay çarpanı × pansiyon × acente indirimi (10 TL'ye yuvarlı).
+// Acente rezervasyonlarının geceleri aynı formülle yazılır: kontratla rezervasyon hiç ayrışmaz.
+const BOARD_FACTOR = { RO: 0.92, BB: 1, HB: 1.15, FB: 1.28, AI: 1.35, UAI: 1.5 };
+const CONTRACT_BOARDS = ['BB', 'HB', 'AI'];
+const agencyNightPrice = (seed, type, board, iso) => Math.round((Number(type.basePrice) * PRICE[monthOf(iso)] * BOARD_FACTOR[board] * seed.discount) / 10) * 10;
+
+const AGENCY_SEEDS = [
+  { code: 'ATLAS', name: 'Atlas Tur Seyahat', contactName: 'Selin Aksoy', commissionPct: '12', paymentTermDays: 30, discount: 0.82, weight: 24, stopSales: [{ from: 30, to: 33, reason: 'Kongre haftası: kontenjan yok' }] },
+  { code: 'EGE', name: 'Ege Turizm ve Seyahat', contactName: 'Mert Yalçın', commissionPct: '10', paymentTermDays: 15, discount: 0.85, weight: 18, stopSales: [] },
+  { code: 'AKDENIZ', name: 'Akdeniz Tatil Acentesi', contactName: 'Gül Demirtaş', commissionPct: '15', paymentTermDays: 45, discount: 0.8, weight: 16, stopSales: [{ from: 52, to: 54, reason: 'Toplu etkinlik' }] },
+  { code: 'ROTA', name: 'Rota Travel', contactName: 'Kaan Özbek', commissionPct: '8', paymentTermDays: 30, discount: 0.88, weight: 10, stopSales: [] },
+  { code: 'MAVIYOL', name: 'Mavi Yol Turizm', contactName: 'Hande Işık', commissionPct: '12.5', paymentTermDays: 30, discount: 0.83, weight: 10, stopSales: [] },
+  { code: 'NORDIC', name: 'Nordic Sun Holidays (İsveç)', contactName: 'Anna Lindqvist', commissionPct: '18', paymentTermDays: 60, discount: 0.78, weight: 8, stopSales: [{ from: 40, to: 41, reason: 'Bakım: üst kat kapalı' }] },
+  { code: 'SUNWAY', name: 'Sunway Reisen (Almanya)', contactName: 'Jonas Becker', commissionPct: '16', paymentTermDays: 60, discount: 0.8, weight: 8, stopSales: [] },
+  { code: 'BALTIC', name: 'Baltic Trips (Polonya)', contactName: 'Marta Nowak', commissionPct: '15', paymentTermDays: 45, discount: 0.8, weight: 4, stopSales: [] },
+  { code: 'KARDELEN', name: 'Kardelen Kurumsal Seyahat', contactName: 'Emre Kaplan', commissionPct: '5', paymentTermDays: 15, discount: 0.9, weight: 2, stopSales: [] },
+  // Anlaşması bitmiş, pasif acente: durumların nasıl göründüğü için.
+  { code: 'POYRAZ', name: 'Poyraz Turizm', contactName: 'Tuncay Ateş', commissionPct: '10', paymentTermDays: 30, discount: 0.86, weight: 0, stopSales: [], ended: true },
+];
+
+const agenciesService = await import('../src/modules/agencies/service.js');
+const asActor = (fn) => core.runWithContext({ correlationId: randomUUID(), actor: ACTOR }, fn);
+const monthStartOf = (iso) => `${iso.slice(0, 7)}-01`;
+const nextMonthStart = (iso) => new Date(Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)), 1)).toISOString().slice(0, 10);
+const contractStart = addDays(firstDay, -10);
+const contractEnd = addDays(lastDay, 60);
+const CONTRACT_NAME = `Sezon ${contractStart.slice(0, 4)}–${contractEnd.slice(0, 4)}`;
+
+/** Satışta olan, rezervasyon alabilen acenteler (stop-sale günleriyle). */
+const sellableAgencies = [];
+for (const seed of AGENCY_SEEDS) {
+  const agency = await asActor(() =>
+    agenciesService.createAgency(hotelId, {
+      code: seed.code,
+      name: seed.name,
+      contactName: seed.contactName,
+      phone: null,
+      email: `rezervasyon@${seed.code.toLowerCase()}.example.com`,
+      address: null,
+      taxOffice: null,
+      taxNumber: null,
+      commissionPct: seed.commissionPct,
+      paymentTermDays: seed.paymentTermDays,
+      notes: null,
+    }),
+  );
+  let contract = await asActor(() => agenciesService.createContract(hotelId, agency.id, { name: CONTRACT_NAME, startDate: midnight(contractStart), endDate: midnight(contractEnd), notes: null }));
+  const rates = [];
+  for (let monthStart = monthStartOf(contractStart); monthStart <= contractEnd; monthStart = nextMonthStart(monthStart)) {
+    const blockStart = monthStart < contractStart ? contractStart : monthStart;
+    const lastOfMonth = addDays(nextMonthStart(monthStart), -1);
+    const blockEnd = lastOfMonth > contractEnd ? contractEnd : lastOfMonth;
+    for (const type of Object.values(types)) {
+      for (const board of CONTRACT_BOARDS) {
+        rates.push({ roomTypeId: type.id, boardType: board, startDate: midnight(blockStart), endDate: midnight(blockEnd), price: String(agencyNightPrice(seed, type, board, blockStart)) });
+      }
+    }
+  }
+  contract = await asActor(() => agenciesService.saveContractRates(hotelId, contract.id, { expectedUpdatedAt: new Date(contract.updatedAt), rates }));
+  contract = await asActor(() => agenciesService.activateContract(hotelId, contract.id, { expectedUpdatedAt: new Date(contract.updatedAt) }));
+  const stopRanges = [];
+  for (const stop of seed.stopSales) {
+    const from = addDays(today, stop.from);
+    const to = addDays(today, stop.to);
+    contract = await asActor(() => agenciesService.addStopSale(hotelId, contract.id, { roomTypeId: null, startDate: midnight(from), endDate: midnight(to), reason: stop.reason }));
+    stopRanges.push({ from, to });
+  }
+  if (seed.ended) {
+    contract = await asActor(() => agenciesService.endContract(hotelId, contract.id, { expectedUpdatedAt: new Date(contract.updatedAt), reason: 'Anlaşma yenilenmedi' }));
+    await asActor(() => agenciesService.setAgencyStatus(hotelId, agency.id, { expectedUpdatedAt: new Date(agency.updatedAt), status: 'PASSIVE' }));
+    continue;
+  }
+  sellableAgencies.push({ id: agency.id, seed, commissionPct: seed.commissionPct, stopRanges });
+}
+
+/** Konaklamaya uyan, stop-sale'i olmayan bir acente (ağırlıklı); yoksa null. */
+function pickAgency(checkIn, checkOut) {
+  const fits = sellableAgencies.filter((agency) => !agency.stopRanges.some((stop) => checkIn <= stop.to && stop.from < checkOut));
+  return fits.length ? weighted(fits.map((agency) => [agency, agency.seed.weight])) : null;
+}
+
 let sequence = 0;
 const reservations = [];
 const nights = [];
@@ -204,9 +294,13 @@ for (const { room, checkIn, checkOut, lead } of stays) {
   else status = rand() < 0.86 ? 'CONFIRMED' : 'PENDING';
   const id = randomUUID();
   sequence += 1;
+  const sourceChoice = weighted(SOURCES);
+  const agency = sourceChoice === 'AGENCY' ? pickAgency(checkIn, checkOut) : null;
+  const boardChoice = agency ? weighted([['BB', 45], ['HB', 25], ['AI', 30]]) : weighted(BOARDS);
   const nightRows = [];
   for (let day = checkIn; day < checkOut; day = addDays(day, 1)) {
-    nightRows.push({ id: randomUUID(), hotelId, reservationId: id, date: midnight(day), amount: nightAmount(room, day) });
+    const amount = agency ? agencyNightPrice(agency.seed, room.roomType, boardChoice, day) : nightAmount(room, day);
+    nightRows.push({ id: randomUUID(), hotelId, reservationId: id, date: midnight(day), amount, ...(agency ? { baseRate: amount, seasonName: CONTRACT_NAME } : {}) });
   }
   nights.push(...nightRows);
   const stayed = status === 'CHECKED_IN' || status === 'CHECKED_OUT';
@@ -222,8 +316,11 @@ for (const { room, checkIn, checkOut, lead } of stays) {
     adults,
     children: adults < capacity && rand() < 0.15 ? 1 : 0,
     status,
-    source: weighted(SOURCES),
-    boardType: weighted(BOARDS),
+    // Kaynak "Acente" olan ama stop-sale yüzünden acente bulunamayan konaklama resepsiyondan sayılır.
+    source: agency ? 'AGENCY' : sourceChoice === 'AGENCY' ? 'UI' : sourceChoice,
+    agencyId: agency?.id ?? null,
+    agencyCommissionPct: agency?.commissionPct ?? null,
+    boardType: boardChoice,
     totalPrice: money(nightRows.reduce((sum, night) => sum + night.amount, 0)),
     currency: 'TRY',
     confirmationCode: `${CODE_PREFIX}${String(sequence).padStart(6, '0')}`,
@@ -250,7 +347,9 @@ for (let index = 0; index < lostCount; index += 1) {
   const checkIn = addDays(today, int(-HISTORY_DAYS + 10, FUTURE_DAYS - 10));
   const length = int(2, 5);
   const noShow = checkIn < today && rand() < 0.15;
-  const nightly = nightAmount(room, checkIn);
+  const sourceChoice = weighted(SOURCES);
+  const agency = sourceChoice === 'AGENCY' ? pickAgency(checkIn, addDays(checkIn, length)) : null;
+  const nightly = agency ? agencyNightPrice(agency.seed, room.roomType, 'BB', checkIn) : nightAmount(room, checkIn);
   const fee = rand() < 0.35 || noShow ? Math.round(nightly * (noShow ? 1 : 0.5)) : null;
   const createdDay = addDays(checkIn, -int(5, 40));
   const createdAt = at(createdDay > today ? today : createdDay, 10);
@@ -264,7 +363,9 @@ for (let index = 0; index < lostCount; index += 1) {
     checkOut: at(addDays(checkIn, length), 9),
     adults: 2,
     status: noShow ? 'NO_SHOW' : 'CANCELLED',
-    source: weighted(SOURCES),
+    source: agency ? 'AGENCY' : sourceChoice === 'AGENCY' ? 'UI' : sourceChoice,
+    agencyId: agency?.id ?? null,
+    agencyCommissionPct: agency?.commissionPct ?? null,
     boardType: 'BB',
     totalPrice: money(nightly * length),
     confirmationCode: `${CODE_PREFIX}${String(sequence).padStart(6, '0')}`,
@@ -341,9 +442,9 @@ for (const { row, nightRows, checkIn, checkOut } of reservations) {
   const method = row.source === 'AGENCY' ? 'AGENCY' : weighted(METHODS);
   const closed = row.status === 'CHECKED_OUT';
   if (closed) {
-    if (rand() < 0.4 && folio.charges > 1000) pay(folio, row.id, Math.round(folio.charges * 0.3), checkIn, 'CARD');
+    if (row.source !== 'AGENCY' && rand() < 0.4 && folio.charges > 1000) pay(folio, row.id, Math.round(folio.charges * 0.3), checkIn, 'CARD');
     pay(folio, row.id, Math.round((folio.charges - folio.paid) * 100) / 100, checkOut, method);
-  } else if (folio.charges > 0 && rand() < 0.6) {
+  } else if (row.source !== 'AGENCY' && folio.charges > 0 && rand() < 0.6) {
     pay(folio, row.id, Math.round(folio.charges * 0.4), checkIn, method);
   }
   folios.push({
@@ -436,6 +537,7 @@ try {
 
 console.log(
   `Demo veri hazır: ${rooms.length} oda, ${guestRows.length} misafir, ${reservations.length + lost.length} rezervasyon ` +
-    `(${lost.length} iptal / gelmeyen), ${nights.length} gece, ${items.length} folyo kalemi, ${payments.length} ödeme.`,
+    `(${lost.length} iptal / gelmeyen, ${reservations.filter((entry) => entry.row.agencyId).length + lost.filter((entry) => entry.agencyId).length} acenteli), ` +
+    `${nights.length} gece, ${items.length} folyo kalemi, ${payments.length} ödeme, ${AGENCY_SEEDS.length} acente.`,
 );
 await prisma.$disconnect();

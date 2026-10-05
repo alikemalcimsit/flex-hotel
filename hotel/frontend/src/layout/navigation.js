@@ -110,6 +110,13 @@ export const NAV_SECTIONS = Object.freeze([
         icon: 'wallet',
         permission: PERMISSIONS.BUDGET_VIEW,
       },
+      // Acente ve kontrat (modül 29): müdür düzenler, muhasebe görür.
+      {
+        label: 'Acenteler',
+        to: '/acenteler',
+        icon: 'building',
+        permission: PERMISSIONS.AGENCIES_VIEW,
+      },
       {
         label: 'Mesajlar',
         to: '/mesajlar',

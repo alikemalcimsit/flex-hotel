@@ -13,7 +13,11 @@
  * gruplar arası sıraya uymalı (oda kilidini aldıktan sonra rezervasyon
  * kilitlenmez). Modül 4 rezervasyon oluştururken `lockRoomTypes` çağırmalı;
  * aksi hâlde aynı anda açılan son iki rezervasyon envanteri aşabilir. Modül 6
- * giriş/çıkışta önce rezervasyonu, sonra odayı kilitlemeli.
+ * giriş/çıkışta önce rezervasyonu, sonra odayı kilitlemeli. Modül 29: acente
+ * oda tipinden **sonra** kilitlenir (rezervasyon → oda tipi → acente); satışta
+ * paylaşımlı (aynı acentenin rezervasyonları birbirini beklemez), kontrat
+ * yazımında özel (satış yazılırken kontrat değişmez, kontrat yazılırken satış
+ * eski fiyatı okumaz).
  *
  * Soft-delete edilmiş satırlar kilitlenmez ve "bulunamadı" sayılır.
  */
@@ -58,6 +62,43 @@ export function lockReservations(tx, hotelId, reservationIds) {
  */
 export function lockRoomTypes(tx, hotelId, roomTypeIds) {
   return lockRows(tx, 'RoomType', hotelId, roomTypeIds);
+}
+
+/**
+ * Silinmeyen (`deletedAt` kolonu olmayan) tablolar için kilit.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} table Tablo adı (sabit, kullanıcı girdisi değil)
+ * @param {string} hotelId
+ * @param {string[]} ids
+ * @param {boolean} shared `FOR SHARE` (okuyanlar birbirini beklemez, yazan hepsini bekler)
+ * @returns {Promise<Set<string>>}
+ */
+async function lockPlainRows(tx, table, hotelId, ids, shared) {
+  const unique = [...new Set(ids.filter(Boolean))].sort();
+  if (unique.length === 0) return new Set();
+  const rows = await tx.$queryRawUnsafe(
+    `SELECT id FROM "${table}" WHERE id = ANY($1::text[]) AND "hotelId" = $2 ORDER BY id ${shared ? 'FOR SHARE' : 'FOR UPDATE'}`,
+    unique,
+    hotelId,
+  );
+  return new Set(rows.map((row) => row.id));
+}
+
+/**
+ * Acente satırı (modül 29). Acenteye rezervasyon yazan işlem `shared: true` ile
+ * alır (kontrat / stop-sale / durum okuması bu kilit altında yapılır); acente
+ * kartını ya da kontratını değiştiren işlem özel alır. Böylece stop-sale
+ * eklenirken aynı anda gelen rezervasyon eski durumu görüp geçemez.
+ * Sıra: rezervasyon → oda tipi → acente.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} agencyIds
+ * @param {{ shared?: boolean }} [options]
+ */
+export function lockAgencies(tx, hotelId, agencyIds, { shared = false } = {}) {
+  return lockPlainRows(tx, 'Agency', hotelId, agencyIds, shared);
 }
 
 /**

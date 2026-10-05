@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { BOARD_TYPES, BOARD_TYPE_LABELS, updateReservationSchema } from '@hotelos/hotel-contracts';
 import { Alert, Badge, Button, Input, Select, Textarea } from '@hotelos/ui';
+import { AgencyPicker } from '../../components/AgencyPicker.jsx';
 import { Modal } from '../../components/Modal.jsx';
+import { agencyIssueText } from '../../lib/agencies.js';
 import { apiPatch, apiPost } from '../../lib/api.js';
 import { formatMoney } from '../../lib/format.js';
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
@@ -50,14 +52,20 @@ export function EditReservationDialog({ reservation, onClose, onSaved, onError }
   const [manual, setManual] = useState({ total: '', note: '' });
   const [errors, setErrors] = useState({});
   const [decisionRequired, setDecisionRequired] = useState(false);
+  // Acente (modül 29): atanabilir, değiştirilebilir, kaldırılabilir; içerideki misafirde sabit.
+  const [agency, setAgency] = useState(reservation.agency ?? null);
+  const agencyChanged = (agency?.id ?? null) !== (reservation.agency?.id ?? null);
+  const boardChanged = form.boardType !== reservation.boardType;
 
   const set = (field) => (event) => setForm((current) => ({ ...current, [field]: event.target.value }));
   const stayChanged = form.checkIn !== reservation.checkIn || form.checkOut !== reservation.checkOut || form.roomTypeId !== reservation.roomType.id;
   const stayValid = form.checkIn && form.checkOut && form.checkOut > form.checkIn;
+  // Fiyat kaynağı değişti mi: konaklama, acente ya da acente kontratında pansiyon.
+  const previewNeeded = stayChanged || agencyChanged || Boolean(agency && boardChanged);
 
   const [quoteInput, setQuoteInput] = useState(null);
   useEffect(() => {
-    if (!stayChanged || !stayValid) {
+    if (!previewNeeded || !stayValid) {
       setQuoteInput(null);
       return undefined;
     }
@@ -68,11 +76,12 @@ export function EditReservationDialog({ reservation, onClose, onSaved, onError }
           checkOut: form.checkOut,
           lines: [{ roomTypeId: form.roomTypeId, quantity: 1, adults: Number(form.adults) || 1, children: Number(form.children) || 0 }],
           excludeReservationId: reservation.id,
+          ...(agency ? { agencyId: agency.id, boardType: form.boardType } : {}),
         }),
       QUOTE_DEBOUNCE_MS,
     );
     return () => clearTimeout(timer);
-  }, [stayChanged, stayValid, form.checkIn, form.checkOut, form.roomTypeId, form.adults, form.children, reservation.id]);
+  }, [previewNeeded, stayValid, form.checkIn, form.checkOut, form.roomTypeId, form.adults, form.children, form.boardType, agency, reservation.id]);
   const quote = useQuery({
     queryKey: reservationKeys.quote(quoteInput ?? {}),
     queryFn: () => apiPost('/reservations/quote', quoteInput),
@@ -110,6 +119,7 @@ export function EditReservationDialog({ reservation, onClose, onSaved, onError }
     if (form.children !== String(reservation.children)) body.children = form.children;
     if (form.boardType !== reservation.boardType) body.boardType = form.boardType;
     if (form.notes !== (reservation.notes ?? '')) body.notes = form.notes;
+    if (agencyChanged) body.agencyId = agency?.id ?? null;
     if (priceMode === 'CALCULATED') body.price = { mode: 'CALCULATED' };
     if (priceMode === 'MANUAL') body.price = { mode: 'MANUAL', total: manual.total, note: manual.note };
 
@@ -153,22 +163,38 @@ export function EditReservationDialog({ reservation, onClose, onSaved, onError }
           <Input label="Çıkış" type="date" min={addDaysIso(form.checkIn || today, 1)} value={form.checkOut} onChange={set('checkOut')} disabled={busy} error={errors.checkOut} className="w-full sm:w-44" />
           <Select label="Oda tipi" value={form.roomTypeId} onChange={set('roomTypeId')} options={roomTypeOptions} disabled={busy || inHouse} error={errors.roomTypeId} className="w-full sm:w-64" />
         </div>
+        {(!inHouse || agency) && (
+          <div className="flex flex-col gap-2">
+            <AgencyPicker value={agency} onChange={setAgency} error={errors.agencyId} disabled={busy || inHouse} label="Acente (isteğe bağlı)" />
+            {agencyChanged && (
+              <p className="text-xs text-ink-muted">
+                {agency
+                  ? 'Kaynak "Acente" olur; geceler yeni acentenin kontratıyla yeniden fiyatlanır (fiyatı elle girilmişse fiyat kalır).'
+                  : 'Acente kaldırılınca kaynak "Resepsiyon" olur; geceler otelin sistem fiyatıyla yeniden hesaplanır (fiyatı elle girilmişse fiyat kalır).'}
+              </p>
+            )}
+          </div>
+        )}
         <div className="flex flex-wrap gap-3">
           <Input label="Yetişkin" type="number" min={1} max={20} value={form.adults} onChange={set('adults')} disabled={busy} error={errors.adults} className="w-28" />
           <Input label="Çocuk" type="number" min={0} max={20} value={form.children} onChange={set('children')} disabled={busy} error={errors.children} className="w-28" />
           <Select label="Pansiyon" value={form.boardType} onChange={set('boardType')} options={BOARD_OPTIONS} disabled={busy} className="w-full sm:w-64" />
         </div>
 
-        {stayChanged && stayValid && (
+        {previewNeeded && stayValid && (
           <div className="rounded-item border border-line bg-canvas p-3 text-sm">
             {quote.isPending && 'Müsaitlik denetleniyor…'}
             {quote.isError && <span className="text-sec-strong">{quote.error.message}</span>}
             {typeQuote && (
               <span className="flex flex-wrap items-center gap-2">
                 <Badge tone={typeQuote.available > 0 ? 'success' : 'danger'}>
-                  {typeQuote.available > 0 ? `Yeni tarihlerde ${typeQuote.available} boş` : 'Yeni tarihlerde yer yok'}
+                  {typeQuote.available > 0 ? `${stayChanged ? 'Yeni' : 'Bu'} tarihlerde ${typeQuote.available} boş` : `${stayChanged ? 'Yeni' : 'Bu'} tarihlerde yer yok`}
                 </Badge>
-                <span className="text-ink-muted">Güncel sistem fiyatı: {formatMoney(typeQuote.total, quote.data.currency)}</span>
+                {typeQuote.agency && !typeQuote.agency.sellable ? (
+                  <span className="font-semibold text-sec-strong">{agencyIssueText(typeQuote.agency.issue, canOverridePrice)}</span>
+                ) : (
+                  <span className="text-ink-muted">{agency ? `${agency.name} kontrat fiyatı` : 'Güncel sistem fiyatı'}: {formatMoney(typeQuote.total, quote.data.currency)}</span>
+                )}
                 {reservation.room && <span className="text-ink-muted">· Oda yeni tarihlere uymazsa ataması kaldırılır.</span>}
               </span>
             )}
@@ -182,8 +208,8 @@ export function EditReservationDialog({ reservation, onClose, onSaved, onError }
               Bu rezervasyonun fiyatı elle girilmişti. Yeni konaklama için sistem fiyatını seçin ya da yeni elle fiyat girin.
             </Alert>
           )}
-          <PriceOption checked={priceMode === 'KEEP'} onChange={() => setPriceMode('KEEP')} disabled={busy} label="Anlaşılan fiyatı koru" hint="Değişmeyen geceler eski fiyatında kalır; eklenen geceler güncel fiyatla hesaplanır. Oda tipi değişirse tüm geceler yeni tipin fiyatıyla." />
-          <PriceOption checked={priceMode === 'CALCULATED'} onChange={() => setPriceMode('CALCULATED')} disabled={busy} label="Güncel sistem fiyatıyla yeniden hesapla" hint={inHouse ? 'İçerideki misafirin geçmiş geceleri değişmez.' : 'Tüm geceler bugünkü taban fiyat ve sezon çarpanıyla.'} />
+          <PriceOption checked={priceMode === 'KEEP'} onChange={() => setPriceMode('KEEP')} disabled={busy} label="Anlaşılan fiyatı koru" hint={agencyChanged || (agency && boardChanged) ? 'Acente ya da pansiyon değiştiği için geceler yeni kaynağın fiyatıyla yeniden hesaplanır; fiyatı elle girilmiş rezervasyonda fiyat kalır.' : 'Değişmeyen geceler eski fiyatında kalır; eklenen geceler güncel fiyatla hesaplanır. Oda tipi değişirse tüm geceler yeni tipin fiyatıyla.'} />
+          <PriceOption checked={priceMode === 'CALCULATED'} onChange={() => setPriceMode('CALCULATED')} disabled={busy} label={agency ? 'Güncel kontrat fiyatıyla yeniden hesapla' : 'Güncel sistem fiyatıyla yeniden hesapla'} hint={inHouse ? 'İçerideki misafirin geçmiş geceleri değişmez.' : agency ? `Tüm geceler ${agency.name} kontratının bugünkü fiyatıyla.` : 'Tüm geceler bugünkü taban fiyat ve sezon çarpanıyla.'} />
           {canOverridePrice && (
             <PriceOption checked={priceMode === 'MANUAL'} onChange={() => setPriceMode('MANUAL')} disabled={busy} label="Elle fiyat gir" hint="Toplam gecelere eşit bölünür; gerekçe denetim izine yazılır." />
           )}

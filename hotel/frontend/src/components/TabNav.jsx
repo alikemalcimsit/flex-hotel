@@ -10,7 +10,7 @@ import { Icon } from '@hotelos/ui';
  * Dar ekranda şerit yatay kayar; sayfa açılınca etkin sekme görünür alana
  * getirilir, yoksa sağda kalan sekme yarım görünür ve seçili olduğu anlaşılmaz.
  *
- * @param {{ label: string, tabs: Array<{ to: string, label: string, icon?: string }> }} props
+ * @param {{ label: string, tabs: Array<{ to: string, label: string, icon?: string, end?: boolean }> }} props
  */
 export function TabNav({ label, tabs }) {
   const scrollerRef = useRef(null);
@@ -33,6 +33,7 @@ export function TabNav({ label, tabs }) {
           <li key={tab.to}>
             <NavLink
               to={tab.to}
+              end={tab.end}
               className={({ isActive }) =>
                 `inline-flex items-center gap-2 whitespace-nowrap rounded-item px-4 py-2 text-sm font-semibold transition-colors duration-200 ${
                   isActive ? 'bg-ink text-white' : 'text-ink-muted hover:bg-black/[0.04] hover:text-ink'

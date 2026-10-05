@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { BUDGET_MONTH_LABELS, BUDGET_MONTHS } from '@hotelos/hotel-contracts';
 import { api, withQuery } from './api.js';
+import { cellText, parseCell } from './moneyInput.js';
 import { BUDGET_CHANNEL } from './socket.js';
 import { useLiveChannel } from './useLiveChannel.js';
 
@@ -62,30 +63,8 @@ export function useCommentary(query) {
 
 /* ─────────────── Biçim ─────────────── */
 
-const moneyFormatter = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-
-/**
- * Izgara hücresinin görünen hali: "1234.5" → "1.234,5"; boş → "".
- * @param {string | null} value
- */
-export function cellText(value) {
-  return value === null || value === undefined || value === '' ? '' : moneyFormatter.format(Number(value));
-}
-
-/**
- * Kullanıcının yazdığı hücre → sunucu biçimi: "1.234,50" / "1234.5" / "1 234" →
- * "1234.50"-benzeri metin; boş → null. Geçersiz metin olduğu gibi döner
- * (doğrulama sözleşmede, hata ay adıyla gösterilir).
- * @param {string} text
- */
-export function parseCell(text) {
-  const trimmed = String(text ?? '').trim().replace(/\s/g, '');
-  if (!trimmed) return null;
-  // Türkçe biçim: nokta binlik, virgül ondalık. Yalnızca nokta varsa ve 3 haneli gruplarsa binliktir.
-  if (trimmed.includes(',')) return trimmed.replace(/\./g, '').replace(',', '.');
-  if (/^\d{1,3}(\.\d{3})+$/.test(trimmed)) return trimmed.replace(/\./g, '');
-  return trimmed;
-}
+// Hücre biçimi ortak (kontrat fiyat tablosu da kullanır): bkz. moneyInput.js.
+export { cellText, parseCell };
 
 /* ─────────────── Excel ─────────────── */
 

@@ -15,6 +15,8 @@ export const reservationKeys = Object.freeze({
   detail: (id) => ['reservations', 'detail', id],
   /** @param {string} id */
   history: (id) => ['reservations', 'history', id],
+  /** Bütün fiyat önizlemeleri (kontrat / stop-sale değişince hepsi bayatlar). */
+  quotes: ['reservations', 'quote'],
   /** @param {object} input */
   quote: (input) => ['reservations', 'quote', input],
   /** @param {string} query */

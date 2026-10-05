@@ -216,6 +216,18 @@ export function ReservationDetailPage() {
               <Field label="Kişi">{partyLabel(detail.adults, detail.children)}</Field>
               <Field label="Pansiyon">{boardLong(detail.boardType)}</Field>
               <Field label="Kaynak">{sourceLabel(detail.source)}</Field>
+              {detail.agency && (
+                <Field label="Acente">
+                  {can(PERMISSIONS.AGENCIES_VIEW) ? (
+                    <Link to={`/acenteler/${detail.agency.id}`} className="font-semibold text-info-ink underline-offset-2 hover:underline">
+                      {detail.agency.name}
+                    </Link>
+                  ) : (
+                    <span className="font-semibold">{detail.agency.name}</span>
+                  )}
+                  <span className="ml-2 font-mono text-xs text-ink-muted">{detail.agency.code}</span>
+                </Field>
+              )}
               <Field label="Açan">{detail.createdBy} · {formatDateTime(detail.createdAt, timeZone)}</Field>
               {detail.confirmedAt && <Field label="Onaylandı">{formatDateTime(detail.confirmedAt, timeZone)}</Field>}
               {detail.roomSince && <Field label="Bu odada">{formatDate(detail.roomSince)} tarihinden beri</Field>}
@@ -274,7 +286,14 @@ export function ReservationDetailPage() {
                   <tr key={night.date}>
                     <td className="py-1.5">{formatDate(night.date)}</td>
                     <td className="py-1.5 text-xs text-ink-muted">
-                      {night.seasonName ? `${night.seasonName} ×${night.multiplier.replace('.', ',')}` : night.multiplier === null ? 'elle / aktarılan' : ''}
+                      {/* Sezon çarpanlı gece: "Yaz ×1,3"; acente kontratı gecesi çarpansız: "Kontrat: Yaz 2027"; elle / aktarılan gece etiketsiz. */}
+                      {night.seasonName
+                        ? night.multiplier
+                          ? `${night.seasonName} ×${night.multiplier.replace('.', ',')}`
+                          : `Kontrat: ${night.seasonName}`
+                        : night.multiplier === null
+                          ? 'elle / aktarılan'
+                          : ''}
                     </td>
                     <td className="py-1.5 text-right font-semibold">{formatMoney(night.amount, currency)}</td>
                   </tr>

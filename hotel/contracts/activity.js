@@ -82,6 +82,10 @@ export const AUDIT_ENTITY_LABELS = Object.freeze({
   BudgetExpenseItem: 'Bütçe gider kalemi',
   BudgetExpenseActual: 'Gerçekleşen gider',
   BudgetCommentary: 'Bütçe AI yorumu',
+  Agency: 'Acente',
+  Contract: 'Acente kontratı',
+  ContractRate: 'Kontrat fiyatları',
+  ContractStopSale: 'Kontrat stop-sale',
 });
 
 export const AUDIT_ENTITIES = Object.freeze(Object.keys(AUDIT_ENTITY_LABELS));

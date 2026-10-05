@@ -191,7 +191,16 @@ export function ReservationListTab() {
       header: 'Durum',
       render: (row) => <Badge tone={RESERVATION_STATUS_TONES[row.status]}>{statusLabel(row.status)}</Badge>,
     },
-    { key: 'source', header: 'Kaynak', render: (row) => <span className="text-xs text-ink-muted">{sourceLabel(row.source)}</span> },
+    {
+      key: 'source',
+      header: 'Kaynak',
+      render: (row) => (
+        <span className="block text-xs text-ink-muted">
+          {sourceLabel(row.source)}
+          {row.agency && <span className="block font-semibold text-ink-soft">{row.agency.name}</span>}
+        </span>
+      ),
+    },
   ];
 
   return (

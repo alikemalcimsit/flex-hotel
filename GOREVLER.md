@@ -1949,11 +1949,64 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 29. Kontrat & acente yönetimi — arkadaşın
 **Gün sonu:** Acenteler kayıtlı, kontrat fiyatları girili; acente adına açılan rezervasyon kontrat fiyatını otomatik alıyor.
-- [ ] Backend: Agency, Contract, ContractRate tabloları + API
-- [ ] Backend: rezervasyonda acente seçiliyse kontrat fiyatı kullan; stop-sale günlerinde reddet
-- [ ] Ekran: Acente listesi + kart (firma, yetkili, iletişim, komisyon %, vade)
-- [ ] Ekran: Kontrat formu (acente, dönem, oda tipi, pansiyon, fiyat, stop-sale tarihleri)
-- [ ] Ekran: Acente rezervasyonları ve cari özeti (47 ile bağlanır)
+- [x] Backend: Agency, Contract, ContractRate tabloları + API
+- [x] Backend: rezervasyonda acente seçiliyse kontrat fiyatı kullan; stop-sale günlerinde reddet
+- [x] Ekran: Acente listesi + kart (firma, yetkili, iletişim, komisyon %, vade)
+- [x] Ekran: Kontrat formu (acente, dönem, oda tipi, pansiyon, fiyat, stop-sale tarihleri)
+- [x] Ekran: Acente rezervasyonları ve cari özeti (47 ile bağlanır)
+
+> **📌 Modül 29 tamamlandı (5 Ekim 2026 — Ahmet).**
+>
+> **Kararlar (kullanıcı, 5 Ekim 2026):** kontrat fiyatı **oda başı gecelik** (oda tipi × pansiyon × dönem; kişi başı ek,
+> tek kişi farkı, çocuk indirimi modül 28'in işi); kontratta fiyatı olmayan gece **reddedilir** (yetkili personel fiyatı
+> elle girebilir; stop-sale elle fiyatla da aşılmaz); satıştaki kontratın fiyatı **denetim iziyle değişebilir** ve yalnızca
+> sonradan açılan rezervasyonları etkiler; bekleyen ve onaylı rezervasyona sonradan acente atanır / değiştirilir /
+> kaldırılır (geceler yeniden fiyatlanır; içerideki misafirde acente değişmez). Kontrat para birimi otelin parasıdır
+> (çoklu para: modül 60).
+>
+> **Veri** (migration `20261009090000_agencies_contracts`): `Agency` (kod ve ad otel içinde tekil, komisyon %, vade, aktif /
+> pasif; silinmez, pasife alınır), `Contract` (taslak → satışta → sonlandırıldı; **aynı acentenin aynı günü kapsayan en
+> fazla bir satıştaki kontratı** — EXCLUDE kısıtı), `ContractRate` (oda tipi × pansiyon × dönem fiyatı; aynı kontratta aynı
+> tip + pansiyon için dönemler çakışmaz — EXCLUDE), `ContractStopSale` (oda tipi boşsa tüm tipler; aynı kapsamda çakışmaz).
+> `Reservation.agencyId` artık yabancı anahtar; `agencyCommissionPct` rezervasyon açılırken kartın oranını **kopyalar**
+> (kart sonradan değişse de geçmiş rezervasyon etkilenmez; acente varsa oran da vardır — CHECK).
+>
+> **Fiyatlama** (`modules/agencies/sale.js`, `rules.js`): acente seçiliyse her gece o günü kapsayan satıştaki kontratın oda tipi +
+> pansiyon fiyatından yazılır (iki kontrata yayılan konaklama gece gece kendi kontratından; gece dökümünde kontrat adı).
+> Sebepler: `AGENCY_NOT_FOUND`, `AGENCY_PASSIVE`, `AGENCY_NO_CONTRACT`, `AGENCY_NO_RATE`, `AGENCY_STOP_SALE` (422, mesaj hangi
+> geceler olduğunu söyler). Açma, grup (satır başına tip + pansiyon; biri satılamıyorsa hiçbiri açılmaz), düzenleme
+> (yalnızca yeniden satılan geceler denetlenir: uzatma, pansiyon / tip / acente değişimi; eski geceler fiyatını ve
+> stop-sale'den bağımsızlığını korur), iptal geri alma (pasif acente ve stop-sale engeller), fiyat önizlemesi ve
+> kapasite onayı aynı kuraldan geçer. Kaynak acenteyle birlikte döner (acente → "Acente"; kaldırılınca "Resepsiyon").
+> **Kilit düzeni:** rezervasyon → oda tipi → **acente** (satışta paylaşımlı, kontrat / stop-sale / kart yazımında özel):
+> stop-sale yazılırken gelen rezervasyon eski durumu görüp geçemez (testle kanıtlı).
+>
+> **API** (`/agencies`): seçici (`reservations.manage` ya da `agencies.view`; yalnız ad / kod), liste (arama, durum,
+> sayfalı), kart (sürümlü güncelle, aktif ↔ pasif), kontrat (aç, başlık, fiyat tablosunun tamamı sürümlü, satışa aç,
+> sonlandır, taslağı sil), stop-sale ekle / kaldır, cari özeti, acentenin rezervasyonları (sayfalı; `agencies.view`,
+> rezervasyon listesi izni gerekmez). İzinler `agencies.view` (müdür, muhasebe), `agencies.manage` (müdür). Canlı kanal
+> `agencies.changed`; denetim izi kartı, kontratı, **fiyat farkını** (eklenen / kaldırılan / değişen satır) ve stop-sale'i yazar.
+>
+> **Ekran:** `/acenteler` (liste; kontratı olmayan aktif acente uyarılır), `/acenteler/:id` (genel, kontratlar, rezervasyonlar ve
+> cari), `/acenteler/kontrat/:id` (başlık, **dönem blokları × oda tipi × pansiyon fiyat tablosu** — çok dönemde bloklar kapalı
+> başlar, dönemi kopyala, hata hücreye bağlanır; kaydedilmemiş girişi canlı tazeleme silmez; stop-sale; satışa aç /
+> sonlandır). Rezervasyon formunda kaynak "Acente" → aramalı acente seçici, kontrat fiyatı canlı, satılamayan tip sebebiyle
+> işaretli; düzenleme penceresinde acente atama / değiştirme / kaldırma; detayda ve listede acente.
+>
+> **Cari özeti:** dönemde (girişe göre) satış, komisyon (açılıştaki oranla), net, iptal / gelmeme ücretleri; "cariye aktarılan" =
+> folyoda "Acente / cari" yöntemiyle kapatılan tutar ve vadesi gelen kısmı (çıkış + vade günü). Acentenin yaptığı ödemelerin
+> düşümü **modül 47** ile bağlanır.
+>
+> **Ölçüm** (`scripts/perf-agencies.mjs`, 3000 acente, 600 kontrat × 108 fiyat satırı, 82 bin acenteli rezervasyon, 550 bin
+> rezervasyonlu tablo): liste 6–10 ms, seçici araması 3 ms, kontrat ekranı 7 ms, cari özeti 4 ms, acente fiyat önizlemesi
+> 6 ms, acente rezervasyonu açma ~90 ms (acentesiz ~80 ms).
+>
+> **Test:** kurallar 13 + sözleşme 15 + ekran dönüşümleri 11 birim; entegrasyon 43 (kart, yaşam döngüsü, stop-sale,
+> fiyatlama, düzenleme, geri alma, önizleme, kilit, cari, izinler, ayar korumaları).
+>
+> **Devir:** modül 28 pansiyon / fiyat planı gelince standart fiyat kaynağı değişir; kontrat fiyatı `priceRoomLine` içinde ayrı
+> kalır (acente → kontrat, değilse standart). Modül 30 allotment'ı bu acenteye bağlar (kota, release); modül 35 komisyonu /
+> prim hesabını `agencyCommissionPct` üzerinden yapar; modül 33 kanal stop-sale'i ayrıdır (otel geneli).
 
 ### 30. Grup & allotment — Ali Kemal
 **Gün sonu:** Acenteye ayrılan oda kotası tanımlı; müsaitlik hesabı kotayı düşüyor; rooming list yüklenip toplu check-in yapılıyor.

@@ -14,6 +14,8 @@ import {
   createWaitlistSchema,
 } from '@hotelos/hotel-contracts';
 import { Alert, Badge, Button, Card, Checkbox, Icon, Input, Select, Spinner, Textarea } from '@hotelos/ui';
+import { AgencyPicker } from '../../components/AgencyPicker.jsx';
+import { agencyIssueText, useAgencyLive } from '../../lib/agencies.js';
 import { api, apiPost } from '../../lib/api.js';
 import { formatDate, formatMoney } from '../../lib/format.js';
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
@@ -80,6 +82,8 @@ export function NewReservationTab() {
   const [lines, setLines] = useState(() => [newLine('')]);
   const [status, setStatus] = useState('CONFIRMED');
   const [source, setSource] = useState('UI');
+  // Acente adına açılıyorsa (modül 29): fiyat kontrattan gelir, kaynak her zaman "Acente".
+  const [agency, setAgency] = useState(null);
   const [notes, setNotes] = useState('');
   const [manual, setManual] = useState({ enabled: false, total: '', note: '' });
   const [errors, setErrors] = useState({});
@@ -88,6 +92,17 @@ export function NewReservationTab() {
   const [approval, setApproval] = useState(null);
 
   const board = (value) => value || defaultBoard;
+  // Kontrat ya da stop-sale değişince açık formun fiyat önizlemesi de tazelenir.
+  useAgencyLive();
+  const chooseAgency = (next) => {
+    setAgency(next);
+    if (next) setSource('AGENCY');
+    else if (source === 'AGENCY') setSource('UI');
+  };
+  const chooseSource = (value) => {
+    setSource(value);
+    if (value !== 'AGENCY') setAgency(null);
+  };
 
   // Bekleme listesinden çevriliyorsa kaydın bilgileriyle doldur.
   const waitlistQuery = useQuery({
@@ -107,6 +122,10 @@ export function NewReservationTab() {
   }, [waitlistQuery.data]);
 
   const stayValid = validDay(checkIn) && validDay(checkOut) && checkOut > checkIn;
+  const agencyId = agency?.id ?? null;
+  // Acente kontratı pansiyona göre fiyatlar: acente varsa pansiyonlar önizlemeye girer
+  // (acentesizde sistem fiyatı pansiyondan bağımsız; gereksiz yeniden sorgu olmasın).
+  const quoteBoard = board(single.boardType);
   const quoteLines = useMemo(
     () =>
       mode === 'single'
@@ -115,8 +134,14 @@ export function NewReservationTab() {
           : []
         : lines
             .filter((line) => line.roomTypeId)
-            .map((line) => ({ roomTypeId: line.roomTypeId, quantity: Number(line.quantity) || 1, adults: Number(line.adults) || 1, children: Number(line.children) || 0 })),
-    [mode, single, lines],
+            .map((line) => ({
+              roomTypeId: line.roomTypeId,
+              quantity: Number(line.quantity) || 1,
+              adults: Number(line.adults) || 1,
+              children: Number(line.children) || 0,
+              ...(agencyId ? { boardType: line.boardType || defaultBoard } : {}),
+            })),
+    [mode, single, lines, agencyId, defaultBoard],
   );
   const [quoteInput, setQuoteInput] = useState(null);
   useEffect(() => {
@@ -124,9 +149,12 @@ export function NewReservationTab() {
       setQuoteInput(null);
       return undefined;
     }
-    const timer = setTimeout(() => setQuoteInput({ checkIn, checkOut, lines: quoteLines }), QUOTE_DEBOUNCE_MS);
+    const timer = setTimeout(
+      () => setQuoteInput({ checkIn, checkOut, lines: quoteLines, ...(agencyId ? { agencyId, boardType: mode === 'single' ? quoteBoard : defaultBoard } : {}) }),
+      QUOTE_DEBOUNCE_MS,
+    );
     return () => clearTimeout(timer);
-  }, [stayValid, checkIn, checkOut, quoteLines]);
+  }, [stayValid, checkIn, checkOut, quoteLines, agencyId, quoteBoard, mode, defaultBoard]);
 
   const quote = useQuery({
     queryKey: reservationKeys.quote(quoteInput ?? {}),
@@ -152,7 +180,8 @@ export function NewReservationTab() {
       checkIn,
       checkOut,
       status,
-      source,
+      source: agency ? 'AGENCY' : source,
+      agencyId: agency?.id ?? null,
       notes: notes || null,
       requestId,
       waitlistId: waitlistId ?? null,
@@ -273,6 +302,8 @@ export function NewReservationTab() {
     setGuestMatch(null);
     setNotes('');
     setManual({ enabled: false, total: '', note: '' });
+    setAgency(null);
+    setSource('UI');
   }
 
   const busy = mutation.isPending;
@@ -363,6 +394,20 @@ export function NewReservationTab() {
                 </div>
               )}
             </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Select label="Kaynak" name="source" value={agency ? 'AGENCY' : source} onChange={(e) => chooseSource(e.target.value)} options={SOURCE_OPTIONS} disabled={busy} />
+              {(source === 'AGENCY' || agency) && <AgencyPicker value={agency} onChange={chooseAgency} error={errors.agencyId} disabled={busy} required />}
+            </div>
+            {agency && (
+              <p className="text-xs text-ink-muted">
+                Fiyat {agency.name} acentesinin kontratından gelir; kontratta fiyatı olmayan ya da stop-sale&apos;deki geceler için rezervasyon açılamaz.
+              </p>
+            )}
+            {quoteData?.agency?.issue && (
+              <Alert tone="danger" title="Bu acente adına rezervasyon açılamıyor">
+                {quoteData.agency.issue.message}
+              </Alert>
+            )}
           </Section>
         </Card>
 
@@ -400,6 +445,11 @@ export function NewReservationTab() {
                           </span>
                           <span className="text-right">
                             <span className="block font-semibold">{formatMoney(type.total, quoteData?.currency)}</span>
+                            {type.agency && !type.agency.sellable && (
+                              <Badge tone="danger" className="mb-1">
+                                {type.agency.issue?.code === 'AGENCY_STOP_SALE' ? 'Stop-sale' : 'Kontratta yok'}
+                              </Badge>
+                            )}
                             <Badge tone={type.available > 0 ? 'success' : 'danger'}>{type.available > 0 ? `${type.available} boş` : 'Yer yok'}</Badge>
                           </span>
                         </button>
@@ -408,6 +458,11 @@ export function NewReservationTab() {
                   </div>
                 )}
                 {errors.roomTypeId && <p className="text-xs text-sec-strong">{errors.roomTypeId}</p>}
+                {selectedQuote?.agency && !selectedQuote.agency.sellable && (
+                  <Alert tone="warning" title={`${agency?.name ?? 'Acente'} için bu oda tipi satılamıyor`}>
+                    {agencyIssueText(selectedQuote.agency.issue, canOverridePrice)}
+                  </Alert>
+                )}
                 <div className="flex flex-wrap gap-3">
                   <Input label="Yetişkin" name="adults" type="number" min={1} max={20} value={single.adults} onChange={(e) => setSingle((c) => ({ ...c, adults: e.target.value }))} error={errors.adults} disabled={busy} className="w-28" />
                   <Input label="Çocuk" name="children" type="number" min={0} max={20} value={single.children} onChange={(e) => setSingle((c) => ({ ...c, children: e.target.value }))} error={errors.children} disabled={busy} className="w-28" />
@@ -424,6 +479,7 @@ export function NewReservationTab() {
                 <Input label="Grup adı" name="groupName" placeholder="Ör. Demir Ailesi, ABC Kongre" value={groupName} onChange={(e) => setGroupName(e.target.value)} error={errors.groupName} disabled={busy} className="w-full sm:w-96" />
                 {lines.map((line, index) => {
                   const typeQuote = typeQuotes.find((type) => type.id === line.roomTypeId);
+                  const lineQuote = agency ? quoteData?.lines?.[lines.filter((row) => row.roomTypeId).findIndex((row) => row.key === line.key)] : null;
                   const update = (field, value) => setLines((current) => current.map((row) => (row.key === line.key ? { ...row, [field]: value } : row)));
                   return (
                     <div key={line.key} className="flex flex-wrap items-end gap-2 rounded-item border border-line p-3">
@@ -446,7 +502,11 @@ export function NewReservationTab() {
                       <Select label="Pansiyon" value={board(line.boardType)} onChange={(e) => update('boardType', e.target.value)} options={BOARD_OPTIONS} disabled={busy} className="w-full sm:w-56" />
                       {typeQuote && (
                         <span className="self-center text-sm">
-                          {formatMoney(typeQuote.total, quoteData?.currency)} / oda
+                          {lineQuote && lineQuote.unitTotal === null ? (
+                            <span className="font-semibold text-sec-strong">{agencyIssueText(lineQuote.agency?.issue, canOverridePrice) || 'Fiyat yok'}</span>
+                          ) : (
+                            <>{formatMoney(lineQuote ? lineQuote.unitTotal : typeQuote.total, quoteData?.currency)} / oda</>
+                          )}
                           {typeQuote.available < Number(line.quantity) && <Badge tone="danger" className="ml-2">{Math.max(0, typeQuote.available)} boş</Badge>}
                         </span>
                       )}
@@ -473,7 +533,6 @@ export function NewReservationTab() {
           <Section title="Durum ve not" icon="fileText">
             <div className="flex flex-wrap gap-3">
               <Select label="Durum" name="status" value={status} onChange={(e) => setStatus(e.target.value)} options={STATUS_OPTIONS} disabled={busy} className="w-full sm:w-64" />
-              <Select label="Kaynak" name="source" value={source} onChange={(e) => setSource(e.target.value)} options={SOURCE_OPTIONS} disabled={busy} className="w-full sm:w-56" />
             </div>
             {status === 'PENDING' && <p className="text-xs text-ink-muted">Opsiyonlu rezervasyon yer tutar ama misafire onay bildirimi, onaylandığında gider.</p>}
             <Textarea label="Not" name="notes" rows={3} maxLength={2000} value={notes} onChange={(e) => setNotes(e.target.value)} error={errors.notes} disabled={busy} />
@@ -547,14 +606,16 @@ function PriceSummary({ quote, selectedQuote, manual, typeName }) {
   const currency = quote.currency;
   return (
     <div className="flex flex-col gap-3 text-sm">
-      {selectedQuote ? (
+      {selectedQuote && selectedQuote.total === null ? (
+        <p className="text-xs text-ink-muted">Bu oda tipi için fiyat yok.</p>
+      ) : selectedQuote ? (
         <table className="w-full text-xs">
           <caption className="sr-only">Gece gece fiyat</caption>
           <tbody className="divide-y divide-line">
             {selectedQuote.nights.slice(0, 14).map((night) => (
               <tr key={night.date}>
                 <td className="py-1">{formatDate(night.date)}</td>
-                <td className="py-1 text-ink-muted">{night.seasonName ? `${night.seasonName} ×${night.multiplier.replace('.', ',')}` : ''}</td>
+                <td className="py-1 text-ink-muted">{night.seasonName ? (night.multiplier ? `${night.seasonName} ×${night.multiplier.replace('.', ',')}` : night.seasonName) : ''}</td>
                 <td className="py-1 text-right font-semibold">{formatMoney(night.amount, currency)}</td>
               </tr>
             ))}

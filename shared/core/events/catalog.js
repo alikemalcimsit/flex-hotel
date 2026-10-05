@@ -184,8 +184,10 @@ export const EVENT_CATALOG = Object.freeze({
      */
     source: z.string().min(1).max(30).nullable().default(null),
     requestId: z.string().min(1).max(100).nullable().default(null),
+    /** Acente adına açıldıysa acente (modül 29). */
+    agencyId: z.string().uuid().nullable().default(null),
   }),
-  /** Tarih, oda tipi, kişi, pansiyon, fiyat ya da not değişti. */
+  /** Tarih, oda tipi, kişi, pansiyon, fiyat, acente ya da not değişti. */
   'reservation.updated': reservationStay.extend({
     changedFields: z.array(z.string()).default([]),
   }),
@@ -631,6 +633,28 @@ export const EVENT_CATALOG = Object.freeze({
     status: z.enum(['READY', 'FAILED']),
   }),
 
+  /* ── Acente ve kontrat (modül 29) ──
+     Acente listesi / kartı, kontrat ekranı ve rezervasyon formundaki acente
+     fiyat önizlemesi bunlarla canlı tazelenir (`AGENCY_EVENTS`); yükte yalnızca kimlik. */
+
+  /** Acente kartı açıldı, düzenlendi, pasife alındı ya da yeniden aktif oldu. */
+  'agency.changed': hotelScoped.extend({
+    agencyId: z.string().uuid(),
+    change: z.enum(['CREATED', 'UPDATED', 'ACTIVATED', 'DEACTIVATED']),
+  }),
+  /** Kontrat açıldı, başlığı / fiyatları değişti, satışa açıldı, sonlandı ya da taslak silindi. */
+  'agency.contract.changed': hotelScoped.extend({
+    agencyId: z.string().uuid(),
+    contractId: z.string().uuid(),
+    change: z.enum(['CREATED', 'UPDATED', 'RATES_SAVED', 'ACTIVATED', 'ENDED', 'DELETED']),
+  }),
+  /** Kontrata stop-sale eklendi ya da kaldırıldı (satışı hemen etkiler). */
+  'agency.stop_sale.changed': hotelScoped.extend({
+    agencyId: z.string().uuid(),
+    contractId: z.string().uuid(),
+    change: z.enum(['ADDED', 'REMOVED']),
+  }),
+
   /* ── Ödeme (modül 17) ──
      Folyo ekranı (bakiye) ve kasa görünümü bunlarla canlı tazelenir
      (`PAYMENT_EVENTS`). Tutar folyonun para biriminde (`amount`, iade ve
@@ -856,6 +880,9 @@ export const BUDGET_EVENTS = Object.freeze([
   'budget.commentary.requested',
   'budget.commentary.completed',
 ]);
+
+/** Acente ve kontrat (modül 29): ekranlar bunlarla tazelenir (`agencies.changed` kanalı). */
+export const AGENCY_EVENTS = Object.freeze(['agency.changed', 'agency.contract.changed', 'agency.stop_sale.changed']);
 
 /** Onay kuyruğunu etkileyen event'ler (canlı yayın: `approvals.changed`). */
 export const APPROVAL_EVENTS = Object.freeze([

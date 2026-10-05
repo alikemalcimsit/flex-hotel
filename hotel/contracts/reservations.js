@@ -349,7 +349,20 @@ const createCommonShape = {
   requestId: uuid('Geçersiz istek kimliği'),
   /** Bekleme listesinden çevriliyorsa kaydın kimliği (çevrilince kapanır). */
   waitlistId: uuid('Geçersiz bekleme kaydı').nullish(),
+  /**
+   * Acente adına açılıyorsa acente (modül 29): fiyat acentenin kontratından
+   * gelir, stop-sale günleri reddedilir. Kaynak "Acente" ise acente zorunlu;
+   * acente verilirse kaynak sunucuda "Acente" yapılır.
+   */
+  agencyId: uuid('Geçersiz acente').nullish(),
 };
+
+/** Kaynak "Acente" ise hangi acente olduğu belli olmalı (raporlar ve cari buna dayanır). */
+function refineAgencySource(value, ctx) {
+  if (value.source === 'AGENCY' && !value.agencyId) {
+    ctx.addIssue({ code: 'custom', path: ['agencyId'], message: 'Acente rezervasyonunda acenteyi seçin' });
+  }
+}
 
 export const createReservationSchema = z
   .object({
@@ -362,6 +375,7 @@ export const createReservationSchema = z
   })
   .superRefine(refineGuestChoice)
   .superRefine(refineStay)
+  .superRefine(refineAgencySource)
   .superRefine(refineManualPrice);
 
 const groupLineSchema = z.object({
@@ -389,6 +403,7 @@ export const createGroupReservationSchema = z
   })
   .superRefine(refineGuestChoice)
   .superRefine(refineStay)
+  .superRefine(refineAgencySource)
   .superRefine((value, ctx) => {
     const rooms = value.lines.reduce((total, line) => total + line.quantity, 0);
     if (rooms < 2) {
@@ -417,6 +432,11 @@ export const updateReservationSchema = z
     children: childrenField.optional(),
     boardType: boardField.optional(),
     notes: trimmedOptional(MAX_RESERVATION_NOTES_LENGTH, 'Not'),
+    /**
+     * Acente (modül 29): verilmezse değişmez, `null` acenteyi kaldırır.
+     * Değişince geceler yeni kaynağın fiyatıyla yeniden hesaplanır.
+     */
+    agencyId: uuid('Geçersiz acente').nullable().optional(),
     price: z
       .discriminatedUnion('mode', [
         z.object({ mode: z.literal('CALCULATED') }),
@@ -470,10 +490,16 @@ export const reservationQuoteSchema = z
           quantity: z.coerce.number().int().min(1).max(MAX_LINE_QUANTITY).default(1),
           adults: adultsField.default(1),
           children: childrenField.default(0),
+          /** Acente kontratı pansiyona göre fiyatlar; boşsa otelin varsayılan pansiyonu. */
+          boardType: boardField.optional(),
         }),
       )
       .max(MAX_GROUP_LINES, `En fazla ${MAX_GROUP_LINES} satır`)
       .default([]),
+    /** Acente adına fiyatlanıyorsa (modül 29): kontrat fiyatı ve stop-sale durumu döner. */
+    agencyId: uuid('Geçersiz acente').nullish(),
+    /** Oda tipi kartlarının fiyatı için pansiyon (acente kontratında pansiyona göre fiyat vardır). */
+    boardType: boardField.optional(),
     /** Düzenlenen rezervasyon: kendi tuttuğu yer "dolu" sayılmasın. */
     excludeReservationId: uuid('Geçersiz rezervasyon').nullish(),
   })
@@ -485,6 +511,8 @@ export const reservationListQuerySchema = paginationQuerySchema.extend({
   source: z.enum(RESERVATION_SOURCES, { error: 'Geçersiz kaynak' }).optional(),
   roomTypeId: uuid('Geçersiz oda tipi').optional(),
   groupId: uuid('Geçersiz grup').optional(),
+  /** Acentenin rezervasyonları (modül 29). */
+  agencyId: uuid('Geçersiz acente').optional(),
   /** Bu aralıkta en az bir gecesi olan konaklamalar (her iki uç dahil). */
   from: dateField.optional(),
   to: dateField.optional(),

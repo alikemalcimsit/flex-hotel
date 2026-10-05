@@ -269,7 +269,7 @@ export function sameGuestName(a, b) {
 /* ══════════════════ Değişiklik ══════════════════ */
 
 /** Düzenlemede izlenen alanlar (olayda ve denetim izinde `changedFields`). */
-const TRACKED_FIELDS = Object.freeze(['checkIn', 'checkOut', 'roomTypeId', 'adults', 'children', 'boardType', 'notes', 'totalPrice', 'priceMode']);
+const TRACKED_FIELDS = Object.freeze(['checkIn', 'checkOut', 'roomTypeId', 'adults', 'children', 'boardType', 'notes', 'totalPrice', 'priceMode', 'agencyId']);
 
 /**
  * @param {Record<string, unknown>} before

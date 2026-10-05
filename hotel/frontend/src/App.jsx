@@ -77,6 +77,12 @@ const LostItemsPage = lazy(() => import('./pages/lost-items/LostItemsPage.jsx').
 const LostItemDetailPage = lazy(() => import('./pages/lost-items/LostItemDetailPage.jsx').then((m) => ({ default: m.LostItemDetailPage })));
 const RevenueReportPage = lazy(() => import('./pages/reports/RevenueReportPage.jsx').then((m) => ({ default: m.RevenueReportPage })));
 const BudgetPage = lazy(() => import('./pages/budget/BudgetPage.jsx').then((m) => ({ default: m.BudgetPage })));
+const AgenciesPage = lazy(() => import('./pages/agencies/AgenciesPage.jsx').then((m) => ({ default: m.AgenciesPage })));
+const AgencyPage = lazy(() => import('./pages/agencies/AgencyPage.jsx').then((m) => ({ default: m.AgencyPage })));
+const AgencyOverviewTab = lazy(() => import('./pages/agencies/AgencyOverviewTab.jsx').then((m) => ({ default: m.AgencyOverviewTab })));
+const AgencyContractsTab = lazy(() => import('./pages/agencies/AgencyContractsTab.jsx').then((m) => ({ default: m.AgencyContractsTab })));
+const AgencyAccountTab = lazy(() => import('./pages/agencies/AgencyAccountTab.jsx').then((m) => ({ default: m.AgencyAccountTab })));
+const ContractPage = lazy(() => import('./pages/agencies/ContractPage.jsx').then((m) => ({ default: m.ContractPage })));
 const ExpenseActualsPage = lazy(() => import('./pages/budget/ExpenseActualsPage.jsx').then((m) => ({ default: m.ExpenseActualsPage })));
 const VariancePage = lazy(() => import('./pages/budget/VariancePage.jsx').then((m) => ({ default: m.VariancePage })));
 const MinibarEntryTab = lazy(() => import('./pages/extras/MinibarEntryTab.jsx').then((m) => ({ default: m.MinibarEntryTab })));
@@ -347,6 +353,35 @@ export default function App() {
                 </RequirePermission>
               }
             />
+            {/* Acente ve kontrat (modül 29): kontrat adresi, acente sekmelerinden önce (statik parça önce eşleşir). */}
+            <Route
+              path="acenteler"
+              element={
+                <RequirePermission permission={PERMISSIONS.AGENCIES_VIEW}>
+                  <AgenciesPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="acenteler/kontrat/:contractId"
+              element={
+                <RequirePermission permission={PERMISSIONS.AGENCIES_VIEW}>
+                  <ContractPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="acenteler/:agencyId"
+              element={
+                <RequirePermission permission={PERMISSIONS.AGENCIES_VIEW}>
+                  <AgencyPage />
+                </RequirePermission>
+              }
+            >
+              <Route index element={<AgencyOverviewTab />} />
+              <Route path="kontratlar" element={<AgencyContractsTab />} />
+              <Route path="cari" element={<AgencyAccountTab />} />
+            </Route>
             <Route
               path="kayip-esya/:id"
               element={
