@@ -228,6 +228,11 @@ export const EVENT_CATALOG = Object.freeze({
      * kullanılır; yoksa yeni kart açılır. Modül 8.
      */
     guestId: z.string().uuid().nullable().default(null),
+    /**
+     * Misafirin girdiği kupon kodu (modül 31; web widget'ı — modül 32 — gönderir).
+     * Kupon uymuyorsa ya da dolmuşsa istek reddedilir (`reservation.rejected`).
+     */
+    couponCode: z.string().min(1).max(40).nullable().default(null),
   }),
   /** Kanal isteği karşılanamadı (yer yok, kapasite, geçersiz tarih). */
   'reservation.rejected': hotelScoped.extend({
@@ -655,6 +660,22 @@ export const EVENT_CATALOG = Object.freeze({
     change: z.enum(['ADDED', 'REMOVED']),
   }),
 
+  /* ── Promosyon ve kupon (modül 31) ──
+     Promosyon listesi / ekranı ve rezervasyon formunun fiyat önizlemesi bunlarla
+     canlı tazelenir (`PROMOTION_EVENTS`); yükte yalnızca kimlik. */
+
+  /** Promosyon açıldı, düzenlendi, yayına alındı, durduruldu ya da (kullanılmamış taslak) silindi. */
+  'promotion.changed': hotelScoped.extend({
+    promotionId: z.string().uuid(),
+    change: z.enum(['CREATED', 'UPDATED', 'ACTIVATED', 'PAUSED', 'DELETED']),
+  }),
+  /** Promosyona kupon üretildi ya da bir kupon kapatıldı / yeniden açıldı. */
+  'promotion.coupons.changed': hotelScoped.extend({
+    promotionId: z.string().uuid(),
+    change: z.enum(['GENERATED', 'DISABLED', 'ENABLED']),
+    count: z.number().int().min(1).default(1),
+  }),
+
   /* ── Ödeme (modül 17) ──
      Folyo ekranı (bakiye) ve kasa görünümü bunlarla canlı tazelenir
      (`PAYMENT_EVENTS`). Tutar folyonun para biriminde (`amount`, iade ve
@@ -883,6 +904,9 @@ export const BUDGET_EVENTS = Object.freeze([
 
 /** Acente ve kontrat (modül 29): ekranlar bunlarla tazelenir (`agencies.changed` kanalı). */
 export const AGENCY_EVENTS = Object.freeze(['agency.changed', 'agency.contract.changed', 'agency.stop_sale.changed']);
+
+/** Promosyon ve kupon (modül 31): ekranlar bunlarla tazelenir (`promotions.changed` kanalı). */
+export const PROMOTION_EVENTS = Object.freeze(['promotion.changed', 'promotion.coupons.changed']);
 
 /** Onay kuyruğunu etkileyen event'ler (canlı yayın: `approvals.changed`). */
 export const APPROVAL_EVENTS = Object.freeze([

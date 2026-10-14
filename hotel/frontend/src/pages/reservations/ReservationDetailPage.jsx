@@ -31,6 +31,9 @@ const FIELD_LABELS = Object.freeze({
   children: 'Çocuk',
   boardType: 'Pansiyon',
   totalPrice: 'Tutar',
+  discountTotal: 'İndirim',
+  promotionId: 'Promosyon',
+  couponId: 'Kupon',
   priceMode: 'Fiyat türü',
   priceNote: 'Fiyat gerekçesi',
   notes: 'Not',
@@ -295,11 +298,35 @@ export function ReservationDetailPage() {
                           ? 'elle / aktarılan'
                           : ''}
                     </td>
-                    <td className="py-1.5 text-right font-semibold">{formatMoney(night.amount, currency)}</td>
+                    <td className="py-1.5 text-right font-semibold">
+                      {night.discount !== '0.00' && <span className="mr-1.5 text-xs font-normal text-success-ink">−{formatMoney(night.discount, currency)}</span>}
+                      {formatMoney(night.amount, currency)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            {/* Promosyon (modül 31): açılıştaki kopyanın adı ve indirimi; kuponla geldiyse kod. */}
+            {detail.promotion && (
+              <div className="mt-3 flex flex-col gap-0.5 rounded-item bg-canvas p-2.5 text-xs">
+                <span className="flex justify-between gap-2">
+                  <span>Liste fiyatı</span>
+                  <span>{formatMoney(detail.promotion.listTotal, currency)}</span>
+                </span>
+                <span className="flex justify-between gap-2 font-semibold text-success-ink">
+                  <span className="min-w-0">
+                    {can(PERMISSIONS.PROMOTIONS_VIEW) ? (
+                      <Link to={`/promosyonlar/${detail.promotion.id}`} className="underline-offset-2 hover:underline">{detail.promotion.name}</Link>
+                    ) : (
+                      detail.promotion.name
+                    )}{' '}
+                    ({detail.promotion.label}){detail.promotion.couponCode && <span className="font-mono"> · {detail.promotion.couponCode}</span>}
+                  </span>
+                  <span className="shrink-0">−{formatMoney(detail.discountTotal, currency)}</span>
+                </span>
+                {detail.promotion.bookedOn && <span className="text-ink-muted">Satış günü {formatDate(detail.promotion.bookedOn)}; koşullar açılıştaki haliyle korunur.</span>}
+              </div>
+            )}
             <div className="mt-3 flex items-baseline justify-between border-t border-line pt-3">
               <span className="font-semibold">Toplam</span>
               <span className="text-lg font-bold">{formatMoney(detail.totalPrice, currency)}</span>
@@ -493,7 +520,9 @@ function describeEntry(entry, currency) {
   const show = (field, value) => {
     if (value === null || value === undefined) return '—';
     if (field === 'checkIn' || field === 'checkOut') return formatDate(value);
-    if (field === 'totalPrice') return formatMoney(value, currency);
+    if (field === 'totalPrice' || field === 'discountTotal') return formatMoney(value, currency);
+    // Promosyon / kupon kimlik olarak tutulur: eklendi mi kaldırıldı mı yeter (ad, detayın fiyat kartında).
+    if (field === 'promotionId' || field === 'couponId') return 'var';
     return String(value);
   };
   const fields = entry.changedFields.length ? entry.changedFields : Object.keys(after).filter((key) => key in FIELD_LABELS);

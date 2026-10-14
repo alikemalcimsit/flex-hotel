@@ -38,7 +38,7 @@ const CHANNEL_SOURCES = new Set(['WHATSAPP', 'WEBCHAT']);
  *     latestGuest: { id: string, at: string } | null,
  *     unanswered: boolean,
  *   }>,
- *   checkAvailability: (hotelId: string, stay: object) => Promise<object>,
+ *   checkAvailability: (hotelId: string, stay: object, context: { conversationId: string }) => Promise<object>,
  *   requestReservation: (hotelId: string, conversationId: string, request: object) => Promise<{ requestId: string }>,
  *   saveMemory: (hotelId: string, conversationId: string, patch: object) => Promise<void>,
  *   reply: (hotelId: string, conversationId: string, text: string, meta: object) => Promise<{ messageId: string }>,

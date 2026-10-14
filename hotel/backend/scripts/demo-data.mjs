@@ -16,6 +16,11 @@ import { randomUUID } from 'node:crypto';
  *   (9 satıştaki kontrat, stop-sale; biri pasif / kontratı sonlanmış) ve
  *   acente rezervasyonları kontrat fiyatıyla, cariye aktarılan ödemeleriyle.
  * - Acenteler `createdBy = demo@hotel.local` ile tanınır; `--reset` onları da siler.
+ * - Promosyonlar (modül 31): erken rezervasyon, "7 kal 6 öde", son dakika
+ *   online, hoş geldin kuponu (çok kullanımlık), sadık misafir kuponları (tek
+ *   kullanımlık), bir durdurulmuş ve bir taslak promosyon. Doğrudan satışlara
+ *   kural motoru (her rezervasyonun kendi satış günüyle) uygulanır; acente ve
+ *   OTA satışına uygulanmaz. Aynı `createdBy` ile tanınır, `--reset` siler.
  */
 
 if (process.env.DEMO_CONFIRM !== 'DEMO') {
@@ -24,6 +29,7 @@ if (process.env.DEMO_CONFIRM !== 'DEMO') {
 }
 
 const core = await import('@hotelos/core');
+const contracts = await import('@hotelos/hotel-contracts');
 const { prisma } = await import('../src/db.js');
 const budget = await import('../src/modules/budget/service.js');
 
@@ -50,7 +56,9 @@ const at = (iso, hourUtc) => new Date(`${iso}T${String(hourUtc).padStart(2, '0')
 const money = (n) => (Math.round(n * 100) / 100).toFixed(2);
 
 const existingDemo =
-  (await prisma.reservation.count({ where: { hotelId, confirmationCode: { startsWith: CODE_PREFIX } } })) + (await prisma.agency.count({ where: { hotelId, createdBy: ACTOR } }));
+  (await prisma.reservation.count({ where: { hotelId, confirmationCode: { startsWith: CODE_PREFIX } } })) +
+  (await prisma.agency.count({ where: { hotelId, createdBy: ACTOR } })) +
+  (await prisma.promotion.count({ where: { hotelId, createdBy: ACTOR } }));
 if (process.argv.includes('--reset')) {
   await prisma.$transaction(
     async (tx) => {
@@ -67,6 +75,12 @@ if (process.argv.includes('--reset')) {
       const orphan = `(SELECT a."id" FROM "Agency" a WHERE a."hotelId" = $1 AND a."createdBy" = $2 AND NOT EXISTS (SELECT 1 FROM "Reservation" r WHERE r."agencyId" = a."id"))`;
       await tx.$executeRawUnsafe(`DELETE FROM "Contract" WHERE "hotelId" = $1 AND "agencyId" IN ${orphan}`, hotelId, ACTOR);
       await tx.$executeRawUnsafe(`DELETE FROM "Agency" WHERE "id" IN ${orphan}`, hotelId, ACTOR);
+      // Demo promosyonlar: başka rezervasyona düşmemişler kuponlarıyla (kupon promosyonla gider) silinir.
+      await tx.$executeRawUnsafe(
+        `DELETE FROM "Promotion" p WHERE p."hotelId" = $1 AND p."createdBy" = $2 AND NOT EXISTS (SELECT 1 FROM "Reservation" r WHERE r."promotionId" = p."id")`,
+        hotelId,
+        ACTOR,
+      );
     },
     { timeout: 120_000 },
   );
@@ -279,6 +293,79 @@ function pickAgency(checkIn, checkOut) {
   return fits.length ? weighted(fits.map((agency) => [agency, agency.seed.weight])) : null;
 }
 
+// ── Promosyonlar ve kuponlar (modül 31) ────────────────────────────────
+// Satış dönemi demo geçmişinin başından: geçmiş satışlar da kendi günlerinde uygun sayılır.
+const promotionsService = await import('../src/modules/promotions/service.js');
+const promotionRules = await import('../src/modules/promotions/rules.js');
+const DIRECT_SOURCES = contracts.DEFAULT_PROMOTION_SOURCES;
+const winterYear = Number(today.slice(0, 4));
+const PROMOTION_SEEDS = [
+  { key: 'early', name: 'Erken Rezervasyon %15', discountType: 'PERCENT', discountValue: '15', minLeadDays: 45, minNights: 2, notes: 'Girişe 45 gün ve fazlası kala, en az 2 gece.' },
+  { key: 'long', name: 'Uzun Konaklama: 7 Kal 6 Öde', discountType: 'FREE_NIGHTS', stayNights: 7, payNights: 6 },
+  { key: 'lastMinute', name: 'Son Dakika Online %10', discountType: 'PERCENT', discountValue: '10', maxLeadDays: 3, sources: ['WIDGET', 'WEBCHAT', 'WHATSAPP'] },
+  { key: 'welcome', name: 'Hoş Geldin Kuponu %20', requiresCoupon: true, discountType: 'PERCENT', discountValue: '20', coupons: { mode: 'CUSTOM', code: 'HOSGELDIN', maxUses: 500 } },
+  { key: 'loyal', name: 'Sadık Misafir 750 TL', requiresCoupon: true, discountType: 'AMOUNT', discountValue: '750', minNights: 2, coupons: { mode: 'GENERATE', count: 150, prefix: 'SADIK', maxUses: 1 } },
+  { key: 'spring', name: 'Bahar Fırsatı %8', discountType: 'PERCENT', discountValue: '8', status: 'PAUSED' },
+  { key: 'winter', name: 'Kış Hafta Sonu %12', discountType: 'PERCENT', discountValue: '12', stayFrom: `${winterYear}-12-01`, stayTo: `${winterYear + 1}-02-28`, status: 'DRAFT' },
+];
+const promotionBookFrom = addDays(firstDay, -30);
+/** @type {Record<string, { id: string, terms: any, coupons: Array<{ id: string, code: string }> }>} */
+const demoPromotions = {};
+for (const seed of PROMOTION_SEEDS) {
+  const input = contracts.createPromotionSchema.parse({
+    name: seed.name,
+    notes: seed.notes ?? null,
+    requiresCoupon: Boolean(seed.requiresCoupon),
+    discountType: seed.discountType,
+    discountValue: seed.discountValue ?? null,
+    stayNights: seed.stayNights ?? null,
+    payNights: seed.payNights ?? null,
+    bookFrom: promotionBookFrom,
+    stayFrom: seed.stayFrom ?? null,
+    stayTo: seed.stayTo ?? null,
+    minNights: seed.minNights ?? null,
+    minLeadDays: seed.minLeadDays ?? null,
+    maxLeadDays: seed.maxLeadDays ?? null,
+    sources: seed.sources ?? DIRECT_SOURCES,
+  });
+  let promotion = await asActor(() => promotionsService.createPromotion(hotelId, input));
+  if (seed.coupons) await asActor(() => promotionsService.createCoupons(hotelId, promotion.id, contracts.createCouponsSchema.parse(seed.coupons)));
+  if (seed.status !== 'DRAFT') {
+    promotion = await asActor(() => promotionsService.setPromotionStatus(hotelId, promotion.id, { expectedUpdatedAt: new Date(promotion.updatedAt), status: 'ACTIVE' }));
+  }
+  if (seed.status === 'PAUSED') {
+    promotion = await asActor(() => promotionsService.setPromotionStatus(hotelId, promotion.id, { expectedUpdatedAt: new Date(promotion.updatedAt), status: 'PAUSED' }));
+  }
+  const row = await prisma.promotion.findFirst({ where: { id: promotion.id } });
+  const coupons = await prisma.coupon.findMany({ where: { promotionId: promotion.id }, orderBy: { code: 'asc' }, select: { id: true, code: true } });
+  demoPromotions[seed.key] = { id: promotion.id, status: row.status, terms: promotionRules.toTerms(row), coupons };
+}
+/** Satışta kendiliğinden değerlendirilenler (yayındaki, kuponsuz). */
+const autoTerms = Object.values(demoPromotions).filter((entry) => entry.status === 'ACTIVE' && !entry.terms.requiresCoupon).map((entry) => entry.terms);
+/** Tek kullanımlık sadık misafir kodları: her biri en fazla bir rezervasyonda. */
+const loyalPool = [...demoPromotions.loyal.coupons];
+const welcomeCoupon = demoPromotions.welcome.coupons[0];
+
+/**
+ * Doğrudan satışın teklifi (kural motoruyla, satış gününde): bazı misafirler
+ * kupon da getirir; kupon daha avantajlı değilse kullanılmaz.
+ */
+function demoOffer({ bookedOn, checkIn, roomTypeId, boardType, source, nightRows }) {
+  if (!DIRECT_SOURCES.includes(source)) return null;
+  const roll = rand();
+  let coupon = null;
+  if (roll < 0.05 && loyalPool.length) coupon = { id: loyalPool[0].id, code: loyalPool[0].code, terms: demoPromotions.loyal.terms, issue: null };
+  else if (roll < 0.13) coupon = { id: welcomeCoupon.id, code: welcomeCoupon.code, terms: demoPromotions.welcome.terms, issue: null };
+  const { offer } = promotionRules.planOffer({
+    autos: autoTerms,
+    coupon,
+    sale: { bookedOn, checkIn, days: nightRows.map((night) => core.toIsoDay(night.date)), roomTypeId, boardType, source },
+    nights: nightRows.map((night) => ({ date: core.toIsoDay(night.date), gross: money(night.amount) })),
+  });
+  if (offer?.couponId && offer.couponId === loyalPool[0]?.id) loyalPool.shift();
+  return offer;
+}
+
 let sequence = 0;
 const reservations = [];
 const nights = [];
@@ -302,6 +389,16 @@ for (const { room, checkIn, checkOut, lead } of stays) {
     const amount = agency ? agencyNightPrice(agency.seed, room.roomType, boardChoice, day) : nightAmount(room, day);
     nightRows.push({ id: randomUUID(), hotelId, reservationId: id, date: midnight(day), amount, ...(agency ? { baseRate: amount, seasonName: CONTRACT_NAME } : {}) });
   }
+  const source = agency ? 'AGENCY' : sourceChoice === 'AGENCY' ? 'UI' : sourceChoice;
+  // Promosyon (modül 31): gece tutarı indirimli, indirim gecede; kopya satış günüyle.
+  const bookedOn = createdDay > today ? today : createdDay;
+  const offer = demoOffer({ bookedOn, checkIn, roomTypeId: room.roomTypeId, boardType: boardChoice, source, nightRows });
+  if (offer) {
+    nightRows.forEach((night, index) => {
+      night.discount = Number(offer.discounts[index]);
+      night.amount = Number(core.toMoneyString(core.toDecimal(money(night.amount)).minus(core.toDecimal(offer.discounts[index]))));
+    });
+  }
   nights.push(...nightRows);
   const stayed = status === 'CHECKED_IN' || status === 'CHECKED_OUT';
   const row = {
@@ -317,9 +414,12 @@ for (const { room, checkIn, checkOut, lead } of stays) {
     children: adults < capacity && rand() < 0.15 ? 1 : 0,
     status,
     // Kaynak "Acente" olan ama stop-sale yüzünden acente bulunamayan konaklama resepsiyondan sayılır.
-    source: agency ? 'AGENCY' : sourceChoice === 'AGENCY' ? 'UI' : sourceChoice,
+    source,
     agencyId: agency?.id ?? null,
     agencyCommissionPct: agency?.commissionPct ?? null,
+    ...(offer
+      ? { promotionId: offer.terms.id, couponId: offer.couponId, promotionTerms: { ...offer.terms, bookedOn }, discountTotal: offer.total }
+      : {}),
     boardType: boardChoice,
     totalPrice: money(nightRows.reduce((sum, night) => sum + night.amount, 0)),
     currency: 'TRY',
@@ -433,7 +533,7 @@ for (const { row, nightRows, checkIn, checkOut } of reservations) {
   for (const night of nightRows) {
     const day = core.toIsoDay(night.date);
     if (day >= today) continue;
-    addItem(folio, row.id, { type: 'ROOM', source: 'ROOM_NIGHT', description: 'Oda ücreti', amount: night.amount, taxCategory: 'ROOM', serviceDate: day });
+    if (night.amount > 0) addItem(folio, row.id, { type: 'ROOM', source: 'ROOM_NIGHT', description: 'Oda ücreti', amount: night.amount, taxCategory: 'ROOM', serviceDate: day });
     if (!allInclusive && rand() < 0.5) addItem(folio, row.id, { type: 'FNB', source: 'FNB_ORDER', description: pick(['Restoran', 'Bar', 'Oda servisi', 'Plaj bar']), amount: int(250, 1800), taxCategory: 'FNB', serviceDate: day });
     if (rand() < 0.12) addItem(folio, row.id, { type: 'MINIBAR', source: 'MINIBAR', description: 'Minibar', amount: int(80, 420), taxCategory: 'MINIBAR', serviceDate: day });
     if (rand() < 0.04) addItem(folio, row.id, { type: 'LAUNDRY', source: 'LAUNDRY', description: 'Çamaşırhane', amount: int(150, 700), taxCategory: 'LAUNDRY', serviceDate: day });
@@ -538,6 +638,8 @@ try {
 console.log(
   `Demo veri hazır: ${rooms.length} oda, ${guestRows.length} misafir, ${reservations.length + lost.length} rezervasyon ` +
     `(${lost.length} iptal / gelmeyen, ${reservations.filter((entry) => entry.row.agencyId).length + lost.filter((entry) => entry.agencyId).length} acenteli), ` +
-    `${nights.length} gece, ${items.length} folyo kalemi, ${payments.length} ödeme, ${AGENCY_SEEDS.length} acente.`,
+    `${nights.length} gece, ${items.length} folyo kalemi, ${payments.length} ödeme, ${AGENCY_SEEDS.length} acente, ` +
+    `${PROMOTION_SEEDS.length} promosyon (${reservations.filter((entry) => entry.row.promotionId).length} promosyonlu rezervasyon, ` +
+    `${reservations.filter((entry) => entry.row.couponId).length} kuponlu).`,
 );
 await prisma.$disconnect();

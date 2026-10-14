@@ -19,6 +19,12 @@ export const reservationKeys = Object.freeze({
   quotes: ['reservations', 'quote'],
   /** @param {object} input */
   quote: (input) => ['reservations', 'quote', input],
+  /**
+   * Düzenlemenin fiyat önizlemesi (modül 31). `quotes` önekinin altında: promosyon /
+   * kontrat değişince açık düzenleme penceresinin önizlemesi de bayatlar.
+   * @param {string} id @param {object} changes
+   */
+  updatePreview: (id, changes) => ['reservations', 'quote', 'update', id, changes],
   /** @param {string} query */
   guests: (query) => ['reservations', 'guests', query],
   waitlists: ['reservations', 'waitlist'],

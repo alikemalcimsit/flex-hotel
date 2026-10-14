@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { addDays, currentActor, isZero, toDecimal, toIsoDay, toMoneyString, toUtcDayStart } from '@hotelos/core';
 import {
   HOUSEKEEPING_STATUS_LABELS,
@@ -22,6 +23,7 @@ import { sameGuestName } from '../reservations/rules.js';
 import { getReservation, reservationSearchConditions } from '../reservations/service.js';
 import { assignRoomInTransaction, roomConflictForStay } from '../rooms/service.js';
 import { pendingStayCharges } from '../folios/service.js';
+import { reevaluateStay } from '../promotions/rules.js';
 import { stayPaymentStatus } from '../payments/service.js';
 import { openLaundryForStay } from '../extras/laundry.js';
 import { lostItemsForCheckOut } from '../lost-items/service.js';
@@ -139,6 +141,12 @@ const STAY_SELECT = Object.freeze({
   depositReference: true,
   checkoutOpenBalance: true,
   openBalanceReason: true,
+  // Promosyon (modül 31): erken çıkışta şart yeniden denetlenir.
+  source: true,
+  promotionId: true,
+  promotionTerms: true,
+  discountTotal: true,
+  promotion: { select: { name: true } },
   updatedAt: true,
   guest: {
     select: {
@@ -159,7 +167,7 @@ const STAY_SELECT = Object.freeze({
   _count: { select: { reservationGuests: { where: { isPrimary: false } } } },
 });
 
-const NIGHTS = Object.freeze({ select: { date: true, amount: true }, orderBy: { date: 'asc' } });
+const NIGHTS = Object.freeze({ select: { date: true, amount: true, discount: true }, orderBy: { date: 'asc' } });
 
 /** Prisma Decimal → "1234.50". */
 const money = (value) => (value === null || value === undefined ? null : toMoneyString(String(value)));
@@ -231,8 +239,53 @@ function assertStayAction(action, row, businessDate) {
   if (reason) throw new ConflictError(reason, 'INVALID_STATUS', { status: row.status });
 }
 
-/** @param {Array<{ date: Date, amount: unknown }>} nights */
-const nightRows = (nights) => nights.map((night) => ({ date: toIsoDay(night.date), amount: money(night.amount) }));
+/** @param {Array<{ date: Date, amount: unknown, discount?: unknown }>} nights */
+const nightRows = (nights) =>
+  nights.map((night) => ({ date: toIsoDay(night.date), amount: money(night.amount), discount: money(night.discount ?? 0) }));
+
+/**
+ * Gecenin liste fiyatı (promosyon indirimi öncesi). Erken giriş / geç çıkış ücreti
+ * "gecenin yüzdesi"yse buna bakar: bedava gece ("X kal Y öde") ücreti sıfırlamaz,
+ * indirim konaklamanın kendisine verilmiştir (modül 31).
+ * @param {{ amount: unknown, discount?: unknown } | undefined} night
+ */
+const listedAmount = (night) => (night ? toMoneyString(toDecimal(String(night.amount)).plus(toDecimal(String(night.discount ?? 0)))) : null);
+
+/**
+ * Erken ayrılışta kalan geceler ve tutar. Promosyonlu konaklamada kopyadaki
+ * koşullar kalan gecelerle yeniden denetlenir (modül 31 kararı: kısalınca şart
+ * bozulursa indirim geri alınır); fark folyoya düzeltme olarak işlenir.
+ *
+ * @param {any} stay
+ * @param {ReturnType<typeof nightRows>} nights
+ * @param {string[]} releasedNights
+ */
+function departurePricing(stay, nights, releasedNights) {
+  const price = priceAfterRelease(nights, releasedNights);
+  const kept = nights.filter((night) => !releasedNights.includes(night.date));
+  if (!stay.promotionTerms || releasedNights.length === 0) return { price, kept, promotion: null };
+  const repriced = reevaluateStay({
+    terms: stay.promotionTerms,
+    checkIn: toIsoDay(stay.checkIn),
+    roomTypeId: stay.roomTypeId,
+    boardType: stay.boardType,
+    source: stay.source,
+    nights: kept,
+  });
+  return {
+    price: { total: repriced.total, released: price.released },
+    kept: repriced.nights,
+    promotion: {
+      name: stay.promotion?.name ?? stay.promotionTerms.name,
+      kept: repriced.kept,
+      discountBefore: money(stay.discountTotal),
+      discountAfter: repriced.discountTotal,
+      message: repriced.kept
+        ? null
+        : `"${stay.promotion?.name ?? stay.promotionTerms.name}" promosyonunun şartı kalan gecelerle tutmuyor (${repriced.issue?.message}); indirim kalkar`,
+    },
+  };
+}
 
 /** Olay gövdesi: kimlik ve envanter etkisi. */
 const stayPayload = (row) => ({
@@ -430,7 +483,7 @@ export async function getCheckInPreview(hotelId, reservationId, { now = new Date
     checkInTime: hotel.checkInTime,
     clock,
     arrivalDay: toIsoDay(stay.checkIn),
-    firstNightAmount: money(stay.nights[0]?.amount),
+    firstNightAmount: listedAmount(stay.nights[0]),
   });
 
   return {
@@ -501,7 +554,7 @@ export async function checkIn(hotelId, reservationId, input, { now = new Date() 
         checkInTime: hotel.checkInTime,
         clock,
         arrivalDay: toIsoDay(stay.checkIn),
-        firstNightAmount: money(stay.nights[0]?.amount),
+        firstNightAmount: listedAmount(stay.nights[0]),
       });
       const fee = early.fee && !input.waiveEarlyFee ? early.fee : null;
       if (fee && !sameAmount(fee, input.expectedEarlyFee)) {
@@ -582,7 +635,7 @@ export async function getCheckOutPreview(hotelId, reservationId, { now = new Dat
   const stay = await readStay(prisma, hotelId, reservationId);
   const nights = nightRows(stay.nights);
   const plan = departurePlan({ checkIn: stay.checkIn, checkOut: stay.checkOut, businessDate });
-  const price = priceAfterRelease(nights, plan.releasedNights);
+  const { price, kept: keptNights, promotion } = departurePricing(stay, nights, plan.releasedNights);
   const late =
     plan.kind === 'ON_TIME'
       ? lateCheckOutCharge({
@@ -590,10 +643,9 @@ export async function getCheckOutPreview(hotelId, reservationId, { now = new Dat
           checkOutTime: hotel.checkOutTime,
           clock,
           departureDay: toIsoDay(stay.checkOut),
-          lastNightAmount: nights.at(-1)?.amount ?? null,
+          lastNightAmount: listedAmount(nights.at(-1)),
         })
       : { applies: false, fee: null };
-  const keptNights = nights.filter((night) => !plan.releasedNights.includes(night.date));
   const [balances, pending, payments, openLaundry, lostItems] = await Promise.all([
     stayBalances(prisma, hotelId, [stay.id]),
     pendingStayCharges(prisma, hotelId, stay, { keptNights, lateFee: late.fee }),
@@ -615,6 +667,8 @@ export async function getCheckOutPreview(hotelId, reservationId, { now = new Dat
       overdueDays: plan.overdueDays,
       totalPrice: price.total,
       releasedAmount: price.released,
+      // Promosyonlu konaklamada erken ayrılışın indirime etkisi (modül 31).
+      promotion,
     },
     lateCheckOut: { ...late, mode: hotel.lateCheckOutFeeMode, checkOutTime: hotel.checkOutTime },
     folio,
@@ -660,17 +714,17 @@ export async function checkOut(hotelId, reservationId, input, { now = new Date()
       const nights = nightRows(stay.nights);
       const plan = departurePlan({ checkIn: stay.checkIn, checkOut: stay.checkOut, businessDate });
       const early = plan.kind === 'EARLY';
-      const price = priceAfterRelease(nights, plan.releasedNights);
+      const { price, kept, promotion } = departurePricing(stay, nights, plan.releasedNights);
       if (early && !input.confirmEarlyDeparture) {
         throw new ConflictError(
           `Misafir ${dotted(stay.checkOut)} yerine ${dotted(businessDate)} ayrılıyor: ${plan.releasedNights.length} gece ` +
-            `bırakılır, konaklama tutarı ${priced(price.total, stay.currency)} olur. Onaylayıp tekrar deneyin.`,
+            `bırakılır, konaklama tutarı ${priced(price.total, stay.currency)} olur` +
+            `${promotion && !promotion.kept ? ` (${promotion.message})` : ''}. Onaylayıp tekrar deneyin.`,
           'EARLY_DEPARTURE',
-          { checkOut: toIsoDay(plan.checkOut), releasedNights: plan.releasedNights, totalPrice: price.total, releasedAmount: price.released },
+          { checkOut: toIsoDay(plan.checkOut), releasedNights: plan.releasedNights, totalPrice: price.total, releasedAmount: price.released, promotion },
         );
       }
 
-      const kept = early ? nights.filter((night) => !plan.releasedNights.includes(night.date)) : nights;
       const late =
         plan.kind === 'ON_TIME'
           ? lateCheckOutCharge({
@@ -678,7 +732,7 @@ export async function checkOut(hotelId, reservationId, input, { now = new Date()
               checkOutTime: hotel.checkOutTime,
               clock,
               departureDay: toIsoDay(stay.checkOut),
-              lastNightAmount: kept.at(-1)?.amount ?? null,
+              lastNightAmount: listedAmount(kept.at(-1)),
             })
           : { applies: false, fee: null };
       const lateFee = late.fee && !input.waiveLateFee ? late.fee : null;
@@ -716,6 +770,18 @@ export async function checkOut(hotelId, reservationId, input, { now = new Date()
       if (early) {
         // Bırakılan geceler: envanter oda tipi kilidiyle (yukarıda alındı) döner, fiyattan düşer.
         await tx.reservationNight.deleteMany({ where: { hotelId, reservationId: stay.id, date: { gte: plan.checkOut } } });
+        // Promosyon yeniden denetlendiyse kalan gecelerin indirimi değişmiş olabilir (folyo farkı işler).
+        if (promotion) {
+          const before = new Map(nights.map((night) => [night.date, night]));
+          for (const night of kept) {
+            const old = before.get(night.date);
+            if (old && old.amount === night.amount && old.discount === night.discount) continue;
+            await tx.reservationNight.updateMany({
+              where: { hotelId, reservationId: stay.id, date: new Date(`${night.date}T00:00:00.000Z`) },
+              data: { amount: night.amount, discount: night.discount },
+            });
+          }
+        }
       }
       const updated = await tx.reservation.update({
         where: { id: stay.id },
@@ -727,6 +793,11 @@ export async function checkOut(hotelId, reservationId, input, { now = new Date()
           checkoutOpenBalance: openBalance,
           openBalanceReason: openBalance ? input.openBalanceReason : null,
           ...(early ? { checkOut: plan.checkOut, totalPrice: price.total } : {}),
+          ...(promotion
+            ? promotion.kept
+              ? { discountTotal: promotion.discountAfter }
+              : { discountTotal: '0.00', promotionId: null, couponId: null, promotionTerms: Prisma.DbNull }
+            : {}),
         },
         select: STAY_SELECT,
       });
@@ -746,6 +817,7 @@ export async function checkOut(hotelId, reservationId, input, { now = new Date()
           lateFeeWaived: Boolean(late.fee && input.waiveLateFee),
           folioBalance: folio?.balance ?? null,
           pendingCharges: pending.ownTotal,
+          ...(promotion ? { promotion: { name: promotion.name, kept: promotion.kept, discountBefore: promotion.discountBefore, discountAfter: promotion.discountAfter } } : {}),
         },
       });
       await stage('guest.checked_out', {

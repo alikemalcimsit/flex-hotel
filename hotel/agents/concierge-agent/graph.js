@@ -68,7 +68,7 @@ export const TurnState = Annotation.Root({
  *   guestId: string | null,
  *   callModel: (request: object) => Promise<{ text: string | null, toolCalls: Array<{ id: string, name: string, arguments: string }> }>,
  *   service: {
- *     checkAvailability: (hotelId: string, stay: object) => Promise<{ roomTypes: object[], currency: string }>,
+ *     checkAvailability: (hotelId: string, stay: object, context: { conversationId: string }) => Promise<{ roomTypes: object[], currency: string }>,
  *     requestReservation: (hotelId: string, conversationId: string, request: object) => Promise<{ requestId: string }>,
  *   },
  *   parseArguments: (text: string) => { ok: boolean, value?: object, error?: string },
@@ -112,7 +112,7 @@ async function runTool(state, turn, { name, args }) {
     case TOOL_NAMES.CHECK_AVAILABILITY: {
       const stay = validateStayArgs(args, turn.today);
       if (!stay.ok) return { result: { ok: false, error: stay.error } };
-      const quote = await turn.service.checkAvailability(turn.hotelId, stay.value);
+      const quote = await turn.service.checkAvailability(turn.hotelId, stay.value, { conversationId: turn.conversationId });
       const offers = offersFrom(quote, stay.value);
       return {
         result: {
@@ -170,7 +170,7 @@ async function runTool(state, turn, { name, args }) {
 
       // Göndermeden hemen önce: hâlâ yer var mı, fiyat aynı mı?
       const proposal = state.pendingOffer;
-      const quote = await turn.service.checkAvailability(turn.hotelId, proposal);
+      const quote = await turn.service.checkAvailability(turn.hotelId, proposal, { conversationId: turn.conversationId });
       const current = offersFrom(quote, proposal).find((offer) => offer.roomTypeId === proposal.roomTypeId);
       if (!current) {
         return {

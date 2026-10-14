@@ -116,6 +116,9 @@ export const EVENT_LABELS = Object.freeze({
   'agency.changed': 'Acente kartı değişti',
   'agency.contract.changed': 'Acente kontratı değişti',
   'agency.stop_sale.changed': 'Acente stop-sale değişti',
+
+  'promotion.changed': 'Promosyon değişti',
+  'promotion.coupons.changed': 'Kuponlar değişti',
 });
 
 /**

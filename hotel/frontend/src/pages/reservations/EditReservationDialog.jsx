@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { BOARD_TYPES, BOARD_TYPE_LABELS, updateReservationSchema } from '@hotelos/hotel-contracts';
+import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query';
+import { BOARD_TYPES, BOARD_TYPE_LABELS, reservationUpdatePreviewSchema, updateReservationSchema } from '@hotelos/hotel-contracts';
 import { Alert, Badge, Button, Input, Select, Textarea } from '@hotelos/ui';
 import { AgencyPicker } from '../../components/AgencyPicker.jsx';
+import { CouponField } from '../../components/CouponField.jsx';
 import { Modal } from '../../components/Modal.jsx';
 import { agencyIssueText } from '../../lib/agencies.js';
 import { apiPatch, apiPost } from '../../lib/api.js';
@@ -17,6 +18,9 @@ import { useRoomTypes } from '../rooms/useRoomTypes.js';
 const BOARD_OPTIONS = BOARD_TYPES.map((value) => ({ value, label: BOARD_TYPE_LABELS[value] }));
 const QUOTE_DEBOUNCE_MS = 250;
 
+/** İndirim kararının tonu (bkz. sunucu `discountMessage`). */
+const OUTCOME_TONES = Object.freeze({ KEPT: 'info', REVOKED: 'warning', REMOVED: 'warning', APPLIED: 'success', REPLACED: 'success' });
+
 /**
  * Rezervasyonu düzenler.
  *
@@ -25,6 +29,11 @@ const QUOTE_DEBOUNCE_MS = 250;
  * - Fiyat kararı: **anlaşılanı koru** (yalnızca eklenen geceler güncel
  *   fiyatla), **sistem fiyatıyla yeniden hesapla** ya da (yetkiliyse) **elle**.
  *   Elle fiyatlı rezervasyonda konaklama değişirse sunucu karar ister.
+ * - İndirim (modül 31): promosyonun koşulları konaklama ya da pansiyon
+ *   değişince yeniden denetlenir; şart bozulursa indirim kalkar. Kupon
+ *   eklenebilir (daha avantajlıysa yerine geçer), indirim kaldırılabilir. Yeni
+ *   toplam ve indirimin ne olacağı kaydetmeden önce sunucunun aynı hesabıyla
+ *   gösterilir (önizleme ucu).
  * - Yalnızca değişen alanlar gönderilir; kayıt bu arada değiştiyse sunucu
  *   409 döner, sayfa tazelenir.
  * - Yeni tarihler için müsaitlik önizlemesi (rezervasyonun kendi yeri boş sayılır).
@@ -50,6 +59,8 @@ export function EditReservationDialog({ reservation, onClose, onSaved, onError }
   /** `KEEP` | `CALCULATED` | `MANUAL` */
   const [priceMode, setPriceMode] = useState('KEEP');
   const [manual, setManual] = useState({ total: '', note: '' });
+  /** İndirim kararı: `null` (kopyadaki koşullarla yeniden denetlenir) | `{ mode: 'REMOVE' }` | `{ mode: 'COUPON', code }` */
+  const [discount, setDiscount] = useState(null);
   const [errors, setErrors] = useState({});
   const [decisionRequired, setDecisionRequired] = useState(false);
   // Acente (modül 29): atanabilir, değiştirilebilir, kaldırılabilir; içerideki misafirde sabit.
@@ -60,12 +71,29 @@ export function EditReservationDialog({ reservation, onClose, onSaved, onError }
   const set = (field) => (event) => setForm((current) => ({ ...current, [field]: event.target.value }));
   const stayChanged = form.checkIn !== reservation.checkIn || form.checkOut !== reservation.checkOut || form.roomTypeId !== reservation.roomType.id;
   const stayValid = form.checkIn && form.checkOut && form.checkOut > form.checkIn;
-  // Fiyat kaynağı değişti mi: konaklama, acente ya da acente kontratında pansiyon.
-  const previewNeeded = stayChanged || agencyChanged || Boolean(agency && boardChanged);
+  // Müsaitlik önizlemesi: konaklama, acente ya da acente kontratında pansiyon değiştiyse.
+  const availabilityNeeded = stayChanged || agencyChanged || Boolean(agency && boardChanged);
+
+  /** Değişen alanlar (sürüm damgası olmadan): kayıt ve fiyat önizlemesi aynı gövdeyi kullanır. */
+  function changes() {
+    const body = {};
+    if (form.checkIn !== reservation.checkIn) body.checkIn = form.checkIn;
+    if (form.checkOut !== reservation.checkOut) body.checkOut = form.checkOut;
+    if (form.roomTypeId !== reservation.roomType.id) body.roomTypeId = form.roomTypeId;
+    if (form.adults !== String(reservation.adults)) body.adults = form.adults;
+    if (form.children !== String(reservation.children)) body.children = form.children;
+    if (form.boardType !== reservation.boardType) body.boardType = form.boardType;
+    if (form.notes !== (reservation.notes ?? '')) body.notes = form.notes;
+    if (agencyChanged) body.agencyId = agency?.id ?? null;
+    if (priceMode === 'CALCULATED') body.price = { mode: 'CALCULATED' };
+    if (priceMode === 'MANUAL') body.price = { mode: 'MANUAL', total: manual.total, note: manual.note };
+    if (discount) body.discount = discount;
+    return body;
+  }
 
   const [quoteInput, setQuoteInput] = useState(null);
   useEffect(() => {
-    if (!previewNeeded || !stayValid) {
+    if (!availabilityNeeded || !stayValid) {
       setQuoteInput(null);
       return undefined;
     }
@@ -81,13 +109,41 @@ export function EditReservationDialog({ reservation, onClose, onSaved, onError }
       QUOTE_DEBOUNCE_MS,
     );
     return () => clearTimeout(timer);
-  }, [previewNeeded, stayValid, form.checkIn, form.checkOut, form.roomTypeId, form.adults, form.children, form.boardType, agency, reservation.id]);
+  }, [availabilityNeeded, stayValid, form.checkIn, form.checkOut, form.roomTypeId, form.adults, form.children, form.boardType, agency, reservation.id]);
   const quote = useQuery({
     queryKey: reservationKeys.quote(quoteInput ?? {}),
     queryFn: () => apiPost('/reservations/quote', quoteInput),
     enabled: Boolean(quoteInput),
   });
   const typeQuote = quote.data?.roomTypes.find((type) => type.id === form.roomTypeId);
+
+  // Fiyat önizlemesi: fiyatı ya da indirimi etkileyen bir değişiklik varsa (elle fiyatta toplam zaten bellidir).
+  const priceChanges = stayValid && priceMode !== 'MANUAL' && (stayChanged || agencyChanged || boardChanged || priceMode === 'CALCULATED' || discount) ? changes() : null;
+  const priceKey = priceChanges ? JSON.stringify(priceChanges) : null;
+  const [previewInput, setPreviewInput] = useState(null);
+  useEffect(() => {
+    if (!priceKey) {
+      setPreviewInput(null);
+      return undefined;
+    }
+    const body = JSON.parse(priceKey);
+    if (!validateWith(reservationUpdatePreviewSchema, body).ok) {
+      setPreviewInput(null);
+      return undefined;
+    }
+    const timer = setTimeout(() => setPreviewInput(body), QUOTE_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [priceKey]);
+  const preview = useQuery({
+    queryKey: reservationKeys.updatePreview(reservation.id, previewInput ?? {}),
+    queryFn: () => apiPost(`/reservations/${reservation.id}/preview`, previewInput),
+    enabled: Boolean(previewInput),
+    placeholderData: keepPreviousData,
+    retry: false,
+  });
+  const plan = previewInput && preview.data && !preview.isPlaceholderData ? preview.data : null;
+  const previewFieldErrors = preview.isError ? (preview.error.fields ?? {}) : {};
+  const couponError = errors['discount.code'] ?? previewFieldErrors['discount.code'];
 
   const mutation = useMutation({
     mutationFn: (body) => apiPatch(`/reservations/${reservation.id}`, body),
@@ -111,25 +167,14 @@ export function EditReservationDialog({ reservation, onClose, onSaved, onError }
 
   function submit(event) {
     event.preventDefault();
-    const body = { expectedUpdatedAt: reservation.updatedAt };
-    if (form.checkIn !== reservation.checkIn) body.checkIn = form.checkIn;
-    if (form.checkOut !== reservation.checkOut) body.checkOut = form.checkOut;
-    if (form.roomTypeId !== reservation.roomType.id) body.roomTypeId = form.roomTypeId;
-    if (form.adults !== String(reservation.adults)) body.adults = form.adults;
-    if (form.children !== String(reservation.children)) body.children = form.children;
-    if (form.boardType !== reservation.boardType) body.boardType = form.boardType;
-    if (form.notes !== (reservation.notes ?? '')) body.notes = form.notes;
-    if (agencyChanged) body.agencyId = agency?.id ?? null;
-    if (priceMode === 'CALCULATED') body.price = { mode: 'CALCULATED' };
-    if (priceMode === 'MANUAL') body.price = { mode: 'MANUAL', total: manual.total, note: manual.note };
-
+    const body = { expectedUpdatedAt: reservation.updatedAt, ...changes() };
     if (Object.keys(body).length === 1) {
       onClose();
       return;
     }
     const result = validateWith(updateReservationSchema, body);
     if (!result.ok) {
-      setErrors(Object.fromEntries(Object.entries(result.errors).map(([key, message]) => [key.replace(/^price\./, 'price.'), message])));
+      setErrors(result.errors);
       return;
     }
     setErrors({});
@@ -137,6 +182,10 @@ export function EditReservationDialog({ reservation, onClose, onSaved, onError }
   }
 
   const busy = mutation.isPending;
+  const currency = reservation.currency;
+  const promotion = reservation.promotion;
+  // Acente satışında ve elle fiyatta indirim yoktur: kupon alanı gizli, mevcut indirimin kalkacağı söylenir.
+  const discountClosed = Boolean(agency) || priceMode === 'MANUAL';
   return (
     <Modal
       open
@@ -181,7 +230,7 @@ export function EditReservationDialog({ reservation, onClose, onSaved, onError }
           <Select label="Pansiyon" value={form.boardType} onChange={set('boardType')} options={BOARD_OPTIONS} disabled={busy} className="w-full sm:w-64" />
         </div>
 
-        {previewNeeded && stayValid && (
+        {availabilityNeeded && stayValid && (
           <div className="rounded-item border border-line bg-canvas p-3 text-sm">
             {quote.isPending && 'Müsaitlik denetleniyor…'}
             {quote.isError && <span className="text-sec-strong">{quote.error.message}</span>}
@@ -190,13 +239,82 @@ export function EditReservationDialog({ reservation, onClose, onSaved, onError }
                 <Badge tone={typeQuote.available > 0 ? 'success' : 'danger'}>
                   {typeQuote.available > 0 ? `${stayChanged ? 'Yeni' : 'Bu'} tarihlerde ${typeQuote.available} boş` : `${stayChanged ? 'Yeni' : 'Bu'} tarihlerde yer yok`}
                 </Badge>
-                {typeQuote.agency && !typeQuote.agency.sellable ? (
+                {typeQuote.agency && !typeQuote.agency.sellable && (
                   <span className="font-semibold text-sec-strong">{agencyIssueText(typeQuote.agency.issue, canOverridePrice)}</span>
-                ) : (
-                  <span className="text-ink-muted">{agency ? `${agency.name} kontrat fiyatı` : 'Güncel sistem fiyatı'}: {formatMoney(typeQuote.total, quote.data.currency)}</span>
                 )}
                 {reservation.room && <span className="text-ink-muted">· Oda yeni tarihlere uymazsa ataması kaldırılır.</span>}
               </span>
+            )}
+          </div>
+        )}
+
+        <fieldset className="flex flex-col gap-2">
+          <legend className="mb-1 text-sm font-bold text-ink">İndirim</legend>
+          {promotion ? (
+            <div className={`flex flex-wrap items-center justify-between gap-2 rounded-item border p-2.5 text-sm ${discount?.mode === 'REMOVE' ? 'border-line opacity-60' : 'border-line-strong'}`}>
+              <span className="min-w-0">
+                <span className="font-semibold text-ink">{promotion.name}</span>
+                {promotion.couponCode && <span className="ml-2 font-mono text-xs text-ink-muted">Kupon {promotion.couponCode}</span>}
+                <span className="ml-2 text-success-ink">−{formatMoney(reservation.discountTotal, currency)}</span>
+              </span>
+              {!discountClosed &&
+                (discount?.mode === 'REMOVE' ? (
+                  <Button size="sm" variant="ghost" icon="rotateCcw" onClick={() => setDiscount(null)} disabled={busy}>Vazgeç</Button>
+                ) : (
+                  <Button size="sm" variant="outline" icon="close" onClick={() => setDiscount({ mode: 'REMOVE' })} disabled={busy}>İndirimi kaldır</Button>
+                ))}
+            </div>
+          ) : (
+            <p className="text-xs text-ink-muted">Bu rezervasyonda indirim yok.</p>
+          )}
+          {discountClosed ? (
+            promotion && (
+              <p className="text-xs text-warning-ink">
+                {agency ? 'Acente satışında promosyon uygulanmaz: kaydedince indirim kalkar.' : 'Elle fiyatta promosyon uygulanmaz: kaydedince indirim kalkar.'}
+              </p>
+            )
+          ) : (
+            discount?.mode !== 'REMOVE' && (
+              <CouponField
+                value={discount?.mode === 'COUPON' ? discount.code : null}
+                onChange={(code) => {
+                  setDiscount(code ? { mode: 'COUPON', code } : null);
+                  setErrors((current) => ({ ...current, 'discount.code': undefined }));
+                }}
+                coupon={
+                  plan?.discount && ['APPLIED', 'REPLACED'].includes(plan.discount.outcome)
+                    ? { status: 'APPLIED', issue: null, promotion: plan.after.promotion, remainingUses: null }
+                    : null
+                }
+                checking={discount?.mode === 'COUPON' && preview.isFetching}
+                error={couponError}
+                disabled={busy}
+                label={promotion ? 'Kupon (daha avantajlıysa mevcut indirimin yerine geçer)' : 'Kupon ekle'}
+              />
+            )
+          )}
+        </fieldset>
+
+        {priceChanges && (
+          <div className="rounded-item border border-line bg-canvas p-3 text-sm" aria-live="polite">
+            {preview.isFetching && !plan && 'Yeni fiyat hesaplanıyor…'}
+            {preview.isError && !previewFieldErrors['discount.code'] && <span className="text-sec-strong">{preview.error.message}</span>}
+            {plan && (
+              <div className="flex flex-col gap-2">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <span className="font-semibold">Yeni toplam</span>
+                  <span className="text-lg font-bold">{formatMoney(plan.after.total, currency)}</span>
+                </div>
+                <p className="text-xs text-ink-muted">
+                  Şu an {formatMoney(plan.before.total, currency)}
+                  {plan.after.discountTotal !== '0.00' && ` · indirim −${formatMoney(plan.after.discountTotal, currency)}${plan.after.promotion ? ` (${plan.after.promotion.name})` : ''}`}
+                </p>
+                {plan.discount && (
+                  <Alert tone={OUTCOME_TONES[plan.discount.outcome] ?? 'info'} title="İndirim">
+                    {plan.discount.message}
+                  </Alert>
+                )}
+              </div>
             )}
           </div>
         )}

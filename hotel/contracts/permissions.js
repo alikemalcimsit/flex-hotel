@@ -110,6 +110,11 @@ export const PERMISSIONS = Object.freeze({
   /** Acente kartı ve kontratı düzenlemek: fiyat, stop-sale, satışa açma, sonlandırma. */
   AGENCIES_MANAGE: 'agencies.manage',
 
+  /** Promosyon ve kupon (modül 31): promosyonları, kuponları ve kullanım raporunu görmek. */
+  PROMOTIONS_VIEW: 'promotions.view',
+  /** Promosyon açmak / düzenlemek / yayına almak, kupon üretmek ve kapatmak. */
+  PROMOTIONS_MANAGE: 'promotions.manage',
+
   /** Aktör paneli (modül 12): aktörlerin durumu, bildirgesi, LLM harcaması. */
   ACTORS_VIEW: 'actors.view',
   /** Aktörü bu otelde açmak / kapatmak (kapalı aktörün işi personele düşer). */
@@ -168,6 +173,8 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.BUDGET_APPROVE]: 'Bütçeyi onayla ve revize aç',
   [PERMISSIONS.AGENCIES_VIEW]: 'Acente, kontrat fiyatı ve cari özetini görüntüle',
   [PERMISSIONS.AGENCIES_MANAGE]: 'Acente kartı ve kontratı düzenle (fiyat, stop-sale, satışa aç)',
+  [PERMISSIONS.PROMOTIONS_VIEW]: 'Promosyonları, kuponları ve kullanım raporunu görüntüle',
+  [PERMISSIONS.PROMOTIONS_MANAGE]: 'Promosyon aç, düzenle, yayına al; kupon üret ve kapat',
   [PERMISSIONS.ACTORS_VIEW]: 'Aktör panelini görüntüle',
   [PERMISSIONS.ACTORS_MANAGE]: 'Aktörleri aç / kapat',
 });
@@ -238,6 +245,7 @@ export const PERMISSION_GROUPS = Object.freeze([
   { key: 'reports', label: 'Raporlar', permissions: [PERMISSIONS.REPORTS_VIEW] },
   { key: 'budget', label: 'Bütçe', permissions: [PERMISSIONS.BUDGET_VIEW, PERMISSIONS.BUDGET_MANAGE, PERMISSIONS.BUDGET_APPROVE] },
   { key: 'agencies', label: 'Acente ve kontrat', permissions: [PERMISSIONS.AGENCIES_VIEW, PERMISSIONS.AGENCIES_MANAGE] },
+  { key: 'promotions', label: 'Promosyon ve kupon', permissions: [PERMISSIONS.PROMOTIONS_VIEW, PERMISSIONS.PROMOTIONS_MANAGE] },
   { key: 'monitoring', label: 'İzleme', permissions: [PERMISSIONS.ACTIVITY_VIEW, PERMISSIONS.AUDIT_VIEW] },
   { key: 'actors', label: 'Aktörler', permissions: [PERMISSIONS.ACTORS_VIEW, PERMISSIONS.ACTORS_MANAGE] },
 ]);
@@ -313,6 +321,9 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     // Acente sözleşmesi ve kontrat fiyatı ticari karar: müdürün.
     PERMISSIONS.AGENCIES_VIEW,
     PERMISSIONS.AGENCIES_MANAGE,
+    // İndirim kampanyası fiyat kararıdır: müdürün.
+    PERMISSIONS.PROMOTIONS_VIEW,
+    PERMISSIONS.PROMOTIONS_MANAGE,
   ]),
   FRONT_DESK: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,
@@ -384,6 +395,8 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.BUDGET_MANAGE,
     // Acente carisi ve komisyon muhasebenin takibi; kontratı düzenlemez.
     PERMISSIONS.AGENCIES_VIEW,
+    // Verilen indirimin geliri ne kadar düşürdüğünü muhasebe izler; promosyonu düzenlemez.
+    PERMISSIONS.PROMOTIONS_VIEW,
   ]),
   FNB: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,
