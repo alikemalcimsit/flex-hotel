@@ -2178,7 +2178,8 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 >
 > **Bu modülde düzeltilen (modül 31):** promosyon kullanım raporu ham SQL'e saat dilimli tarih veriyordu; veritabanı oturumu
 > UTC değilse (yerelde `Europe/Istanbul`) gece 00:00–03:00 satışları önceki güne sayılıyordu — `::timestamp` ile düzeltildi,
-> saatten bağımsız test eklendi.
+> saatten bağımsız test eklendi. Yayındaki promosyon API'den de silinemez (önce durdurulur; ekran zaten göstermiyordu —
+> satışla yarışan silme rezervasyonu anlamsız bir kısıt hatasıyla düşürebilirdi).
 >
 > **Devir:** **modül 28** pansiyon / fiyat planı: `rate.changed` yayınlamalı; kanala giden fiyat `modules/channel-manager/ari.js`
 > → `computeRoomTypeValues` (şimdilik taban × sezon). **Modül 34** yield: onaylanan fiyat `rate.changed` ile kanallara gider.

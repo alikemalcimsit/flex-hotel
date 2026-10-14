@@ -4,7 +4,7 @@ import { MAX_COUPON_BATCH, RESERVATION_COUNT_CAP, zonedWallTimeToUtc } from '@ho
 import { prisma } from '../../db.js';
 import { recordAudit } from '../../lib/audit.js';
 import { getBusinessDate } from '../../lib/business-date.js';
-import { AppError, InUseError, NotFoundError, StaleWriteError, ValidationError, rethrowPrismaError } from '../../lib/errors.js';
+import { AppError, ConflictError, InUseError, NotFoundError, StaleWriteError, ValidationError, rethrowPrismaError } from '../../lib/errors.js';
 import { lockCoupons, lockPromotions } from '../../lib/locks.js';
 import { buildPage, toSkipTake } from '../../lib/pagination.js';
 import { containsText } from '../../lib/search.js';
@@ -438,6 +438,11 @@ export async function deletePromotion(hotelId, promotionId, { expectedUpdatedAt 
         throw new InUseError(`Bu promosyon ${used} rezervasyonda kullanıldı; silinemez. Yeni satışı durdurmak için "Durdur"u kullanın.`, {
           reservations: used,
         });
+      }
+      // Yayındaki promosyon önce durdurulur: satış onu kilitsiz okur, silmeyle yarışan
+      // rezervasyon anlamsız bir kısıt hatasıyla düşmesin (ekran da yayındakine "Sil" göstermez).
+      if (before.status === 'ACTIVE') {
+        throw new ConflictError('Yayındaki promosyon silinmez; önce durdurun', 'PROMOTION_ACTIVE');
       }
       const coupons = await tx.coupon.count({ where: { hotelId, promotionId } });
       await tx.promotion.delete({ where: { id: promotionId } });

@@ -247,6 +247,12 @@ describe('promosyon ve kupon (entegrasyon)', { skip }, () => {
       assert.equal(await db.promotion.count({ where: { id: unused.id } }), 0);
       assert.equal(await db.coupon.count({ where: { promotionId: unused.id } }), 0);
 
+      // Kullanılmamış ama yayındaki promosyon: önce durdurulur.
+      const live = await livePromotion({ name: 'Yayında Silinmez' });
+      const liveVersion = (await db.promotion.findUnique({ where: { id: live.id } })).updatedAt;
+      await rejectsWith(manager(() => promotions.deletePromotion(hotelId, live.id, { expectedUpdatedAt: liveVersion })), 'PROMOTION_ACTIVE', /önce durdurun/);
+      await manager(() => promotions.setPromotionStatus(hotelId, live.id, { expectedUpdatedAt: liveVersion, status: 'PAUSED' }));
+
       const usedPromo = await livePromotion();
       const reservation = await book();
       assert.equal(reservation.promotion.id, usedPromo.id);
