@@ -180,11 +180,13 @@ export async function updateHotel(hotelId, input) {
       if (!before) throw new NotFoundError('Otel kaydı bulunamadı');
 
       if (data.currency !== before.currency) {
-        const [reservations, folios] = await Promise.all([
+        const [reservations, folios, contracts] = await Promise.all([
           tx.reservation.count({ where: { hotelId } }),
           tx.folio.count({ where: { hotelId } }),
+          // Acente kontratı fiyatları otelin parasıyla tutulur (modül 29).
+          tx.contract.count({ where: { hotelId } }),
         ]);
-        const usage = nonZero({ rezervasyon: reservations, folyo: folios });
+        const usage = nonZero({ rezervasyon: reservations, folyo: folios, kontrat: contracts });
         if (Object.keys(usage).length > 0) {
           throw new ConflictError(
             `Otelde parası ${before.currency} olarak kaydedilmiş kayıtlar var; para birimi ${data.currency} yapılamaz. ` +
@@ -457,15 +459,24 @@ export async function deleteRoomType(hotelId, id) {
     const existing = await tx.roomType.findFirst({ where: { id, hotelId } });
     if (!existing) throw new NotFoundError('Oda tipi bulunamadı');
 
-    const [rooms, reservations, ratePlans] = await Promise.all([
+    const [rooms, reservations, ratePlans, contractRates, contractStopSales] = await Promise.all([
       tx.room.count({ where: { roomTypeId: id, hotelId } }),
       tx.reservation.count({
         where: { roomTypeId: id, hotelId, status: { in: ACTIVE_RESERVATION_STATUSES } },
       }),
       tx.ratePlan.count({ where: { roomTypeId: id, hotelId } }),
+      // Acente kontratları (modül 29) bu tipin fiyatını taşıyor olabilir.
+      tx.contractRate.count({ where: { roomTypeId: id, hotelId } }),
+      tx.contractStopSale.count({ where: { roomTypeId: id, hotelId } }),
     ]);
 
-    const usage = nonZero({ oda: rooms, aktifRezervasyon: reservations, fiyatPlani: ratePlans });
+    const usage = nonZero({
+      oda: rooms,
+      aktifRezervasyon: reservations,
+      fiyatPlani: ratePlans,
+      kontratFiyati: contractRates,
+      kontratStopSale: contractStopSales,
+    });
     if (Object.keys(usage).length > 0) {
       throw new InUseError(
         `"${existing.name}" oda tipi kullanımda olduğu için silinemez. Önce bağlı kayıtları kaldırın.`,

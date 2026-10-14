@@ -112,6 +112,10 @@ export const EVENT_LABELS = Object.freeze({
   'budget.actuals.changed': 'Gerçekleşen giderler girildi',
   'budget.commentary.requested': 'Bütçe AI yorumu istendi',
   'budget.commentary.completed': 'Bütçe AI yorumu tamamlandı',
+
+  'agency.changed': 'Acente kartı değişti',
+  'agency.contract.changed': 'Acente kontratı değişti',
+  'agency.stop_sale.changed': 'Acente stop-sale değişti',
 });
 
 /**

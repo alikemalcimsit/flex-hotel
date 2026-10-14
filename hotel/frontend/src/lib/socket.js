@@ -59,6 +59,8 @@ export const EXTRAS_CHANNEL = 'extras.changed';
 export const LOST_ITEMS_CHANNEL = 'lost-items.changed';
 /** Bütçe (modül 27): sürüm, gider kalemi, gerçekleşen gider, AI yorumu. */
 export const BUDGET_CHANNEL = 'budget.changed';
+/** Acente ve kontrat (modül 29): kart, kontrat, fiyat, stop-sale. */
+export const AGENCY_CHANNEL = 'agencies.changed';
 
 /**
  * Kanal aboneliği sayacı. Aynı kanalı birden fazla bileşen dinleyebilir

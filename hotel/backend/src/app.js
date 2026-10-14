@@ -25,6 +25,7 @@ import { actorRoutes } from './modules/actors/routes.js';
 import { approvalRoutes } from './modules/approvals/routes.js';
 import { dashboardRoutes } from './modules/dashboard/routes.js';
 import { dashboardCacheStats } from './modules/dashboard/service.js';
+import { agencyRoutes } from './modules/agencies/routes.js';
 import { budgetRoutes } from './modules/budget/routes.js';
 import { budgetCacheStats } from './modules/budget/variance.js';
 import { forecastRoutes } from './modules/forecast/routes.js';
@@ -313,6 +314,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   await app.register(reportRoutes, { prefix: '/reports' });
   await app.register(forecastRoutes, { prefix: '/forecast' });
   await app.register(budgetRoutes, { prefix: '/budgets' });
+  await app.register(agencyRoutes, { prefix: '/agencies' });
   await app.register(manualTaskRoutes, { prefix: '/manual-tasks' });
   await app.register(conciergeRoutes, { prefix: '/ai' });
   await app.register(messagingChannelRoutes, { prefix: '/messaging-channels' });

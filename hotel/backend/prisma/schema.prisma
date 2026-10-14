@@ -306,6 +306,19 @@ enum LostItemCategory {
 }
 
 /// Bütçe sürümü (modül 27): taslak düzenlenir; onaylı kilitlidir; revize onaylanınca eskisi saklanır.
+/// Acente durumu (modül 29): pasif acentede yeni rezervasyon açılmaz; açılmışlar etkilenmez.
+enum AgencyStatus {
+  ACTIVE
+  PASSIVE
+}
+
+/// Kontrat durumu (modül 29): taslak (satışa kapalı) → satışta → sonlandırıldı.
+enum ContractStatus {
+  DRAFT
+  ACTIVE
+  ENDED
+}
+
 enum BudgetStatus {
   DRAFT
   APPROVED
@@ -556,6 +569,10 @@ model Hotel {
   reservationGroups     ReservationGroup[]
   reservationNights     ReservationNight[]
   waitlistEntries       WaitlistEntry[]
+  agencies              Agency[]
+  contracts             Contract[]
+  contractRates         ContractRate[]
+  contractStopSales     ContractStopSale[]
 }
 
 model User {
@@ -1071,11 +1088,13 @@ model RoomType {
   updatedAt        DateTime  @updatedAt
   deletedAt        DateTime?
 
-  hotel        Hotel           @relation(fields: [hotelId], references: [id])
-  rooms        Room[]
-  reservations Reservation[]
-  ratePlans    RatePlan[]
-  waitlist     WaitlistEntry[]
+  hotel             Hotel              @relation(fields: [hotelId], references: [id])
+  rooms             Room[]
+  reservations      Reservation[]
+  ratePlans         RatePlan[]
+  waitlist          WaitlistEntry[]
+  contractRates     ContractRate[]
+  contractStopSales ContractStopSale[]
 
   // Benzersizlik kısmi (partial) unique index ile veritabanında tanımlı:
   // `RoomType_hotelId_code_active_key ... WHERE "deletedAt" IS NULL`.
@@ -1206,7 +1225,10 @@ model Reservation {
   currency            String               @default("TRY")
   boardType           BoardType            @default(BB)
   requestId           String?
+  /// Acente adına açıldıysa acente (modül 29); kaynak "Acente" olur.
   agencyId            String?
+  /// Rezervasyon açıldığı andaki acente komisyon yüzdesi (acente kartı sonradan değişse de bu kalır).
+  agencyCommissionPct Decimal?             @db.Decimal(5, 2)
   groupId             String?
   notes               String?
   confirmationCode    String               @unique
@@ -1254,6 +1276,7 @@ model Reservation {
   roomType            RoomType             @relation(fields: [roomTypeId], references: [id])
   room                Room?                @relation(fields: [roomId], references: [id])
   group               ReservationGroup?    @relation(fields: [groupId], references: [id])
+  agency              Agency?              @relation(fields: [agencyId], references: [id], onDelete: Restrict)
   nights              ReservationNight[]
   waitlistEntries     WaitlistEntry[]
   reservationGuests   ReservationGuest[]
@@ -2500,4 +2523,118 @@ model BudgetCommentary {
   // Dönemin son yorumu.
   @@index([hotelId, year, month, scope, requestedAt(sort: Desc)])
   @@index([budgetId])
+}
+
+/// Acente kartı (modül 29): firma, yetkili, iletişim, komisyon, vade. Rezervasyonu olan
+/// acente silinmez, pasife alınır. Kod ve ad otel içinde tekil (büyük / küçük harf duyarsız:
+/// migration'daki index'ler).
+model Agency {
+  id              String       @id @default(uuid())
+  hotelId         String
+  /// Büyük harf kısa kod ("TUI", "ATLAS1").
+  code            String
+  name            String
+  contactName     String?
+  phone           String?
+  email           String?
+  address         String?
+  taxOffice       String?
+  taxNumber       String?
+  /// Rezervasyon toplamı üzerinden acenteye komisyon yüzdesi (0–100). Rezervasyon
+  /// açılırken rezervasyona kopyalanır: sonradan değişirse geçmiş rezervasyonlar etkilenmez.
+  commissionPct   Decimal      @default(0) @db.Decimal(5, 2)
+  /// Çıkış gününden sonra ödeme vadesi (gün).
+  paymentTermDays Int          @default(0)
+  status          AgencyStatus @default(ACTIVE)
+  notes           String?
+  createdBy       String
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  hotel        Hotel         @relation(fields: [hotelId], references: [id])
+  contracts    Contract[]
+  reservations Reservation[]
+
+  // Kod otel içinde tekil. Ad tekilliği (büyük / küçük harf duyarsız) ve arama (trigram): migration.
+  @@unique([hotelId, code])
+  // Liste: duruma göre, ada göre sıralı.
+  @@index([hotelId, status, name])
+}
+
+/// Acente kontratı (modül 29): dönem + fiyat satırları + stop-sale. Taslak satışa kapalıdır;
+/// aktif kontrat acentenin o günkü satış fiyatını belirler. Acentenin aynı günü kapsayan
+/// en fazla bir aktif kontratı olur (EXCLUDE kısıtı, migration). Rezervasyonu olan kontrat
+/// silinmez, sonlandırılır (rezervasyonlar fiyatını açıldığı günkü haliyle taşır).
+model Contract {
+  id          String         @id @default(uuid())
+  hotelId     String
+  agencyId    String
+  name        String
+  /// Dönem; iki uç dahil.
+  startDate   DateTime       @db.Date
+  endDate     DateTime       @db.Date
+  status      ContractStatus @default(DRAFT)
+  /// Fiyatların para birimi: oluşturulduğu andaki otel parası (çoklu para: modül 60).
+  currency    String
+  notes       String?
+  createdBy   String
+  activatedAt DateTime?
+  activatedBy String?
+  endedAt     DateTime?
+  endedBy     String?
+  endReason   String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  hotel     Hotel              @relation(fields: [hotelId], references: [id])
+  agency    Agency             @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  rates     ContractRate[]
+  stopSales ContractStopSale[]
+
+  // Satış anında "acentenin bu günleri kapsayan aktif kontratı" (sıcak yol) ve acente kartındaki liste.
+  @@index([hotelId, agencyId, status, startDate, endDate])
+  @@index([hotelId, status, endDate])
+}
+
+/// Kontrat fiyat satırı (modül 29): oda tipi × pansiyon × dönem için oda başı gecelik fiyat.
+/// Aynı kontratta aynı oda tipi + pansiyon için dönemler çakışmaz (EXCLUDE, migration).
+model ContractRate {
+  id         String    @id @default(uuid())
+  hotelId    String
+  contractId String
+  roomTypeId String
+  boardType  BoardType
+  /// Dönem; iki uç dahil.
+  startDate  DateTime  @db.Date
+  endDate    DateTime  @db.Date
+  price      Decimal   @db.Decimal(12, 2)
+  createdAt  DateTime  @default(now())
+
+  hotel    Hotel    @relation(fields: [hotelId], references: [id])
+  contract Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  roomType RoomType @relation(fields: [roomTypeId], references: [id], onDelete: Restrict)
+
+  @@index([contractId, roomTypeId, boardType, startDate, endDate])
+  @@index([hotelId, roomTypeId])
+}
+
+/// Kontrat stop-sale'i (modül 29): bu günlerde acente satamaz. Oda tipi boşsa kontratın
+/// bütün oda tipleri. Aynı kapsamda çakışan kayıt olmaz (EXCLUDE, migration).
+model ContractStopSale {
+  id         String   @id @default(uuid())
+  hotelId    String
+  contractId String
+  roomTypeId String?
+  startDate  DateTime @db.Date
+  endDate    DateTime @db.Date
+  reason     String?
+  createdBy  String
+  createdAt  DateTime @default(now())
+
+  hotel    Hotel     @relation(fields: [hotelId], references: [id])
+  contract Contract  @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  roomType RoomType? @relation(fields: [roomTypeId], references: [id], onDelete: Restrict)
+
+  @@index([contractId, startDate, endDate])
+  @@index([hotelId, roomTypeId])
 }
