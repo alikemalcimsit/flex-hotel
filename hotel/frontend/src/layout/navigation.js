@@ -117,6 +117,13 @@ export const NAV_SECTIONS = Object.freeze([
         icon: 'building',
         permission: PERMISSIONS.AGENCIES_VIEW,
       },
+      // Promosyon ve kupon (modül 31): müdür düzenler, muhasebe kullanım raporunu görür.
+      {
+        label: 'Promosyonlar',
+        to: '/promosyonlar',
+        icon: 'percent',
+        permission: PERMISSIONS.PROMOTIONS_VIEW,
+      },
       {
         label: 'Mesajlar',
         to: '/mesajlar',

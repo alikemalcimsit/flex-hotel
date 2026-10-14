@@ -1863,7 +1863,7 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 > satış; eşik izni, doğrulama, denetim, eski sürümle kayıt 409, önbelleğin olayla tazelenmesi; MCP).
 >
 > **Bilinen sınır:** sonradan uzatılan konaklamanın eklenen gecesi rezervasyonun açılış anından beri eldeymiş sayılır
-> (pickup bir miktar az görünür). Rol matrisini kaydetmiş otelde yeni `forecast.manage` izni müdüre elle verilir.
+> (pickup bir miktar az görünür). Yeni `forecast.manage` izni rol matrisini kaydetmiş otelde de rolün varsayılanını kendiliğinden alır (matris kaydedilirken o günkü katalog `Hotel.permissionCatalog`a yazılır; sonradan eklenen izin varsayılandır).
 >
 > **Devir:** modül 18 (gece kapanışı) otomatik "gelmedi" işaretleyince geçmiş geceler ve pickup örnekleri kendiliğinden
 > düzelir; modül 24 `get_forecast`'ı MCP'den çağırır.
@@ -2019,12 +2019,76 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 31. Promosyon & kupon — arkadaşın
 **Gün sonu:** "Erken rezervasyon %15", "3 gece kal 1 gece bedava" gibi kurallar tanımlanıyor; kupon kodu girilince fiyat düşüyor.
-- [ ] Backend: Promotion, Coupon tabloları + API; kural motoru (koşul: tarih, min. gece, oda tipi, erken rezervasyon günü)
-- [ ] Backend: fiyat hesabına promosyon uygulama, kupon doğrulama
-- [ ] Ekran: Promosyon formu (ad, geçerlilik, indirim tipi, koşullar)
-- [ ] Ekran: Kupon kodu üretimi (adet, tek kullanımlık mı)
-- [ ] Ekran: Kullanım raporu
-- [ ] Rezervasyon formuna ve web widget'a kupon alanı
+- [x] Backend: Promotion, Coupon tabloları + API; kural motoru (koşul: tarih, min. gece, oda tipi, erken rezervasyon günü)
+- [x] Backend: fiyat hesabına promosyon uygulama, kupon doğrulama
+- [x] Ekran: Promosyon formu (ad, geçerlilik, indirim tipi, koşullar)
+- [x] Ekran: Kupon kodu üretimi (adet, tek kullanımlık mı)
+- [x] Ekran: Kullanım raporu
+- [x] Rezervasyon formuna ve web widget'a kupon alanı (rezervasyon formu ve düzenleme; widget modül 32'de — sunucu tarafı hazır, aşağıda)
+
+> **📌 Modül 31 tamamlandı (14 Ekim 2026 — Ahmet).**
+>
+> **Kararlar (kullanıcı, 14 Ekim 2026):** bir rezervasyona **tek indirim** düşer — uygun kendiliğinden promosyonlar ve
+> girilen kuponun promosyonu arasından misafire en avantajlısı (kupon daha avantajlı değilse kullanılmaz, hakkı düşmez);
+> **acente (kontrat) satışına promosyon da kupon da uygulanmaz**; kuponlu rezervasyon iptal edilince / gelmeyince kupon
+> hakkı **geri açılır** (iptal geri alınırken kupon kilitlenip yeniden sayılır; başkası kullandıysa geri alma reddedilir);
+> konaklama kısalınca (düzenleme, erken çıkış) promosyon şartı bozulursa **indirim geri alınır** (önizlemede önceden
+> söylenir, folyoya fark işlenir).
+>
+> **Veri** (migration `20261010090000_promotions_coupons`): `Promotion` (ad otel içinde tekil; taslak → yayında ⇄ durduruldu;
+> indirim: yüzde / konaklama başına tutar / "X gece kal Y gece öde"; koşullar: satış dönemi, konaklama dönemi, en az / en
+> fazla gece, erken rezervasyon / son dakika günü, oda tipleri, pansiyonlar, satış kanalları — acente hiçbir zaman),
+> `Coupon` (kod otel içinde tekil, büyük harf; tek / sınırlı / sınırsız kullanım; üretim kimliği). Rezervasyonda
+> `promotionId`, `couponId`, `promotionTerms` (açılıştaki **kopya** + satış günü — promosyon sonradan değişse de söz
+> değişmez), `discountTotal`; gecede `discount` (tutar indirimli, liste fiyatı = tutar + indirim). CHECK'ler: türle indirim
+> değeri tutarlı, acente kanalı yok, kupon ↔ promosyon ↔ kopya, acente satışında ve elle fiyatta promosyon yok.
+>
+> **Kural motoru** (`modules/promotions/rules.js`, saf, birim testli): koşullar; indirim yalnızca konaklama dönemindeki
+> gecelere — yüzde her geceye (kuruşa), tutar gecelere fiyatları oranında (kuruş kalanı tarih sırasıyla, gecelerin
+> toplamını aşmaz), "X kal Y öde" her X gecede en ucuz (X − Y) gece bedava (eşit fiyatta sondaki); en avantajlı teklif
+> (eşitlikte kendiliğinden — kupon hakkı harcanmaz). **Kupon kullanımı** sayaçla tutulmaz: kupon satırı kilitlenip kuponla
+> açılmış geçerli rezervasyonlar sayılır (iptalde hak kendiliğinden geri açılır); her oda bir kullanım (grupta hak
+> yetmezse grubun hiçbiri açılmaz). Kilit sırası: rezervasyon → oda tipi → acente → promosyon → kupon.
+>
+> **Nerede uygulanır:** açma, grup, kanal isteği (WhatsApp / web chat / widget; olayda `couponCode`), kapasite onayından
+> açılan, fiyat önizlemesi (tip kartında liste fiyatı + indirim, kuponun durumu: uygulanıyor / daha avantajlısı var / uymuyor
+> / geçersiz / hak yetmez). **Düzenleme:** fiyat, konaklama ya da pansiyon değişince kopyadaki koşullar (kopyadaki satış
+> günüyle) yeniden denetlenir — tutuyorsa indirim yeni gecelere göre, tutmuyorsa kalkar (içerideki misafirin geçmiş geceleri
+> dahil; fark folyoya düzeltme); kupon eklenir (mevcut indirimden avantajlıysa), indirim kaldırılır; acente atanınca ya da elle
+> fiyat girilince kalkar. Yeni uç `POST /reservations/:id/preview`: düzenlemenin aynı hesabı, yazmadan. **Erken çıkış:**
+> kalan gecelerle şart yeniden denetlenir. **Gelmedi ücreti:** konaklama tek geceye iner, şart o gece için denetlenir
+> (bedava ilk gece ücretsiz sayılmaz). Erken giriş / geç çıkış ücreti "gecenin yüzdesi"yse gecenin liste fiyatından. AI asistanı
+> fiyatı konuşmanın kanalıyla sorar (kanala özel promosyon misafire söylenen fiyatla açılan fiyatı ayırmaz). Tutar
+> indirimli promosyon varken otelin para birimi değişmez.
+>
+> **API** (`/promotions`): liste (arama, durum, kendiliğinden / kuponla; kullanım sayıları tek ek sorguyla), kart (kullanım,
+> kupon üretimleri, yayına almayı engelleyen eksikler ve uyarılar), aç / düzenle (sürümlü), yayına al / durdur, sil (hiç
+> kullanılmamışsa), kupon üret (toplu rastgele — karışmayan harfler, isteğe bağlı önek — ya da tek kod; üretim başına tek denetim
+> kaydı), kupon listesi (kod araması, kullanılmış / kullanılmamış, açık / kapalı, üretim), kupon kapat / aç, üretimi dışa
+> aktar, kullanım raporu (satış ya da giriş gününe göre; promosyon başına geçerli / iptal, gece, liste, indirim, net, kupon;
+> toplamlar), promosyonun rezervasyonları. İzinler `promotions.view` (müdür, muhasebe), `promotions.manage` (müdür);
+> kupon alanı `reservations.*` içinde. Canlı kanal `promotions.changed`.
+>
+> **Ekran:** `/promosyonlar` (liste — kuralın okunur özeti, kullanım; kullanım raporu sekmesi), `/promosyonlar/yeni` ve kart
+> (`Kurallar` — kuralın cümlesi yazarken canlı, başkası değiştirirse uyarır; `Kuponlar` — üret, Excel'e aktar, süz, kapat;
+> `Kullanım`). Rezervasyon formunda kupon alanı ve tip kartında liste fiyatı / indirim; düzenleme penceresinde indirim
+> bölümü (kaldır, kupon) ve yeni toplamla indirimin akıbeti; detayda promosyon, kupon, gece indirimi; çıkış penceresinde
+> erken ayrılışın indirime etkisi.
+>
+> **Ölçüm** (`scripts/perf-promotions.mjs`; yayında 250 promosyon, 100 bin kupon, 27 bin promosyonlu rezervasyon, 550 bin
+> rezervasyonlu tablo): liste 9–13 ms, kart 9 ms, kupon listesi 11–20 ms, kullanım raporu 17–21 ms, fiyat önizlemesi 14 ms
+> (kuponla 16 ms), rezervasyon açma ~85 ms (promosyonsuzla aynı düzey), aynı kuponla 8 eşzamanlı rezervasyon ~560 ms.
+>
+> **Test:** kural motoru 27, sözleşme 10, ekran dönüşümleri 9 birim; entegrasyon 27 (yaşam döngüsü, kupon üretimi / kapatma,
+> en avantajlı teklif, kupon hakkı ve iptal / geri alma, eşzamanlı tek kullanım, grup, acente / elle fiyat, kanal ve AI
+> asistanı, kopya, gelmedi ücreti, uzatma / kısaltma / kupon ekleme / kaldırma, erken çıkış ve geç çıkış ücreti, önizleme,
+> rapor, izinler). Demo betiği 7 promosyon ve kuralla fiyatlanmış ~900 promosyonlu rezervasyon üretir.
+>
+> **Devir:** **modül 32 (widget)** kupon alanını `POST /reservations/quote` (`couponCode`, `source: 'WIDGET'`; dönen
+> `coupon.status`) ile gösterir, isteği `reservation.requested` olayında `couponCode` ile gönderir (uymayan / dolmuş kupon
+> isteği reddeder). Modül 28 standart fiyat kaynağını değiştirince promosyon onun üstüne düşer (`priceRoomLine` → liste
+> fiyatı). Modül 34 yield fiyatı da liste fiyatıdır; promosyon üstüne uygulanır. Modül 56 sadakat programı kupon üretimini
+> (`createCoupons`) kullanabilir.
 
 ### 32. Online rezervasyon motoru — Ali Kemal
 **Gün sonu:** Otel sitesindeki widget'tan misafir tarih seçip fiyat görüyor, bilgilerini girip rezervasyon yapıyor; chat balonu da aynı widget'ta.

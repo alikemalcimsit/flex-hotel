@@ -82,6 +82,14 @@ const AgencyPage = lazy(() => import('./pages/agencies/AgencyPage.jsx').then((m)
 const AgencyOverviewTab = lazy(() => import('./pages/agencies/AgencyOverviewTab.jsx').then((m) => ({ default: m.AgencyOverviewTab })));
 const AgencyContractsTab = lazy(() => import('./pages/agencies/AgencyContractsTab.jsx').then((m) => ({ default: m.AgencyContractsTab })));
 const AgencyAccountTab = lazy(() => import('./pages/agencies/AgencyAccountTab.jsx').then((m) => ({ default: m.AgencyAccountTab })));
+const PromotionsLayout = lazy(() => import('./pages/promotions/PromotionsLayout.jsx').then((m) => ({ default: m.PromotionsLayout })));
+const PromotionListTab = lazy(() => import('./pages/promotions/PromotionListTab.jsx').then((m) => ({ default: m.PromotionListTab })));
+const PromotionReportTab = lazy(() => import('./pages/promotions/PromotionReportTab.jsx').then((m) => ({ default: m.PromotionReportTab })));
+const NewPromotionPage = lazy(() => import('./pages/promotions/NewPromotionPage.jsx').then((m) => ({ default: m.NewPromotionPage })));
+const PromotionPage = lazy(() => import('./pages/promotions/PromotionPage.jsx').then((m) => ({ default: m.PromotionPage })));
+const PromotionRulesTab = lazy(() => import('./pages/promotions/PromotionRulesTab.jsx').then((m) => ({ default: m.PromotionRulesTab })));
+const PromotionCouponsTab = lazy(() => import('./pages/promotions/PromotionCouponsTab.jsx').then((m) => ({ default: m.PromotionCouponsTab })));
+const PromotionUsageTab = lazy(() => import('./pages/promotions/PromotionUsageTab.jsx').then((m) => ({ default: m.PromotionUsageTab })));
 const ContractPage = lazy(() => import('./pages/agencies/ContractPage.jsx').then((m) => ({ default: m.ContractPage })));
 const ExpenseActualsPage = lazy(() => import('./pages/budget/ExpenseActualsPage.jsx').then((m) => ({ default: m.ExpenseActualsPage })));
 const VariancePage = lazy(() => import('./pages/budget/VariancePage.jsx').then((m) => ({ default: m.VariancePage })));
@@ -381,6 +389,38 @@ export default function App() {
               <Route index element={<AgencyOverviewTab />} />
               <Route path="kontratlar" element={<AgencyContractsTab />} />
               <Route path="cari" element={<AgencyAccountTab />} />
+            </Route>
+            {/* Promosyon ve kupon (modül 31): "yeni" ve "rapor" statik parçaları kimlikli yoldan önce eşleşir. */}
+            <Route
+              path="promosyonlar"
+              element={
+                <RequirePermission permission={PERMISSIONS.PROMOTIONS_VIEW}>
+                  <PromotionsLayout />
+                </RequirePermission>
+              }
+            >
+              <Route index element={<PromotionListTab />} />
+              <Route path="rapor" element={<PromotionReportTab />} />
+            </Route>
+            <Route
+              path="promosyonlar/yeni"
+              element={
+                <RequirePermission permission={PERMISSIONS.PROMOTIONS_MANAGE}>
+                  <NewPromotionPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="promosyonlar/:promotionId"
+              element={
+                <RequirePermission permission={PERMISSIONS.PROMOTIONS_VIEW}>
+                  <PromotionPage />
+                </RequirePermission>
+              }
+            >
+              <Route index element={<PromotionRulesTab />} />
+              <Route path="kuponlar" element={<PromotionCouponsTab />} />
+              <Route path="kullanim" element={<PromotionUsageTab />} />
             </Route>
             <Route
               path="kayip-esya/:id"

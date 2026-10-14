@@ -307,15 +307,22 @@ export const conciergeService = {
 
   /**
    * Müsaitlik ve fiyat: rezervasyon formunun kullandığı önizlemenin aynısı
-   * (aynı fiyat kuralı, aynı envanter takvimi).
+   * (aynı fiyat kuralı, aynı envanter takvimi). Satış kaynağı konuşmanın kanalıdır
+   * (rezervasyon isteği de o kaynakla açılır): kanala özel promosyon (modül 31)
+   * misafire söylenen fiyatla açılan fiyatı ayırmaz.
    * @param {string} hotelId
    * @param {{ checkIn: string, checkOut: string }} stay
+   * @param {{ conversationId?: string }} [context]
    */
-  async checkAvailability(hotelId, stay) {
+  async checkAvailability(hotelId, stay, { conversationId } = {}) {
+    const conversation = conversationId
+      ? await prisma.conversation.findFirst({ where: { id: conversationId, hotelId }, select: { channel: true } })
+      : null;
     const quote = await quoteReservation(hotelId, {
       checkIn: new Date(`${stay.checkIn}T00:00:00.000Z`),
       checkOut: new Date(`${stay.checkOut}T00:00:00.000Z`),
       lines: [],
+      ...(conversation && MESSAGING_CHANNELS.includes(conversation.channel) ? { source: conversation.channel } : {}),
     });
     return {
       currency: quote.currency,

@@ -86,6 +86,8 @@ export const AUDIT_ENTITY_LABELS = Object.freeze({
   Contract: 'Acente kontratı',
   ContractRate: 'Kontrat fiyatları',
   ContractStopSale: 'Kontrat stop-sale',
+  Promotion: 'Promosyon',
+  Coupon: 'Kupon',
 });
 
 export const AUDIT_ENTITIES = Object.freeze(Object.keys(AUDIT_ENTITY_LABELS));

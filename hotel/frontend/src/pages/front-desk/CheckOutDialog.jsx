@@ -189,7 +189,15 @@ export function CheckOutDialog({ reservationId, onClose, onDone }) {
             <Alert tone="warning" title={`Erken ayrılış: ${departure.releasedNights.length} gece bırakılacak`}>
               Planlanan çıkış {formatDate(departure.plannedCheckOut)}. Bugünden sonraki geceler satışa döner; konaklama tutarı{' '}
               <strong>{formatMoney(reservation.totalPrice, currency)}</strong> yerine <strong>{formatMoney(departure.totalPrice, currency)}</strong> olur
-              ({formatMoney(departure.releasedAmount, currency)} düşer).
+              {departure.promotion ? '.' : ` (${formatMoney(departure.releasedAmount, currency)} düşer).`}
+              {/* Promosyonlu konaklama (modül 31): kalan gecelerle şart yeniden denetlenir. */}
+              {departure.promotion && (
+                <span className="mt-1 block">
+                  {departure.promotion.kept
+                    ? `"${departure.promotion.name}" promosyonu korunur; indirim kalan gecelere göre ${formatMoney(departure.promotion.discountAfter, currency)}.`
+                    : `${departure.promotion.message} (${formatMoney(departure.promotion.discountBefore, currency)} indirim geri alınır; fark folyoya işlenir).`}
+                </span>
+              )}
             </Alert>
             <Checkbox label="Misafir bugün ayrılıyor; kalan geceleri bırak" checked={confirmEarly} onChange={(e) => setConfirmEarly(e.target.checked)} disabled={busy} />
           </div>

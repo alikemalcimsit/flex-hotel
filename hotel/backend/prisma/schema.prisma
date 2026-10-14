@@ -319,6 +319,20 @@ enum ContractStatus {
   ENDED
 }
 
+/// Promosyon durumu (modül 31): taslak (uygulanmaz) → yayında ⇄ durduruldu.
+enum PromotionStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+}
+
+/// İndirim tipi (modül 31): gece yüzdesi, konaklama başına tutar, "X gece kal Y gece öde".
+enum PromotionDiscountType {
+  PERCENT
+  AMOUNT
+  FREE_NIGHTS
+}
+
 enum BudgetStatus {
   DRAFT
   APPROVED
@@ -573,6 +587,8 @@ model Hotel {
   contracts             Contract[]
   contractRates         ContractRate[]
   contractStopSales     ContractStopSale[]
+  promotions            Promotion[]
+  coupons               Coupon[]
 }
 
 model User {
@@ -1229,6 +1245,14 @@ model Reservation {
   agencyId            String?
   /// Rezervasyon açıldığı andaki acente komisyon yüzdesi (acente kartı sonradan değişse de bu kalır).
   agencyCommissionPct Decimal?             @db.Decimal(5, 2)
+  /// Uygulanan promosyon (modül 31) ve (kuponla uygulandıysa) kupon. `promotionTerms`
+  /// açılıştaki kopyasıdır (indirim + koşullar + uygulandığı gün): promosyon sonradan
+  /// değişse de bu rezervasyonun sözü değişmez; konaklama değişince bu kopyayla denetlenir.
+  promotionId         String?
+  couponId            String?
+  promotionTerms      Json?
+  /// Gecelere düşen indirimlerin toplamı (`ReservationNight.discount`); toplam fiyat indirimlidir.
+  discountTotal       Decimal              @default(0) @db.Decimal(12, 2)
   groupId             String?
   notes               String?
   confirmationCode    String               @unique
@@ -1277,6 +1301,8 @@ model Reservation {
   room                Room?                @relation(fields: [roomId], references: [id])
   group               ReservationGroup?    @relation(fields: [groupId], references: [id])
   agency              Agency?              @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  promotion           Promotion?           @relation(fields: [promotionId], references: [id], onDelete: Restrict)
+  coupon              Coupon?              @relation(fields: [couponId], references: [id], onDelete: Restrict)
   nights              ReservationNight[]
   waitlistEntries     WaitlistEntry[]
   reservationGuests   ReservationGuest[]
@@ -1349,6 +1375,9 @@ model ReservationNight {
   baseRate      Decimal?  @db.Decimal(12, 2)
   multiplier    Decimal?  @db.Decimal(6, 3)
   seasonName    String?
+  /// Bu geceye düşen promosyon indirimi (modül 31). `amount` indirimli tutardır;
+  /// liste fiyatı `amount + discount`.
+  discount      Decimal   @default(0) @db.Decimal(12, 2)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   deletedAt     DateTime?
@@ -2637,4 +2666,81 @@ model ContractStopSale {
 
   @@index([contractId, startDate, endDate])
   @@index([hotelId, roomTypeId])
+}
+
+/// Promosyon (modül 31): koşulu tutan doğrudan satışa kendiliğinden (`requiresCoupon = false`)
+/// ya da kuponla uygulanan indirim. Bir rezervasyona tek indirim düşer (en avantajlısı);
+/// acente satışına uygulanmaz. Rezervasyon açılırken koşullarıyla kopyalanır. Kullanılmış
+/// promosyon silinmez, durdurulur. Tutarlılık kısıtları ve ad tekilliği migration'da.
+model Promotion {
+  id             String                @id @default(uuid())
+  hotelId        String
+  name           String
+  notes          String?
+  status         PromotionStatus       @default(DRAFT)
+  requiresCoupon Boolean               @default(false)
+  discountType   PromotionDiscountType
+  /// Yüzde (0–100] ya da konaklama başına tutar; "X kal Y öde"de boş.
+  discountValue  Decimal?              @db.Decimal(12, 2)
+  /// "X gece kal Y gece öde": X ve Y (yalnızca FREE_NIGHTS).
+  stayNights     Int?
+  payNights      Int?
+  /// Rezervasyonun yapıldığı (satış) gün aralığı; iki uç dahil, boşsa sınırsız.
+  bookFrom       DateTime?             @db.Date
+  bookTo         DateTime?             @db.Date
+  /// İndirimin düştüğü geceler; iki uç dahil, boşsa sınırsız.
+  stayFrom       DateTime?             @db.Date
+  stayTo         DateTime?             @db.Date
+  minNights      Int?
+  maxNights      Int?
+  /// Erken rezervasyon: girişe en az bu kadar gün kala. Son dakika: en fazla.
+  minLeadDays    Int?
+  maxLeadDays    Int?
+  /// Boşsa bütün oda tipleri / pansiyonlar.
+  roomTypeIds    String[]              @default([])
+  boardTypes     BoardType[]           @default([])
+  /// Uygulandığı satış kanalları (acente hiçbir zaman).
+  sources        ReservationSource[]
+  createdBy      String
+  activatedAt    DateTime?
+  activatedBy    String?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  hotel        Hotel         @relation(fields: [hotelId], references: [id])
+  coupons      Coupon[]
+  reservations Reservation[]
+
+  // Satışta değerlendirilen promosyonlar: yayındaki, kendiliğinden uygulananlar.
+  @@index([hotelId, status, requiresCoupon])
+  // Liste: ada göre sıralı. Ad tekilliği (büyük / küçük harf duyarsız) ve arama (trigram): migration.
+  @@index([hotelId, name])
+}
+
+/// Kupon (modül 31): bir promosyonu kodla açar. Kod otel içinde tekil. Kullanım = kuponla
+/// açılmış geçerli (iptal / gelmedi olmayan) rezervasyon sayısı — sayaç tutulmaz, kupon
+/// satırı kilitlenip sayılır (iptalde hak kendiliğinden geri açılır). Her oda bir kullanım.
+model Coupon {
+  id          String   @id @default(uuid())
+  hotelId     String
+  promotionId String
+  /// Büyük harf, harf / rakam / tire.
+  code        String
+  /// Boşsa sınırsız; 1 = tek kullanımlık.
+  maxUses     Int?
+  isActive    Boolean  @default(true)
+  /// Aynı seferde üretilen kodlar (dağıtım için dışa aktarma bu kimlikle).
+  batchId     String
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  hotel        Hotel         @relation(fields: [hotelId], references: [id])
+  promotion    Promotion     @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  reservations Reservation[]
+
+  @@unique([hotelId, code])
+  // Promosyonun kuponları (sayfalı), üretimin kodları.
+  @@index([hotelId, promotionId, createdAt, id])
+  @@index([promotionId, batchId])
 }

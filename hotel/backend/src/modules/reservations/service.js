@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { Prisma } from '@prisma/client';
 import { addDays, currentActor, eachNight, toDecimal, toIsoDay, toMoneyString, toUtcDayStart } from '@hotelos/core';
 import {
   APPROVAL_DEFAULT_TTL_MS,
@@ -7,6 +8,7 @@ import {
   RESERVATION_STATUS_LABELS,
   WAITLIST_OPEN_STATUSES,
   allowedReservationActions,
+  couponCodeField,
   reservationActionError,
 } from '@hotelos/hotel-contracts';
 import { prisma } from '../../db.js';
@@ -22,6 +24,8 @@ import { containsText, isFuzzyToken, MATCH_NOTHING, matchGuestIds, matchRoomIdsB
 import { writeWithEvents } from '../../lib/write.js';
 import { AgencySaleError, loadAgencySale, stayDays } from '../agencies/sale.js';
 import { requestApproval } from '../approvals/service.js';
+import { applyOffer, discountLabel, evaluatePromotion } from '../promotions/rules.js';
+import { PromotionError, loadPromotionSale, readCoupon } from '../promotions/sale.js';
 import { PHONE_MATCH_DIGITS } from '../messaging/rules.js';
 import { availabilityForStay, buildAvailabilityCalendar, findNewOverbooking, fitsCapacity } from '../rooms/rules.js';
 import { assignRoomInTransaction, getAvailabilityCalendar, loadInventorySnapshot, roomConflictForStay } from '../rooms/service.js';
@@ -63,6 +67,12 @@ import {
  * (`ReservationNight`). Yetkili personel toplamı elle girebilir (gerekçesiyle,
  * geceler eşit bölünür). Konaklama değişince anlaşılan geceler anlaşılan
  * fiyatında kalır, yalnızca eklenen geceler güncel fiyatla hesaplanır.
+ *
+ * Promosyon (modül 31): doğrudan satışta liste fiyatının üstüne tek indirim
+ * (uygun otomatik promosyonlar ve girilen kupon arasından en avantajlısı);
+ * geceler indirimli yazılır (`ReservationNight.discount`), promosyon koşullarıyla
+ * rezervasyona kopyalanır. Konaklama değişince kopyadaki koşullar yeniden
+ * denetlenir; şart bozulursa indirim kalkar.
  *
  * ### Tekrar gönderim
  *
@@ -115,6 +125,10 @@ const RESERVATION_SELECT = Object.freeze({
   notes: true,
   groupId: true,
   agencyId: true,
+  promotionId: true,
+  couponId: true,
+  promotionTerms: true,
+  discountTotal: true,
   requestId: true,
   createdBy: true,
   confirmedAt: true,
@@ -139,9 +153,11 @@ const RESERVATION_SELECT = Object.freeze({
   room: { select: { id: true, number: true } },
   group: { select: { id: true, code: true, name: true } },
   agency: { select: { id: true, code: true, name: true } },
+  promotion: { select: { id: true, name: true } },
+  coupon: { select: { id: true, code: true } },
 });
 
-const NIGHT_SELECT = Object.freeze({ date: true, amount: true, baseRate: true, multiplier: true, seasonName: true });
+const NIGHT_SELECT = Object.freeze({ date: true, amount: true, baseRate: true, multiplier: true, seasonName: true, discount: true });
 
 /** Prisma Decimal → "1234.50" (para yardımcısıyla; `Number()` ile değil). */
 const money = (value) => (value === null || value === undefined ? null : toMoneyString(String(value)));
@@ -173,6 +189,9 @@ function toListDto(row) {
     priceMode: row.priceMode,
     group: row.group ? { id: row.group.id, code: row.group.code, name: row.group.name } : null,
     agency: row.agency ? { id: row.agency.id, code: row.agency.code, name: row.agency.name } : null,
+    // İndirim (modül 31): uygulanan promosyon, kuponla geldiyse kupon kodu.
+    promotion: row.promotion ? { id: row.promotion.id, name: row.promotion.name, couponCode: row.coupon?.code ?? null } : null,
+    discountTotal: money(row.discountTotal),
     createdBy: row.createdBy,
     createdAt: iso(row.createdAt),
     updatedAt: iso(row.updatedAt),
@@ -198,6 +217,9 @@ function snapshot(row) {
     source: row.source,
     groupId: row.groupId ?? null,
     agencyId: row.agencyId ?? null,
+    promotionId: row.promotionId ?? null,
+    couponId: row.couponId ?? null,
+    discountTotal: money(row.discountTotal),
     cancelReason: row.cancelReason ?? null,
     cancellationFee: money(row.cancellationFee),
     noShowFee: money(row.noShowFee),
@@ -301,6 +323,106 @@ function priceRoomLine({ type, room, stay, seasons, manual, agencySale }) {
 }
 
 /**
+ * Promosyonlu satış bağlamı (modül 31): acente satışında ve elle fiyatta yok
+ * (kontrat fiyatı ve elle fiyat nettir). Kupon kilitli okunur (kilit sırası:
+ * rezervasyon → oda tipi → acente → kupon); kullanılamayan kupon (yok, kapalı,
+ * dolmuş, promosyonu yayında değil) yer aramadan önce reddedilir.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {{ businessDate: Date, couponCode?: string | null, agencySale: object | null, manual: object | null }} context
+ */
+async function promotionSaleFor(tx, hotelId, { businessDate, couponCode, agencySale, manual }) {
+  if (agencySale || manual) {
+    if (couponCode) {
+      throw agencySale
+        ? new PromotionError('Acente satışında kupon kullanılmaz (kontrat fiyatı nettir)', 'PROMO_AGENCY')
+        : new PromotionError('Elle fiyat girilen rezervasyonda kupon kullanılmaz', 'PROMO_MANUAL_PRICE');
+    }
+    return null;
+  }
+  const sale = await loadPromotionSale(tx, hotelId, { bookedOn: toIsoDay(businessDate), couponCode: couponCode ?? null, lock: true });
+  sale.assertCouponUsable();
+  return sale;
+}
+
+/**
+ * Oda satırlarının fiyatı ve indirimi (satırlarla aynı sırada). Kupon girildiyse
+ * en az bir odaya uymalı (uymuyorsa sebebiyle reddedilir; daha avantajlı bir
+ * promosyon yüzünden kullanılmıyorsa red değildir) ve kullanıldığı oda sayısı
+ * kadar hakkı olmalı.
+ *
+ * @param {object} args
+ * @returns {Array<{ nights: Array<object & { discount: string }>, total: string, offer: import('../promotions/rules.js').Offer | null }>}
+ */
+function priceRooms({ rooms, typeById, stay, seasons, manual, agencySale, promo, source }) {
+  const priced = rooms.map((room) => {
+    const listed = priceRoomLine({ type: typeById.get(room.roomTypeId), room, stay, seasons, manual, agencySale });
+    if (!promo) return { nights: applyOffer(listed.nights, null), total: listed.total, offer: null, coupon: null };
+    const plan = promo.offerFor({ roomTypeId: room.roomTypeId, boardType: room.boardType, source, checkIn: toIsoDay(stay.checkIn), nights: listed.nights });
+    const nights = applyOffer(listed.nights, plan.offer);
+    return { nights, total: totalOf(nights), offer: plan.offer, coupon: plan.coupon };
+  });
+  if (promo?.coupon) {
+    const using = priced.filter((room) => room.offer?.couponId).length;
+    const unfit = priced.find((room) => room.coupon?.status === 'NOT_APPLICABLE');
+    if (using === 0 && unfit && !priced.some((room) => room.coupon?.status === 'NOT_BETTER')) {
+      throw new PromotionError(unfit.coupon.issue.message, unfit.coupon.issue.code);
+    }
+    promo.assertCouponCapacity(using);
+  }
+  return priced.map(({ coupon, ...room }) => room);
+}
+
+/**
+ * Rezervasyonun promosyon alanları. Teklif yoksa alanlar boşalır.
+ * @param {import('../promotions/rules.js').Offer | null} offer
+ * @param {string | null} bookedOn teklifin satış günü (kopyada; erken rezervasyon günü buna göre)
+ */
+function promotionData(offer, bookedOn) {
+  if (!offer) return { promotionId: null, couponId: null, promotionTerms: Prisma.DbNull, discountTotal: '0.00' };
+  return { promotionId: offer.terms.id, couponId: offer.couponId, promotionTerms: { ...offer.terms, bookedOn }, discountTotal: offer.total };
+}
+
+/**
+ * Gecelerin liste fiyatı (indirimsiz): `amount + discount`.
+ * @param {Array<{ date: Date, amount: unknown, discount?: unknown, baseRate: unknown, multiplier: unknown, seasonName: string | null }>} nights
+ */
+function listedNights(nights) {
+  return nights.map((night) => ({
+    date: toIsoDay(night.date),
+    amount: toMoneyString(toDecimal(String(night.amount)).plus(toDecimal(String(night.discount ?? 0)))),
+    baseRate: night.baseRate === null ? null : money(night.baseRate),
+    multiplier: multiplierText(night.multiplier),
+    seasonName: night.seasonName,
+  }));
+}
+
+/**
+ * Gelmedi ücreti: ilk gecenin fiyatı. Promosyonlu rezervasyonda gelmeyen
+ * misafirin konaklaması tek geceye iner: kopyadaki koşullar (en az gece,
+ * "X kal Y öde"…) o tek gece için yeniden denetlenir; tutmuyorsa gecenin liste
+ * fiyatı (modül 31 kararı: kısalınca indirim geri alınır).
+ *
+ * @param {{ promotionTerms: any, roomTypeId: string, boardType: string, source: string }} row
+ * @param {Array<{ date: Date | string, amount: unknown, discount?: unknown }>} nights
+ */
+function noShowCharge(row, nights) {
+  const plain = nights.map((night) => ({ date: toIsoDay(night.date), amount: money(night.amount) }));
+  if (!row.promotionTerms || nights.length === 0) return noShowFee(plain);
+  const first = [...nights].sort((a, b) => toUtcDayStart(a.date) - toUtcDayStart(b.date))[0];
+  const date = toIsoDay(first.date);
+  const gross = toMoneyString(toDecimal(String(first.amount)).plus(toDecimal(String(first.discount ?? 0))));
+  const terms = row.promotionTerms;
+  const result = evaluatePromotion(
+    terms,
+    { bookedOn: terms.bookedOn, checkIn: date, days: [date], roomTypeId: row.roomTypeId, boardType: row.boardType, source: row.source },
+    [{ date, gross }],
+  );
+  return result.issue ? gross : toMoneyString(toDecimal(gross).minus(toDecimal(result.total)));
+}
+
+/**
  * Değişikliğin yeni overbooking yaratıp yaratmadığı (çağıranın transaction'ında,
  * oda tipleri kilitliyken).
  *
@@ -371,7 +493,7 @@ async function uniqueConfirmationCodes(tx, hotelCode, count) {
  * @param {import('@prisma/client').Prisma.TransactionClient} tx
  * @param {string} hotelId
  * @param {string} reservationId
- * @param {Array<{ date: string, amount: string, baseRate: string | null, multiplier: string | null, seasonName: string | null }>} nights
+ * @param {Array<{ date: string, amount: string, baseRate: string | null, multiplier: string | null, seasonName: string | null, discount?: string }>} nights
  */
 function writeNights(tx, hotelId, reservationId, nights) {
   if (nights.length === 0) return Promise.resolve();
@@ -384,6 +506,7 @@ function writeNights(tx, hotelId, reservationId, nights) {
       baseRate: night.baseRate,
       multiplier: night.multiplier,
       seasonName: night.seasonName,
+      discount: night.discount ?? '0.00',
     })),
   });
 }
@@ -534,13 +657,12 @@ async function sendToApproval(tx, stage, { hotelId, hotel, kind, input, guest, r
  * @param {object} context
  * @returns {Promise<string[]>} rezervasyon kimlikleri
  */
-async function insertReservations(tx, stage, { hotelId, hotel, input, guest, rooms, seasons, typeById, createdBy, groupId, manual, agencySale }) {
+async function insertReservations(tx, stage, { hotelId, hotel, input, guest, rooms, pricing, bookedOn, createdBy, groupId, manual, agencySale }) {
   const codes = await uniqueConfirmationCodes(tx, hotel.code, rooms.length);
   const now = new Date();
   const ids = [];
   for (const [index, room] of rooms.entries()) {
-    const type = typeById.get(room.roomTypeId);
-    const priced = priceRoomLine({ type, room, stay: input, seasons, manual, agencySale });
+    const priced = pricing[index];
     const row = await tx.reservation.create({
       data: {
         hotelId,
@@ -557,6 +679,8 @@ async function insertReservations(tx, stage, { hotelId, hotel, input, guest, roo
         agencyId: agencySale?.agency.id ?? null,
         // Komisyon oranı açılışta kopyalanır: kart sonradan değişse de bu rezervasyon etkilenmez.
         agencyCommissionPct: agencySale?.commissionPct ?? null,
+        // Promosyon (modül 31): koşullarıyla kopyalanır; geceler indirimli.
+        ...(priced.offer ? promotionData(priced.offer, bookedOn) : {}),
         totalPrice: manual ? manual.total : priced.total,
         currency: hotel.currency,
         priceMode: manual ? 'MANUAL' : 'CALCULATED',
@@ -651,9 +775,11 @@ export async function createReservation(hotelId, input, options = {}) {
       // yer aramadan önce reddedilir (yer olmayan satış onaya da gönderilmez).
       const agencySale = await agencySaleFor(tx, hotelId, hotel, input.agencyId, input);
       agencySale?.assertActive();
-      const priced = priceRoomLine({ type: typeById.get(input.roomTypeId), room: input, stay: input, seasons, manual, agencySale });
-      const { guest } = await resolveGuest(tx, hotelId, input, hotel);
+      // Promosyon ve kupon (modül 31): uymayan ya da dolmuş kupon da yer aramadan önce reddedilir.
+      const promo = await promotionSaleFor(tx, hotelId, { businessDate, couponCode: input.couponCode, agencySale, manual });
       const rooms = [{ ...pickLine(input), requestId: input.requestId, roomId: input.roomId ?? null }];
+      const pricing = priceRooms({ rooms, typeById, stay: input, seasons, manual, agencySale, promo, source: input.source });
+      const { guest } = await resolveGuest(tx, hotelId, input, hotel);
 
       const violations = await overbookingViolations(tx, hotelId, {
         roomTypeIds: [input.roomTypeId],
@@ -664,12 +790,23 @@ export async function createReservation(hotelId, input, options = {}) {
       if (violations.length > 0 && !options.allowOverbooking) {
         if (input.roomId) throw noAvailabilityError(violations, typeById);
         if (hotel.overbookingPolicy === 'APPROVAL' && options.approvalAllowed !== false) {
-          return sendToApproval(tx, stage, { hotelId, hotel, kind: 'single', input, guest, rooms, violations, typeById, total: priced.total, createdBy });
+          return sendToApproval(tx, stage, { hotelId, hotel, kind: 'single', input, guest, rooms, violations, typeById, total: pricing[0].total, createdBy });
         }
         throw noAvailabilityError(violations, typeById);
       }
 
-      const [reservationId] = await insertReservations(tx, stage, { hotelId, hotel, input, guest, rooms, seasons, typeById, createdBy, manual, agencySale });
+      const [reservationId] = await insertReservations(tx, stage, {
+        hotelId,
+        hotel,
+        input,
+        guest,
+        rooms,
+        pricing,
+        bookedOn: toIsoDay(businessDate),
+        createdBy,
+        manual,
+        agencySale,
+      });
       if (input.waitlistId) await convertWaitlistEntry(tx, stage, hotelId, input.waitlistId, reservationId, createdBy);
       if (input.roomId) {
         await assignRoomInTransaction(tx, stage, hotelId, reservationId, input.roomId, { businessDate, reason: 'Oda planından açıldı' });
@@ -715,9 +852,9 @@ export async function createGroupReservation(hotelId, input, options = {}) {
       // biri satılamıyorsa grubun hiçbiri açılmaz.
       const agencySale = await agencySaleFor(tx, hotelId, hotel, input.agencyId, input);
       agencySale?.assertActive();
-      const roomTotals = rooms.map((room) => ({
-        amount: priceRoomLine({ type: typeById.get(room.roomTypeId), room, stay: input, seasons, manual: null, agencySale }).total,
-      }));
+      // Promosyon (modül 31): her oda kendi tipi + pansiyonuyla değerlendirilir; kupon her odada bir kullanım.
+      const promo = await promotionSaleFor(tx, hotelId, { businessDate, couponCode: input.couponCode, agencySale, manual: null });
+      const pricing = priceRooms({ rooms, typeById, stay: input, seasons, manual: null, agencySale, promo, source: input.source });
       const { guest } = await resolveGuest(tx, hotelId, input, hotel);
 
       const violations = await overbookingViolations(tx, hotelId, {
@@ -728,7 +865,18 @@ export async function createGroupReservation(hotelId, input, options = {}) {
       });
       if (violations.length > 0 && !options.allowOverbooking) {
         if (hotel.overbookingPolicy === 'APPROVAL' && options.approvalAllowed !== false) {
-          return sendToApproval(tx, stage, { hotelId, hotel, kind: 'group', input, guest, rooms, violations, typeById, total: totalOf(roomTotals), createdBy });
+          return sendToApproval(tx, stage, {
+            hotelId,
+            hotel,
+            kind: 'group',
+            input,
+            guest,
+            rooms,
+            violations,
+            typeById,
+            total: totalOf(pricing.map((room) => ({ amount: room.total }))),
+            createdBy,
+          });
         }
         throw noAvailabilityError(violations, typeById);
       }
@@ -751,8 +899,8 @@ export async function createGroupReservation(hotelId, input, options = {}) {
         input,
         guest,
         rooms,
-        seasons,
-        typeById,
+        pricing,
+        bookedOn: toIsoDay(businessDate),
         createdBy,
         groupId: group.id,
         manual: null,
@@ -835,12 +983,15 @@ function manualPrice(input, options) {
 /**
  * Rezervasyonu düzenler (bkz. `updateReservationSchema`).
  *
- * - Bekleyen / onaylı: tarih, tip, kişi, pansiyon, not, fiyat.
+ * - Bekleyen / onaylı: tarih, tip, kişi, pansiyon, not, fiyat, indirim.
  * - İçerideki misafir: çıkış tarihi (uzatma / kısaltma), kişi, pansiyon, not.
  * - Atanmış oda yeni hâle uymuyorsa (tip değişti, yeni gecelerde dolu ya da
  *   arızalı, kişi sığmıyor) atama kaldırılır; oda-worker ya da personel yeniden
  *   atar. İçerideki misafirin odası kaldırılamaz: uzatma o odada mümkün
  *   değilse işlem reddedilir (önce oda değişikliği).
+ * - Promosyon (modül 31): fiyat, konaklama ya da pansiyon değişince kopyadaki
+ *   koşullar yeniden denetlenir; şart bozulursa indirim kalkar. Kupon eklenebilir
+ *   (mevcut indirimden avantajlıysa) ya da indirim kaldırılabilir.
  *
  * @param {string} hotelId
  * @param {string} reservationId
@@ -848,64 +999,15 @@ function manualPrice(input, options) {
  * @param {{ canOverridePrice?: boolean }} [options]
  */
 export async function updateReservation(hotelId, reservationId, input, options = {}) {
-  const { hotel, businessDate, seasons, typeById } = await loadContext(hotelId);
-  if (input.price?.mode === 'MANUAL' && !options.canOverridePrice) {
-    throw new AppError('Fiyatı elle değiştirme yetkiniz yok', { statusCode: 403, code: 'FORBIDDEN' });
-  }
+  const context = await loadContext(hotelId);
+  const { businessDate, typeById } = context;
+  assertPriceOverride(input, options);
 
   try {
     await writeWithEvents(async (tx, stage) => {
       const current = await lockForWrite(tx, hotelId, reservationId, input.expectedUpdatedAt);
-      assertAction('edit', current, businessDate);
-      const inHouse = current.status === 'CHECKED_IN';
-
-      // Acente (modül 29): atama / değiştirme / kaldırma yalnızca gelecek konaklamada;
-      // içerideki misafirin faturalama tarafı değişmez.
-      const nextAgencyId = input.agencyId === undefined ? current.agencyId : input.agencyId;
-      const agencyChanged = nextAgencyId !== current.agencyId;
-      if (agencyChanged && inHouse) {
-        throw new ValidationError('Misafir içeride; acente değiştirilemez', { field: 'agencyId' });
-      }
-
-      if (inHouse && input.checkIn && toIsoDay(input.checkIn) !== toIsoDay(current.checkIn)) {
-        throw new ValidationError('Misafir içeride; giriş tarihi değiştirilemez', { field: 'checkIn' });
-      }
-      if (inHouse && input.roomTypeId && input.roomTypeId !== current.roomTypeId) {
-        throw new ValidationError('Misafir içeride; oda tipi yerine oda planından oda değiştirin', { field: 'roomTypeId' });
-      }
-
-      const next = {
-        checkIn: input.checkIn ?? current.checkIn,
-        checkOut: input.checkOut ?? current.checkOut,
-        roomTypeId: input.roomTypeId ?? current.roomTypeId,
-        adults: input.adults ?? current.adults,
-        children: input.children ?? current.children,
-        boardType: input.boardType ?? current.boardType,
-        notes: input.notes === undefined ? current.notes : input.notes,
-      };
-      if (toUtcDayStart(next.checkOut) <= toUtcDayStart(next.checkIn)) {
-        throw new ValidationError('Çıkış tarihi girişten sonra olmalı', { field: 'checkOut' });
-      }
-      if (toIsoDay(next.checkIn) !== toIsoDay(current.checkIn)) assertArrivalNotPast(next.checkIn, businessDate);
-      if (toIsoDay(next.checkOut) !== toIsoDay(current.checkOut) && toUtcDayStart(next.checkOut) < businessDate.getTime()) {
-        throw new ValidationError('Çıkış tarihi otelin bugününden önce olamaz', { field: 'checkOut' });
-      }
-      if (inHouse && current.roomSince && toUtcDayStart(next.checkOut) < toUtcDayStart(current.roomSince)) {
-        throw new ValidationError(`Misafir ${dotted(current.roomSince)} tarihinde bu odaya taşındı; çıkış bundan önce olamaz`, { field: 'checkOut' });
-      }
-      assertLineFits(typeById, next);
-
-      const changedStay = stayChanged(current, next);
-      const roomTypeIds = [...new Set([current.roomTypeId, next.roomTypeId])];
-      if (changedStay) await lockRoomTypes(tx, hotelId, roomTypeIds);
-
-      // Acente satışı: kontrat fiyatı ve stop-sale kilit altında okunur (oda tipinden sonra).
-      // Aynı acentede yalnızca yeniden satılan geceler denetlenir; acente değiştiyse yeni
-      // acente aktif olmalı.
-      const boardChanged = next.boardType !== current.boardType;
-      const needsSale = Boolean(nextAgencyId) && (agencyChanged || changedStay || boardChanged || input.price !== undefined);
-      const agencySale = needsSale ? await agencySaleFor(tx, hotelId, hotel, nextAgencyId, next) : null;
-      if (agencyChanged) agencySale?.assertActive();
+      const plan = await planUpdate(tx, { ...context, hotelId, lock: true }, current, input);
+      const { inHouse, next, nextAgencyId, agencyChanged, changedStay, roomTypeIds, agencySale, priced } = plan;
 
       // Atanmış oda yeni hâle uyuyor mu? (yazmadan önce: veritabanı çifte
       // rezervasyonu yazma sırasında reddeder ve transaction bozulur)
@@ -942,13 +1044,20 @@ export async function updateReservation(hotelId, reservationId, input, options =
         if (violations.length > 0) throw noAvailabilityError(violations, typeById);
       }
 
-      const pricing = repriceFor({ current, next, input, changedStay, inHouse, businessDate, seasons, typeById, agencySale, agencyChanged });
       const changedFields = changedReservationFields(
-        { ...current, totalPrice: money(current.totalPrice) },
-        { ...next, agencyId: nextAgencyId, totalPrice: pricing ? pricing.total : money(current.totalPrice), priceMode: pricing ? pricing.mode : current.priceMode },
+        { ...current, totalPrice: money(current.totalPrice), discountTotal: money(current.discountTotal) },
+        {
+          ...next,
+          agencyId: nextAgencyId,
+          totalPrice: priced ? priced.total : money(current.totalPrice),
+          priceMode: priced ? priced.mode : current.priceMode,
+          ...(priced?.promotion
+            ? { promotionId: priced.promotion.promotionId, couponId: priced.promotion.couponId, discountTotal: priced.promotion.discountTotal }
+            : {}),
+        },
       );
       if (releaseRoom) changedFields.push('roomId');
-      if (pricing && pricing.note !== (current.priceNote ?? null) && !changedFields.includes('priceMode')) changedFields.push('priceNote');
+      if (priced && priced.note !== (current.priceNote ?? null) && !changedFields.includes('priceMode')) changedFields.push('priceNote');
       // Hiçbir şey değişmiyorsa yazılmaz: sürüm (updatedAt) boşuna ilerlemez,
       // denetim izine boş kayıt düşmez.
       if (changedFields.length === 0) return;
@@ -958,7 +1067,7 @@ export async function updateReservation(hotelId, reservationId, input, options =
         data: {
           ...next,
           ...(releaseRoom ? { roomId: null } : {}),
-          ...(pricing ? { totalPrice: pricing.total, priceMode: pricing.mode, priceNote: pricing.note } : {}),
+          ...(priced ? { totalPrice: priced.total, priceMode: priced.mode, priceNote: priced.note, ...(priced.promotion ?? {}) } : {}),
           // Kaynak acenteyle birlikte döner: acente varsa "Acente"; kaldırılınca resepsiyon.
           // Komisyon oranı bu andaki kart oranıdır (acente değişmediyse eski oran korunur).
           ...(agencyChanged
@@ -971,9 +1080,9 @@ export async function updateReservation(hotelId, reservationId, input, options =
         },
         select: RESERVATION_SELECT,
       });
-      if (pricing) {
+      if (priced) {
         await tx.reservationNight.deleteMany({ where: { reservationId: current.id, hotelId } });
-        await writeNights(tx, hotelId, current.id, pricing.nights);
+        await writeNights(tx, hotelId, current.id, priced.nights);
       }
 
       await recordAudit(tx, {
@@ -996,20 +1105,271 @@ export async function updateReservation(hotelId, reservationId, input, options =
 }
 
 /**
- * Düzenlemede yeni gece fiyatları; fiyat değişmiyorsa `null`.
+ * Düzenlemenin fiyat önizlemesi (yazmadan, kilitsiz): yeni toplam, indirim ve
+ * indirimin ne olacağı (korunur, kalkar, kupon uygulanır, kaldırılır). Kayıtta
+ * aynı hesap kilit altında yeniden yapılır.
+ *
+ * @param {string} hotelId
+ * @param {string} reservationId
+ * @param {object} input `reservationUpdatePreviewSchema` çıktısı
+ * @param {{ canOverridePrice?: boolean }} [options]
+ */
+export async function previewReservationUpdate(hotelId, reservationId, input, options = {}) {
+  const context = await loadContext(hotelId);
+  assertPriceOverride(input, options);
+  const current = await prisma.reservation.findFirst({
+    where: { id: reservationId, hotelId },
+    select: { ...RESERVATION_SELECT, nights: { select: NIGHT_SELECT, orderBy: { date: 'asc' } } },
+  });
+  if (!current) throw new NotFoundError('Rezervasyon bulunamadı');
+  const { priced, discount } = await planUpdate(prisma, { ...context, hotelId, lock: false }, current, input);
+
+  const currency = current.currency;
+  const before = {
+    total: money(current.totalPrice),
+    discountTotal: money(current.discountTotal),
+    promotion: promotionSummary(current.promotionTerms, current.coupon?.code ?? null, currency),
+  };
+  const after = !priced
+    ? before
+    : {
+        total: priced.total,
+        discountTotal: priced.promotion ? priced.promotion.discountTotal : before.discountTotal,
+        promotion: discount ? promotionSummary(discount.offer?.terms ?? null, discount.offer?.couponCode ?? null, currency) : before.promotion,
+      };
+  const nights = priced ? priced.nights : listedNights(current.nights).map((night, index) => ({ ...night, amount: money(current.nights[index].amount), discount: money(current.nights[index].discount) }));
+  return {
+    changed: Boolean(priced),
+    currency,
+    before,
+    after,
+    discount: discount ? { outcome: discount.outcome, message: discountMessage(discount, before.promotion) } : null,
+    nights: nights.map((night) => ({ date: night.date, amount: night.amount, discount: night.discount ?? '0.00' })),
+  };
+}
+
+/**
+ * @param {{ price?: { mode: string } }} input
+ * @param {{ canOverridePrice?: boolean }} options
+ */
+function assertPriceOverride(input, options) {
+  if (input.price?.mode === 'MANUAL' && !options.canOverridePrice) {
+    throw new AppError('Fiyatı elle değiştirme yetkiniz yok', { statusCode: 403, code: 'FORBIDDEN' });
+  }
+}
+
+/**
+ * Düzenlemenin hesabı (yazmadan): kurallar, yeni konaklama, acente satışı, gece
+ * fiyatları ve indirim. Düzenleme bunu kilitli transaction'da yapar (`lock`:
+ * oda tipi, acente ve kupon kilitlenir), önizleme kilitsiz — ikisi aynı kuralı izler.
+ *
+ * @param {any} db transaction ya da `prisma`
+ * @param {{ hotelId: string, hotel: any, businessDate: Date, seasons: any[], typeById: Map<string, any>, lock: boolean }} context
+ * @param {any} current rezervasyon (`RESERVATION_SELECT` + geceler)
+ * @param {any} input
+ */
+async function planUpdate(db, context, current, input) {
+  const { hotelId, hotel, businessDate, seasons, typeById, lock } = context;
+  assertAction('edit', current, businessDate);
+  const inHouse = current.status === 'CHECKED_IN';
+
+  // Acente (modül 29): atama / değiştirme / kaldırma yalnızca gelecek konaklamada;
+  // içerideki misafirin faturalama tarafı değişmez.
+  const nextAgencyId = input.agencyId === undefined ? current.agencyId : input.agencyId;
+  const agencyChanged = nextAgencyId !== current.agencyId;
+  if (agencyChanged && inHouse) {
+    throw new ValidationError('Misafir içeride; acente değiştirilemez', { field: 'agencyId' });
+  }
+
+  if (inHouse && input.checkIn && toIsoDay(input.checkIn) !== toIsoDay(current.checkIn)) {
+    throw new ValidationError('Misafir içeride; giriş tarihi değiştirilemez', { field: 'checkIn' });
+  }
+  if (inHouse && input.roomTypeId && input.roomTypeId !== current.roomTypeId) {
+    throw new ValidationError('Misafir içeride; oda tipi yerine oda planından oda değiştirin', { field: 'roomTypeId' });
+  }
+
+  const next = {
+    checkIn: input.checkIn ?? current.checkIn,
+    checkOut: input.checkOut ?? current.checkOut,
+    roomTypeId: input.roomTypeId ?? current.roomTypeId,
+    adults: input.adults ?? current.adults,
+    children: input.children ?? current.children,
+    boardType: input.boardType ?? current.boardType,
+    notes: input.notes === undefined ? current.notes : input.notes,
+  };
+  if (toUtcDayStart(next.checkOut) <= toUtcDayStart(next.checkIn)) {
+    throw new ValidationError('Çıkış tarihi girişten sonra olmalı', { field: 'checkOut' });
+  }
+  if (toIsoDay(next.checkIn) !== toIsoDay(current.checkIn)) assertArrivalNotPast(next.checkIn, businessDate);
+  if (toIsoDay(next.checkOut) !== toIsoDay(current.checkOut) && toUtcDayStart(next.checkOut) < businessDate.getTime()) {
+    throw new ValidationError('Çıkış tarihi otelin bugününden önce olamaz', { field: 'checkOut' });
+  }
+  if (inHouse && current.roomSince && toUtcDayStart(next.checkOut) < toUtcDayStart(current.roomSince)) {
+    throw new ValidationError(`Misafir ${dotted(current.roomSince)} tarihinde bu odaya taşındı; çıkış bundan önce olamaz`, { field: 'checkOut' });
+  }
+  assertLineFits(typeById, next);
+
+  const changedStay = stayChanged(current, next);
+  const roomTypeIds = [...new Set([current.roomTypeId, next.roomTypeId])];
+  if (changedStay && lock) await lockRoomTypes(db, hotelId, roomTypeIds);
+
+  // Acente satışı: kontrat fiyatı ve stop-sale kilit altında okunur (oda tipinden sonra).
+  // Aynı acentede yalnızca yeniden satılan geceler denetlenir; acente değiştiyse yeni
+  // acente aktif olmalı.
+  const boardChanged = next.boardType !== current.boardType;
+  const needsSale = Boolean(nextAgencyId) && (agencyChanged || changedStay || boardChanged || input.price !== undefined);
+  let agencySale = null;
+  if (needsSale) {
+    agencySale = lock
+      ? await agencySaleFor(db, hotelId, hotel, nextAgencyId, next)
+      : await loadAgencySale(db, hotelId, nextAgencyId, { checkIn: next.checkIn, checkOut: next.checkOut, hotelCurrency: hotel.currency });
+  }
+  if (agencyChanged) agencySale?.assertActive();
+
+  const pricing = repriceFor({ current, next, input, changedStay, inHouse, businessDate, seasons, typeById, agencySale, agencyChanged });
+  const discount = await rediscount(db, { hotelId, businessDate, current, next, input, pricing, nextAgencyId, agencyChanged, boardChanged, lock });
+  return { inHouse, next, nextAgencyId, agencyChanged, changedStay, roomTypeIds, agencySale, discount, priced: finalPricing(current, pricing, discount) };
+}
+
+/**
+ * Yazılacak fiyat: indirim kararı varsa onun geceleri, yoksa yeniden fiyatlanan
+ * geceler (indirimsiz); ikisi de yoksa `null` (fiyat ve indirim değişmez).
+ *
+ * @param {any} current
+ * @param {ReturnType<typeof repriceFor>} pricing
+ * @param {Awaited<ReturnType<typeof rediscount>>} discount
+ */
+function finalPricing(current, pricing, discount) {
+  if (discount) {
+    return {
+      mode: pricing?.mode ?? current.priceMode,
+      note: pricing ? pricing.note : (current.priceNote ?? null),
+      nights: discount.nights,
+      total: totalOf(discount.nights),
+      promotion: promotionData(discount.offer, discount.bookedOn),
+    };
+  }
+  if (pricing) return { ...pricing, nights: applyOffer(pricing.nights, null), promotion: null };
+  return null;
+}
+
+/**
+ * Düzenlemede indirim kararı (modül 31). `null`: promosyon ve gece indirimleri
+ * değişmez.
+ *
+ * 1. Acente satışı ya da elle fiyat → promosyon kalkar (kontrat ve elle fiyat nettir).
+ * 2. "İndirimi kaldır" → kalkar (kupon hakkı geri açılır).
+ * 3. Kupon → kuponun promosyonu bu konaklamaya uymalı (bugünün satışı sayılır) ve
+ *    mevcut indirimden fazlasını vermeli; kupon kilitli okunur, hakkı sayılır.
+ * 4. Fiyat, konaklama ya da pansiyon değiştiyse kopyadaki koşullar (kopyadaki
+ *    satış günüyle) yeniden denetlenir: tutuyorsa indirim yeni gecelere göre
+ *    yeniden hesaplanır, tutmuyorsa kalkar. İçerideki misafirin geçmiş geceleri
+ *    de dahildir; fark folyoya düzeltme olarak işlenir.
+ *
+ * @param {any} db
+ * @param {object} args
+ */
+async function rediscount(db, { hotelId, businessDate, current, next, input, pricing, nextAgencyId, agencyChanged, boardChanged, lock }) {
+  const hadPromotion = Boolean(current.promotionId);
+  const request = input.discount;
+  const listed = pricing ? pricing.nights : listedNights(current.nights);
+  const mode = pricing?.mode ?? current.priceMode;
+  const removal = (issue) => ({ offer: null, bookedOn: null, nights: applyOffer(listed, null), outcome: 'REMOVED', issue });
+
+  if (request?.mode === 'COUPON') {
+    if (nextAgencyId) throw new PromotionError('Acente satışında kupon kullanılmaz (kontrat fiyatı nettir)', 'PROMO_AGENCY', 'discount.code');
+    if (mode === 'MANUAL') throw new PromotionError('Elle fiyat girilen rezervasyonda kupon kullanılmaz', 'PROMO_MANUAL_PRICE', 'discount.code');
+  }
+  if (nextAgencyId || mode === 'MANUAL') {
+    if (!hadPromotion) return null;
+    return removal(
+      nextAgencyId
+        ? { code: 'PROMO_AGENCY', message: 'Acente satışında promosyon uygulanmaz; indirim kalkar' }
+        : { code: 'PROMO_MANUAL_PRICE', message: 'Elle fiyatta promosyon uygulanmaz; indirim kalkar' },
+    );
+  }
+  if (request?.mode === 'REMOVE') return hadPromotion ? removal(null) : null;
+
+  // Acente kaldırıldıysa satış resepsiyonun olur (kaynak birlikte döner).
+  const source = agencyChanged && current.source === 'AGENCY' ? 'UI' : current.source;
+  const saleOn = (bookedOn) => ({
+    bookedOn,
+    checkIn: toIsoDay(next.checkIn),
+    days: listed.map((night) => night.date),
+    roomTypeId: next.roomTypeId,
+    boardType: next.boardType,
+    source,
+  });
+  const gross = listed.map((night) => ({ date: night.date, gross: night.amount }));
+  const terms = hadPromotion ? current.promotionTerms : null;
+  const kept = terms ? evaluatePromotion(terms, saleOn(terms.bookedOn), gross) : null;
+
+  if (request?.mode === 'COUPON' && request.code !== current.coupon?.code) {
+    const today = toIsoDay(businessDate);
+    const coupon = await readCoupon(db, hotelId, request.code, { lock, excludeReservationId: current.id });
+    if (coupon.issue) throw new PromotionError(coupon.issue.message, coupon.issue.code, 'discount.code');
+    const result = evaluatePromotion(coupon.terms, saleOn(today), gross);
+    if (result.issue) throw new PromotionError(result.issue.message, result.issue.code, 'discount.code');
+    if (kept && !kept.issue && toDecimal(kept.total).greaterThanOrEqualTo(toDecimal(result.total))) {
+      throw new PromotionError(
+        `Mevcut "${terms.name}" promosyonu daha avantajlı (${kept.total} ${current.currency} indirim; kuponla ${result.total}); kupon uygulanmadı`,
+        'COUPON_NOT_BETTER',
+        'discount.code',
+      );
+    }
+    const offer = { terms: coupon.terms, couponId: coupon.id, couponCode: coupon.code, discounts: result.discounts, total: result.total };
+    return { offer, bookedOn: today, nights: applyOffer(listed, offer), outcome: hadPromotion ? 'REPLACED' : 'APPLIED', issue: null };
+  }
+
+  if (!hadPromotion) return null;
+  const touched = Boolean(pricing) || boardChanged || agencyChanged || request?.mode === 'COUPON';
+  if (!touched) return null;
+  if (kept.issue) return { offer: null, bookedOn: null, nights: applyOffer(listed, null), outcome: 'REVOKED', issue: kept.issue };
+  const offer = { terms, couponId: current.couponId, couponCode: current.coupon?.code ?? null, discounts: kept.discounts, total: kept.total };
+  return { offer, bookedOn: terms.bookedOn, nights: applyOffer(listed, offer), outcome: 'KEPT', issue: null };
+}
+
+/**
+ * Promosyonun ekrandaki özeti.
+ * @param {any} terms kopya (ya da `null`)
+ * @param {string | null} couponCode
+ * @param {string} currency
+ */
+function promotionSummary(terms, couponCode, currency) {
+  return terms ? { id: terms.id, name: terms.name, label: discountLabel(terms, currency), couponCode } : null;
+}
+
+/**
+ * İndirim kararının personele söylenen hâli.
+ * @param {NonNullable<Awaited<ReturnType<typeof rediscount>>>} discount
+ * @param {{ name: string } | null} previous
+ */
+function discountMessage(discount, previous) {
+  const name = discount.offer?.terms.name;
+  switch (discount.outcome) {
+    case 'KEPT':
+      return `"${name}" promosyonu korunur; indirim yeni gecelere göre hesaplanır`;
+    case 'REVOKED':
+      return `"${previous?.name}" promosyonunun şartı artık tutmuyor (${discount.issue?.message}); indirim kalkar`;
+    case 'APPLIED':
+      return `"${discount.offer?.couponCode}" kuponu uygulanır (${name})`;
+    case 'REPLACED':
+      return `"${discount.offer?.couponCode}" kuponu uygulanır (${name}); "${previous?.name}" promosyonunun yerine geçer`;
+    default:
+      return discount.issue?.message ?? `"${previous?.name}" indirimi kaldırılır`;
+  }
+}
+
+/**
+ * Düzenlemede yeni gece fiyatları (liste fiyatıyla, indirimsiz); fiyat değişmiyorsa `null`.
  * @param {object} args
  */
 function repriceFor({ current, next, input, changedStay, inHouse, businessDate, seasons, typeById, agencySale, agencyChanged }) {
   const dates = () => eachNight(next.checkIn, next.checkOut);
   const days = dates().map(toIsoDay);
   const today = toIsoDay(businessDate);
-  const existing = current.nights.map((night) => ({
-    date: toIsoDay(night.date),
-    amount: money(night.amount),
-    baseRate: night.baseRate === null ? null : money(night.baseRate),
-    multiplier: multiplierText(night.multiplier),
-    seasonName: night.seasonName,
-  }));
+  // Anlaşılan geceler liste fiyatıyla (indirim ayrıca yeniden hesaplanır: `rediscount`).
+  const existing = listedNights(current.nights);
   const existingByDate = new Map(existing.map((night) => [night.date, night]));
   const type = typeById.get(next.roomTypeId);
 
@@ -1144,7 +1504,7 @@ export async function markNoShow(hotelId, reservationId, input) {
   await writeWithEvents(async (tx, stage) => {
     const current = await lockForWrite(tx, hotelId, reservationId, input.expectedUpdatedAt);
     assertAction('noShow', current, businessDate);
-    const policyFee = noShowFee(current.nights.map((night) => ({ date: night.date, amount: money(night.amount) })));
+    const policyFee = noShowCharge(current, current.nights);
     const fee = input.waiveFee ? '0.00' : policyFee;
     const updated = await tx.reservation.update({
       where: { id: current.id },
@@ -1196,6 +1556,20 @@ export async function reinstateReservation(hotelId, reservationId, { expectedUpd
           days: stayDays(current.checkIn, current.checkOut).filter((day) => day >= today),
           requireRate: false,
         });
+      }
+
+      // Kupon (modül 31): iptalde kullanım hakkı geri açılmıştı; geri alınırken kupon
+      // kilitlenip yeniden sayılır. Bu arada başkası kullandıysa geri alma reddedilir
+      // (indirimli fiyat kupona bağlı). Kuponun kapatılmış olması engel değildir: bu yeni
+      // kullanım değil, aynı satışın geri gelmesidir.
+      if (current.couponId) {
+        const coupon = await readCoupon(tx, hotelId, current.coupon.code, { lock: true, excludeReservationId: current.id });
+        if (coupon.maxUses !== null && coupon.used >= coupon.maxUses) {
+          throw new ConflictError(
+            `"${coupon.code}" kuponu bu arada başka rezervasyonda kullanıldı (${coupon.used}/${coupon.maxUses}); iptal geri alınamaz. Gerekirse yeni rezervasyon açın.`,
+            'COUPON_USED_UP',
+          );
+        }
       }
 
       let releaseRoom = false;
@@ -1456,6 +1830,7 @@ export async function getReservation(hotelId, reservationId) {
     baseRate: night.baseRate === null ? null : money(night.baseRate),
     multiplier: multiplierText(night.multiplier),
     seasonName: night.seasonName,
+    discount: money(night.discount),
   }));
   const members = row.groupId
     ? await prisma.reservation.findMany({
@@ -1497,13 +1872,21 @@ export async function getReservation(hotelId, reservationId) {
     checkoutOpenBalance: money(row.checkoutOpenBalance),
     openBalanceReason: row.openBalanceReason,
     nightlyRates,
+    // Promosyon (modül 31): kopyadaki ad ve indirim; kuponla geldiyse kod, satış günü.
+    promotion: row.promotionTerms
+      ? {
+          ...promotionSummary(row.promotionTerms, row.coupon?.code ?? null, row.currency),
+          bookedOn: row.promotionTerms.bookedOn ?? null,
+          listTotal: toMoneyString(toDecimal(String(row.totalPrice)).plus(toDecimal(String(row.discountTotal)))),
+        }
+      : null,
     taxes: roomTaxBreakdown(money(row.totalPrice), taxes),
     businessDate: toIsoDay(businessDate),
     actions,
     cancellationPreview: actions.includes('cancel')
       ? cancellationTerms({ totalPrice: money(row.totalPrice), checkIn: row.checkIn }, hotel, businessDate)
       : null,
-    noShowPreview: actions.includes('noShow') ? { fee: noShowFee(nightlyRates) } : null,
+    noShowPreview: actions.includes('noShow') ? { fee: noShowCharge(row, row.nights) } : null,
     fromWaitlist: row.waitlistEntries.length > 0,
     groupMembers: members.map((member) => ({
       id: member.id,
@@ -1607,11 +1990,40 @@ export async function quoteReservation(hotelId, input) {
   const quoteBoard = input.boardType ?? hotel.defaultBoardType;
   const agencyPreview = (type, boardType) => sale?.preview({ roomTypeId: type.id, roomTypeName: type.name, boardType, days: quoteDays }) ?? null;
 
+  // Promosyon (modül 31): acente fiyatlanmıyorsa liste fiyatının üstüne en avantajlı tek
+  // indirim (otomatik promosyonlar + girilen kupon). Kanal koşulu için satış kaynağı.
+  const promo = sale
+    ? null
+    : await loadPromotionSale(prisma, hotelId, {
+        bookedOn: toIsoDay(businessDate),
+        couponCode: input.couponCode ?? null,
+        excludeReservationId: input.excludeReservationId ?? null,
+      });
+  const source = input.source ?? 'UI';
+  const checkInDay = toIsoDay(input.checkIn);
+  /** @type {Map<string, ReturnType<typeof priceStay>['nights']>} liste fiyatlı geceler (pansiyondan bağımsız) */
+  const listedByType = new Map();
+  const offerOn = (typeId, boardType) =>
+    promo.offerFor({ roomTypeId: typeId, boardType, source, checkIn: checkInDay, nights: listedByType.get(typeId) });
+  const discountOf = (offer) =>
+    offer
+      ? { amount: offer.total, couponCode: offer.couponCode, promotion: { id: offer.terms.id, name: offer.terms.name, label: discountLabel(offer.terms, hotel.currency) } }
+      : null;
+  const typePlans = [];
+
   const types = roomTypes.map((type) => {
     const preview = agencyPreview(type, quoteBoard);
-    const priced = preview
-      ? { nights: preview.nights, total: preview.sellable ? totalOf(preview.nights) : null }
-      : priceStay({ basePrice: type.basePrice, seasons, checkIn: input.checkIn, checkOut: input.checkOut });
+    let priced;
+    if (preview) {
+      priced = { nights: preview.nights, total: preview.sellable ? totalOf(preview.nights) : null };
+    } else {
+      const listed = priceStay({ basePrice: type.basePrice, seasons, checkIn: input.checkIn, checkOut: input.checkOut });
+      listedByType.set(type.id, listed.nights);
+      const plan = offerOn(type.id, quoteBoard);
+      typePlans.push(plan);
+      const nights = applyOffer(listed.nights, plan.offer);
+      priced = { nights, total: totalOf(nights), listTotal: listed.total, discount: discountOf(plan.offer) };
+    }
     return {
       id: type.id,
       code: type.code,
@@ -1621,26 +2033,38 @@ export async function quoteReservation(hotelId, input) {
       available: availability(type.id),
       total: priced.total,
       nights: priced.nights,
-      ...(preview ? { agency: { sellable: preview.sellable, issue: preview.issue } } : {}),
+      ...(preview ? { agency: { sellable: preview.sellable, issue: preview.issue } } : { listTotal: priced.listTotal, discount: priced.discount }),
     };
   });
   const typeQuote = new Map(types.map((type) => [type.id, type]));
 
   const demand = new Map();
+  const linePlans = [];
+  let couponRooms = 0;
   const lines = input.lines.map((line) => {
     const type = typeQuote.get(line.roomTypeId);
     if (!type) throw new ValidationError('Seçilen oda tipi bulunamadı ya da silinmiş', { field: 'roomTypeId' });
     demand.set(line.roomTypeId, (demand.get(line.roomTypeId) ?? 0) + line.quantity);
-    // Satırın kendi pansiyonu varsa kontrat o pansiyonun fiyatını verir.
+    // Satırın kendi pansiyonu varsa kontrat o pansiyonun fiyatını verir; promosyonun pansiyon koşulu da ona bakar.
     const own = sale ? agencyPreview(typeById.get(line.roomTypeId), line.boardType ?? quoteBoard) : null;
-    const unitTotal = own ? (own.sellable ? totalOf(own.nights) : null) : type.total;
+    let unitTotal = type.total;
+    let discount = null;
+    if (own) {
+      unitTotal = own.sellable ? totalOf(own.nights) : null;
+    } else {
+      const plan = offerOn(line.roomTypeId, line.boardType ?? quoteBoard);
+      linePlans.push(plan);
+      if (plan.offer?.couponId) couponRooms += line.quantity;
+      unitTotal = totalOf(applyOffer(listedByType.get(line.roomTypeId), plan.offer));
+      discount = discountOf(plan.offer);
+    }
     return {
       roomTypeId: line.roomTypeId,
       quantity: line.quantity,
       fitsCapacity: fitsCapacity(line, typeById.get(line.roomTypeId)),
       unitTotal,
       total: unitTotal === null ? '0.00' : totalOf(Array.from({ length: line.quantity }, () => ({ amount: unitTotal }))),
-      ...(own ? { agency: { sellable: own.sellable, issue: own.issue } } : {}),
+      ...(own ? { agency: { sellable: own.sellable, issue: own.issue } } : { discount }),
     };
   });
   const total = totalOf(lines.map((line) => ({ amount: line.total })));
@@ -1667,11 +2091,52 @@ export async function quoteReservation(hotelId, input) {
           issue: sale.agency.status === 'ACTIVE' ? null : { code: 'AGENCY_PASSIVE', message: `${sale.agency.name} acentesi pasif; yeni rezervasyon açılamaz` },
         }
       : null,
+    // Kupon (modül 31): uygulanıyor mu, neden uygulanmıyor; satırlar varsa satırlara göre.
+    coupon: quoteCoupon({
+      code: input.couponCode ?? null,
+      agency: Boolean(sale),
+      promo,
+      plans: input.lines.length ? linePlans : typePlans,
+      rooms: couponRooms,
+      currency: hotel.currency,
+    }),
     taxes: roomTaxBreakdown(total, taxes),
     shortages,
     overbookingPolicy: hotel.overbookingPolicy,
     cancellation: cancellationTerms({ totalPrice: total, checkIn: input.checkIn }, hotel, businessDate),
   };
+}
+
+/**
+ * Önizlemede kuponun durumu (bkz. `COUPON_QUOTE_STATUSES`): uygulanan bir satır
+ * varsa `APPLIED` (oda sayısına hakkı yetmiyorsa `INVALID`); yoksa daha
+ * avantajlı promosyon yüzünden `NOT_BETTER`; yoksa `NOT_APPLICABLE`.
+ *
+ * @param {{ code: string | null, agency: boolean, promo: any, plans: Array<ReturnType<import('../promotions/rules.js').planOffer>>, rooms: number, currency: string }} args
+ */
+function quoteCoupon({ code, agency, promo, plans, rooms, currency }) {
+  if (!code) return null;
+  if (agency) {
+    return { code, status: 'INVALID', issue: { code: 'PROMO_AGENCY', message: 'Acente satışında kupon kullanılmaz (kontrat fiyatı nettir)' }, promotion: null, remainingUses: null };
+  }
+  const coupon = promo.coupon;
+  const remainingUses = coupon.maxUses === null ? null : Math.max(coupon.maxUses - coupon.used, 0);
+  const base = { code: coupon.code, promotion: promotionSummary(coupon.terms, null, currency), remainingUses };
+  if (coupon.issue) return { ...base, status: 'INVALID', issue: coupon.issue };
+  if (plans.some((plan) => plan.coupon?.status === 'APPLIED')) {
+    if (remainingUses !== null && rooms > remainingUses) {
+      return {
+        ...base,
+        status: 'INVALID',
+        issue: { code: 'COUPON_USED_UP', message: `"${coupon.code}" kuponunun ${remainingUses} kullanım hakkı kaldı; ${rooms} oda için yetmez (her oda bir kullanım)` },
+      };
+    }
+    return { ...base, status: 'APPLIED', issue: null };
+  }
+  const notBetter = plans.find((plan) => plan.coupon?.status === 'NOT_BETTER');
+  if (notBetter) return { ...base, status: 'NOT_BETTER', issue: notBetter.coupon.issue };
+  const unfit = plans.find((plan) => plan.coupon?.status === 'NOT_APPLICABLE');
+  return { ...base, status: 'NOT_APPLICABLE', issue: unfit?.coupon.issue ?? { code: 'PROMO_NO_DISCOUNT', message: 'Bu konaklamaya uymuyor' } };
 }
 
 /**
@@ -1712,6 +2177,7 @@ export async function createFromChannelRequest(payload) {
     roomId: null,
     manualTotal: null,
     priceNote: null,
+    couponCode: null,
   };
 
   const reject = async (code, reason) => {
@@ -1724,6 +2190,12 @@ export async function createFromChannelRequest(payload) {
     input.boardType = payload.boardType ?? hotel.defaultBoardType;
     if (!knownGuestId && !input.guest.phone && !input.guest.email) return reject('VALIDATION', 'Misafirin telefonu ya da e-postası yok');
     if (toUtcDayStart(input.checkOut) <= toUtcDayStart(input.checkIn)) return reject('VALIDATION', 'Çıkış tarihi girişten sonra olmalı');
+    // Misafirin girdiği kupon (modül 31; web widget'ı): biçimi bozuksa istek reddedilir.
+    if (payload.couponCode) {
+      const code = couponCodeField.safeParse(payload.couponCode);
+      if (!code.success) return reject('COUPON_NOT_FOUND', `"${payload.couponCode}" geçerli bir kupon kodu değil`);
+      input.couponCode = code.data;
+    }
     // Kanal isteği politikadan bağımsız onaya gitmez: kapasite aşımı misafire
     // söz vermektir; kanaldan gelen istek yalnızca yer varsa açılır.
     const result = await createReservation(hotelId, input, { approvalAllowed: false, createdBy: `kanal:${payload.source}` });

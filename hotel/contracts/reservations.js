@@ -2,6 +2,7 @@ import { z } from './locale.js';
 import { BOARD_TYPES, MAX_STAY_NIGHTS } from './constants.js';
 import { EMAIL_PATTERN, dateField, expectedUpdatedAt, paginationQuerySchema, queryBoolean } from './fields.js';
 import { normalizeDecimalString } from './decimal.js';
+import { couponCodeField } from './promotions.js';
 
 /**
  * Rezervasyon yönetimi sözleşmeleri (modül 4).
@@ -335,6 +336,9 @@ function refineManualPrice(value, ctx) {
   }
 }
 
+/** Formdan boş gelen kupon "kupon yok" demektir. */
+const optionalCouponCode = z.preprocess((value) => (typeof value === 'string' && value.trim() === '' ? null : value), couponCodeField.nullish());
+
 /** Ortak açılış alanları. */
 const createCommonShape = {
   checkIn: dateField,
@@ -355,12 +359,33 @@ const createCommonShape = {
    * acente verilirse kaynak sunucuda "Acente" yapılır.
    */
   agencyId: uuid('Geçersiz acente').nullish(),
+  /**
+   * Kupon kodu (modül 31): kuponun promosyonu bu konaklamaya uyuyorsa ve otomatik
+   * promosyonlardan daha avantajlıysa uygulanır (tek indirim). Uymuyorsa ya da
+   * kupon dolmuşsa rezervasyon açılmaz; daha avantajlı değilse kupon kullanılmaz.
+   */
+  couponCode: optionalCouponCode,
 };
 
 /** Kaynak "Acente" ise hangi acente olduğu belli olmalı (raporlar ve cari buna dayanır). */
 function refineAgencySource(value, ctx) {
   if (value.source === 'AGENCY' && !value.agencyId) {
     ctx.addIssue({ code: 'custom', path: ['agencyId'], message: 'Acente rezervasyonunda acenteyi seçin' });
+  }
+}
+
+/**
+ * Kupon acente satışında ve elle fiyatta kullanılmaz (kontrat fiyatı ve elle
+ * fiyat nettir; modül 31 kararı).
+ * @param {{ couponCode?: string | null, agencyId?: string | null, source?: string, manualTotal?: string | null }} value
+ * @param {import('zod').RefinementCtx} ctx
+ */
+function refineCoupon(value, ctx) {
+  if (!value.couponCode) return;
+  if (value.agencyId || value.source === 'AGENCY') {
+    ctx.addIssue({ code: 'custom', path: ['couponCode'], message: 'Acente satışında kupon kullanılmaz (kontrat fiyatı nettir)' });
+  } else if (value.manualTotal !== null && value.manualTotal !== undefined) {
+    ctx.addIssue({ code: 'custom', path: ['couponCode'], message: 'Elle fiyat girilen rezervasyonda kupon kullanılmaz' });
   }
 }
 
@@ -376,7 +401,8 @@ export const createReservationSchema = z
   .superRefine(refineGuestChoice)
   .superRefine(refineStay)
   .superRefine(refineAgencySource)
-  .superRefine(refineManualPrice);
+  .superRefine(refineManualPrice)
+  .superRefine(refineCoupon);
 
 const groupLineSchema = z.object({
   ...lineShape,
@@ -404,6 +430,7 @@ export const createGroupReservationSchema = z
   .superRefine(refineGuestChoice)
   .superRefine(refineStay)
   .superRefine(refineAgencySource)
+  .superRefine(refineCoupon)
   .superRefine((value, ctx) => {
     const rooms = value.lines.reduce((total, line) => total + line.quantity, 0);
     if (rooms < 2) {
@@ -422,37 +449,74 @@ export const createGroupReservationSchema = z
  * - `price.mode = CALCULATED`: güncel fiyatlarla baştan hesapla.
  * - `price.mode = MANUAL`: toplam + gerekçe (yetki gerekir).
  */
+const updateShape = {
+  checkIn: dateField.optional(),
+  checkOut: dateField.optional(),
+  roomTypeId: uuid('Geçersiz oda tipi').optional(),
+  adults: adultsField.optional(),
+  children: childrenField.optional(),
+  boardType: boardField.optional(),
+  notes: trimmedOptional(MAX_RESERVATION_NOTES_LENGTH, 'Not'),
+  /**
+   * Acente (modül 29): verilmezse değişmez, `null` acenteyi kaldırır.
+   * Değişince geceler yeni kaynağın fiyatıyla yeniden hesaplanır.
+   */
+  agencyId: uuid('Geçersiz acente').nullable().optional(),
+  price: z
+    .discriminatedUnion('mode', [
+      z.object({ mode: z.literal('CALCULATED') }),
+      z.object({
+        mode: z.literal('MANUAL'),
+        total: moneyInputField,
+        note: z
+          .string({ error: 'Fiyat gerekçesi zorunlu' })
+          .trim()
+          .min(1, 'Elle fiyat için gerekçe yazın')
+          .max(MAX_PRICE_NOTE_LENGTH, `Gerekçe en fazla ${MAX_PRICE_NOTE_LENGTH} karakter`),
+      }),
+    ])
+    .optional(),
+  /**
+   * İndirim (modül 31). Verilmezse: rezervasyonun promosyonu konaklama ya da
+   * pansiyon değişince kopyadaki koşullarla yeniden denetlenir (şart bozulursa
+   * indirim kalkar).
+   * - `REMOVE`: promosyonu / kuponu kaldır (kupon hakkı geri açılır).
+   * - `COUPON`: kupon uygula — mevcut promosyondan daha avantajlıysa yerine geçer.
+   */
+  discount: z
+    .discriminatedUnion(
+      'mode',
+      [z.object({ mode: z.literal('REMOVE') }), z.object({ mode: z.literal('COUPON'), code: couponCodeField })],
+      { error: 'İndirim kararı geçersiz' },
+    )
+    .optional(),
+};
+
+/**
+ * Kupon acente satışında ve elle fiyatta kullanılmaz.
+ * @param {{ discount?: { mode: string }, agencyId?: string | null, price?: { mode: string } }} value
+ * @param {import('zod').RefinementCtx} ctx
+ */
+function refineUpdateDiscount(value, ctx) {
+  if (value.discount?.mode !== 'COUPON') return;
+  if (value.agencyId) {
+    ctx.addIssue({ code: 'custom', path: ['discount', 'code'], message: 'Acente satışında kupon kullanılmaz (kontrat fiyatı nettir)' });
+  } else if (value.price?.mode === 'MANUAL') {
+    ctx.addIssue({ code: 'custom', path: ['discount', 'code'], message: 'Elle fiyat girilen rezervasyonda kupon kullanılmaz' });
+  }
+}
+
 export const updateReservationSchema = z
-  .object({
-    expectedUpdatedAt,
-    checkIn: dateField.optional(),
-    checkOut: dateField.optional(),
-    roomTypeId: uuid('Geçersiz oda tipi').optional(),
-    adults: adultsField.optional(),
-    children: childrenField.optional(),
-    boardType: boardField.optional(),
-    notes: trimmedOptional(MAX_RESERVATION_NOTES_LENGTH, 'Not'),
-    /**
-     * Acente (modül 29): verilmezse değişmez, `null` acenteyi kaldırır.
-     * Değişince geceler yeni kaynağın fiyatıyla yeniden hesaplanır.
-     */
-    agencyId: uuid('Geçersiz acente').nullable().optional(),
-    price: z
-      .discriminatedUnion('mode', [
-        z.object({ mode: z.literal('CALCULATED') }),
-        z.object({
-          mode: z.literal('MANUAL'),
-          total: moneyInputField,
-          note: z
-            .string({ error: 'Fiyat gerekçesi zorunlu' })
-            .trim()
-            .min(1, 'Elle fiyat için gerekçe yazın')
-            .max(MAX_PRICE_NOTE_LENGTH, `Gerekçe en fazla ${MAX_PRICE_NOTE_LENGTH} karakter`),
-        }),
-      ])
-      .optional(),
-  })
-  .superRefine(refineStay);
+  .object({ expectedUpdatedAt, ...updateShape })
+  .superRefine(refineStay)
+  .superRefine(refineUpdateDiscount);
+
+/**
+ * Düzenlemenin fiyat önizlemesi (yazmadan): düzenlemeyle aynı gövde, sürüm
+ * damgası olmadan. Yeni toplam ve indirimin ne olacağı (korunur, kalkar, kupon
+ * uygulanır) döner.
+ */
+export const reservationUpdatePreviewSchema = z.object(updateShape).superRefine(refineStay).superRefine(refineUpdateDiscount);
 
 export const reservationVersionSchema = z.object({ expectedUpdatedAt });
 
@@ -502,6 +566,10 @@ export const reservationQuoteSchema = z
     boardType: boardField.optional(),
     /** Düzenlenen rezervasyon: kendi tuttuğu yer "dolu" sayılmasın. */
     excludeReservationId: uuid('Geçersiz rezervasyon').nullish(),
+    /** Kupon (modül 31): uygulanır mı, neden uygulanmaz — önizlemede döner. */
+    couponCode: optionalCouponCode,
+    /** Satış kanalı: promosyonların kanal koşulu buna bakar (verilmezse resepsiyon). */
+    source: z.enum(RESERVATION_SOURCES, { error: 'Geçersiz kaynak' }).optional(),
   })
   .superRefine(refineStay);
 

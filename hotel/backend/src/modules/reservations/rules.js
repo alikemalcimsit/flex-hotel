@@ -269,7 +269,22 @@ export function sameGuestName(a, b) {
 /* ══════════════════ Değişiklik ══════════════════ */
 
 /** Düzenlemede izlenen alanlar (olayda ve denetim izinde `changedFields`). */
-const TRACKED_FIELDS = Object.freeze(['checkIn', 'checkOut', 'roomTypeId', 'adults', 'children', 'boardType', 'notes', 'totalPrice', 'priceMode', 'agencyId']);
+const TRACKED_FIELDS = Object.freeze([
+  'checkIn',
+  'checkOut',
+  'roomTypeId',
+  'adults',
+  'children',
+  'boardType',
+  'notes',
+  'totalPrice',
+  'priceMode',
+  'agencyId',
+  // Promosyon (modül 31): indirim eklendi, kaldırıldı ya da yeniden hesaplandı.
+  'promotionId',
+  'couponId',
+  'discountTotal',
+]);
 
 /**
  * @param {Record<string, unknown>} before

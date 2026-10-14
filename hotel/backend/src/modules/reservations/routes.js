@@ -12,6 +12,7 @@ import {
   reservationListQuerySchema,
   reservationParamSchema,
   reservationQuoteSchema,
+  reservationUpdatePreviewSchema,
   reservationVersionSchema,
   updateReservationSchema,
   waitlistListQuerySchema,
@@ -147,6 +148,19 @@ export async function reservationRoutes(app) {
       return {
         success: true,
         data: await service.updateReservation(request.hotelId, request.params.reservationId, request.body, { canOverridePrice }),
+      };
+    },
+  );
+
+  // Düzenlemenin fiyat önizlemesi (yazmaz): yeni toplam ve indirimin ne olacağı (modül 31).
+  app.post(
+    '/:reservationId/preview',
+    { ...manage, schema: { params: reservationParamSchema, body: reservationUpdatePreviewSchema } },
+    async (request) => {
+      const canOverridePrice = request.body.price?.mode === 'MANUAL' ? priceOverride(request) : false;
+      return {
+        success: true,
+        data: await service.previewReservationUpdate(request.hotelId, request.params.reservationId, request.body, { canOverridePrice }),
       };
     },
   );

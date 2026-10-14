@@ -61,6 +61,8 @@ export const LOST_ITEMS_CHANNEL = 'lost-items.changed';
 export const BUDGET_CHANNEL = 'budget.changed';
 /** Acente ve kontrat (modül 29): kart, kontrat, fiyat, stop-sale. */
 export const AGENCY_CHANNEL = 'agencies.changed';
+/** Promosyon ve kupon (modül 31): promosyon, kupon üretimi / kapatma. */
+export const PROMOTION_CHANNEL = 'promotions.changed';
 
 /**
  * Kanal aboneliği sayacı. Aynı kanalı birden fazla bileşen dinleyebilir

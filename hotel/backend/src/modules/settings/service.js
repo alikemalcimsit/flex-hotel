@@ -180,13 +180,15 @@ export async function updateHotel(hotelId, input) {
       if (!before) throw new NotFoundError('Otel kaydı bulunamadı');
 
       if (data.currency !== before.currency) {
-        const [reservations, folios, contracts] = await Promise.all([
+        const [reservations, folios, contracts, amountPromotions] = await Promise.all([
           tx.reservation.count({ where: { hotelId } }),
           tx.folio.count({ where: { hotelId } }),
           // Acente kontratı fiyatları otelin parasıyla tutulur (modül 29).
           tx.contract.count({ where: { hotelId } }),
+          // Tutar indirimli promosyon (modül 31) tutarı otelin parasıyla tutar.
+          tx.promotion.count({ where: { hotelId, discountType: 'AMOUNT' } }),
         ]);
-        const usage = nonZero({ rezervasyon: reservations, folyo: folios, kontrat: contracts });
+        const usage = nonZero({ rezervasyon: reservations, folyo: folios, kontrat: contracts, promosyon: amountPromotions });
         if (Object.keys(usage).length > 0) {
           throw new ConflictError(
             `Otelde parası ${before.currency} olarak kaydedilmiş kayıtlar var; para birimi ${data.currency} yapılamaz. ` +

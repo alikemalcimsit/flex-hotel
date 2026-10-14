@@ -15,10 +15,12 @@ import {
 } from '@hotelos/hotel-contracts';
 import { Alert, Badge, Button, Card, Checkbox, Icon, Input, Select, Spinner, Textarea } from '@hotelos/ui';
 import { AgencyPicker } from '../../components/AgencyPicker.jsx';
+import { CouponField } from '../../components/CouponField.jsx';
 import { agencyIssueText, useAgencyLive } from '../../lib/agencies.js';
 import { api, apiPost } from '../../lib/api.js';
 import { formatDate, formatMoney } from '../../lib/format.js';
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
+import { couponBlocks, couponStatusText, usePromotionLive } from '../../lib/promotions.js';
 import { addDaysIso, newRequestId, reservationKeys } from '../../lib/reservations.js';
 import { useHotelSettings, useHotelToday } from '../../lib/useHotel.js';
 import { validateWith } from '../../lib/validate.js';
@@ -49,6 +51,9 @@ const validDay = (value) => DAY_PATTERN.test(value ?? '');
  *   ve toplam fiyatı görünür (canlı). Grup modunda birden fazla satır.
  * - **Fiyat:** gece gece döküm, vergiler, iptal koşulu. Yetkili personel
  *   toplamı elle girebilir (gerekçesiyle).
+ * - **Promosyon ve kupon (modül 31):** uygun promosyon kendiliğinden düşer
+ *   (tip kartında liste fiyatının yanında); kupon girilirse daha avantajlıysa
+ *   onun yerine geçer. Acente satışında ve elle fiyatta indirim yoktur.
  * - **Tekrar gönderim:** form açılırken bir istek kimliği üretilir; çift tık
  *   ya da ağ tekrarı ikinci rezervasyon açmaz.
  * - **Yer yoksa:** otelin politikasına göre ya reddedilir (misafiri bekleme
@@ -86,6 +91,7 @@ export function NewReservationTab() {
   const [agency, setAgency] = useState(null);
   const [notes, setNotes] = useState('');
   const [manual, setManual] = useState({ enabled: false, total: '', note: '' });
+  const [couponCode, setCouponCode] = useState(null);
   const [errors, setErrors] = useState({});
   const [guestMatch, setGuestMatch] = useState(null);
   const [shortfall, setShortfall] = useState(null);
@@ -94,10 +100,14 @@ export function NewReservationTab() {
   const board = (value) => value || defaultBoard;
   // Kontrat ya da stop-sale değişince açık formun fiyat önizlemesi de tazelenir.
   useAgencyLive();
+  usePromotionLive();
   const chooseAgency = (next) => {
     setAgency(next);
-    if (next) setSource('AGENCY');
-    else if (source === 'AGENCY') setSource('UI');
+    // Acente satışında kupon kullanılmaz (kontrat fiyatı nettir).
+    if (next) {
+      setSource('AGENCY');
+      setCouponCode(null);
+    } else if (source === 'AGENCY') setSource('UI');
   };
   const chooseSource = (value) => {
     setSource(value);
@@ -123,14 +133,17 @@ export function NewReservationTab() {
 
   const stayValid = validDay(checkIn) && validDay(checkOut) && checkOut > checkIn;
   const agencyId = agency?.id ?? null;
-  // Acente kontratı pansiyona göre fiyatlar: acente varsa pansiyonlar önizlemeye girer
-  // (acentesizde sistem fiyatı pansiyondan bağımsız; gereksiz yeniden sorgu olmasın).
+  // Pansiyon önizlemeye girer: acente kontratı pansiyona göre fiyatlar, promosyonun
+  // pansiyon koşulu da (modül 31) ona bakar.
   const quoteBoard = board(single.boardType);
+  // Kupon yalnızca doğrudan satışta ve sistem fiyatında (elle fiyatta indirim yok).
+  const couponUsable = !agency && source !== 'AGENCY' && !(mode === 'single' && manual.enabled);
+  const activeCoupon = couponUsable ? couponCode : null;
   const quoteLines = useMemo(
     () =>
       mode === 'single'
         ? single.roomTypeId
-          ? [{ roomTypeId: single.roomTypeId, quantity: 1, adults: Number(single.adults) || 1, children: Number(single.children) || 0 }]
+          ? [{ roomTypeId: single.roomTypeId, quantity: 1, adults: Number(single.adults) || 1, children: Number(single.children) || 0, boardType: quoteBoard }]
           : []
         : lines
             .filter((line) => line.roomTypeId)
@@ -139,9 +152,9 @@ export function NewReservationTab() {
               quantity: Number(line.quantity) || 1,
               adults: Number(line.adults) || 1,
               children: Number(line.children) || 0,
-              ...(agencyId ? { boardType: line.boardType || defaultBoard } : {}),
+              boardType: line.boardType || defaultBoard,
             })),
-    [mode, single, lines, agencyId, defaultBoard],
+    [mode, single, lines, defaultBoard, quoteBoard],
   );
   const [quoteInput, setQuoteInput] = useState(null);
   useEffect(() => {
@@ -150,11 +163,19 @@ export function NewReservationTab() {
       return undefined;
     }
     const timer = setTimeout(
-      () => setQuoteInput({ checkIn, checkOut, lines: quoteLines, ...(agencyId ? { agencyId, boardType: mode === 'single' ? quoteBoard : defaultBoard } : {}) }),
+      () =>
+        setQuoteInput({
+          checkIn,
+          checkOut,
+          lines: quoteLines,
+          boardType: mode === 'single' ? quoteBoard : defaultBoard,
+          // Promosyonun kanal koşulu satış kaynağına bakar; acente fiyatlanıyorsa promosyon yok.
+          ...(agencyId ? { agencyId } : { source, ...(activeCoupon ? { couponCode: activeCoupon } : {}) }),
+        }),
       QUOTE_DEBOUNCE_MS,
     );
     return () => clearTimeout(timer);
-  }, [stayValid, checkIn, checkOut, quoteLines, agencyId, quoteBoard, mode, defaultBoard]);
+  }, [stayValid, checkIn, checkOut, quoteLines, agencyId, quoteBoard, mode, defaultBoard, source, activeCoupon]);
 
   const quote = useQuery({
     queryKey: reservationKeys.quote(quoteInput ?? {}),
@@ -185,6 +206,7 @@ export function NewReservationTab() {
       notes: notes || null,
       requestId,
       waitlistId: waitlistId ?? null,
+      couponCode: activeCoupon,
       ...overrides,
     };
     if (mode === 'group') {
@@ -245,6 +267,9 @@ export function NewReservationTab() {
     },
   });
 
+  // Önizleme kuponu "geçersiz" ya da "uymuyor" diyorsa sunucu da reddeder: göndermeden söylenir.
+  const couponProblem = activeCoupon && quoteInput?.couponCode === activeCoupon && couponBlocks(quoteData?.coupon) ? couponStatusText(quoteData.coupon) : null;
+
   const waitlistMutation = useMutation({
     mutationFn: (payload) => apiPost('/reservations/waitlist', payload),
     onSuccess: (entry) => {
@@ -264,6 +289,11 @@ export function NewReservationTab() {
     if (!result.ok) {
       setErrors(result.errors);
       toastError('Formda düzeltilmesi gereken alanlar var');
+      return;
+    }
+    if (couponProblem) {
+      setErrors({ couponCode: couponProblem });
+      toastError('Kupon bu rezervasyonda kullanılamıyor; kuponu kaldırın ya da değiştirin');
       return;
     }
     setErrors({});
@@ -304,6 +334,7 @@ export function NewReservationTab() {
     setManual({ enabled: false, total: '', note: '' });
     setAgency(null);
     setSource('UI');
+    setCouponCode(null);
   }
 
   const busy = mutation.isPending;
@@ -444,7 +475,15 @@ export function NewReservationTab() {
                             <span className="text-xs text-ink-muted">en fazla {type.capacityAdults} yetişkin, {type.capacityChildren} çocuk</span>
                           </span>
                           <span className="text-right">
+                            {type.discount && (
+                              <span className="block text-xs text-ink-muted line-through">{formatMoney(type.listTotal, quoteData?.currency)}</span>
+                            )}
                             <span className="block font-semibold">{formatMoney(type.total, quoteData?.currency)}</span>
+                            {type.discount && (
+                              <Badge tone="success" className="mb-1 max-w-[11rem] truncate">
+                                {type.discount.couponCode ? `Kupon ${type.discount.couponCode}` : type.discount.promotion.name}
+                              </Badge>
+                            )}
                             {type.agency && !type.agency.sellable && (
                               <Badge tone="danger" className="mb-1">
                                 {type.agency.issue?.code === 'AGENCY_STOP_SALE' ? 'Stop-sale' : 'Kontratta yok'}
@@ -548,6 +587,27 @@ export function NewReservationTab() {
             ) : (
               <PriceSummary quote={quoteData} selectedQuote={mode === 'single' ? selectedQuote : null} manual={manual} typeName={typeName} />
             )}
+            {/* Kupon (modül 31): acente satışında ve elle fiyatta yok. */}
+            <div className="flex flex-col gap-2 border-t border-line pt-3">
+              {couponUsable ? (
+                <CouponField
+                  value={couponCode}
+                  onChange={(code) => {
+                    setCouponCode(code);
+                    setErrors((current) => ({ ...current, couponCode: undefined }));
+                  }}
+                  coupon={quoteInput?.couponCode === couponCode ? quoteData?.coupon : null}
+                  // Önizleme yoksa (tarih / oda seçilmedi) denetim de yok: durum boş kalır.
+                  checking={Boolean(couponCode && quoteInput) && (quoteInput.couponCode !== couponCode || quote.isFetching)}
+                  error={errors.couponCode}
+                  disabled={busy}
+                />
+              ) : (
+                <p className="text-xs text-ink-muted">
+                  {agency || source === 'AGENCY' ? 'Acente satışında kupon ve promosyon uygulanmaz (kontrat fiyatı nettir).' : 'Elle fiyatta kupon ve promosyon uygulanmaz.'}
+                </p>
+              )}
+            </div>
             {mode === 'single' && canOverridePrice && (
               <div className="flex flex-col gap-2 border-t border-line pt-3">
                 <Checkbox label="Fiyatı elle gir" checked={manual.enabled} onChange={(e) => setManual((c) => ({ ...c, enabled: e.target.checked }))} disabled={busy} />
@@ -609,29 +669,52 @@ function PriceSummary({ quote, selectedQuote, manual, typeName }) {
       {selectedQuote && selectedQuote.total === null ? (
         <p className="text-xs text-ink-muted">Bu oda tipi için fiyat yok.</p>
       ) : selectedQuote ? (
-        <table className="w-full text-xs">
-          <caption className="sr-only">Gece gece fiyat</caption>
-          <tbody className="divide-y divide-line">
-            {selectedQuote.nights.slice(0, 14).map((night) => (
-              <tr key={night.date}>
-                <td className="py-1">{formatDate(night.date)}</td>
-                <td className="py-1 text-ink-muted">{night.seasonName ? (night.multiplier ? `${night.seasonName} ×${night.multiplier.replace('.', ',')}` : night.seasonName) : ''}</td>
-                <td className="py-1 text-right font-semibold">{formatMoney(night.amount, currency)}</td>
-              </tr>
-            ))}
-            {selectedQuote.nights.length > 14 && (
-              <tr>
-                <td colSpan={3} className="py-1 text-ink-muted">+{selectedQuote.nights.length - 14} gece daha</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        <>
+          {selectedQuote.discount && !manual.enabled && (
+            <div className="flex flex-col gap-0.5 rounded-item bg-canvas p-2 text-xs">
+              <span className="flex justify-between"><span>Liste fiyatı</span><span>{formatMoney(selectedQuote.listTotal, currency)}</span></span>
+              <span className="flex justify-between gap-2 font-semibold text-success-ink">
+                <span className="min-w-0 truncate">
+                  {selectedQuote.discount.promotion.name} ({selectedQuote.discount.promotion.label}){selectedQuote.discount.couponCode ? ` · ${selectedQuote.discount.couponCode}` : ''}
+                </span>
+                <span className="shrink-0">−{formatMoney(selectedQuote.discount.amount, currency)}</span>
+              </span>
+            </div>
+          )}
+          <table className="w-full text-xs">
+            <caption className="sr-only">Gece gece fiyat</caption>
+            <tbody className="divide-y divide-line">
+              {selectedQuote.nights.slice(0, 14).map((night) => (
+                <tr key={night.date}>
+                  <td className="py-1">{formatDate(night.date)}</td>
+                  <td className="py-1 text-ink-muted">{night.seasonName ? (night.multiplier ? `${night.seasonName} ×${night.multiplier.replace('.', ',')}` : night.seasonName) : ''}</td>
+                  <td className="py-1 text-right font-semibold">
+                    {night.discount && night.discount !== '0.00' && <span className="mr-1.5 font-normal text-success-ink">−{formatMoney(night.discount, currency)}</span>}
+                    {formatMoney(night.amount, currency)}
+                  </td>
+                </tr>
+              ))}
+              {selectedQuote.nights.length > 14 && (
+                <tr>
+                  <td colSpan={3} className="py-1 text-ink-muted">+{selectedQuote.nights.length - 14} gece daha</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </>
       ) : (
         <ul className="flex flex-col gap-1 text-xs">
-          {quote.lines.map((line) => (
-            <li key={line.roomTypeId} className="flex justify-between">
-              <span>{typeName(line.roomTypeId)} × {line.quantity}</span>
-              <span className="font-semibold">{formatMoney(line.total, currency)}</span>
+          {quote.lines.map((line, index) => (
+            <li key={`${line.roomTypeId}-${index}`} className="flex flex-col">
+              <span className="flex justify-between">
+                <span>{typeName(line.roomTypeId)} × {line.quantity}</span>
+                <span className="font-semibold">{formatMoney(line.total, currency)}</span>
+              </span>
+              {line.discount && (
+                <span className="text-success-ink">
+                  {line.discount.couponCode ? `Kupon ${line.discount.couponCode}` : line.discount.promotion.name}: oda başı −{formatMoney(line.discount.amount, currency)}
+                </span>
+              )}
             </li>
           ))}
         </ul>

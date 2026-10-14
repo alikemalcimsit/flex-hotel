@@ -17,7 +17,9 @@
  * oda tipinden **sonra** kilitlenir (rezervasyon → oda tipi → acente); satışta
  * paylaşımlı (aynı acentenin rezervasyonları birbirini beklemez), kontrat
  * yazımında özel (satış yazılırken kontrat değişmez, kontrat yazılırken satış
- * eski fiyatı okumaz).
+ * eski fiyatı okumaz). Modül 31: promosyon ve kupon acenteden sonra
+ * (rezervasyon → oda tipi → acente → promosyon → kupon); kupon kullanımı kupon
+ * satırı kilitliyken sayılır.
  *
  * Soft-delete edilmiş satırlar kilitlenmez ve "bulunamadı" sayılır.
  */
@@ -99,6 +101,32 @@ async function lockPlainRows(tx, table, hotelId, ids, shared) {
  */
 export function lockAgencies(tx, hotelId, agencyIds, { shared = false } = {}) {
   return lockPlainRows(tx, 'Agency', hotelId, agencyIds, shared);
+}
+
+/**
+ * Promosyon satırı (modül 31): promosyonu değiştiren işlem (düzenleme, yayına
+ * alma / durdurma, silme, kupon üretimi) özel kilitler. Sıra: rezervasyon → oda
+ * tipi → acente → promosyon → kupon.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} promotionIds
+ */
+export function lockPromotions(tx, hotelId, promotionIds) {
+  return lockPlainRows(tx, 'Promotion', hotelId, promotionIds, false);
+}
+
+/**
+ * Kupon satırı (modül 31): kupon kullanan rezervasyon (açma, kupon ekleme, iptali
+ * geri alma) ve kuponu kapatan işlem özel kilitler. Kullanım sayısı bu kilit
+ * altında sayılır: tek kullanımlık kuponu aynı anda iki rezervasyon alamaz.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} couponIds
+ */
+export function lockCoupons(tx, hotelId, couponIds) {
+  return lockPlainRows(tx, 'Coupon', hotelId, couponIds, false);
 }
 
 /**
