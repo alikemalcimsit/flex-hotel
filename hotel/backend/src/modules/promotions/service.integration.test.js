@@ -788,6 +788,17 @@ describe('promosyon ve kupon (entegrasyon)', { skip }, () => {
       assert.deepEqual([autoRow.usage.reservations, autoRow.usage.discountTotal], [1, '300.00'], 'listede iptal sayılmaz');
     });
 
+    it('kullanım raporu satış gününü otelin saatiyle sayar (gece 00:30 satışı o güne; veritabanı oturumunun saat dilimi etkilemez)', async () => {
+      await livePromotion({ name: 'Gece Satışı', discountValue: '10' });
+      const reservation = await book(stay(70, 2));
+      // Otel saatiyle 10 gün önce 00:30 (İstanbul'da UTC'de önceki günün 21:30'u).
+      await db.reservation.update({ where: { id: reservation.id }, data: { createdAt: at('00:30', -10) } });
+      const onDay = await promotions.getPromotionReport(hotelId, { from: date(-10), to: date(-10), basis: 'BOOKED', page: 1, pageSize: 20 });
+      assert.equal(onDay.totals.reservations, 1, 'satış o günün');
+      const dayBefore = await promotions.getPromotionReport(hotelId, { from: date(-11), to: date(-11), basis: 'BOOKED', page: 1, pageSize: 20 });
+      assert.equal(dayBefore.totals.reservations, 0, 'önceki güne kaymaz');
+    });
+
     it('izinler: resepsiyon promosyonları göremez ama kuponla rezervasyon açar; muhasebe görür, düzenleyemez', async () => {
       const promo = await livePromotion({ requiresCoupon: true, discountValue: '10' });
       await customCoupon(promo, 'IZIN10');

@@ -173,6 +173,42 @@ describe('aktör kapalıyken', () => {
 
     assert.equal(calls.processed.length, 1);
   });
+
+  it('telafisi zamanlanmış işle olan olay görev açmadan atlanır (skipWhenDisabled)', async () => {
+    const { calls, deps } = makeDeps({ isEnabled: async () => false });
+    let ran = false;
+    class SyncWorker extends BaseWorker {
+      skipWhenDisabled(eventName) {
+        return eventName === 'reservation.created';
+      }
+    }
+    const worker = new SyncWorker(manifest, { 'reservation.created': async () => { ran = true; } }, deps);
+
+    await worker.handle(payload(), envelope());
+
+    assert.equal(ran, false, 'kapalı aktörün işleyicisi çalışmaz');
+    assert.equal(calls.manualTasks.length, 0, 'personele görev düşmez');
+    assert.equal(calls.processed.length, 1, 'olay işlenmiş sayılır');
+    assert.equal(calls.activity.length, 1);
+    assert.equal(calls.activity[0].level, 'INFO');
+    assert.equal(calls.activity[0].meta.skipped, true);
+  });
+
+  it('atlama yalnızca kapalıyken: açık aktörde işleyici çalışır', async () => {
+    const { calls, deps } = makeDeps();
+    let ran = false;
+    class SyncWorker extends BaseWorker {
+      skipWhenDisabled() {
+        return true;
+      }
+    }
+    const worker = new SyncWorker(manifest, { 'reservation.created': async () => { ran = true; } }, deps);
+
+    await worker.handle(payload(), envelope());
+
+    assert.equal(ran, true);
+    assert.equal(calls.manualTasks.length, 0);
+  });
 });
 
 describe('hata ve yeniden deneme', () => {

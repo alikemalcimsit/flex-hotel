@@ -231,6 +231,29 @@ export function ReservationDetailPage() {
                   <span className="ml-2 font-mono text-xs text-ink-muted">{detail.agency.code}</span>
                 </Field>
               )}
+              {/* Kanaldan geldiyse (modül 33): kanal, kanaldaki kod ve bizdeki işlenme durumu. */}
+              {detail.channel && (
+                <Field label="Kanal">
+                  {can(PERMISSIONS.CHANNEL_MANAGER_VIEW) ? (
+                    <Link to={`/kanallar/${detail.channel.channelId}/rezervasyonlar`} className="font-semibold text-info-ink underline-offset-2 hover:underline">
+                      {detail.channel.channelName ?? 'Kanal'}
+                    </Link>
+                  ) : (
+                    <span className="font-semibold">{detail.channel.channelName ?? 'Kanal'}</span>
+                  )}
+                  {(detail.channel.otaName || detail.channel.externalCode) && (
+                    <span className="ml-2 text-xs text-ink-muted">
+                      {/* Kanalın adı OTA'nınkiyle aynıysa ("Airbnb") tekrar yazılmaz. */}
+                      {[detail.channel.otaName !== detail.channel.channelName ? detail.channel.otaName : null, detail.channel.externalCode].filter(Boolean).join(' · ')}
+                    </span>
+                  )}
+                  {['REVIEW', 'ATTENTION'].includes(detail.channel.state) && (
+                    <span className={`mt-1 block text-xs font-semibold ${detail.channel.state === 'ATTENTION' ? 'text-danger-ink' : 'text-warning-ink'}`}>
+                      {detail.channel.stateReason}
+                    </span>
+                  )}
+                </Field>
+              )}
               <Field label="Açan">{detail.createdBy} · {formatDateTime(detail.createdAt, timeZone)}</Field>
               {detail.confirmedAt && <Field label="Onaylandı">{formatDateTime(detail.confirmedAt, timeZone)}</Field>}
               {detail.roomSince && <Field label="Bu odada">{formatDate(detail.roomSince)} tarihinden beri</Field>}

@@ -63,6 +63,8 @@ export const BUDGET_CHANNEL = 'budget.changed';
 export const AGENCY_CHANNEL = 'agencies.changed';
 /** Promosyon ve kupon (modül 31): promosyon, kupon üretimi / kapatma. */
 export const PROMOTION_CHANNEL = 'promotions.changed';
+/** Kanal yönetimi (modül 33): kanal ayarı, eşleştirme, stop-sale, senkron logu, kanal rezervasyonları. */
+export const CHANNEL_MANAGER_CHANNEL = 'channel-manager.changed';
 
 /**
  * Kanal aboneliği sayacı. Aynı kanalı birden fazla bileşen dinleyebilir

@@ -647,8 +647,10 @@ export async function getPromotionReport(hotelId, query) {
   const window = reportWindow(query, hotel.timezone);
   const column = window.column === 'checkIn' ? 'r."checkIn"' : 'r."createdAt"';
   const active = `r.status IN ('PENDING', 'CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT')`;
-  const params = [hotelId, window.from, window.before];
-  let scope = `r."hotelId" = $1 AND r."promotionId" IS NOT NULL AND r."deletedAt" IS NULL AND ${column} >= $2 AND ${column} < $3`;
+  // Sütunlar UTC duvar saati (`timestamp`): sınır da öyle verilir (JS Date saat dilimli gider,
+  // oturum UTC değilse — ör. Europe/Istanbul — gece 00:00–03:00 satışları önceki güne kayardı).
+  const params = [hotelId, window.from.toISOString(), window.before.toISOString()];
+  let scope = `r."hotelId" = $1 AND r."promotionId" IS NOT NULL AND r."deletedAt" IS NULL AND ${column} >= $2::timestamp AND ${column} < $3::timestamp`;
   if (query.promotionId) {
     params.push(query.promotionId);
     scope += ` AND r."promotionId" = $${params.length}`;

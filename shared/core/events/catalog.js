@@ -441,6 +441,8 @@ export const EVENT_CATALOG = Object.freeze({
       'FOLIO_ATTENTION',
       'AI_HANDOFF',
       'AI_BUDGET',
+      'CHANNEL_BOOKING',
+      'CHANNEL_SYNC',
     ]),
     userId: z.string().uuid().nullable(),
     permission: z.string().nullable(),
@@ -676,6 +678,59 @@ export const EVENT_CATALOG = Object.freeze({
     count: z.number().int().min(1).default(1),
   }),
 
+  /* ── Satış fiyatı ve kanal yönetimi (modül 33) ──
+     `rate.changed` satış fiyatının (liste fiyatı) değiştiğini söyler: yayıncıları
+     ayarlar (taban fiyat, sezon) ve ileride fiyat planı / yield (modül 28, 34).
+     Kanal aktörü (`channel-sync-worker`) bunu ve envanter olaylarını dinleyip
+     kanalları "gönderilecek değişiklik var" diye işaretler; gönderim zamanlanmış
+     işte, birleştirilerek ve kanalın hız sınırına uyarak yapılır. Kanal ekranları
+     `CHANNEL_EVENTS` ile canlı tazelenir; yükte yalnızca kimlik. */
+
+  /**
+   * Satış fiyatı değişti. `roomTypeIds` boşsa bütün oda tipleri; `from` / `to`
+   * boşsa bütün tarihler (iki uç dahil, otelin günü).
+   */
+  'rate.changed': hotelScoped.extend({
+    roomTypeIds: z.array(z.string().uuid()).max(500).default([]),
+    from: isoDay.nullable().default(null),
+    to: isoDay.nullable().default(null),
+    /** Değişikliğin kaynağı ("Sezon: Yaz", "Taban fiyat: Standart") — iz için. */
+    reason: z.string().min(1).max(200),
+  }),
+  /** Kanal açıldı, ayarı / eşleştirmesi değişti, senkrona alındı, durduruldu ya da silindi. */
+  'channel.changed': hotelScoped.extend({
+    channelId: z.string().uuid(),
+    change: z.enum(['CREATED', 'UPDATED', 'MAPPINGS_SAVED', 'ACTIVATED', 'PAUSED', 'DELETED', 'WEBHOOK_SET']),
+  }),
+  /** Kanala stop-sale eklendi ya da kaldırıldı. */
+  'channel.stop_sale.changed': hotelScoped.extend({
+    channelId: z.string().uuid(),
+    change: z.enum(['ADDED', 'REMOVED']),
+  }),
+  /** Senkron işi bitti (log satırı yazıldı): gönderim, tam eşitleme, rezervasyon alımı, takvim okuma. */
+  'channel.synced': hotelScoped.extend({
+    channelId: z.string().uuid(),
+    logId: z.string().uuid(),
+    kind: z.enum(['DELTA', 'FULL', 'BOOKINGS', 'ICAL_IMPORT', 'SETUP']),
+    status: z.enum(['SUCCESS', 'PARTIAL', 'FAILED']),
+  }),
+  /**
+   * Kanaldan rezervasyon revizyonu geldi (yeni, değişiklik ya da iptal) ve
+   * kalıcı olarak saklandı. Kanal aktörü rezervasyonu açar / değiştirir / iptal
+   * eder; yapamazsa personele görev düşer.
+   */
+  'channel.booking.received': hotelScoped.extend({
+    channelId: z.string().uuid(),
+    bookingId: z.string().uuid(),
+    revisionId: z.string().uuid(),
+  }),
+  /** Kanal rezervasyonunun bizdeki durumu değişti (işlendi, doğrulanmalı, elle işlenmeli, kapatıldı). */
+  'channel.booking.changed': hotelScoped.extend({
+    channelId: z.string().uuid(),
+    bookingId: z.string().uuid(),
+    state: z.enum(['PENDING', 'PROCESSED', 'REVIEW', 'ATTENTION']),
+  }),
+
   /* ── Ödeme (modül 17) ──
      Folyo ekranı (bakiye) ve kasa görünümü bunlarla canlı tazelenir
      (`PAYMENT_EVENTS`). Tutar folyonun para biriminde (`amount`, iade ve
@@ -907,6 +962,15 @@ export const AGENCY_EVENTS = Object.freeze(['agency.changed', 'agency.contract.c
 
 /** Promosyon ve kupon (modül 31): ekranlar bunlarla tazelenir (`promotions.changed` kanalı). */
 export const PROMOTION_EVENTS = Object.freeze(['promotion.changed', 'promotion.coupons.changed']);
+
+/** Kanal yönetimi (modül 33): ekranlar bunlarla tazelenir (`channel-manager.changed` kanalı). */
+export const CHANNEL_EVENTS = Object.freeze([
+  'channel.changed',
+  'channel.stop_sale.changed',
+  'channel.synced',
+  'channel.booking.received',
+  'channel.booking.changed',
+]);
 
 /** Onay kuyruğunu etkileyen event'ler (canlı yayın: `approvals.changed`). */
 export const APPROVAL_EVENTS = Object.freeze([

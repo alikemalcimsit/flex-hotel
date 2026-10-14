@@ -90,6 +90,13 @@ const PromotionPage = lazy(() => import('./pages/promotions/PromotionPage.jsx').
 const PromotionRulesTab = lazy(() => import('./pages/promotions/PromotionRulesTab.jsx').then((m) => ({ default: m.PromotionRulesTab })));
 const PromotionCouponsTab = lazy(() => import('./pages/promotions/PromotionCouponsTab.jsx').then((m) => ({ default: m.PromotionCouponsTab })));
 const PromotionUsageTab = lazy(() => import('./pages/promotions/PromotionUsageTab.jsx').then((m) => ({ default: m.PromotionUsageTab })));
+const ChannelListPage = lazy(() => import('./pages/channels/ChannelListPage.jsx').then((m) => ({ default: m.ChannelListPage })));
+const ChannelPage = lazy(() => import('./pages/channels/ChannelPage.jsx').then((m) => ({ default: m.ChannelPage })));
+const ChannelSettingsTab = lazy(() => import('./pages/channels/ChannelSettingsTab.jsx').then((m) => ({ default: m.ChannelSettingsTab })));
+const ChannelMappingTab = lazy(() => import('./pages/channels/ChannelMappingTab.jsx').then((m) => ({ default: m.ChannelMappingTab })));
+const ChannelStopSaleTab = lazy(() => import('./pages/channels/ChannelStopSaleTab.jsx').then((m) => ({ default: m.ChannelStopSaleTab })));
+const ChannelLogTab = lazy(() => import('./pages/channels/ChannelLogTab.jsx').then((m) => ({ default: m.ChannelLogTab })));
+const ChannelBookingsTab = lazy(() => import('./pages/channels/ChannelBookingsTab.jsx').then((m) => ({ default: m.ChannelBookingsTab })));
 const ContractPage = lazy(() => import('./pages/agencies/ContractPage.jsx').then((m) => ({ default: m.ContractPage })));
 const ExpenseActualsPage = lazy(() => import('./pages/budget/ExpenseActualsPage.jsx').then((m) => ({ default: m.ExpenseActualsPage })));
 const VariancePage = lazy(() => import('./pages/budget/VariancePage.jsx').then((m) => ({ default: m.VariancePage })));
@@ -421,6 +428,29 @@ export default function App() {
               <Route index element={<PromotionRulesTab />} />
               <Route path="kuponlar" element={<PromotionCouponsTab />} />
               <Route path="kullanim" element={<PromotionUsageTab />} />
+            </Route>
+            {/* Kanal yönetimi (modül 33). */}
+            <Route
+              path="kanallar"
+              element={
+                <RequirePermission permission={PERMISSIONS.CHANNEL_MANAGER_VIEW}>
+                  <ChannelListPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="kanallar/:channelId"
+              element={
+                <RequirePermission permission={PERMISSIONS.CHANNEL_MANAGER_VIEW}>
+                  <ChannelPage />
+                </RequirePermission>
+              }
+            >
+              <Route index element={<ChannelSettingsTab />} />
+              <Route path="eslestirme" element={<ChannelMappingTab />} />
+              <Route path="stop-sale" element={<ChannelStopSaleTab />} />
+              <Route path="log" element={<ChannelLogTab />} />
+              <Route path="rezervasyonlar" element={<ChannelBookingsTab />} />
             </Route>
             <Route
               path="kayip-esya/:id"

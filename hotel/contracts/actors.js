@@ -101,6 +101,8 @@ export const MANUAL_TASK_MODULE_PERMISSIONS = Object.freeze({
   'Misafir mesajları': PERMISSIONS.MESSAGES_REPLY,
   // Modül 15: folyo aktörü (oda ücreti, giriş / çıkış ücretleri, restoran / minibar kalemi).
   Folyo: PERMISSIONS.FOLIO_POST,
+  // Modül 33: kanal aktörünün işleyemediği OTA / iCal rezervasyonu resepsiyonun önüne düşer.
+  'Kanal rezervasyonu': PERMISSIONS.RESERVATIONS_MANAGE,
 });
 
 export const MANUAL_TASK_KNOWN_MODULES = Object.freeze(Object.keys(MANUAL_TASK_MODULE_PERMISSIONS));

@@ -115,6 +115,11 @@ export const PERMISSIONS = Object.freeze({
   /** Promosyon açmak / düzenlemek / yayına almak, kupon üretmek ve kapatmak. */
   PROMOTIONS_MANAGE: 'promotions.manage',
 
+  /** Kanal yönetimi (modül 33): kanallar, eşleştirme, senkron logu, kanal rezervasyonları. */
+  CHANNEL_MANAGER_VIEW: 'channel_manager.view',
+  /** Kanal bağlamak / düzenlemek / senkrona almak, eşleştirme, stop-sale, elle senkron. */
+  CHANNEL_MANAGER_MANAGE: 'channel_manager.manage',
+
   /** Aktör paneli (modül 12): aktörlerin durumu, bildirgesi, LLM harcaması. */
   ACTORS_VIEW: 'actors.view',
   /** Aktörü bu otelde açmak / kapatmak (kapalı aktörün işi personele düşer). */
@@ -175,6 +180,8 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.AGENCIES_MANAGE]: 'Acente kartı ve kontratı düzenle (fiyat, stop-sale, satışa aç)',
   [PERMISSIONS.PROMOTIONS_VIEW]: 'Promosyonları, kuponları ve kullanım raporunu görüntüle',
   [PERMISSIONS.PROMOTIONS_MANAGE]: 'Promosyon aç, düzenle, yayına al; kupon üret ve kapat',
+  [PERMISSIONS.CHANNEL_MANAGER_VIEW]: 'Kanalları, senkron logunu ve kanal rezervasyonlarını görüntüle',
+  [PERMISSIONS.CHANNEL_MANAGER_MANAGE]: 'Kanal bağla, eşleştir, stop-sale koy, elle senkronla',
   [PERMISSIONS.ACTORS_VIEW]: 'Aktör panelini görüntüle',
   [PERMISSIONS.ACTORS_MANAGE]: 'Aktörleri aç / kapat',
 });
@@ -246,6 +253,11 @@ export const PERMISSION_GROUPS = Object.freeze([
   { key: 'budget', label: 'Bütçe', permissions: [PERMISSIONS.BUDGET_VIEW, PERMISSIONS.BUDGET_MANAGE, PERMISSIONS.BUDGET_APPROVE] },
   { key: 'agencies', label: 'Acente ve kontrat', permissions: [PERMISSIONS.AGENCIES_VIEW, PERMISSIONS.AGENCIES_MANAGE] },
   { key: 'promotions', label: 'Promosyon ve kupon', permissions: [PERMISSIONS.PROMOTIONS_VIEW, PERMISSIONS.PROMOTIONS_MANAGE] },
+  {
+    key: 'channel_manager',
+    label: 'Kanal yönetimi',
+    permissions: [PERMISSIONS.CHANNEL_MANAGER_VIEW, PERMISSIONS.CHANNEL_MANAGER_MANAGE],
+  },
   { key: 'monitoring', label: 'İzleme', permissions: [PERMISSIONS.ACTIVITY_VIEW, PERMISSIONS.AUDIT_VIEW] },
   { key: 'actors', label: 'Aktörler', permissions: [PERMISSIONS.ACTORS_VIEW, PERMISSIONS.ACTORS_MANAGE] },
 ]);
@@ -324,6 +336,9 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     // İndirim kampanyası fiyat kararıdır: müdürün.
     PERMISSIONS.PROMOTIONS_VIEW,
     PERMISSIONS.PROMOTIONS_MANAGE,
+    // Hangi kanalda hangi fiyattan satılacağı ticari karar: müdürün.
+    PERMISSIONS.CHANNEL_MANAGER_VIEW,
+    PERMISSIONS.CHANNEL_MANAGER_MANAGE,
   ]),
   FRONT_DESK: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,

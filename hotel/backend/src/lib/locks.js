@@ -19,7 +19,11 @@
  * yazımında özel (satış yazılırken kontrat değişmez, kontrat yazılırken satış
  * eski fiyatı okumaz). Modül 31: promosyon ve kupon acenteden sonra
  * (rezervasyon → oda tipi → acente → promosyon → kupon); kupon kullanımı kupon
- * satırı kilitliyken sayılır.
+ * satırı kilitliyken sayılır. Modül 33: kanal satırı (ayar, eşleştirme, stop-sale,
+ * gönderim) ve kanal rezervasyonu (revizyonlar sırayla uygulanır) — kanal
+ * rezervasyonu rezervasyondan **önce** kilitlenir (kanal rezervasyonu →
+ * rezervasyon → oda tipi …): revizyonu işleyen iş, rezervasyonu açan / değiştiren
+ * servisi çağırmadan önce kanal rezervasyonunu tutar.
  *
  * Soft-delete edilmiş satırlar kilitlenmez ve "bulunamadı" sayılır.
  */
@@ -127,6 +131,30 @@ export function lockPromotions(tx, hotelId, promotionIds) {
  */
 export function lockCoupons(tx, hotelId, couponIds) {
   return lockPlainRows(tx, 'Coupon', hotelId, couponIds, false);
+}
+
+/**
+ * Kanal satırı (modül 33): ayarı, eşleştirmesi, stop-sale'i ya da gönderim
+ * durumu değişen kanal. Silinmiş kanal kilitlenmez ("bulunamadı").
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} channelIds
+ */
+export function lockChannels(tx, hotelId, channelIds) {
+  return lockRows(tx, 'Channel', hotelId, channelIds);
+}
+
+/**
+ * Kanal rezervasyonu (modül 33): aynı rezervasyonun revizyonları aynı anda
+ * işlenmez; eski revizyon yenisinin üstüne yazılmaz.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} bookingIds
+ */
+export function lockChannelBookings(tx, hotelId, bookingIds) {
+  return lockPlainRows(tx, 'ChannelBooking', hotelId, bookingIds, false);
 }
 
 /**

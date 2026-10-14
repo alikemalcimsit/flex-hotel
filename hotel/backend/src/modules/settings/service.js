@@ -437,6 +437,10 @@ export async function updateRoomType(hotelId, id, input) {
         label: `${dto.code} — ${dto.name}`,
         changedFields,
       });
+      // Satış fiyatı değişti: kanallar (modül 33) yeni fiyatı alır.
+      if (changedFields.includes('basePrice')) {
+        await stage('rate.changed', { hotelId, roomTypeIds: [id], from: null, to: null, reason: `Taban fiyat: ${dto.name}` });
+      }
 
       return dto;
     });
@@ -461,7 +465,7 @@ export async function deleteRoomType(hotelId, id) {
     const existing = await tx.roomType.findFirst({ where: { id, hotelId } });
     if (!existing) throw new NotFoundError('Oda tipi bulunamadı');
 
-    const [rooms, reservations, ratePlans, contractRates, contractStopSales] = await Promise.all([
+    const [rooms, reservations, ratePlans, contractRates, contractStopSales, channelMappings] = await Promise.all([
       tx.room.count({ where: { roomTypeId: id, hotelId } }),
       tx.reservation.count({
         where: { roomTypeId: id, hotelId, status: { in: ACTIVE_RESERVATION_STATUSES } },
@@ -470,6 +474,8 @@ export async function deleteRoomType(hotelId, id) {
       // Acente kontratları (modül 29) bu tipin fiyatını taşıyor olabilir.
       tx.contractRate.count({ where: { roomTypeId: id, hotelId } }),
       tx.contractStopSale.count({ where: { roomTypeId: id, hotelId } }),
+      // Kanal eşleşmesi (modül 33): silinen tip kanalda satılmaya devam ederdi.
+      tx.channelRoomMapping.count({ where: { roomTypeId: id, hotelId, channel: { deletedAt: null } } }),
     ]);
 
     const usage = nonZero({
@@ -478,6 +484,7 @@ export async function deleteRoomType(hotelId, id) {
       fiyatPlani: ratePlans,
       kontratFiyati: contractRates,
       kontratStopSale: contractStopSales,
+      kanalEslesmesi: channelMappings,
     });
     if (Object.keys(usage).length > 0) {
       throw new InUseError(
@@ -658,6 +665,7 @@ export async function createSeason(hotelId, input) {
 
       await recordAudit(tx, { hotelId, entity: 'Season', entityId: created.id, action: 'CREATE', after: dto });
       await stage('settings.season.created', { hotelId, id: created.id, label: dto.name });
+      await stage('rate.changed', seasonRateChange(hotelId, [created], `Sezon açıldı: ${dto.name}`));
 
       return dto;
     });
@@ -696,6 +704,10 @@ export async function updateSeason(hotelId, id, input) {
         after: dto,
       });
       await stage('settings.season.updated', { hotelId, id, label: dto.name, changedFields });
+      if (changedFields.some((field) => ['startDate', 'endDate', 'multiplier'].includes(field))) {
+        // Eski ve yeni dönem: iki tarafta da fiyat değişti.
+        await stage('rate.changed', seasonRateChange(hotelId, [before, after], `Sezon değişti: ${dto.name}`));
+      }
 
       return dto;
     });
@@ -722,7 +734,22 @@ export async function deleteSeason(hotelId, id) {
       before: toSeasonDto(existing),
     });
     await stage('settings.season.deleted', { hotelId, id, label: existing.name });
+    await stage('rate.changed', seasonRateChange(hotelId, [existing], `Sezon silindi: ${existing.name}`));
   });
+}
+
+/**
+ * Sezon değişikliğinin satış fiyatına etkisi (`rate.changed`): sezonların
+ * kapsadığı günler, bütün oda tipleri.
+ *
+ * @param {string} hotelId
+ * @param {Array<{ startDate: Date, endDate: Date }>} seasons
+ * @param {string} reason
+ */
+function seasonRateChange(hotelId, seasons, reason) {
+  const from = seasons.map((season) => toIsoDay(season.startDate)).sort()[0];
+  const to = seasons.map((season) => toIsoDay(season.endDate)).sort().at(-1);
+  return { hotelId, roomTypeIds: [], from, to, reason: reason.slice(0, 200) };
 }
 
 /* ══════════════════ Sıcak okumalar (diğer modüller buradan tüketir) ══════════════════ */

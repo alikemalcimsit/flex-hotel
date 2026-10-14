@@ -2101,13 +2101,89 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 33. Kanal yönetimi / Channel Manager — arkadaşın
 **Gün sonu:** Müsaitlik ve fiyat değişince OTA'ya gidiyor, OTA'dan gelen rezervasyon sisteme düşüyor; oda tipleri eşleştirilmiş.
-- [ ] Backend: Channel, ChannelRoomMapping, ChannelSyncLog tabloları + API
-- [ ] Adaptör 1: iCal (Airbnb / Booking iCal export-import)
-- [ ] Adaptör 2: bir OTA API'si (Booking veya bir channel manager aracısı)
-- [ ] Ekran: Kanal listesi + bağlantı ayarları
-- [ ] Ekran: Oda tipi eşleştirme (bizim tip ↔ kanal tipi)
-- [ ] Ekran: Senkron logu (ne gönderildi, hata) + manuel senkron butonu, stop-sale
-- [ ] Aktör: channel-sync-worker paketi (`room.availability.changed` / `rate.changed` → kanala gönder; kanal webhook → `reservation.requested`)
+- [x] Backend: Channel, ChannelRoomMapping, ChannelSyncLog tabloları + API
+- [x] Adaptör 1: iCal (Airbnb / Booking iCal export-import)
+- [x] Adaptör 2: bir OTA API'si (Booking veya bir channel manager aracısı) — Channex.io
+- [x] Ekran: Kanal listesi + bağlantı ayarları
+- [x] Ekran: Oda tipi eşleştirme (bizim tip ↔ kanal tipi)
+- [x] Ekran: Senkron logu (ne gönderildi, hata) + manuel senkron butonu, stop-sale
+- [x] Aktör: channel-sync-worker paketi (`room.availability.changed` / `rate.changed` → kanala gönder; kanal webhook → `reservation.requested`) — envanter olayları + `rate.changed`; kanal rezervasyonu `channel.booking.received` ile (aşağıda)
+
+> **📌 Modül 33 tamamlandı (15 Ekim 2026 — Ahmet).**
+>
+> **Kararlar (kullanıcı, 14 Ekim 2026):** OTA bağlantısı **Channex.io** üzerinden (Booking.com, Expedia, Airbnb, Agoda…
+> Channex'e, biz Channex'e bağlanırız; Booking'e doğrudan bağlantı Connectivity Partner sertifikası ister). **OTA
+> rezervasyonu onaylı açılır, tutarı OTA'nın tutarıdır**; yer yoksa reddedilmez — kapasite aşılarak açılır, resepsiyona
+> kritik "overbooking" uyarısı düşer. **iCal'deki dolu günler rezervasyon olarak açılır** (onaylı; iCal ad / fiyat taşımaz:
+> misafir "Airbnb misafiri HM…", fiyat geçici olarak sistem fiyatı ve kayıt "doğrulanmalı"); takvimden kalkan, henüz
+> gelinmemiş rezervasyon iptal edilir.
+>
+> **Veri** (migration `20261014090000_channel_manager`): `Channel` (Channex: ortam, mülk, **şifreli** API anahtarı ve webhook
+> sırrı, mülkün adı / para birimi; iCal: takvimin geldiği yer; fiyat farkı %, kaç gün ileri; taslak → senkronda ⇄ durduruldu;
+> yumuşak silme), `ChannelState` (gönderim durumu ayrı tabloda: kirli pencere, tam eşitleme isteği, son işler, hata, bekleme —
+> kanal ayarının sürümü arka plandaki gönderimle ilerlemez), `ChannelRoomMapping` (oda tipi ↔ Channex oda tipi ya da iCal
+> takvimi; dışa aktarma belirteci), `ChannelRateMapping` (Channex fiyat planı ↔ pansiyon), `ChannelAriState` (kanala en son
+> gönderilen değerler), `ChannelStopSale`, `ChannelSyncLog` (90 gün), `ChannelBooking` + `ChannelBookingRevision` (gelen
+> rezervasyon kutusu), rezervasyonda `channelBookingId` / `channelRoomIndex`. CHECK'ler: türle alanlar, fark ve gün aralığı,
+> kirli pencere, kapatma notu; ad otel içinde, Channex mülkü bütün kanallarda tekil (kısmi index). Uyarı türleri
+> `CHANNEL_BOOKING`, `CHANNEL_SYNC`.
+>
+> **Gönderim (Channex):** envanter olayları (rezervasyon, iptal, giriş / çıkış, oda atama, arıza, oda envanteri) ve
+> `rate.changed` (taban fiyat, sezon; modül 28 / 34 de yayınlar) kanalı **kirli işaretler** (gün penceresi birikir). Zamanlanmış
+> iş (5 sn'de bir) penceredeki değerleri hesaplar — müsaitlik oda planının takviminden, fiyat taban × sezon + kanal farkı,
+> stop-sale kanalın kendi kapatmaları — ve **kanala en son gönderilenle karşılaştırıp yalnızca farkı**, ardışık aynı
+> değerleri tek aralıkta, **en fazla iki çağrıda** gönderir (müsaitlik oda tipine, fiyat + stop-sale fiyat planına). Kanal
+> başına en sık 10 sn'de bir (Channex sınırı dakikada 10 + 10). **Tam eşitleme** (500 gün, iki çağrı): senkrona alınınca,
+> eşleştirme / fiyat farkı değişince, elle ve gece (otelin saatiyle 02–05) bir kez. Hata: pencere geri işaretlenir; 429'da 1 dk,
+> anahtar hatasında 30 dk, geçici hatada 30 sn × 2ⁿ (en çok 15 dk) beklenir; 3 art arda hatada / anahtar hatasında müdüre
+> uyarı. Kanalın reddettiği satırlar loga "kısmen" düşer. Promosyon kanala gitmez; pansiyon farkı modül 28 ile gelir (o zamana
+> kadar bir tipin bütün planları aynı fiyatı alır).
+>
+> **Gelen rezervasyon (Channex):** revizyon akışı dakikada bir okunur (webhook gelince hemen; webhook sırrı başlıkta, sabit
+> zamanlı karşılaştırma); her revizyon **önce saklanır, sonra teyit edilir** (kart bilgisi saklanmaz). Kanal aktörü işler:
+> yeni → oda başına onaylı rezervasyon (OTA tutarı elle fiyat olarak, gerekçesi kanal; pansiyon fiyat planından; misafir
+> kartı; not: kanal, kod, ödeme kimde); değişiklik → bekleyen / onaylı rezervasyon güncellenir (azalan oda iptal); iptal →
+> cezasız iptal (iptal eden "kanal:…"). Eski revizyon yenisinin üstüne yazılmaz; aynı rezervasyonun revizyonları sırayla.
+> Yapılamayan adım (eşleşmeyen plan, içerideki / çıkmış misafir, geçmiş giriş, elle fiyatlı rezervasyonun tarihi) **"elle
+> işlenmeli"** olur ve resepsiyona görev düşer (`Kanal rezervasyonu` modülü, `reservations.manage`); para birimi farkı ve
+> iCal tutarı **"doğrulanmalı"**. Müdür gereğini yapınca kaydı notla kapatır. Aktör kapalıyken gönderim tetikleyicileri
+> görev açmadan atlanır (actor-kit'e `skipWhenDisabled` kancası; açılınca tam eşitleme), gelen rezervasyon göreve düşer.
+>
+> **iCal:** dışa aktarma `/channel-ical/<belirteç>.ics` (oturumsuz, gizli belirteç; satılamayan — boş odası olmayan ya da
+> stop-sale'deki — günler "dolu"; 60 sn önbellek; kendi kayıtlarımız UID sonekiyle tanınır, kanal geri yansıtsa döngü olmaz).
+> İçe aktarma 15 dk'da bir: yalnızca https, özel ağa çözülen ad / yönlendirme reddedilir, 2 MB / 15 sn sınırı; Airbnb'nin
+> "Not available" kapatması rezervasyon açmaz; takvim birden boş gelirse toplu iptal yapılmaz (uyarı); iptalden sonra
+> yeniden görünen kayıt yeniden açılır.
+>
+> **API** (`/channel-manager`, `channel_manager.view` / `.manage` — müdür): kanal listesi (son senkron, eşleşme, dikkat
+> sayıları), kart (eşleştirme, güncel stop-sale'ler, eksikler / uyarılar), aç / düzenle (sürümlü; bağlantı yeniden
+> doğrulanır; mülk değişirse eşleştirme silinir), senkrona al / durdur, sil (durmuşken), Channex oda tipi / fiyat planı
+> listesi, eşleştirme kaydı, stop-sale ekle / kaldır, elle senkron, webhook kurulumu, senkron logu (süzgeçli, ayrıntı),
+> kanal rezervasyonları (süzgeç, arama) ve kapatma. Oturumsuz: `POST /webhooks/channex/:id`, `GET /channel-ical/:dosya`.
+> Canlı kanal `channel-manager.changed`. Rezervasyon detayında kanal, kod ve durum.
+>
+> **Ekran:** `/kanallar` (liste, yeni kanal), kanal kartı: `Ayarlar` (bağlantı, webhook), `Eşleştirme` (Channex oda tipi
+> ve planları; iCal takvim adresi ve kopyalanan dışa aktarma adresi), `Stop-sale`, `Senkron logu` (ayrıntı penceresi),
+> `Rezervasyonlar`. Zamanlar otelin saatiyle.
+>
+> **Ölçüm** (`scripts/perf-channels.mjs`; 550 bin rezervasyonlu veritabanı, ufukta 99 bin, 12 oda tipi × 2 plan): 500 günlük
+> değer hesabı ~0,5 sn, tam eşitleme ~0,8 sn, olay başına işaretleme 2–3 ms, 3 gecelik fark gönderimi ~60 ms, bütün ufuk farkı
+> ~0,5 sn, listeler (100 bin log, 20 bin kayıt) 9–67 ms.
+>
+> **Test:** aktör paketi 48 (fark / aralık, iCal okuma / yazma, Channex istemcisi ve hata sınıfları, normalleştirme, olay
+> yönlendirme), sözleşme 10, actor-kit +2, ekran dönüşümleri 9 birim; entegrasyon 31 (bağlantı, eksikler, tam ve fark
+> gönderimi, stop-sale, fiyat, hata / 429 / anahtar, aktör kapalı, OTA yeni / overbooking / değişiklik / eski revizyon / iptal
+> / çok oda / eşleşmeyen / para birimi / içerideki misafir, webhook, iCal dışa / içe / boş takvim / özel ağ, izinler, listeler,
+> silme).
+>
+> **Bu modülde düzeltilen (modül 31):** promosyon kullanım raporu ham SQL'e saat dilimli tarih veriyordu; veritabanı oturumu
+> UTC değilse (yerelde `Europe/Istanbul`) gece 00:00–03:00 satışları önceki güne sayılıyordu — `::timestamp` ile düzeltildi,
+> saatten bağımsız test eklendi.
+>
+> **Devir:** **modül 28** pansiyon / fiyat planı: `rate.changed` yayınlamalı; kanala giden fiyat `modules/channel-manager/ari.js`
+> → `computeRoomTypeValues` (şimdilik taban × sezon). **Modül 34** yield: onaylanan fiyat `rate.changed` ile kanallara gider.
+> **Modül 32** widget doğrudan satıştır (kanal değildir). Canlıya bağlanmak için otelin Channex hesabı, mülk kimliği ve API
+> anahtarı gerekir (önce test ortamı; Channex PMS sertifikasyonu için kanıtlar senkron logunda: görev kimlikleri).
 
 ### 34. Dinamik fiyat / yield — Ali Kemal
 **Gün sonu:** Sistem günde bir fiyat önerisi üretiyor, gerekçesiyle onaya düşüyor; onaylanınca fiyat değişip kanallara gidiyor.

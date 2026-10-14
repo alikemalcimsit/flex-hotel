@@ -119,6 +119,13 @@ export const EVENT_LABELS = Object.freeze({
 
   'promotion.changed': 'Promosyon değişti',
   'promotion.coupons.changed': 'Kuponlar değişti',
+
+  'rate.changed': 'Satış fiyatı değişti',
+  'channel.changed': 'Kanal değişti',
+  'channel.stop_sale.changed': 'Kanal stop-sale değişti',
+  'channel.synced': 'Kanal senkronu yapıldı',
+  'channel.booking.received': 'Kanaldan rezervasyon geldi',
+  'channel.booking.changed': 'Kanal rezervasyonu işlendi',
 });
 
 /**

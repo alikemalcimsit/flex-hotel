@@ -27,6 +27,7 @@ import { dashboardRoutes } from './modules/dashboard/routes.js';
 import { dashboardCacheStats } from './modules/dashboard/service.js';
 import { agencyRoutes } from './modules/agencies/routes.js';
 import { promotionRoutes } from './modules/promotions/routes.js';
+import { channelManagerRoutes, channexWebhookRoutes, icalExportRoutes } from './modules/channel-manager/routes.js';
 import { budgetRoutes } from './modules/budget/routes.js';
 import { budgetCacheStats } from './modules/budget/variance.js';
 import { forecastRoutes } from './modules/forecast/routes.js';
@@ -317,10 +318,14 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   await app.register(budgetRoutes, { prefix: '/budgets' });
   await app.register(agencyRoutes, { prefix: '/agencies' });
   await app.register(promotionRoutes, { prefix: '/promotions' });
+  await app.register(channelManagerRoutes, { prefix: '/channel-manager' });
   await app.register(manualTaskRoutes, { prefix: '/manual-tasks' });
   await app.register(conciergeRoutes, { prefix: '/ai' });
   await app.register(messagingChannelRoutes, { prefix: '/messaging-channels' });
   await app.register(webhookRoutes, { prefix: '/webhooks' });
+  // Kanal yönetimi (modül 33): Channex bildirimi ve kanalın okuduğu takvim (oturumsuz, sır / belirteçle).
+  await app.register(channexWebhookRoutes, { prefix: '/webhooks/channex' });
+  await app.register(icalExportRoutes, { prefix: '/channel-ical' });
   await app.register(webchatWidgetRoutes, { prefix: '/webchat' });
 
   app.addHook('onClose', async () => {

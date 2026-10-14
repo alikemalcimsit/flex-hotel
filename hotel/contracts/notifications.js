@@ -428,6 +428,8 @@ export const STAFF_ALERT_KINDS = Object.freeze([
   'FOLIO_ATTENTION',
   'AI_HANDOFF',
   'AI_BUDGET',
+  'CHANNEL_BOOKING',
+  'CHANNEL_SYNC',
 ]);
 
 export const STAFF_ALERT_KIND_LABELS = Object.freeze({
@@ -443,6 +445,8 @@ export const STAFF_ALERT_KIND_LABELS = Object.freeze({
   FOLIO_ATTENTION: 'Folyoda dikkat gereken durum',
   AI_HANDOFF: 'AI konuşmayı devretti',
   AI_BUDGET: 'AI bütçesi doldu',
+  CHANNEL_BOOKING: 'Kanal rezervasyonu dikkat istiyor',
+  CHANNEL_SYNC: 'Kanal senkronu başarısız',
 });
 
 export const STAFF_ALERT_SEVERITIES = Object.freeze(['INFO', 'WARNING', 'CRITICAL']);
