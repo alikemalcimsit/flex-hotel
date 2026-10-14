@@ -8,7 +8,9 @@
  *    deneme, outbox tarayıcısı, süreç yeniden başlaması) oda ikinci kez
  *    atanmamalı. `ProcessedEvent` kaydı bunu garanti eder.
  * 2. **Kapalıyken işi düşürmemek.** Aktör yönetim panelinden kapatıldığında
- *    iş kaybolmaz, "manuel görev" olarak personelin önüne düşer.
+ *    iş kaybolmaz, "manuel görev" olarak personelin önüne düşer. İstisna:
+ *    telafisi aktörün kendi zamanlanmış işi olan olaylar (`skipWhenDisabled`;
+ *    ör. kanal senkronu — tam eşitleme kaçanı yakalar) atlanır.
  * 3. **Geçici hatada yeniden denemek.** Veritabanı bir an cevap vermediyse
  *    pes etmek yerine birkaç kez denenir; yine olmazsa manuel göreve düşer.
  * 4. **İz bırakmak.** Ne kadar sürdü, başarılı mıydı — Activity Feed (modül 10)
@@ -233,6 +235,16 @@ export class BaseWorker {
       }
 
       if (!approval && !(await this.#deps.isEnabled(hotelId, name))) {
+        if (this.skipWhenDisabled(envelope.name, payload)) {
+          // Personele görev açılmaz: iş başka bir yoldan telafi edilir. Olay işlenmiş sayılır.
+          await this.#deps.markProcessed(name, envelope.id, hotelId);
+          await this.#safely(() =>
+            this.#deps.logActivity(
+              this.#entry(payload, envelope, 'INFO', `Aktör kapalı; iş atlandı (${this.describeFallback(envelope.name, payload)})`, { skipped: true }, startedAt),
+            ),
+          );
+          return;
+        }
         await this.#fallbackToManualTask(payload, envelope, 'Aktör kapalı');
         await this.#deps.markProcessed(name, envelope.id, hotelId);
         // Akışı izleyen yönetici işin personele düştüğünü görsün.
@@ -422,6 +434,20 @@ export class BaseWorker {
    */
   accepts(_eventName, _payload) {
     return true;
+  }
+
+  /**
+   * Aktör kapalıyken bu olayın işi personele görev olarak düşmeden **atlanabilir**
+   * mi? Yalnızca işi aktörün kendi zamanlanmış işiyle telafi edilen olaylar için
+   * `true` dönülmeli (ör. kanala müsaitlik gönderimi: aktör açılınca tam
+   * eşitleme yapılır). Varsayılan: hayır — iş kaybolmasın.
+   *
+   * @param {string} _eventName
+   * @param {object} _payload
+   * @returns {boolean}
+   */
+  skipWhenDisabled(_eventName, _payload) {
+    return false;
   }
 
   /**

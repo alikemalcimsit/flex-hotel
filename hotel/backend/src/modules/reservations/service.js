@@ -129,6 +129,8 @@ const RESERVATION_SELECT = Object.freeze({
   couponId: true,
   promotionTerms: true,
   discountTotal: true,
+  channelBookingId: true,
+  channelRoomIndex: true,
   requestId: true,
   createdBy: true,
   confirmedAt: true,
@@ -681,6 +683,8 @@ async function insertReservations(tx, stage, { hotelId, hotel, input, guest, roo
         agencyCommissionPct: agencySale?.commissionPct ?? null,
         // Promosyon (modül 31): koşullarıyla kopyalanır; geceler indirimli.
         ...(priced.offer ? promotionData(priced.offer, bookedOn) : {}),
+        // Kanaldan geldiyse (modül 33) kanal rezervasyonu ve oradaki oda sırası.
+        ...(input.channelBookingId ? { channelBookingId: input.channelBookingId, channelRoomIndex: input.channelRoomIndex ?? index } : {}),
         totalPrice: manual ? manual.total : priced.total,
         currency: hotel.currency,
         priceMode: manual ? 'MANUAL' : 'CALCULATED',
@@ -794,6 +798,8 @@ export async function createReservation(hotelId, input, options = {}) {
         }
         throw noAvailabilityError(violations, typeById);
       }
+      // İzinli kapasite aşımı (onaylanmış istek, kanalda zaten satılmış rezervasyon): çağıran uyarı düşürür.
+      const overbooked = violations.length > 0;
 
       const [reservationId] = await insertReservations(tx, stage, {
         hotelId,
@@ -811,7 +817,7 @@ export async function createReservation(hotelId, input, options = {}) {
       if (input.roomId) {
         await assignRoomInTransaction(tx, stage, hotelId, reservationId, input.roomId, { businessDate, reason: 'Oda planından açıldı' });
       }
-      return { outcome: 'CREATED', reservationId };
+      return { outcome: 'CREATED', reservationId, overbooked };
     });
   } catch (error) {
     if (isDuplicateRequest(error)) return withReservation(hotelId, await findPriorOutcome(hotelId, input.requestId));
@@ -999,12 +1005,31 @@ function manualPrice(input, options) {
  * @param {{ canOverridePrice?: boolean }} [options]
  */
 export async function updateReservation(hotelId, reservationId, input, options = {}) {
+  return (await applyReservationUpdate(hotelId, reservationId, input, options)).reservation;
+}
+
+/**
+ * Düzenlemenin kendisi; sonuçta değişip değişmediği ve (izin verildiyse) kapasitenin
+ * aşılıp aşılmadığı da döner. `allowOverbooking`: kanalda zaten değişmiş rezervasyon
+ * (modül 33) — yer yoksa da yazılır, çağıran uyarı düşürür.
+ *
+ * @param {string} hotelId
+ * @param {string} reservationId
+ * @param {object} input `updateReservationSchema` çıktısı (`expectedUpdatedAt` verilmezse sürüm denetlenmez)
+ * @param {{ canOverridePrice?: boolean, allowOverbooking?: boolean }} [options]
+ * @returns {Promise<{ reservation: Awaited<ReturnType<typeof getReservation>>, changed: boolean, overbooked: boolean }>}
+ */
+export async function applyReservationUpdate(hotelId, reservationId, input, options = {}) {
   const context = await loadContext(hotelId);
   const { businessDate, typeById } = context;
   assertPriceOverride(input, options);
+  let changed = false;
+  let overbooked = false;
 
   try {
     await writeWithEvents(async (tx, stage) => {
+      changed = false;
+      overbooked = false;
       const current = await lockForWrite(tx, hotelId, reservationId, input.expectedUpdatedAt);
       const plan = await planUpdate(tx, { ...context, hotelId, lock: true }, current, input);
       const { inHouse, next, nextAgencyId, agencyChanged, changedStay, roomTypeIds, agencySale, priced } = plan;
@@ -1041,7 +1066,10 @@ export async function updateReservation(hotelId, reservationId, input, options =
                 : row,
             ),
         });
-        if (violations.length > 0) throw noAvailabilityError(violations, typeById);
+        if (violations.length > 0) {
+          if (!options.allowOverbooking) throw noAvailabilityError(violations, typeById);
+          overbooked = true;
+        }
       }
 
       const changedFields = changedReservationFields(
@@ -1061,6 +1089,7 @@ export async function updateReservation(hotelId, reservationId, input, options =
       // Hiçbir şey değişmiyorsa yazılmaz: sürüm (updatedAt) boşuna ilerlemez,
       // denetim izine boş kayıt düşmez.
       if (changedFields.length === 0) return;
+      changed = true;
 
       const updated = await tx.reservation.update({
         where: { id: current.id },
@@ -1101,7 +1130,7 @@ export async function updateReservation(hotelId, reservationId, input, options =
   } catch (error) {
     rethrowPrismaError(error);
   }
-  return getReservation(hotelId, reservationId);
+  return { reservation: await getReservation(hotelId, reservationId), changed, overbooked };
 }
 
 /**
@@ -1815,6 +1844,9 @@ export async function getReservation(hotelId, reservationId) {
         ...RESERVATION_SELECT,
         nights: { select: NIGHT_SELECT, orderBy: { date: 'asc' } },
         waitlistEntries: { select: { id: true }, take: 1 },
+        channelBooking: {
+          select: { id: true, channelId: true, externalCode: true, otaName: true, state: true, stateReason: true, channel: { select: { name: true } } },
+        },
       },
     }),
     getBusinessDate(hotelId),
@@ -1888,6 +1920,19 @@ export async function getReservation(hotelId, reservationId) {
       : null,
     noShowPreview: actions.includes('noShow') ? { fee: noShowCharge(row, row.nights) } : null,
     fromWaitlist: row.waitlistEntries.length > 0,
+    // Kanaldan geldiyse (modül 33): kanal, kanaldaki kod ve bizdeki işlenme durumu.
+    channel: row.channelBooking
+      ? {
+          bookingId: row.channelBooking.id,
+          channelId: row.channelBooking.channelId,
+          channelName: row.channelBooking.channel?.name ?? null,
+          externalCode: row.channelBooking.externalCode,
+          otaName: row.channelBooking.otaName,
+          state: row.channelBooking.state,
+          stateReason: row.channelBooking.stateReason,
+          roomIndex: row.channelRoomIndex,
+        }
+      : null,
     groupMembers: members.map((member) => ({
       id: member.id,
       confirmationCode: member.confirmationCode,

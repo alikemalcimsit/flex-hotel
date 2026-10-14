@@ -1,0 +1,15 @@
+{
+  "name": "@hotelos/channel-sync-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "description": "Kanal aktörü (modül 33): müsaitlik / fiyat değişikliğini kanala bildirir, kanaldan gelen rezervasyonu işler; Channex istemcisi ve iCal okuyucu / yazıcı",
+  "scripts": {
+    "test": "node --test \"*.test.js\""
+  },
+  "dependencies": {
+    "@hotelos/actor-kit": "*",
+    "@hotelos/core": "*"
+  }
+}

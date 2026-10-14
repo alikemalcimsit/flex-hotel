@@ -124,6 +124,13 @@ export const NAV_SECTIONS = Object.freeze([
         icon: 'percent',
         permission: PERMISSIONS.PROMOTIONS_VIEW,
       },
+      // Kanal yönetimi (modül 33): OTA (Channex) ve iCal takvimleri; müdürün.
+      {
+        label: 'Kanallar',
+        to: '/kanallar',
+        icon: 'globe',
+        permission: PERMISSIONS.CHANNEL_MANAGER_VIEW,
+      },
       {
         label: 'Mesajlar',
         to: '/mesajlar',

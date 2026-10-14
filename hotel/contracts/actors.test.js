@@ -39,7 +39,8 @@ describe('manuel görev kimi ilgilendirir', () => {
     const scope = manualTaskScope(DEFAULT_ROLE_PERMISSIONS.FRONT_DESK);
     assert.equal(scope.all, false);
     assert.equal(scope.others, false);
-    assert.deepEqual([...scope.modules].sort(), ['Folyo', 'Misafir mesajları', 'Oda atama', 'Rezervasyon']);
+    // Kanaldan gelip işlenemeyen rezervasyon (modül 33) da resepsiyonun işi.
+    assert.deepEqual([...scope.modules].sort(), ['Folyo', 'Kanal rezervasyonu', 'Misafir mesajları', 'Oda atama', 'Rezervasyon']);
   });
 
   it('muhasebe yalnızca folyo görevlerini görür', () => {

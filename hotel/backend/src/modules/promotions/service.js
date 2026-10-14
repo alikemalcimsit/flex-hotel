@@ -4,7 +4,7 @@ import { MAX_COUPON_BATCH, RESERVATION_COUNT_CAP, zonedWallTimeToUtc } from '@ho
 import { prisma } from '../../db.js';
 import { recordAudit } from '../../lib/audit.js';
 import { getBusinessDate } from '../../lib/business-date.js';
-import { AppError, InUseError, NotFoundError, StaleWriteError, ValidationError, rethrowPrismaError } from '../../lib/errors.js';
+import { AppError, ConflictError, InUseError, NotFoundError, StaleWriteError, ValidationError, rethrowPrismaError } from '../../lib/errors.js';
 import { lockCoupons, lockPromotions } from '../../lib/locks.js';
 import { buildPage, toSkipTake } from '../../lib/pagination.js';
 import { containsText } from '../../lib/search.js';
@@ -439,6 +439,11 @@ export async function deletePromotion(hotelId, promotionId, { expectedUpdatedAt 
           reservations: used,
         });
       }
+      // Yayındaki promosyon önce durdurulur: satış onu kilitsiz okur, silmeyle yarışan
+      // rezervasyon anlamsız bir kısıt hatasıyla düşmesin (ekran da yayındakine "Sil" göstermez).
+      if (before.status === 'ACTIVE') {
+        throw new ConflictError('Yayındaki promosyon silinmez; önce durdurun', 'PROMOTION_ACTIVE');
+      }
       const coupons = await tx.coupon.count({ where: { hotelId, promotionId } });
       await tx.promotion.delete({ where: { id: promotionId } });
       await recordAudit(tx, { hotelId, entity: 'Promotion', entityId: promotionId, action: 'DELETE', before: { ...promotionSnapshot(before), coupons } });
@@ -647,8 +652,10 @@ export async function getPromotionReport(hotelId, query) {
   const window = reportWindow(query, hotel.timezone);
   const column = window.column === 'checkIn' ? 'r."checkIn"' : 'r."createdAt"';
   const active = `r.status IN ('PENDING', 'CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT')`;
-  const params = [hotelId, window.from, window.before];
-  let scope = `r."hotelId" = $1 AND r."promotionId" IS NOT NULL AND r."deletedAt" IS NULL AND ${column} >= $2 AND ${column} < $3`;
+  // Sütunlar UTC duvar saati (`timestamp`): sınır da öyle verilir (JS Date saat dilimli gider,
+  // oturum UTC değilse — ör. Europe/Istanbul — gece 00:00–03:00 satışları önceki güne kayardı).
+  const params = [hotelId, window.from.toISOString(), window.before.toISOString()];
+  let scope = `r."hotelId" = $1 AND r."promotionId" IS NOT NULL AND r."deletedAt" IS NULL AND ${column} >= $2::timestamp AND ${column} < $3::timestamp`;
   if (query.promotionId) {
     params.push(query.promotionId);
     scope += ` AND r."promotionId" = $${params.length}`;

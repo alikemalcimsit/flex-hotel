@@ -26,6 +26,8 @@ const KIND_ICONS = Object.freeze({
   FOLIO_ATTENTION: 'fileText',
   AI_HANDOFF: 'bot',
   AI_BUDGET: 'zap',
+  CHANNEL_BOOKING: 'globe',
+  CHANNEL_SYNC: 'refresh',
 });
 
 const SEVERITY_TONES = Object.freeze({

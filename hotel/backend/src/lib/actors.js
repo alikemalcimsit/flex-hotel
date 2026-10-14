@@ -8,6 +8,7 @@ import {
   manualTaskPermission,
 } from '@hotelos/hotel-contracts';
 import { createBillingWorker } from '@hotelos/billing-worker';
+import { CHANNEL_SYNC_WORKER_NAME, createChannelSyncWorker } from '@hotelos/channel-sync-worker';
 import { parseToolArguments } from '@hotelos/llm';
 import { createNotificationWorker, NOTIFICATION_WORKER_NAME } from '@hotelos/notification-worker';
 import { createReservationWorker } from '@hotelos/reservation-worker';
@@ -28,6 +29,7 @@ import { enqueueTriggerNotifications } from '../modules/notifications/service.js
 import { raiseStaffAlert } from '../modules/notifications/staff-alerts.js';
 import { requestApprovalStandalone } from '../modules/approvals/service.js';
 import { createFromChannelRequest } from '../modules/reservations/service.js';
+import { channelSyncService } from '../modules/channel-manager/service.js';
 import { applySystemRoomState, autoAssignRoom } from '../modules/rooms/service.js';
 import { registerAutoResponder, registerChannel } from './channels.js';
 import { publishActivity } from './activity-stream.js';
@@ -254,6 +256,10 @@ export function registerActors() {
         deps,
       ),
     );
+  }
+  // Kanal aktörü (modül 33): envanter / fiyat değişikliğini kanallara işaretler, kanal rezervasyonunu işler.
+  if (!actorRegistry.get(CHANNEL_SYNC_WORKER_NAME)) {
+    actorRegistry.register(createChannelSyncWorker(channelSyncService, deps));
   }
   registerChannelGateways();
   registerAiAgents();

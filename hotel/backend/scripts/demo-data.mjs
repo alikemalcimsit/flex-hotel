@@ -21,6 +21,11 @@ import { randomUUID } from 'node:crypto';
  *   kullanımlık), bir durdurulmuş ve bir taslak promosyon. Doğrudan satışlara
  *   kural motoru (her rezervasyonun kendi satış günüyle) uygulanır; acente ve
  *   OTA satışına uygulanmaz. Aynı `createdBy` ile tanınır, `--reset` siler.
+ * - Kanal (modül 33): senkronda bir "Airbnb (demo)" iCal kanalı — bütün oda
+ *   tipleri eşleşmiş, dışa aktarma takvimi gerçek müsaitlikten; içe aktarma
+ *   adresi yok (sunucu dışarıya istek atmaz). Gelecekteki OTA
+ *   rezervasyonlarının bir kısmı bu kanalın kayıtlarına bağlı (çoğu işlenmiş,
+ *   birkaçı "doğrulanmalı"). Aynı `createdBy` ile tanınır, `--reset` siler.
  */
 
 if (process.env.DEMO_CONFIRM !== 'DEMO') {
@@ -58,7 +63,8 @@ const money = (n) => (Math.round(n * 100) / 100).toFixed(2);
 const existingDemo =
   (await prisma.reservation.count({ where: { hotelId, confirmationCode: { startsWith: CODE_PREFIX } } })) +
   (await prisma.agency.count({ where: { hotelId, createdBy: ACTOR } })) +
-  (await prisma.promotion.count({ where: { hotelId, createdBy: ACTOR } }));
+  (await prisma.promotion.count({ where: { hotelId, createdBy: ACTOR } })) +
+  (await prisma.channel.count({ where: { hotelId, createdBy: ACTOR } }));
 if (process.argv.includes('--reset')) {
   await prisma.$transaction(
     async (tx) => {
@@ -67,6 +73,12 @@ if (process.argv.includes('--reset')) {
         await tx.$executeRawUnsafe(`DELETE FROM "${table}" WHERE "reservationId" IN ${ids}`, hotelId);
       }
       await tx.$executeRawUnsafe(`DELETE FROM "Reservation" WHERE "hotelId" = $1 AND "confirmationCode" LIKE '${CODE_PREFIX}%'`, hotelId);
+      // Demo kanal (modül 33): kayıtları ve revizyonları, sonra kanal (eşleştirme, durum, log kanalla gider).
+      const demoChannels = `(SELECT "id" FROM "Channel" WHERE "hotelId" = $1 AND "createdBy" = $2)`;
+      await tx.$executeRawUnsafe(`UPDATE "Reservation" SET "channelBookingId" = NULL, "channelRoomIndex" = NULL WHERE "channelBookingId" IN (SELECT "id" FROM "ChannelBooking" WHERE "channelId" IN ${demoChannels})`, hotelId, ACTOR);
+      await tx.$executeRawUnsafe(`DELETE FROM "ChannelBookingRevision" WHERE "channelId" IN ${demoChannels}`, hotelId, ACTOR);
+      await tx.$executeRawUnsafe(`DELETE FROM "ChannelBooking" WHERE "channelId" IN ${demoChannels}`, hotelId, ACTOR);
+      await tx.$executeRawUnsafe(`DELETE FROM "Channel" WHERE "id" IN ${demoChannels}`, hotelId, ACTOR);
       await tx.$executeRawUnsafe(
         `DELETE FROM "Guest" g WHERE g."hotelId" = $1 AND 'demo' = ANY(g."tags") AND NOT EXISTS (SELECT 1 FROM "Reservation" r WHERE r."guestId" = g."id")`,
         hotelId,
@@ -588,6 +600,61 @@ await insertChunks('payment', payments);
 await prisma.$executeRawUnsafe('DELETE FROM "RevenueStatDay" WHERE "hotelId" = $1', hotelId);
 await prisma.$executeRawUnsafe('DELETE FROM "RevenueDayStat" WHERE "hotelId" = $1', hotelId);
 
+// ── Kanal (modül 33): Airbnb takvimi ve ona bağlı gelecek OTA rezervasyonları ──
+const DEMO_CHANNEL_BOOKINGS = 30;
+const DEMO_REVIEW_EVERY = 10;
+const demoChannel = await prisma.channel.create({
+  data: {
+    hotelId,
+    type: 'ICAL',
+    name: 'Airbnb (demo)',
+    status: 'ACTIVE',
+    provider: 'AIRBNB',
+    horizonDays: contracts.DEFAULT_ICAL_HORIZON_DAYS,
+    activatedAt: new Date(),
+    activatedBy: ACTOR,
+    createdBy: ACTOR,
+    state: { create: { hotelId } },
+  },
+});
+const channelTypes = await prisma.roomType.findMany({ where: { hotelId }, select: { id: true } });
+const mappingByType = new Map();
+for (const type of channelTypes) {
+  const mapping = await prisma.channelRoomMapping.create({
+    data: { hotelId, channelId: demoChannel.id, roomTypeId: type.id, exportToken: randomUUID().replace(/-/g, '') },
+  });
+  mappingByType.set(type.id, mapping.id);
+}
+const otaUpcoming = await prisma.reservation.findMany({
+  where: { hotelId, source: 'OTA', confirmationCode: { startsWith: CODE_PREFIX }, status: { in: ['CONFIRMED', 'PENDING'] }, checkIn: { gte: midnight(today) } },
+  include: { guest: { select: { firstName: true, lastName: true } } },
+  orderBy: [{ checkIn: 'asc' }, { id: 'asc' }],
+  take: DEMO_CHANNEL_BOOKINGS,
+});
+for (const [index, row] of otaUpcoming.entries()) {
+  const code = `HM${String(4_000_000 + index * 7919).slice(-7)}`;
+  const review = index % DEMO_REVIEW_EVERY === 0;
+  const booking = await prisma.channelBooking.create({
+    data: {
+      hotelId,
+      channelId: demoChannel.id,
+      externalBookingId: `${mappingByType.get(row.roomTypeId)}:demo-${row.id}@airbnb.com`,
+      externalCode: code,
+      otaName: 'Airbnb',
+      state: review ? 'REVIEW' : 'PROCESSED',
+      stateReason: review ? 'iCal fiyat ve kişi sayısı taşımaz: tutarı ve kişi sayısını kanaldaki rezervasyonla güncelleyin' : null,
+      guestName: `${row.guest.firstName} ${row.guest.lastName}`,
+      checkIn: midnight(core.toIsoDay(row.checkIn)),
+      checkOut: midnight(core.toIsoDay(row.checkOut)),
+      roomCount: 1,
+      appliedRevisionAt: row.createdAt,
+      ...(review ? {} : { resolvedAt: row.createdAt, resolvedBy: ACTOR, resolutionNote: 'Tutar Airbnb ödemesiyle doğrulandı' }),
+      createdAt: row.createdAt,
+    },
+  });
+  await prisma.$executeRaw`UPDATE "Reservation" SET "channelBookingId" = ${booking.id}, "channelRoomIndex" = 0 WHERE "id" = ${row.id}`;
+}
+
 // Odaların anlık durumu: içeride kimse varsa dolu, boşların bir kısmı kirli.
 const inHouse = new Set(reservations.filter((entry) => entry.row.status === 'CHECKED_IN').map((entry) => entry.row.roomId));
 await prisma.room.updateMany({ where: { hotelId, id: { in: [...inHouse] } }, data: { occupancy: 'OCCUPIED' } });
@@ -640,6 +707,6 @@ console.log(
     `(${lost.length} iptal / gelmeyen, ${reservations.filter((entry) => entry.row.agencyId).length + lost.filter((entry) => entry.agencyId).length} acenteli), ` +
     `${nights.length} gece, ${items.length} folyo kalemi, ${payments.length} ödeme, ${AGENCY_SEEDS.length} acente, ` +
     `${PROMOTION_SEEDS.length} promosyon (${reservations.filter((entry) => entry.row.promotionId).length} promosyonlu rezervasyon, ` +
-    `${reservations.filter((entry) => entry.row.couponId).length} kuponlu).`,
+    `${reservations.filter((entry) => entry.row.couponId).length} kuponlu), 1 kanal (${otaUpcoming.length} kanal rezervasyonu).`,
 );
 await prisma.$disconnect();

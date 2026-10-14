@@ -216,6 +216,10 @@ enum StaffAlertKind {
   AI_HANDOFF
   /// Günlük AI bütçesi doldu; yeni konuşmalar personele düşüyor — modül 8.
   AI_BUDGET
+  /// Kanal rezervasyonu dikkat istiyor: kapasite aşıldı ya da elle işlenmeli — modül 33.
+  CHANNEL_BOOKING
+  /// Kanala gönderim art arda başarısız (anahtar, bağlantı) — modül 33.
+  CHANNEL_SYNC
 }
 
 /// Rezervasyon fiyatının kaynağı (modül 4): sistem hesabı ya da yetkili
@@ -589,6 +593,7 @@ model Hotel {
   contractStopSales     ContractStopSale[]
   promotions            Promotion[]
   coupons               Coupon[]
+  channels              Channel[]
 }
 
 model User {
@@ -1104,13 +1109,14 @@ model RoomType {
   updatedAt        DateTime  @updatedAt
   deletedAt        DateTime?
 
-  hotel             Hotel              @relation(fields: [hotelId], references: [id])
+  hotel             Hotel                @relation(fields: [hotelId], references: [id])
   rooms             Room[]
   reservations      Reservation[]
   ratePlans         RatePlan[]
   waitlist          WaitlistEntry[]
   contractRates     ContractRate[]
   contractStopSales ContractStopSale[]
+  channelMappings   ChannelRoomMapping[]
 
   // Benzersizlik kısmi (partial) unique index ile veritabanında tanımlı:
   // `RoomType_hotelId_code_active_key ... WHERE "deletedAt" IS NULL`.
@@ -1253,6 +1259,9 @@ model Reservation {
   promotionTerms      Json?
   /// Gecelere düşen indirimlerin toplamı (`ReservationNight.discount`); toplam fiyat indirimlidir.
   discountTotal       Decimal              @default(0) @db.Decimal(12, 2)
+  /// Kanaldan (OTA / iCal) geldiyse kanal rezervasyonu ve oradaki oda sırası (modül 33).
+  channelBookingId    String?
+  channelRoomIndex    Int?
   groupId             String?
   notes               String?
   confirmationCode    String               @unique
@@ -1303,6 +1312,7 @@ model Reservation {
   agency              Agency?              @relation(fields: [agencyId], references: [id], onDelete: Restrict)
   promotion           Promotion?           @relation(fields: [promotionId], references: [id], onDelete: Restrict)
   coupon              Coupon?              @relation(fields: [couponId], references: [id], onDelete: Restrict)
+  channelBooking      ChannelBooking?      @relation(fields: [channelBookingId], references: [id], onDelete: Restrict)
   nights              ReservationNight[]
   waitlistEntries     WaitlistEntry[]
   reservationGuests   ReservationGuest[]
@@ -2743,4 +2753,328 @@ model Coupon {
   // Promosyonun kuponları (sayfalı), üretimin kodları.
   @@index([hotelId, promotionId, createdAt, id])
   @@index([promotionId, batchId])
+}
+
+/**
+ * ══════════════════ Kanal yönetimi (modül 33) ══════════════════
+ */
+
+/// Kanal türü: Channex (OTA'lara aracı) ya da iCal takvimi.
+enum ChannelType {
+  CHANNEX
+  ICAL
+}
+
+/// DRAFT: kuruluyor. ACTIVE: senkronda. PAUSED: durduruldu (hiçbir şey gitmez / gelmez).
+enum ChannelStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+}
+
+enum ChannexEnvironment {
+  STAGING
+  PRODUCTION
+}
+
+/// iCal takviminin geldiği yer (Airbnb rezervasyonu kapatmadan ayırır).
+enum IcalProvider {
+  AIRBNB
+  BOOKING
+  OTHER
+}
+
+enum ChannelSyncKind {
+  DELTA
+  FULL
+  BOOKINGS
+  ICAL_IMPORT
+  SETUP
+}
+
+enum ChannelSyncStatus {
+  SUCCESS
+  PARTIAL
+  FAILED
+}
+
+enum ChannelSyncTrigger {
+  CHANGE
+  SCHEDULE
+  MANUAL
+  WEBHOOK
+}
+
+/// Kanala en son gönderilen değerin türü: oda tipine müsaitlik, fiyat planına fiyat + stop-sale.
+enum ChannelAriKind {
+  AVAILABILITY
+  RATE
+}
+
+/// Kanal rezervasyonunun bizdeki durumu (bkz. sözleşme `CHANNEL_BOOKING_STATES`).
+enum ChannelBookingState {
+  PENDING
+  PROCESSED
+  REVIEW
+  ATTENTION
+}
+
+/// Kanaldaki durumu.
+enum ChannelBookingStatus {
+  ACTIVE
+  CANCELLED
+}
+
+enum ChannelRevisionKind {
+  NEW
+  MODIFIED
+  CANCELLED
+}
+
+/// Satış kanalı (modül 33). Channex: OTA'lara (Booking, Expedia, Airbnb…) aracı; müsaitlik
+/// oda tipine, fiyat ve stop-sale fiyat planına gider, rezervasyonlar revizyon akışından
+/// alınır. iCal: kanal takvimimizi okur (dışa aktarma), biz kanalınkini okuruz (içe aktarma).
+///
+/// Gönderim "fark" ile yapılır: değişiklikler kanalı kirli işaretler (`dirtyFrom` /
+/// `dirtyTo`), zamanlanmış iş penceredeki değerleri hesaplayıp kanala en son gönderilenle
+/// (`ChannelAriState`) karşılaştırır, yalnızca farkı gönderir. Silme yumuşaktır (log ve
+/// rezervasyon bağları kalır). Ad tekilliği (büyük / küçük harf duyarsız) ve Channex mülkünün
+/// tek kanala bağlanması: kısmi index'ler (migration).
+model Channel {
+  id                 String              @id @default(uuid())
+  hotelId            String
+  type               ChannelType
+  name               String
+  status             ChannelStatus       @default(DRAFT)
+  /// Channex: ortam, mülk, şifreli API anahtarı (secret-box), webhook kimliği ve şifreli sırrı.
+  environment        ChannexEnvironment?
+  propertyId         String?
+  apiKey             String?
+  webhookId          String?
+  webhookSecret      String?
+  /// Channex mülkünün adı ve para birimi (bağlantı denetiminde okunur).
+  externalName       String?
+  externalCurrency   String?
+  /// iCal: takvimin geldiği yer.
+  provider           IcalProvider?
+  /// Kanala giden fiyat = liste fiyatı × (1 + fark / 100).
+  priceMarkupPercent Decimal             @default(0) @db.Decimal(5, 2)
+  /// Kaç gün ileriye gönderilir / dışa aktarılır.
+  horizonDays        Int
+  activatedAt        DateTime?
+  activatedBy        String?
+  createdBy          String
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  deletedAt          DateTime?
+
+  hotel     Hotel                    @relation(fields: [hotelId], references: [id])
+  state     ChannelState?
+  rooms     ChannelRoomMapping[]
+  rates     ChannelRateMapping[]
+  ariStates ChannelAriState[]
+  stopSales ChannelStopSale[]
+  logs      ChannelSyncLog[]
+  bookings  ChannelBooking[]
+  revisions ChannelBookingRevision[]
+
+  @@index([hotelId, deletedAt, name])
+  // Zamanlanmış işlerin taraması: senkrondaki kanallar.
+  @@index([status, type])
+}
+
+/// Kanalın gönderim / alım durumu (modül 33). Ayardan ayrı tutulur: kanal ayarının sürümü
+/// (`Channel.updatedAt`, optimistic lock) her gönderimde ilerlemesin — ayar formu açık
+/// duran yönetici, arka planda giden bir gönderim yüzünden "kayıt değişti" görmesin.
+model ChannelState {
+  channelId           String              @id
+  hotelId             String
+  /// Gönderilecek değişiklik penceresi (otelin günleri, iki uç dahil; ikisi de boşsa temiz).
+  dirtyFrom           DateTime?           @db.Date
+  dirtyTo             DateTime?           @db.Date
+  /// Tam eşitleme istendi (senkrona alma, eşleştirme, elle); sebebi ve tetikleyeni loga yazılır.
+  fullSyncRequestedAt DateTime?
+  fullSyncReason      String?
+  fullSyncTrigger     ChannelSyncTrigger?
+  lastFullSyncAt      DateTime?
+  lastDeltaAt         DateTime?
+  lastBookingPollAt   DateTime?
+  lastIcalImportAt    DateTime?
+  /// Son işin zamanı ve sonucu (kanal listesinde).
+  lastSyncAt          DateTime?
+  lastSyncStatus      ChannelSyncStatus?
+  /// Hız sınırı ya da art arda hata: bu ana kadar gönderim yapılmaz.
+  pausedUntil         DateTime?
+  failureCount        Int                 @default(0)
+  lastError           String?
+  lastErrorAt         DateTime?
+  updatedAt           DateTime            @updatedAt
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+}
+
+/// Bizim oda tipi ↔ kanalın oda tipi (Channex) ya da iCal takvimi (bir ilan / tip).
+/// Eşleştirme kaydı oda tipiyle tekildir ve yeniden kaydedilince korunur: iCal dışa aktarma
+/// adresinin belirteci (`exportToken`) kanala verildiği için değişmemeli.
+model ChannelRoomMapping {
+  id                 String    @id @default(uuid())
+  hotelId            String
+  channelId          String
+  roomTypeId         String
+  externalRoomTypeId String?
+  externalName       String?
+  /// iCal: kanalın takvim adresi (içe aktarma); boşsa yalnızca dışa aktarılır.
+  icalImportUrl      String?
+  /// iCal dışa aktarma adresinin gizli belirteci.
+  exportToken        String?   @unique
+  lastImportAt       DateTime?
+  lastImportError    String?
+  /// iCal: kanalın dışa aktarma takvimini en son okuduğu an.
+  lastExportAt       DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  channel  Channel              @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  roomType RoomType             @relation(fields: [roomTypeId], references: [id])
+  rates    ChannelRateMapping[]
+
+  @@unique([channelId, roomTypeId])
+  @@unique([channelId, externalRoomTypeId])
+  @@index([hotelId, roomTypeId])
+}
+
+/// Kanalın fiyat planı ↔ bizim oda tipi + pansiyon (Channex). Gelen rezervasyonun pansiyonu buradan.
+model ChannelRateMapping {
+  id                 String    @id @default(uuid())
+  hotelId            String
+  channelId          String
+  roomMappingId      String
+  externalRatePlanId String
+  externalName       String?
+  boardType          BoardType
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  channel     Channel            @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  roomMapping ChannelRoomMapping @relation(fields: [roomMappingId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, externalRatePlanId])
+  @@index([roomMappingId])
+}
+
+/// Kanala en son başarıyla gönderilen değerler (gün → değer): fark bununla hesaplanır.
+/// Kanalın kimliğiyle tutulur (eşleştirme yeniden kaydedilse de geçerli kalır).
+model ChannelAriState {
+  id         String         @id @default(uuid())
+  channelId  String
+  kind       ChannelAriKind
+  externalId String
+  sent       Json           @default("{}")
+  updatedAt  DateTime       @updatedAt
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, kind, externalId])
+}
+
+/// Kanala özel satış kapatma (iki uç dahil). Oda tipleri boşsa kanaldaki bütün tipler.
+model ChannelStopSale {
+  id          String   @id @default(uuid())
+  hotelId     String
+  channelId   String
+  roomTypeIds String[] @default([])
+  startDate   DateTime @db.Date
+  endDate     DateTime @db.Date
+  reason      String?
+  createdBy   String
+  createdAt   DateTime @default(now())
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([channelId, endDate])
+}
+
+/// Senkron logu: ne gönderildi / alındı, sonuç, kanalın uyarıları ve hata. 90 gün saklanır.
+model ChannelSyncLog {
+  id          String             @id @default(uuid())
+  hotelId     String
+  channelId   String
+  kind        ChannelSyncKind
+  status      ChannelSyncStatus
+  trigger     ChannelSyncTrigger
+  summary     String
+  details     Json               @default("{}")
+  error       String?
+  /// Kanalın iş kimlikleri (Channex "task" kimliği; destek talebinde istenir).
+  externalIds String[]           @default([])
+  windowFrom  DateTime?          @db.Date
+  windowTo    DateTime?          @db.Date
+  durationMs  Int
+  createdAt   DateTime           @default(now())
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([channelId, createdAt(sort: Desc), id])
+  @@index([channelId, kind, createdAt])
+  @@index([channelId, status, createdAt])
+  @@index([createdAt])
+}
+
+/// Kanaldaki rezervasyon (OTA rezervasyonu ya da iCal kaydı) ve bizdeki karşılığı. Her oda
+/// ayrı bir `Reservation`dır (`channelRoomIndex`). Revizyonlar sırayla uygulanır; eski
+/// revizyon yenisinin üstüne yazılmaz (`appliedRevisionAt`).
+model ChannelBooking {
+  id                String               @id @default(uuid())
+  hotelId           String
+  channelId         String
+  externalBookingId String
+  externalCode      String?
+  otaName           String?
+  status            ChannelBookingStatus @default(ACTIVE)
+  state             ChannelBookingState  @default(PENDING)
+  stateReason       String?
+  guestName         String?
+  checkIn           DateTime?            @db.Date
+  checkOut          DateTime?            @db.Date
+  roomCount         Int                  @default(1)
+  amount            Decimal?             @db.Decimal(12, 2)
+  currency          String?
+  appliedRevisionAt DateTime?
+  resolvedAt        DateTime?
+  resolvedBy        String?
+  resolutionNote    String?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  channel      Channel                  @relation(fields: [channelId], references: [id], onDelete: Restrict)
+  revisions    ChannelBookingRevision[]
+  reservations Reservation[]
+
+  @@unique([channelId, externalBookingId])
+  @@index([channelId, createdAt(sort: Desc), id])
+  // Dikkat isteyenler (rozet ve süzgeç).
+  @@index([hotelId, state, updatedAt])
+}
+
+/// Kanaldan gelen revizyon (yeni / değişiklik / iptal): kalıcı olarak saklanır, kanala
+/// teyit edilir, sonra aktör işler. Kart bilgisi saklanmaz (normalleştirilmiş gövde).
+model ChannelBookingRevision {
+  id                 String              @id @default(uuid())
+  hotelId            String
+  channelId          String
+  bookingId          String
+  externalRevisionId String
+  kind               ChannelRevisionKind
+  occurredAt         DateTime
+  payload            Json
+  receivedAt         DateTime            @default(now())
+  processedAt        DateTime?
+  outcome            String?
+  error              String?
+
+  channel Channel        @relation(fields: [channelId], references: [id], onDelete: Restrict)
+  booking ChannelBooking @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+
+  @@unique([channelId, externalRevisionId])
+  @@index([bookingId, occurredAt])
 }

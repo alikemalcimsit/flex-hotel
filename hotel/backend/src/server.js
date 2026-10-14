@@ -18,6 +18,7 @@ import { startConciergeJobs } from './modules/concierge/jobs.js';
 import { startNotificationJobs } from './modules/notifications/jobs.js';
 import { startLostItemJobs } from './modules/lost-items/jobs.js';
 import { startReportJobs } from './modules/reports/jobs.js';
+import { startChannelManagerJobs } from './modules/channel-manager/jobs.js';
 import { disconnectReporting } from './modules/reports/queries.js';
 import { closeProviders } from './modules/notifications/providers/index.js';
 
@@ -90,6 +91,7 @@ const stopChannelJobs = startChannelJobs(app.log);
 const stopConciergeJobs = startConciergeJobs(app.log);
 const stopLostItemJobs = startLostItemJobs(app.log);
 const stopReportJobs = startReportJobs(app.log);
+const stopChannelManagerJobs = startChannelManagerJobs(app.log);
 
 // Açık socket bağlantıları kapatılmazsa HTTP sunucusu kapanmayı bekler ve
 // süreç yöneticisi (systemd) onu zorla öldürene kadar asılı kalır.
@@ -103,6 +105,7 @@ app.addHook('onClose', async () => {
   stopConciergeJobs();
   stopLostItemJobs();
   stopReportJobs();
+  stopChannelManagerJobs();
   if (!(await actorRegistry.idle(SHUTDOWN_DRAIN_MS))) {
     app.log.warn('Arka plan aktörleri kapanış süresinde bitmedi; kalan işler açılışta toplanacak');
   }
