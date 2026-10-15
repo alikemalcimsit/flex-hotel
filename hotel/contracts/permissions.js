@@ -115,6 +115,13 @@ export const PERMISSIONS = Object.freeze({
   /** Promosyon açmak / düzenlemek / yayına almak, kupon üretmek ve kapatmak. */
   PROMOTIONS_MANAGE: 'promotions.manage',
 
+  /** Acente bonusu (modül 35): hedef / prim kuralları, ilerleme paneli ve hak ediş raporu. */
+  AGENCY_BONUS_VIEW: 'agency_bonus.view',
+  /** Kural açmak / düzenlemek / yürürlüğe almak, hak edişi hesaplamak, onaya göndermek, yeniden açmak. */
+  AGENCY_BONUS_MANAGE: 'agency_bonus.manage',
+  /** Onaylı hak edişi "ödendi" işaretlemek ve işareti gerekçeyle geri almak. */
+  AGENCY_BONUS_PAY: 'agency_bonus.pay',
+
   /** Kanal yönetimi (modül 33): kanallar, eşleştirme, senkron logu, kanal rezervasyonları. */
   CHANNEL_MANAGER_VIEW: 'channel_manager.view',
   /** Kanal bağlamak / düzenlemek / senkrona almak, eşleştirme, stop-sale, elle senkron. */
@@ -180,6 +187,9 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.AGENCIES_MANAGE]: 'Acente kartı ve kontratı düzenle (fiyat, stop-sale, satışa aç)',
   [PERMISSIONS.PROMOTIONS_VIEW]: 'Promosyonları, kuponları ve kullanım raporunu görüntüle',
   [PERMISSIONS.PROMOTIONS_MANAGE]: 'Promosyon aç, düzenle, yayına al; kupon üret ve kapat',
+  [PERMISSIONS.AGENCY_BONUS_VIEW]: 'Acente hedef / prim kurallarını, ilerlemeyi ve hak ediş raporunu görüntüle',
+  [PERMISSIONS.AGENCY_BONUS_MANAGE]: 'Prim kuralı aç, düzenle, yürürlüğe al; hak edişi hesapla ve onaya gönder',
+  [PERMISSIONS.AGENCY_BONUS_PAY]: 'Onaylı prim hak edişini ödendi işaretle',
   [PERMISSIONS.CHANNEL_MANAGER_VIEW]: 'Kanalları, senkron logunu ve kanal rezervasyonlarını görüntüle',
   [PERMISSIONS.CHANNEL_MANAGER_MANAGE]: 'Kanal bağla, eşleştir, stop-sale koy, elle senkronla',
   [PERMISSIONS.ACTORS_VIEW]: 'Aktör panelini görüntüle',
@@ -253,6 +263,11 @@ export const PERMISSION_GROUPS = Object.freeze([
   { key: 'budget', label: 'Bütçe', permissions: [PERMISSIONS.BUDGET_VIEW, PERMISSIONS.BUDGET_MANAGE, PERMISSIONS.BUDGET_APPROVE] },
   { key: 'agencies', label: 'Acente ve kontrat', permissions: [PERMISSIONS.AGENCIES_VIEW, PERMISSIONS.AGENCIES_MANAGE] },
   { key: 'promotions', label: 'Promosyon ve kupon', permissions: [PERMISSIONS.PROMOTIONS_VIEW, PERMISSIONS.PROMOTIONS_MANAGE] },
+  {
+    key: 'agency_bonus',
+    label: 'Acente primi',
+    permissions: [PERMISSIONS.AGENCY_BONUS_VIEW, PERMISSIONS.AGENCY_BONUS_MANAGE, PERMISSIONS.AGENCY_BONUS_PAY],
+  },
   {
     key: 'channel_manager',
     label: 'Kanal yönetimi',
@@ -339,6 +354,11 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     // Hangi kanalda hangi fiyattan satılacağı ticari karar: müdürün.
     PERMISSIONS.CHANNEL_MANAGER_VIEW,
     PERMISSIONS.CHANNEL_MANAGER_MANAGE,
+    // Acente hedef primi ticari söz: kuralı ve hak edişi müdür hazırlar; onayı (dört göz) başka
+    // bir yetkili verir. Ödeme işaretini muhasebe yapar ama müdür de yapabilir (küçük otel).
+    PERMISSIONS.AGENCY_BONUS_VIEW,
+    PERMISSIONS.AGENCY_BONUS_MANAGE,
+    PERMISSIONS.AGENCY_BONUS_PAY,
   ]),
   FRONT_DESK: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,
@@ -412,6 +432,9 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.AGENCIES_VIEW,
     // Verilen indirimin geliri ne kadar düşürdüğünü muhasebe izler; promosyonu düzenlemez.
     PERMISSIONS.PROMOTIONS_VIEW,
+    // Acente priminin hak edişini muhasebe izler ve ödendi işaretler; kuralı düzenlemez.
+    PERMISSIONS.AGENCY_BONUS_VIEW,
+    PERMISSIONS.AGENCY_BONUS_PAY,
   ]),
   FNB: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,

@@ -2197,10 +2197,67 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 35. Acente bonus / sadakat — arkadaşın
 **Gün sonu:** Acentelerin satış hedefleri ve hak ettiği primler dönem sonunda raporlanıyor.
-- [ ] Backend: AgencyBonusRule, AgencyBonus tabloları; dönem sonu hesaplama servisi
-- [ ] Ekran: Bonus kuralı (acente, dönem, hedef gece/ciro, prim oranı)
-- [ ] Ekran: Acente puan / hedef durumu
-- [ ] Ekran: Hak ediş raporu (dönem sonu, onaylı)
+- [x] Backend: AgencyBonusRule, AgencyBonus tabloları; dönem sonu hesaplama servisi
+- [x] Ekran: Bonus kuralı (acente, dönem, hedef gece/ciro, prim oranı)
+- [x] Ekran: Acente puan / hedef durumu
+- [x] Ekran: Hak ediş raporu (dönem sonu, onaylı)
+
+> **📌 Modül 35 tamamlandı (15 Ekim 2026 — Ahmet).**
+>
+> **Kararlar (kullanıcı, 15 Ekim 2026):** üretim = dönemin içine düşen, misafirin **gerçekten kaldığı** geceler (iptal /
+> gelmeyen sayılmaz; dönem sınırını aşan konaklama gece gece bölünür; eldeki geceler yalnızca tahmin); matrah = folyoya
+> işlenen **vergisiz oda geliri** (gelir raporuyla aynı tanım, komisyon düşülmez; ciro hedefi de bununla ölçülür); hak ediş
+> **onay kuyruğuna** gider, **dört göz** (gönderen onaylayamaz); "acente puanı" = hedefe ulaşma yüzdesi + kademe + zamana göre
+> durum (ayrı puan defteri yok — misafir sadakati modül 56).
+>
+> **Veri** (migration `20261015090000_agency_bonus`): `AgencyBonusRule` (acente, dönem ≤ 731 gün, ölçüt gece / ciro, uygulama
+> **tüm üretime** (geriye dönük) ya da **yalnız aşan kısma** (dilimli), hedef, 1–10 kademe, oda tipi süzgeci, prim tavanı;
+> taslak → yürürlükte → iptal; **aynı acentenin aynı ölçütte çakışan iki yürürlükteki kuralı olamaz** — ölçüt başına EXCLUDE;
+> ilerleme özeti kolonları ham SQL'le yazılır, `updatedAt`'e dokunmaz), `AgencyBonus` (kural başına tek hak ediş; kuralın hesap
+> anındaki kopyası + sonuç + durum izi CHECK'i: hesaplandı → onay bekliyor → onaylandı → ödendi), `AgencyBonusLine` (hak edişin
+> dayandığı rezervasyonlar **dondurulur**: rezervasyon başına dönemdeki gece ve ciro). Uyarı türü `AGENCY_BONUS`, onay türü
+> `AGENCY_BONUS` (dört göz listesinde).
+>
+> **Hesap** (`agency-bonus/rules.js`, birim testli): eşiğe eşit üretim kademeye ulaşır; dilimli hesapta gece ölçütünün dilimi
+> "dilimdeki gece × dönemin ortalama gece geliri" ile tutara çevrilir (hangi gecenin "aşan" olduğu sırasından bağımsız); prim
+> yuvarlanmış dilimlerin toplamıdır (döküm toplamı primi tutar); tavan; eksi ciro sıfır. Ters kayıt **asıl gecenin gününe** yazılır
+> (dönem sonra iptal edilen gece o dönemden düşer). Zamana göre durum: doğrusal beklentiye göre önünde / yakın (%10) / gerisinde.
+>
+> **Akış:** dönemin son gecesi kapanınca zamanlanmış iş (30 dk) hak edişi **kendisi hesaplar**, yöneticinin ziline "onaya gönderin"
+> düşer; dönem içinde kademe yükselince bir kez uyarı. Onaya gönderirken **bayatlık** denetlenir (kural hesaptan sonra değiştiyse
+> ya da bugünkü üretim hesaptakinden farklıysa önce yeniden hesap). Prim doğmayan dönem kuyruğa gitmeden kapanır. Ret / süre dolumu
+> (7 gün) "hesaplandı"ya döner (gerekçe görünür); onaylı ama ödenmemiş hak ediş gerekçeyle yeniden açılır (sürüm artar); muhasebe
+> ödendi işaretler (gün + belge no; ileri tarih ve onaydan önce olamaz), gerekçeyle geri alır. Hak edişi onaya gitmiş kural
+> değiştirilemez / iptal edilemez; dönemi uzatılan kuralın taslak hak edişi silinir. Kilit: kural → hak ediş.
+>
+> **API** (`/agency-bonus`): özet, kurallar (liste: evre / durum / arama / hedefe ulaşma sırası; önizleme; aç / düzenle / yürürlüğe al /
+> iptal / sil / hesapla), hak edişler (rapor: durum kırılımıyla; ekran: bugünkü veriyle fark; döküm sayfalı + arama; Excel parçalı;
+> onaya gönder / yeniden aç / ödendi / geri al). İzinler `agency_bonus.view` (müdür, muhasebe), `.manage` (müdür), `.pay`
+> (muhasebe, müdür). Canlı kanal `agency-bonus.changed`.
+>
+> **Ekran:** `/acente-primleri` (özet kutuları; hedef durumu: ilerleme çubuğu kademe işaretleriyle, puan, kademe, tempo; hak ediş
+> raporu), kural formu (kademe satırları, okunur kademe cümleleri, **kaydetmeden önizleme**), kural ekranı (canlı: gerçekleşen,
+> eldekiyle tahmin, şu ana kadarki / tahmini prim, dilim dökümü, kademe merdiveni, aylık üretim), hak ediş ekranı (rakamlar, uyarılar,
+> akış, geçmiş, rezervasyon dökümü, Excel), acente kartında "Prim ve hedef" sekmesi; onay penceresinde hak edişe bağlantı.
+>
+> **Ölçüm** (`scripts/perf-agency-bonus.mjs`; 550 bin rezervasyon, 3000 acente, 1803 kural, 25 bin rezervasyonlu "dev tur
+> operatörü"): ilerleme işi (1202 kural, tek sorgu) 0,76 sn; liste 8–16 ms; özet 4 ms; dev acentenin kural ekranı 0,36 sn; hak
+> ediş hesabı 2,4 sn (ilk sürüm 4,6–6,6 sn idi; döküm `INSERT … SELECT` ile veritabanında yazılıyor); döküm sayfası 16–150 ms;
+> 25 bin satır Excel 1,6 sn (10 binlik parçalar). Plan: acente index'i + gece / folyo index'leri.
+>
+> **Test:** kural motoru 22 + sözleşme 12 + form 7 birim; entegrasyon 27 (üretim tanımı, süzgeç, ters kayıt, işlenmemiş gece,
+> eldeki, yaşam döngüsü, çakışma + eşzamanlı yürürlüğe alma, eşzamanlı hesap, bayatlık, dört göz, ret / süre dolumu, prim yok,
+> ödeme / geri alma / yeniden açma, dilimli + tavan, ilerleme özeti ve kademe uyarısı, dönem sonu işi, liste / rapor / döküm,
+> önizleme, izinler, otel kapsamı, bozuk tarih 400).
+>
+> **Yan düzeltmeler (bu modülde bulundu):** ortak `dateField` boş / bozuk tarihte durdurucu hata (öncesinde dönem denetimi
+> `toISOString`'de çöküyordu: formda doğrulama sessizce duruyor, sorguda 400 yerine 500 — modül 29, 31, 33 şemaları da
+> etkileniyordu); form içindeki tipsiz düğmeler formu gönderiyordu (kontrat ekranında "Değişiklikleri at" değişikliği
+> **kaydediyordu**; promosyon formunda "Vazgeç" kaydediyordu; kur satırı ekle / sil ve çamaşır "Vazgeç" formu gönderiyordu) — 17,
+> 19, 29, 31, 33'te düzeltildi; modül 4 ve 6 ekranlarında aynı kalıp var (Ali'nin).
+>
+> **Devir:** acente carisinden prim düşümü / ödeme kaydı **modül 47**; kontrat fiyatı ve fiyat planı (28) değişse de prim folyoya
+> işlenen gelirden hesaplanır; misafir sadakat puanı modül 56'dır.
 
 ### 36. Call center & satış CRM — Ali Kemal
 **Gün sonu:** Telefonla gelen her talep kayıtlı; teklif gönderiliyor; takip görevleri hatırlatıyor.

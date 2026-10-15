@@ -26,6 +26,7 @@ export const APPROVAL_TYPES = Object.freeze([
   'OVERBOOKING',
   'FOLIO_VOID',
   'PAYMENT_VOID',
+  'AGENCY_BONUS',
   'OTHER',
 ]);
 
@@ -36,6 +37,7 @@ export const APPROVAL_TYPE_LABELS = Object.freeze({
   OVERBOOKING: 'Kapasite aşımı (overbooking)',
   FOLIO_VOID: 'Folyo kalemi iptali',
   PAYMENT_VOID: 'Ödeme iptali',
+  AGENCY_BONUS: 'Acente prim hak edişi',
   OTHER: 'Diğer',
 });
 
@@ -47,7 +49,7 @@ export const APPROVAL_TYPE_LABELS = Object.freeze({
  * çıkarır. İkinci bir yetkili görmeli. Reddetmek (isteği geri çekmek)
  * serbesttir: iş yapılmaz, zarar yok.
  */
-export const APPROVAL_SELF_DECISION_FORBIDDEN_TYPES = Object.freeze(['FOLIO_VOID', 'PAYMENT_VOID', 'REFUND', 'LARGE_PAYMENT']);
+export const APPROVAL_SELF_DECISION_FORBIDDEN_TYPES = Object.freeze(['FOLIO_VOID', 'PAYMENT_VOID', 'REFUND', 'LARGE_PAYMENT', 'AGENCY_BONUS']);
 
 /**
  * Bu kişi bu onayı kendi isteği olduğu için onaylayamıyor mu? Onaylayamıyorsa sebep.

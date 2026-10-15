@@ -3,6 +3,7 @@ import {
   CASH_EVENTS,
   BUDGET_EVENTS,
   AGENCY_EVENTS,
+  AGENCY_BONUS_EVENTS,
   PROMOTION_EVENTS,
   CHANNEL_EVENTS as CHANNEL_MANAGER_EVENTS,
   EXTRAS_EVENTS,
@@ -99,6 +100,9 @@ export const BUDGET_CHANNEL = 'budget.changed';
 /** Acente ve kontrat (modül 29): kart, kontrat, fiyat, stop-sale. */
 export const AGENCY_CHANNEL = 'agencies.changed';
 
+/** Acente bonusu (modül 35): prim kuralı, hak ediş (hesap, onay, ödeme), kademe ve ilerleme özeti. */
+export const AGENCY_BONUS_CHANNEL = 'agency-bonus.changed';
+
 /** Promosyon ve kupon (modül 31): promosyon, kupon üretimi / kapatma. */
 export const PROMOTION_CHANNEL = 'promotions.changed';
 
@@ -132,6 +136,7 @@ const CHANNEL_EVENTS = Object.freeze({
   [LOST_ITEMS_CHANNEL]: LOST_ITEM_EVENTS,
   [BUDGET_CHANNEL]: BUDGET_EVENTS,
   [AGENCY_CHANNEL]: AGENCY_EVENTS,
+  [AGENCY_BONUS_CHANNEL]: AGENCY_BONUS_EVENTS,
   [PROMOTION_CHANNEL]: PROMOTION_EVENTS,
   [CHANNEL_MANAGER_CHANNEL]: CHANNEL_MANAGER_EVENTS,
 });

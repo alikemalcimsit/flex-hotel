@@ -5,15 +5,18 @@ import { PageHeader } from '../../components/PageHeader.jsx';
 import { QueryFallback } from '../../components/QueryFallback.jsx';
 import { TabNav } from '../../components/TabNav.jsx';
 import { AGENCY_STATUS_TONES, useAgency, useAgencyLive } from '../../lib/agencies.js';
+import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 
 /**
  * Acente sayfasının kabuğu (modül 29): başlık ve sekmeler (genel, kontratlar,
- * rezervasyonlar ve cari). Acente bir kez yüklenir, sekmelere bağlam olarak
- * verilir; canlı kanal kartı ve kontratları tazeler.
+ * rezervasyonlar ve cari; prim izni olana prim ve hedef — modül 35). Acente bir
+ * kez yüklenir, sekmelere bağlam olarak verilir; canlı kanal kartı ve
+ * kontratları tazeler.
  */
 export function AgencyPage() {
   const { agencyId } = useParams();
   const query = useAgency(agencyId);
+  const can = useCan();
   useAgencyLive();
 
   const fallback = <QueryFallback query={query} errorTitle="Acente yüklenemedi" />;
@@ -42,6 +45,8 @@ export function AgencyPage() {
           { to: base, label: 'Genel', icon: 'building', end: true },
           { to: `${base}/kontratlar`, label: 'Kontratlar', icon: 'fileText' },
           { to: `${base}/cari`, label: 'Rezervasyonlar ve cari', icon: 'banknote' },
+          // Hedef ve prim (modül 35) yalnızca prim izni olana.
+          ...(can(PERMISSIONS.AGENCY_BONUS_VIEW) ? [{ to: `${base}/prim`, label: 'Prim ve hedef', icon: 'coins' }] : []),
         ]}
       />
       <Outlet context={{ agency }} />

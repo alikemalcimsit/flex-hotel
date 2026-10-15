@@ -197,7 +197,7 @@ function OrderForm({ data, catalog, onClose, onDone }) {
           <span className="block text-xs text-ink-muted">Liste fiyatı; vergi folyoda hesaplanır. Ücret teslimde folyoya yazılır.</span>
         </span>
         <span className="flex gap-2">
-          <Button variant="outline" onClick={onClose} disabled={busy}>Vazgeç</Button>
+          <Button type="button" variant="outline" onClick={onClose} disabled={busy}>Vazgeç</Button>
           <Button type="submit" icon="check" disabled={busy || totals.count === 0}>{busy ? 'Kaydediliyor…' : 'Siparişi al'}</Button>
         </span>
       </div>

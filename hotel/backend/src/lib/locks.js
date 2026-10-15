@@ -23,7 +23,9 @@
  * gönderim) ve kanal rezervasyonu (revizyonlar sırayla uygulanır) — kanal
  * rezervasyonu rezervasyondan **önce** kilitlenir (kanal rezervasyonu →
  * rezervasyon → oda tipi …): revizyonu işleyen iş, rezervasyonu açan / değiştiren
- * servisi çağırmadan önce kanal rezervasyonunu tutar.
+ * servisi çağırmadan önce kanal rezervasyonunu tutar. Modül 35: prim kuralı →
+ * hak ediş (ikisi de rezervasyon kilitlemez; hak ediş hesabı rezervasyonları
+ * yalnızca okur). Onay kararı hak edişi commit'ten sonra, ayrı işlemde kilitler.
  *
  * Soft-delete edilmiş satırlar kilitlenmez ve "bulunamadı" sayılır.
  */
@@ -155,6 +157,31 @@ export function lockChannels(tx, hotelId, channelIds) {
  */
 export function lockChannelBookings(tx, hotelId, bookingIds) {
   return lockPlainRows(tx, 'ChannelBooking', hotelId, bookingIds, false);
+}
+
+/**
+ * Acente prim kuralı (modül 35): kuralı değiştiren (düzenleme, yürürlüğe alma, iptal)
+ * ve hak edişini hesaplayan / onaya gönderen işlem özel kilitler. Böylece hesap
+ * sürerken kural değişmez; aynı kural için iki hesap üst üste yazmaz.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} ruleIds
+ */
+export function lockAgencyBonusRules(tx, hotelId, ruleIds) {
+  return lockPlainRows(tx, 'AgencyBonusRule', hotelId, ruleIds, false);
+}
+
+/**
+ * Hak ediş (modül 35): onaya gönderme, onay kararı, ödeme işareti ve yeniden açma
+ * aynı anda yapılmaz. Sıra: prim kuralı → hak ediş.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} bonusIds
+ */
+export function lockAgencyBonuses(tx, hotelId, bonusIds) {
+  return lockPlainRows(tx, 'AgencyBonus', hotelId, bonusIds, false);
 }
 
 /**
