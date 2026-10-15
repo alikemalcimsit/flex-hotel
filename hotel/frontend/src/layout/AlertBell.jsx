@@ -28,6 +28,7 @@ const KIND_ICONS = Object.freeze({
   AI_BUDGET: 'zap',
   CHANNEL_BOOKING: 'globe',
   CHANNEL_SYNC: 'refresh',
+  AGENCY_BONUS: 'coins',
 });
 
 const SEVERITY_TONES = Object.freeze({

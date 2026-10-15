@@ -16,8 +16,9 @@ import {
 } from '@hotelos/hotel-contracts';
 import { Alert, Button, Card, Input, Textarea } from '@hotelos/ui';
 import { ChoiceChips } from '../../components/ChoiceChips.jsx';
+import { MultiChips } from '../../components/MultiChips.jsx';
 import { apiPatch, apiPost } from '../../lib/api.js';
-import { describeRule, formOf, payloadOf, toggle } from '../../lib/promotionForm.js';
+import { describeRule, formOf, payloadOf } from '../../lib/promotionForm.js';
 import { promotionKeys } from '../../lib/promotions.js';
 import { validateWith } from '../../lib/validate.js';
 import { toastError, toastSuccess } from '../../store/toast.js';
@@ -30,37 +31,6 @@ const APPLY_OPTIONS = Object.freeze([
   { value: 'AUTO', label: 'Kendiliğinden (koşul tutunca)' },
   { value: 'COUPON', label: 'Kuponla (kod girilince)' },
 ]);
-
-/**
- * Çoklu seçim çipleri: seçili olanlar koyu. Boş seçim "hepsi" demekse
- * `allLabel` ilk çip olarak durur ve seçimi temizler.
- *
- * @param {{ label: string, options: Array<{ value: string, label: string }>, values: string[], onChange: (values: string[]) => void, allLabel?: string, disabled?: boolean, error?: string }} props
- */
-function MultiChips({ label, options, values, onChange, allLabel, disabled = false, error }) {
-  const chip = (selected) =>
-    `rounded-full border px-3 py-1 text-xs font-semibold transition-colors duration-150 disabled:opacity-50 ${
-      selected ? 'border-ink bg-ink text-white' : 'border-line-strong bg-surface text-ink-soft hover:border-ink hover:text-ink'
-    }`;
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span className="text-xs font-bold uppercase tracking-[0.06em] text-ink-muted">{label}</span>
-      <div className="flex flex-wrap gap-1.5" role="group" aria-label={label}>
-        {allLabel && (
-          <button type="button" aria-pressed={values.length === 0} disabled={disabled} onClick={() => onChange([])} className={chip(values.length === 0)}>
-            {allLabel}
-          </button>
-        )}
-        {options.map((option) => (
-          <button key={option.value} type="button" aria-pressed={values.includes(option.value)} disabled={disabled} onClick={() => onChange(toggle(values, option.value))} className={chip(values.includes(option.value))}>
-            {option.label}
-          </button>
-        ))}
-      </div>
-      {error && <p className="text-xs font-semibold text-sec-strong">{error}</p>}
-    </div>
-  );
-}
 
 /** @param {{ title: string, hint?: string, children: React.ReactNode }} props */
 function Section({ title, hint, children }) {
@@ -152,7 +122,7 @@ export function PromotionForm({ promotion, readOnly = false, onSaved, onCancel }
             tone="warning"
             title="Promosyon bu arada değişti"
             action={
-              <Button size="sm" variant="outline" icon="refresh" onClick={() => { setBase(promotion); setForm(formOf(promotion)); setErrors({}); }}>
+              <Button type="button" size="sm" variant="outline" icon="refresh" onClick={() => { setBase(promotion); setForm(formOf(promotion)); setErrors({}); }}>
                 Güncel hâli yükle
               </Button>
             }
@@ -264,7 +234,7 @@ export function PromotionForm({ promotion, readOnly = false, onSaved, onCancel }
         {!readOnly && (
           <div className="flex gap-2">
             {onCancel && (
-              <Button variant="outline" onClick={onCancel} disabled={busy} className="flex-1">
+              <Button type="button" variant="outline" onClick={onCancel} disabled={busy} className="flex-1">
                 Vazgeç
               </Button>
             )}

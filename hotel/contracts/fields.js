@@ -33,11 +33,19 @@ export function decimalField({ scale, min, max, label }) {
     });
 }
 
-/** Gün hassasiyetli tarih. `<input type="date">` "YYYY-MM-DD" gönderir → UTC gün başı. */
+/**
+ * Gün hassasiyetli tarih. `<input type="date">` "YYYY-MM-DD" gönderir → UTC gün başı.
+ *
+ * Geçersiz tarih **durdurucu** hatadır (`abort`): nesnenin dönem denetimleri
+ * (bitiş ≥ başlangıç, en fazla N gün) bozuk `Date` ile çalışıp `toISOString`'de
+ * çökmesin — boş tarihli form doğrulaması tarayıcıda sessizce dururdu, sorgu
+ * parametresindeki bozuk tarih sunucuda 400 yerine 500 olurdu.
+ */
 export const dateField = z
   .union([z.string(), z.date()])
+  .refine((value) => value !== '', { message: 'Tarih seçin', abort: true })
   .transform((value) => (value instanceof Date ? value : new Date(value)))
-  .refine((value) => !Number.isNaN(value.getTime()), { message: 'Geçersiz tarih' });
+  .refine((value) => !Number.isNaN(value.getTime()), { message: 'Geçersiz tarih', abort: true });
 
 /**
  * Optimistic lock alanı: istemci en son gördüğü `updatedAt` değerini geri yollar.

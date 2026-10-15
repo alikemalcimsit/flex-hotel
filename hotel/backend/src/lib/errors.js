@@ -294,6 +294,31 @@ const CONSTRAINT_RULES = Object.freeze({
   Reservation_channel_room: { code: 'CONSTRAINT', message: 'Kanal rezervasyonuna bağlı rezervasyonun oda sırası olmalı.' },
   WaitlistEntry_date_order: { code: 'CONSTRAINT', message: 'Çıkış tarihi girişten en az bir gece sonra olmalı.' },
   WaitlistEntry_party_valid: { code: 'CONSTRAINT', message: 'En az 1 yetişkin olmalı; çocuk sayısı eksi olamaz.' },
+  AgencyBonusRule_name_not_blank: { code: 'CONSTRAINT', message: 'Kural adı en az 2 karakter olmalı.' },
+  AgencyBonusRule_period_valid: { code: 'CONSTRAINT', message: 'Kural dönemi bitişi başlangıcından önce olamaz ve en fazla 731 gün sürebilir.' },
+  AgencyBonusRule_target_valid: { code: 'CONSTRAINT', message: 'Hedef 0\'dan büyük olmalı; gece hedefi tam sayıdır.' },
+  AgencyBonusRule_tiers_shape: { code: 'CONSTRAINT', message: 'Kuralın 1 ile 10 arasında kademesi olmalı.' },
+  AgencyBonusRule_room_types: { code: 'CONSTRAINT', message: 'Oda tipi süzgecinde en fazla 100 oda tipi olabilir.' },
+  AgencyBonusRule_max_bonus: { code: 'CONSTRAINT', message: 'Prim tavanı 0\'dan büyük olmalı (tavansız için boş bırakın).' },
+  AgencyBonusRule_currency_code: { code: 'CONSTRAINT', message: 'Kuralın para birimi üç harfli kod olmalı.' },
+  AgencyBonusRule_progress_valid: { code: 'CONSTRAINT', message: 'Kuralın ilerleme özeti tutarsız.' },
+  AgencyBonusRule_status_trail: { code: 'CONSTRAINT', message: 'Kuralın durumu ile yürürlük / iptal kaydı uyuşmuyor.' },
+  AgencyBonusRule_one_active_nights: {
+    code: 'BONUS_RULE_OVERLAP',
+    message: 'Bu acentenin bu dönemle çakışan, gece ölçütlü yürürlükte başka bir prim kuralı var. Aynı üretime aynı türden iki prim verilemez.',
+  },
+  AgencyBonusRule_one_active_revenue: {
+    code: 'BONUS_RULE_OVERLAP',
+    message: 'Bu acentenin bu dönemle çakışan, ciro ölçütlü yürürlükte başka bir prim kuralı var. Aynı üretime aynı türden iki prim verilemez.',
+  },
+  AgencyBonus_ruleId_key: { code: 'DUPLICATE', message: 'Bu kuralın hak edişi az önce başka bir işlemle hesaplandı; sayfayı yenileyin.' },
+  AgencyBonus_period_valid: { code: 'CONSTRAINT', message: 'Hak ediş dönemi tutarsız.' },
+  AgencyBonus_figures_valid: { code: 'CONSTRAINT', message: 'Hak ediş rakamları eksi olamaz.' },
+  AgencyBonus_amount_valid: { code: 'CONSTRAINT', message: 'Hak ediş tutarı tutarsız (tavan / brüt prim).' },
+  AgencyBonus_room_types: { code: 'CONSTRAINT', message: 'Hak edişin oda tipi süzgeci boş olamaz.' },
+  AgencyBonus_currency_code: { code: 'CONSTRAINT', message: 'Hak edişin para birimi üç harfli kod olmalı.' },
+  AgencyBonus_status_trail: { code: 'CONSTRAINT', message: 'Hak edişin durumu ile onay / ödeme kaydı uyuşmuyor.' },
+  AgencyBonusLine_nights_valid: { code: 'CONSTRAINT', message: 'Hak ediş satırının gecesi eksi olamaz.' },
 });
 
 /**

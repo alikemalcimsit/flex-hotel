@@ -61,6 +61,8 @@ export const LOST_ITEMS_CHANNEL = 'lost-items.changed';
 export const BUDGET_CHANNEL = 'budget.changed';
 /** Acente ve kontrat (modül 29): kart, kontrat, fiyat, stop-sale. */
 export const AGENCY_CHANNEL = 'agencies.changed';
+/** Acente bonusu (modül 35): prim kuralı, hak ediş, kademe ve ilerleme özeti. */
+export const AGENCY_BONUS_CHANNEL = 'agency-bonus.changed';
 /** Promosyon ve kupon (modül 31): promosyon, kupon üretimi / kapatma. */
 export const PROMOTION_CHANNEL = 'promotions.changed';
 /** Kanal yönetimi (modül 33): kanal ayarı, eşleştirme, stop-sale, senkron logu, kanal rezervasyonları. */

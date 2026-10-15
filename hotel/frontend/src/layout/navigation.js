@@ -117,6 +117,13 @@ export const NAV_SECTIONS = Object.freeze([
         icon: 'building',
         permission: PERMISSIONS.AGENCIES_VIEW,
       },
+      // Acente bonusu (modül 35): müdür kural / hak ediş hazırlar, muhasebe izler ve ödendi işaretler.
+      {
+        label: 'Acente primleri',
+        to: '/acente-primleri',
+        icon: 'coins',
+        permission: PERMISSIONS.AGENCY_BONUS_VIEW,
+      },
       // Promosyon ve kupon (modül 31): müdür düzenler, muhasebe kullanım raporunu görür.
       {
         label: 'Promosyonlar',

@@ -443,6 +443,7 @@ export const EVENT_CATALOG = Object.freeze({
       'AI_BUDGET',
       'CHANNEL_BOOKING',
       'CHANNEL_SYNC',
+      'AGENCY_BONUS',
     ]),
     userId: z.string().uuid().nullable(),
     permission: z.string().nullable(),
@@ -660,6 +661,34 @@ export const EVENT_CATALOG = Object.freeze({
     agencyId: z.string().uuid(),
     contractId: z.string().uuid(),
     change: z.enum(['ADDED', 'REMOVED']),
+  }),
+
+  /* ── Acente bonusu (modül 35) ──
+     Prim kuralları, ilerleme paneli ve hak ediş raporu bunlarla canlı tazelenir
+     (`AGENCY_BONUS_EVENTS`); yükte yalnızca kimlik. */
+
+  /** Prim kuralı açıldı, düzenlendi, yürürlüğe alındı, iptal edildi ya da (taslak) silindi. */
+  'agency.bonus.rule.changed': hotelScoped.extend({
+    ruleId: z.string().uuid(),
+    agencyId: z.string().uuid(),
+    change: z.enum(['CREATED', 'UPDATED', 'ACTIVATED', 'CANCELLED', 'DELETED']),
+  }),
+  /** Hak ediş hesaplandı / onaya gitti / karar verildi / ödendi / yeniden açıldı. */
+  'agency.bonus.changed': hotelScoped.extend({
+    bonusId: z.string().uuid(),
+    ruleId: z.string().uuid(),
+    agencyId: z.string().uuid(),
+    change: z.enum(['CALCULATED', 'RECALCULATED', 'SUBMITTED', 'APPROVED', 'REJECTED', 'EXPIRED', 'PAID', 'PAYMENT_REVERTED', 'REOPENED']),
+  }),
+  /** Acente dönem içinde bir prim kademesine ulaştı (gerçekleşen üretimle; kademe başına bir kez). */
+  'agency.bonus.tier_reached': hotelScoped.extend({
+    ruleId: z.string().uuid(),
+    agencyId: z.string().uuid(),
+    tier: z.number().int().min(1),
+  }),
+  /** Zamanlanmış iş kuralların ilerleme özetini tazeledi (değişen kural sayısı). */
+  'agency.bonus.progress.refreshed': hotelScoped.extend({
+    rules: z.number().int().min(1),
   }),
 
   /* ── Promosyon ve kupon (modül 31) ──
@@ -959,6 +988,14 @@ export const BUDGET_EVENTS = Object.freeze([
 
 /** Acente ve kontrat (modül 29): ekranlar bunlarla tazelenir (`agencies.changed` kanalı). */
 export const AGENCY_EVENTS = Object.freeze(['agency.changed', 'agency.contract.changed', 'agency.stop_sale.changed']);
+
+/** Acente bonusu (modül 35): ekranlar bunlarla tazelenir (`agency-bonus.changed` kanalı). */
+export const AGENCY_BONUS_EVENTS = Object.freeze([
+  'agency.bonus.rule.changed',
+  'agency.bonus.changed',
+  'agency.bonus.tier_reached',
+  'agency.bonus.progress.refreshed',
+]);
 
 /** Promosyon ve kupon (modül 31): ekranlar bunlarla tazelenir (`promotions.changed` kanalı). */
 export const PROMOTION_EVENTS = Object.freeze(['promotion.changed', 'promotion.coupons.changed']);

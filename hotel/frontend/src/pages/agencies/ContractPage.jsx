@@ -251,7 +251,7 @@ function ContractView({ contract }) {
           {editable && (
             <div className="flex flex-wrap items-center gap-3">
               <Button type="submit" icon="check" disabled={!headerDirty || saveHeader.isPending}>{saveHeader.isPending ? 'Kaydediliyor…' : 'Bilgileri kaydet'}</Button>
-              {headerDirty && <Button variant="outline" onClick={() => { setHeader(headerBase.values); setHeaderErrors({}); }}>Değişiklikleri at</Button>}
+              {headerDirty && <Button type="button" variant="outline" onClick={() => { setHeader(headerBase.values); setHeaderErrors({}); }}>Değişiklikleri at</Button>}
               <p className="text-xs text-ink-muted">Dönem değişince fiyat ve stop-sale tarihleri yeni dönemin içinde kalmalı.</p>
             </div>
           )}

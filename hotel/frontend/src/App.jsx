@@ -82,6 +82,14 @@ const AgencyPage = lazy(() => import('./pages/agencies/AgencyPage.jsx').then((m)
 const AgencyOverviewTab = lazy(() => import('./pages/agencies/AgencyOverviewTab.jsx').then((m) => ({ default: m.AgencyOverviewTab })));
 const AgencyContractsTab = lazy(() => import('./pages/agencies/AgencyContractsTab.jsx').then((m) => ({ default: m.AgencyContractsTab })));
 const AgencyAccountTab = lazy(() => import('./pages/agencies/AgencyAccountTab.jsx').then((m) => ({ default: m.AgencyAccountTab })));
+const AgencyBonusTab = lazy(() => import('./pages/agencies/AgencyBonusTab.jsx').then((m) => ({ default: m.AgencyBonusTab })));
+const AgencyBonusLayout = lazy(() => import('./pages/agency-bonus/AgencyBonusLayout.jsx').then((m) => ({ default: m.AgencyBonusLayout })));
+const BonusRulesTab = lazy(() => import('./pages/agency-bonus/BonusRulesTab.jsx').then((m) => ({ default: m.BonusRulesTab })));
+const BonusSettlementsTab = lazy(() => import('./pages/agency-bonus/BonusSettlementsTab.jsx').then((m) => ({ default: m.BonusSettlementsTab })));
+const NewBonusRulePage = lazy(() => import('./pages/agency-bonus/BonusRuleFormPage.jsx').then((m) => ({ default: m.NewBonusRulePage })));
+const EditBonusRulePage = lazy(() => import('./pages/agency-bonus/BonusRuleFormPage.jsx').then((m) => ({ default: m.EditBonusRulePage })));
+const BonusRulePage = lazy(() => import('./pages/agency-bonus/BonusRulePage.jsx').then((m) => ({ default: m.BonusRulePage })));
+const BonusSettlementPage = lazy(() => import('./pages/agency-bonus/BonusSettlementPage.jsx').then((m) => ({ default: m.BonusSettlementPage })));
 const PromotionsLayout = lazy(() => import('./pages/promotions/PromotionsLayout.jsx').then((m) => ({ default: m.PromotionsLayout })));
 const PromotionListTab = lazy(() => import('./pages/promotions/PromotionListTab.jsx').then((m) => ({ default: m.PromotionListTab })));
 const PromotionReportTab = lazy(() => import('./pages/promotions/PromotionReportTab.jsx').then((m) => ({ default: m.PromotionReportTab })));
@@ -396,7 +404,59 @@ export default function App() {
               <Route index element={<AgencyOverviewTab />} />
               <Route path="kontratlar" element={<AgencyContractsTab />} />
               <Route path="cari" element={<AgencyAccountTab />} />
+              <Route
+                path="prim"
+                element={
+                  <RequirePermission permission={PERMISSIONS.AGENCY_BONUS_VIEW}>
+                    <AgencyBonusTab />
+                  </RequirePermission>
+                }
+              />
             </Route>
+            {/* Acente bonusu (modül 35): "yeni", "kural" ve "hak-edis/:id" sekme kabuğunun dışında. */}
+            <Route
+              path="acente-primleri"
+              element={
+                <RequirePermission permission={PERMISSIONS.AGENCY_BONUS_VIEW}>
+                  <AgencyBonusLayout />
+                </RequirePermission>
+              }
+            >
+              <Route index element={<BonusRulesTab />} />
+              <Route path="hak-edis" element={<BonusSettlementsTab />} />
+            </Route>
+            <Route
+              path="acente-primleri/yeni"
+              element={
+                <RequirePermission permission={PERMISSIONS.AGENCY_BONUS_MANAGE}>
+                  <NewBonusRulePage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="acente-primleri/kural/:ruleId"
+              element={
+                <RequirePermission permission={PERMISSIONS.AGENCY_BONUS_VIEW}>
+                  <BonusRulePage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="acente-primleri/kural/:ruleId/duzenle"
+              element={
+                <RequirePermission permission={PERMISSIONS.AGENCY_BONUS_MANAGE}>
+                  <EditBonusRulePage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="acente-primleri/hak-edis/:bonusId"
+              element={
+                <RequirePermission permission={PERMISSIONS.AGENCY_BONUS_VIEW}>
+                  <BonusSettlementPage />
+                </RequirePermission>
+              }
+            />
             {/* Promosyon ve kupon (modül 31): "yeni" ve "rapor" statik parçaları kimlikli yoldan önce eşleşir. */}
             <Route
               path="promosyonlar"

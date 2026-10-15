@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   APPROVAL_STATUS_LABELS,
+  AUDIT_ENTITY_LABELS,
   approvalDecisionError,
   approvalSelfDecisionError,
   approvalTiming,
@@ -13,6 +15,7 @@ import { Modal } from '../../components/Modal.jsx';
 import { api, apiPost } from '../../lib/api.js';
 import { approvalKeys } from '../../lib/approvals.js';
 import { formatMoney } from '../../lib/format.js';
+import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 import { formatDateTime, formatMinutes } from '../../lib/timeFormat.js';
 import { useNow } from '../../lib/useNow.js';
 import { validateWith } from '../../lib/validate.js';
@@ -40,8 +43,17 @@ const CLOCK_TICK_MS = 30_000;
  *   onClose: () => void,
  * }} props
  */
+/**
+ * Onayın ilgili kaydını açan bağlantılar (kaydın ekranını görme izni olana).
+ * Karar verici neyi onayladığını kaydın kendi ekranında da inceleyebilsin.
+ */
+const ENTITY_LINKS = Object.freeze({
+  AgencyBonus: { to: (id) => `/acente-primleri/hak-edis/${id}`, permission: PERMISSIONS.AGENCY_BONUS_VIEW },
+});
+
 export function ApprovalDetailDialog({ approvalId, canDecide, timeZone, initialMode = 'view', onClose }) {
   const queryClient = useQueryClient();
+  const can = useCan();
   const now = useNow(CLOCK_TICK_MS);
   const me = useAuthStore((state) => state.user?.email);
   /** `view` | `grant` (not isteğe bağlı) | `deny` (gerekçe zorunlu) */
@@ -188,7 +200,15 @@ export function ApprovalDetailDialog({ approvalId, canDecide, timeZone, initialM
             <Field label="Son karar anı">{item.expiresAt ? formatDateTime(item.expiresAt, timeZone) : 'Süresiz'}</Field>
             {item.entityType && (
               <Field label="İlgili kayıt">
-                {item.entityType} · <span className="font-mono text-xs">{item.entityId}</span>
+                {ENTITY_LINKS[item.entityType] && can(ENTITY_LINKS[item.entityType].permission) ? (
+                  <Link to={ENTITY_LINKS[item.entityType].to(item.entityId)} className="font-semibold text-info-ink hover:underline">
+                    {AUDIT_ENTITY_LABELS[item.entityType] ?? item.entityType}: aç
+                  </Link>
+                ) : (
+                  <>
+                    {AUDIT_ENTITY_LABELS[item.entityType] ?? item.entityType} · <span className="font-mono text-xs">{item.entityId}</span>
+                  </>
+                )}
               </Field>
             )}
             {item.pendingAction && (

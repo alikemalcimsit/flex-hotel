@@ -64,10 +64,36 @@ const existingDemo =
   (await prisma.reservation.count({ where: { hotelId, confirmationCode: { startsWith: CODE_PREFIX } } })) +
   (await prisma.agency.count({ where: { hotelId, createdBy: ACTOR } })) +
   (await prisma.promotion.count({ where: { hotelId, createdBy: ACTOR } })) +
-  (await prisma.channel.count({ where: { hotelId, createdBy: ACTOR } }));
+  (await prisma.channel.count({ where: { hotelId, createdBy: ACTOR } })) +
+  (await prisma.agencyBonusRule.count({ where: { hotelId, createdBy: ACTOR } }));
 if (process.argv.includes('--reset')) {
   await prisma.$transaction(
     async (tx) => {
+      // Demo prim kuralları (modül 35): demo acentelere bağlı bütün kurallar (personelin demo acenteye
+      // açtığı da — acente silinecek). Hak ediş satırları rezervasyona bağlı: önce hak edişler (satırlar
+      // onlarla gider), onların onay istekleri ve zil uyarıları, sonra kurallar.
+      const ruleIds = (
+        await tx.$queryRawUnsafe(
+          `SELECT "id" FROM "AgencyBonusRule" WHERE "hotelId" = $1
+             AND ("createdBy" = $2 OR "agencyId" IN (SELECT "id" FROM "Agency" WHERE "hotelId" = $1 AND "createdBy" = $2))`,
+          hotelId,
+          ACTOR,
+        )
+      ).map((row) => row.id);
+      const bonusIds = (await tx.$queryRawUnsafe(`SELECT "id" FROM "AgencyBonus" WHERE "ruleId" = ANY($1::text[])`, ruleIds)).map((row) => row.id);
+      await tx.$executeRawUnsafe(`DELETE FROM "AgencyBonus" WHERE "id" = ANY($1::text[])`, bonusIds);
+      const approvalIds = (
+        await tx.$queryRawUnsafe(`SELECT "id" FROM "Approval" WHERE "hotelId" = $1 AND "entityType" = 'AgencyBonus' AND "entityId" = ANY($2::text[])`, hotelId, bonusIds)
+      ).map((row) => row.id);
+      await tx.$executeRawUnsafe(`DELETE FROM "PendingAction" WHERE "approvalId" = ANY($1::text[])`, approvalIds);
+      await tx.$executeRawUnsafe(`DELETE FROM "Approval" WHERE "id" = ANY($1::text[])`, approvalIds);
+      await tx.$executeRawUnsafe(
+        `DELETE FROM "StaffAlert" WHERE "hotelId" = $1 AND "entityId" = ANY($2::text[])`,
+        hotelId,
+        [...bonusIds, ...ruleIds, ...approvalIds],
+      );
+      await tx.$executeRawUnsafe(`DELETE FROM "AgencyBonusRule" WHERE "id" = ANY($1::text[])`, ruleIds);
+
       const ids = `(SELECT id FROM "Reservation" WHERE "hotelId" = $1 AND "confirmationCode" LIKE '${CODE_PREFIX}%')`;
       for (const table of ['Payment', 'FolioItem', 'Folio', 'ReservationNight']) {
         await tx.$executeRawUnsafe(`DELETE FROM "${table}" WHERE "reservationId" IN ${ids}`, hotelId);
@@ -655,6 +681,136 @@ for (const [index, row] of otaUpcoming.entries()) {
   await prisma.$executeRaw`UPDATE "Reservation" SET "channelBookingId" = ${booking.id}, "channelRoomIndex" = 0 WHERE "id" = ${row.id}`;
 }
 
+// ── Acente primi (modül 35): her acenteye geçen sezon (bitti, hak edişi farklı durumlarda) ve bu sezon
+// (sürüyor) kuralı; hedefler acentenin demo üretiminden türetilir (kimi geçer, kimi geride kalır) ──
+const bonusRules = await import('../src/modules/agency-bonus/service.js');
+const bonusSettlement = await import('../src/modules/agency-bonus/settlement.js');
+const bonusProgress = await import('../src/modules/agency-bonus/progress.js');
+const approvalsService = await import('../src/modules/approvals/service.js');
+// Onay kararı hak edişe dinleyiciyle işlenir; betik uygulamayı başlatmadığı için dinleyici burada kaydedilir.
+const { registerAgencyBonusSubscribers } = await import('../src/modules/agency-bonus/subscribers.js');
+registerAgencyBonusSubscribers();
+const DEMO_APPROVER = 'genel.mudur@hotel.local';
+const DEMO_ACCOUNTANT = 'muhasebe@hotel.local';
+const asUser = (actor, fn) => core.runWithContext({ correlationId: randomUUID(), actor }, fn);
+/** Acente başına hedef çarpanı (geçen sezon / bu sezon): 1'in üstü hedefi zorlaştırır. */
+const TARGET_FACTORS = [0.85, 0.95, 0.9, 1.4, 0.92, 1.1];
+/** Geçen sezon hak edişinin varacağı durum (acente sırasıyla). */
+const PAST_OUTCOMES = ['PAID', 'APPROVED', 'PENDING', 'DRAFT', 'REJECTED', 'PAID'];
+const roundTo = (value, step) => Math.max(step, Math.round(value / step) * step);
+/** Ölçüte göre hedef ve üç kademe (hedefin %85'i, kendisi, %115'i; oranlar 1 / 2 / 3). */
+function demoTerms(metric, production, factor) {
+  const base = metric === 'NIGHTS' ? production.nights : Number(production.revenue);
+  const step = metric === 'NIGHTS' ? 5 : 10_000;
+  const target = roundTo(base * factor, step);
+  const tier = (share) => String(roundTo(target * share, step));
+  return {
+    target: String(target),
+    tiers: [
+      { threshold: tier(0.85), ratePct: '1' },
+      { threshold: tier(1), ratePct: '2' },
+      { threshold: tier(1.15), ratePct: '3' },
+    ],
+  };
+}
+const pastStart = addDays(today, -270);
+const pastEnd = addDays(today, -91);
+const seasonStart = addDays(today, -60);
+const seasonEnd = addDays(today, 120);
+let bonusCount = 0;
+for (const [index, agency] of sellableAgencies.entries()) {
+  const metric = index % 2 === 0 ? 'NIGHTS' : 'REVENUE';
+  const mode = index % 3 === 1 ? 'EXCESS' : 'WHOLE';
+  const factor = TARGET_FACTORS[index % TARGET_FACTORS.length];
+  const probe = (startDate, endDate) =>
+    asActor(() =>
+      bonusRules.previewRule(hotelId, {
+        agencyId: agency.id,
+        startDate: midnight(startDate),
+        endDate: midnight(endDate),
+        metric,
+        mode,
+        target: '1',
+        tiers: [{ threshold: '1', ratePct: '1' }],
+        roomTypeIds: [],
+        maxBonus: null,
+      }),
+    );
+  const create = async (name, startDate, endDate, production, extra = {}) => {
+    const draft = await asActor(() =>
+      bonusRules.createRule(hotelId, {
+        agencyId: agency.id,
+        name,
+        startDate: midnight(startDate),
+        endDate: midnight(endDate),
+        metric,
+        mode,
+        ...demoTerms(metric, production, factor),
+        roomTypeIds: [],
+        maxBonus: null,
+        notes: 'Demo: sezon sonu hedef primi (sözleşme ek protokolü).',
+        ...extra,
+      }),
+    );
+    return asActor(() => bonusRules.activateRule(hotelId, draft.id, { expectedUpdatedAt: new Date(draft.updatedAt) }));
+  };
+
+  // Geçen sezon: dönem bitti → hak ediş hesaplanır, durum acenteye göre ilerletilir.
+  const past = await probe(pastStart, pastEnd);
+  if (past.realized.nights > 0) {
+    const rule = await create(`Geçen sezon ${pastStart.slice(0, 4)} hedef primi`, pastStart, pastEnd, past.realized, index === 0 ? { maxBonus: '250000' } : {});
+    let bonus = await asActor(() => bonusSettlement.calculateBonus(hotelId, rule.id));
+    const outcome = PAST_OUTCOMES[index % PAST_OUTCOMES.length];
+    if (outcome !== 'DRAFT') {
+      bonus = await asActor(() => bonusSettlement.submitBonus(hotelId, bonus.id, { expectedUpdatedAt: new Date(bonus.updatedAt), note: 'Sezon kapanışı' }));
+      if (bonus.status === 'PENDING_APPROVAL' && outcome === 'REJECTED') {
+        await asUser(DEMO_APPROVER, () => approvalsService.decideApproval(hotelId, bonus.approvalId, 'DENIED', { note: 'Gelmeyen misafirler acenteyle mutabakat bekliyor' }));
+      } else if (bonus.status === 'PENDING_APPROVAL' && outcome !== 'PENDING') {
+        await asUser(DEMO_APPROVER, () => approvalsService.decideApproval(hotelId, bonus.approvalId, 'GRANTED', { note: 'Uygun' }));
+        bonus = await asActor(() => bonusSettlement.getBonus(hotelId, bonus.id));
+        if (outcome === 'PAID' && bonus.status === 'APPROVED' && Number(bonus.amount) > 0) {
+          await asUser(DEMO_ACCOUNTANT, () =>
+            bonusSettlement.markBonusPaid(hotelId, bonus.id, { expectedUpdatedAt: new Date(bonus.updatedAt), paidAt: midnight(today), paymentRef: `HVL-${index + 1}0${today.slice(5, 7)}`, note: 'Havale' }),
+          );
+        }
+      }
+    }
+    bonusCount += 1;
+  }
+
+  // Bu sezon: sürüyor; hedef, şimdiye kadarki tempoyla dönem sonuna varılacak üretimden.
+  const season = await probe(seasonStart, seasonEnd);
+  const elapsed = Math.max(1, Math.round((midnight(today) - midnight(seasonStart)) / dayMs));
+  const total = Math.round((midnight(seasonEnd) - midnight(seasonStart)) / dayMs) + 1;
+  const pace = total / elapsed;
+  await create(`Bu sezon ${seasonStart.slice(0, 4)}–${seasonEnd.slice(0, 4)} hedef primi`, seasonStart, seasonEnd, {
+    nights: Math.max(1, Math.round(season.realized.nights * pace)),
+    revenue: String(Math.max(1, Number(season.realized.revenue) * pace)),
+  });
+}
+// Gelecek sezon: taslak (yürürlüğe alınmamış) örnek.
+if (sellableAgencies.length) {
+  await asActor(() =>
+    bonusRules.createRule(hotelId, {
+      agencyId: sellableAgencies[0].id,
+      name: 'Gelecek sezon hedef primi (taslak)',
+      startDate: midnight(addDays(today, 150)),
+      endDate: midnight(addDays(today, 330)),
+      metric: 'REVENUE',
+      mode: 'EXCESS',
+      target: '3000000',
+      tiers: [
+        { threshold: '2000000', ratePct: '1' },
+        { threshold: '3000000', ratePct: '2.5' },
+      ],
+      roomTypeIds: [],
+      maxBonus: null,
+      notes: 'Görüşme sürüyor.',
+    }),
+  );
+}
+await asActor(() => bonusProgress.refreshProgress(hotelId, { announce: false }));
+
 // Odaların anlık durumu: içeride kimse varsa dolu, boşların bir kısmı kirli.
 const inHouse = new Set(reservations.filter((entry) => entry.row.status === 'CHECKED_IN').map((entry) => entry.row.roomId));
 await prisma.room.updateMany({ where: { hotelId, id: { in: [...inHouse] } }, data: { occupancy: 'OCCUPIED' } });
@@ -707,6 +863,7 @@ console.log(
     `(${lost.length} iptal / gelmeyen, ${reservations.filter((entry) => entry.row.agencyId).length + lost.filter((entry) => entry.agencyId).length} acenteli), ` +
     `${nights.length} gece, ${items.length} folyo kalemi, ${payments.length} ödeme, ${AGENCY_SEEDS.length} acente, ` +
     `${PROMOTION_SEEDS.length} promosyon (${reservations.filter((entry) => entry.row.promotionId).length} promosyonlu rezervasyon, ` +
-    `${reservations.filter((entry) => entry.row.couponId).length} kuponlu), 1 kanal (${otaUpcoming.length} kanal rezervasyonu).`,
+    `${reservations.filter((entry) => entry.row.couponId).length} kuponlu), 1 kanal (${otaUpcoming.length} kanal rezervasyonu), ` +
+    `${await prisma.agencyBonusRule.count({ where: { hotelId, createdBy: ACTOR } })} prim kuralı (${bonusCount} hak ediş).`,
 );
 await prisma.$disconnect();

@@ -220,6 +220,8 @@ enum StaffAlertKind {
   CHANNEL_BOOKING
   /// Kanala gönderim art arda başarısız (anahtar, bağlantı) — modül 33.
   CHANNEL_SYNC
+  /// Acente prim kademesine ulaştı, dönem sonu hak edişi hesaplandı ya da kararı çıktı — modül 35.
+  AGENCY_BONUS
 }
 
 /// Rezervasyon fiyatının kaynağı (modül 4): sistem hesabı ya da yetkili
@@ -335,6 +337,32 @@ enum PromotionDiscountType {
   PERCENT
   AMOUNT
   FREE_NIGHTS
+}
+
+/// Acente prim kuralının ölçütü (modül 35): hedefin ve kademe eşiklerinin birimi.
+enum AgencyBonusMetric {
+  NIGHTS
+  REVENUE
+}
+
+/// Ulaşılan kademenin oranı neye uygulanır: dönemin bütün cirosuna ya da yalnızca kademe dilimine.
+enum AgencyBonusMode {
+  WHOLE
+  EXCESS
+}
+
+enum AgencyBonusRuleStatus {
+  DRAFT
+  ACTIVE
+  CANCELLED
+}
+
+/// Hak ediş: hesaplandı → onay bekliyor → onaylandı → ödendi (ret / süre dolumu "hesaplandı"ya döner).
+enum AgencyBonusStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  PAID
 }
 
 enum BudgetStatus {
@@ -594,6 +622,8 @@ model Hotel {
   promotions            Promotion[]
   coupons               Coupon[]
   channels              Channel[]
+  agencyBonusRules      AgencyBonusRule[]
+  agencyBonuses         AgencyBonus[]
 }
 
 model User {
@@ -800,6 +830,7 @@ model Approval {
   hotel          Hotel           @relation(fields: [hotelId], references: [id])
   pendingActions PendingAction[]
   payments       Payment[]
+  agencyBonuses  AgencyBonus[]
 
   // Bekleyenler (eskiden yeniye) ve geçmiş (yeni karar önce), imleçli.
   @@index([hotelId, status, createdAt, id])
@@ -1327,6 +1358,7 @@ model Reservation {
   conversations       Conversation[]
   guestRequests       GuestRequest[]
   notifications       Notification[]
+  agencyBonusLines    AgencyBonusLine[]
 
   // Müsaitlik sorgusunun sıcak yolu: "şu otelde, şu oda tipinde, şu tarihlerde
   // envanteri tüketen rezervasyonlar". Dolu bir otelde saniyede onlarca kez çalışır.
@@ -2590,9 +2622,11 @@ model Agency {
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
-  hotel        Hotel         @relation(fields: [hotelId], references: [id])
+  hotel        Hotel             @relation(fields: [hotelId], references: [id])
   contracts    Contract[]
   reservations Reservation[]
+  bonusRules   AgencyBonusRule[]
+  bonuses      AgencyBonus[]
 
   // Kod otel içinde tekil. Ad tekilliği (büyük / küçük harf duyarsız) ve arama (trigram): migration.
   @@unique([hotelId, code])
@@ -3077,4 +3111,155 @@ model ChannelBookingRevision {
 
   @@unique([channelId, externalRevisionId])
   @@index([bookingId, occurredAt])
+}
+
+/// Acente hedef / prim kuralı (modül 35): acentenin bir dönemdeki gece ya da ciro hedefi ve
+/// kademeli prim oranları. Üretim = dönemde gerçekleşen geceler; ciro = bu gecelerin folyoya
+/// işlenen vergisiz oda geliri. İlerleme özeti (`progress*`) zamanlanmış işte ham SQL ile
+/// yazılır: `updatedAt`'e dokunmaz (formdaki sürüm kontrolünü bozmaz).
+model AgencyBonusRule {
+  id              String                @id @default(uuid())
+  hotelId         String
+  agencyId        String
+  name            String
+  /// Dönem (iki uç dahil, otelin günü).
+  startDate       DateTime              @db.Date
+  endDate         DateTime              @db.Date
+  metric          AgencyBonusMetric
+  mode            AgencyBonusMode
+  /// Ticari hedef (puan = gerçekleşen / hedef). Gece ölçütünde tam sayı.
+  target          Decimal               @db.Decimal(14, 2)
+  /// Kademeler: [{ threshold, ratePct }] — eşik kesin artan, oran azalmaz (sözleşmede denetlenir).
+  tiers           Json
+  /// Boşsa bütün oda tipleri sayılır.
+  roomTypeIds     String[]              @default([])
+  /// Prim tavanı; boşsa tavansız.
+  maxBonus        Decimal?              @db.Decimal(12, 2)
+  currency        String
+  notes           String?
+  status          AgencyBonusRuleStatus @default(DRAFT)
+  createdBy       String
+  activatedAt     DateTime?
+  activatedBy     String?
+  cancelledAt     DateTime?
+  cancelledBy     String?
+  cancelReason    String?
+  /// İlerleme özeti (gerçekleşen; zamanlanmış iş tazeler): liste sıralaması ve kademe uyarısı.
+  progressNights  Int                   @default(0)
+  progressRevenue Decimal               @default(0) @db.Decimal(14, 2)
+  /// Gerçekleşen / hedef × 100.
+  progressScore   Decimal               @default(0) @db.Decimal(9, 2)
+  /// Ulaşılan kademe (0 = yok, 1..n). Yükselince bir kez uyarı düşer.
+  reachedTier     Int                   @default(0)
+  progressAt      DateTime?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  hotel  Hotel        @relation(fields: [hotelId], references: [id])
+  agency Agency       @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  bonus  AgencyBonus?
+  // Ada göre arama (trigram) ve aynı acentenin aynı ölçütte çakışan yürürlükteki kuralı: migration.
+
+  // Acentenin kuralları (kartta) ve çakışma denetimi.
+  @@index([hotelId, agencyId, startDate])
+  // Liste: duruma göre dönem sonu ya da hedefe ulaşma sırasıyla (imleç: id).
+  @@index([hotelId, status, endDate, id])
+  @@index([hotelId, status, progressScore, id])
+  // Kural adıyla arama (trigram). Aynı acentenin aynı ölçütte çakışan yürürlükteki kuralı
+  // olamaz: EXCLUDE kısıtı (migration).
+  @@index([name(ops: raw("gin_trgm_ops"))], map: "AgencyBonusRule_name_trgm_idx", type: Gin)
+}
+
+/// Dönem sonu hak edişi (modül 35): kuralın hesap anındaki kopyası ve sonucu. Kural başına bir
+/// tane; yeniden hesaplama aynı satırı günceller (`revision` artar), onaylanınca kilitlenir.
+model AgencyBonus {
+  id               String            @id @default(uuid())
+  hotelId          String
+  ruleId           String            @unique
+  agencyId         String
+  status           AgencyBonusStatus @default(DRAFT)
+  /// Yeniden açıldıkça artar (1'den başlar).
+  revision         Int               @default(1)
+  /// Kuralın hesap anındaki kopyası (kural sonradan değişse de bu hak ediş değişmez).
+  periodStart      DateTime          @db.Date
+  periodEnd        DateTime          @db.Date
+  metric           AgencyBonusMetric
+  mode             AgencyBonusMode
+  target           Decimal           @db.Decimal(14, 2)
+  tiers            Json
+  roomTypeIds      String[]          @default([])
+  maxBonus         Decimal?          @db.Decimal(12, 2)
+  currency         String
+  /// Hesaplanan kuralın sürümü: kural sonra değiştiyse hak ediş bayattır (onaya gönderilemez).
+  ruleUpdatedAt    DateTime
+  /// Sonuç: gerçekleşen gece, vergisiz oda geliri, hedefe ulaşma, kademe, prim.
+  nights           Int
+  revenue          Decimal           @db.Decimal(14, 2)
+  scorePct         Decimal           @db.Decimal(9, 2)
+  /// Ulaşılan kademe (0 = yok).
+  tierIndex        Int
+  /// Tavandan önceki prim ve ödenecek prim.
+  grossAmount      Decimal           @db.Decimal(12, 2)
+  amount           Decimal           @db.Decimal(12, 2)
+  capped           Boolean           @default(false)
+  /// Dilim dökümü: [{ tier, ratePct, base, amount, nights? }].
+  slices           Json
+  reservationCount Int
+  /// Gerçekleşmiş ama oda ücreti folyoya işlenmemiş gece (ciro eksik olabilir uyarısı).
+  missingPostings  Int               @default(0)
+  calculatedAt     DateTime
+  calculatedBy     String
+  submittedAt      DateTime?
+  submittedBy      String?
+  submitNote       String?
+  approvalId       String?
+  approvedAt       DateTime?
+  approvedBy       String?
+  /// Son kararın notu (ret gerekçesi, süre dolumu, onay notu).
+  decisionNote     String?
+  /// Ödeme (muhasebe işaretler; cari düşümü modül 47).
+  paidAt           DateTime?         @db.Date
+  paidBy           String?
+  paidRecordedAt   DateTime?
+  paymentRef       String?
+  paymentNote      String?
+  reopenedAt       DateTime?
+  reopenedBy       String?
+  reopenReason     String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  hotel    Hotel             @relation(fields: [hotelId], references: [id])
+  rule     AgencyBonusRule   @relation(fields: [ruleId], references: [id], onDelete: Restrict)
+  agency   Agency            @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  approval Approval?         @relation(fields: [approvalId], references: [id], onDelete: Restrict)
+  lines    AgencyBonusLine[]
+
+  // Hak ediş raporu: duruma göre, dönem sonuna göre (imleç: id); acentenin hak edişleri.
+  @@index([hotelId, status, periodEnd, id])
+  @@index([hotelId, periodEnd, id])
+  @@index([hotelId, agencyId, periodEnd])
+  // Onay kararı geldiğinde hak edişi bulmak.
+  @@index([approvalId])
+}
+
+/// Hak edişin dayandığı rezervasyonlar (hesap anında dondurulur): dönemdeki gerçekleşen gece ve
+/// vergisiz oda geliri. Denetim ve itiraz için "hangi rezervasyonlar sayıldı" sorusunun cevabı.
+model AgencyBonusLine {
+  id            String  @id @default(uuid())
+  hotelId       String
+  bonusId       String
+  reservationId String
+  nights        Int
+  revenue       Decimal @db.Decimal(14, 2)
+
+  bonus       AgencyBonus @relation(fields: [bonusId], references: [id], onDelete: Cascade)
+  reservation Reservation @relation(fields: [reservationId], references: [id], onDelete: Restrict)
+
+  @@unique([bonusId, reservationId])
+  // Döküm: ciroya ya da geceye göre büyükten küçüğe (imleç: id).
+  @@index([bonusId, revenue, id])
+  @@index([bonusId, nights, id])
+  // Rezervasyonun hangi hak edişlere girdiği.
+  @@index([reservationId])
 }

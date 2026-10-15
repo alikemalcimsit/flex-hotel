@@ -98,7 +98,7 @@ export function ChannelSettingsTab() {
             tone="warning"
             title="Kanal başka biri tarafından değiştirildi"
             action={
-              <Button size="sm" variant="outline" icon="refresh" onClick={() => { setValues(settingsFormOf(channel)); setBase(channel.updatedAt); setErrors({}); }}>
+              <Button type="button" size="sm" variant="outline" icon="refresh" onClick={() => { setValues(settingsFormOf(channel)); setBase(channel.updatedAt); setErrors({}); }}>
                 Güncel hâli yükle
               </Button>
             }

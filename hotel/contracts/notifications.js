@@ -430,6 +430,7 @@ export const STAFF_ALERT_KINDS = Object.freeze([
   'AI_BUDGET',
   'CHANNEL_BOOKING',
   'CHANNEL_SYNC',
+  'AGENCY_BONUS',
 ]);
 
 export const STAFF_ALERT_KIND_LABELS = Object.freeze({
@@ -447,6 +448,7 @@ export const STAFF_ALERT_KIND_LABELS = Object.freeze({
   AI_BUDGET: 'AI bütçesi doldu',
   CHANNEL_BOOKING: 'Kanal rezervasyonu dikkat istiyor',
   CHANNEL_SYNC: 'Kanal senkronu başarısız',
+  AGENCY_BONUS: 'Acente primi (kademe, hak ediş)',
 });
 
 export const STAFF_ALERT_SEVERITIES = Object.freeze(['INFO', 'WARNING', 'CRITICAL']);

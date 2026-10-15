@@ -144,6 +144,7 @@ function TodayRatesForm({ data }) {
               disabled={busy}
             />
             <Button
+              type="button"
               variant="ghost"
               icon="trash"
               aria-label={`${row.currency || 'Satırı'} kaldır`}
@@ -154,6 +155,7 @@ function TodayRatesForm({ data }) {
         ))}
         <div className="flex flex-wrap items-center gap-2">
           <Button
+            type="button"
             variant="outline"
             icon="plus"
             onClick={() => setRows((current) => [...current, { currency: '', rate: '' }])}
