@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { asBusyError, BusyError, ConflictError, isRetryableTransactionError, rethrowPrismaError } from './errors.js';
+import { asBusyError, BusyError, ConflictError, isRetryableTransactionError, rethrowPrismaError, ValidationError } from './errors.js';
 
 /**
  * Yoğun saatte veritabanı hatalarının sınıflandırması: hangisi kullanıcıya
@@ -31,5 +31,16 @@ describe('yoğunluk ve çakışma hataları', () => {
     assert.equal(isRetryableTransactionError(new Error('ERROR: deadlock detected')), true);
     assert.equal(isRetryableTransactionError(Object.assign(new Error('x'), { code: 'P2002' })), false);
     assert.equal(isRetryableTransactionError(new ConflictError('Oda dolu', 'ROOM_NOT_FREE')), false);
+  });
+});
+
+describe('iş kuralı doğrulama hatası', () => {
+  it('tek alan ya da alan → mesaj sözlüğü formun alanına bağlanır', () => {
+    assert.deepEqual(new ValidationError('Tarih geçmiş', { field: 'date' }).fields, { date: 'Tarih geçmiş' });
+    assert.deepEqual(new ValidationError('Hatalı', { fields: { pax: 'Kapasite 120', layout: 'Tanımsız' } }).fields, { pax: 'Kapasite 120', layout: 'Tanımsız' });
+    assert.deepEqual(new ValidationError('Hatalı', { fields: { pax: 'Kapasite', bad: 3 } }).fields, { pax: 'Kapasite' });
+    assert.equal(new ValidationError('Hatalı', { fields: ['pax'] }).fields, undefined);
+    assert.equal(new ValidationError('Hatalı', { issues: ['a'] }).fields, undefined);
+    assert.equal(new ValidationError('Hatalı').fields, undefined);
   });
 });

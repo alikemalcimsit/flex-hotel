@@ -22,6 +22,7 @@ import { lockFolios, lockReservations } from '../../lib/locks.js';
 import { findActiveStaffByEmail } from '../../lib/staff.js';
 import { writeWithEvents } from '../../lib/write.js';
 import { decideApproval, requestApproval } from '../approvals/service.js';
+import { EVENT_PAYMENT_SELECT, EVENT_REF_SELECT, toEventPaymentDto } from '../banquet/payments.js';
 import { createStayFolio, dayStart, money, refreshFolioTotals } from '../folios/posting.js';
 import { raiseStaffAlert } from '../notifications/staff-alerts.js';
 import { guestFullName } from '../reservations/guests.js';
@@ -1314,10 +1315,17 @@ export async function stayPaymentStatus(client, hotelId, stay) {
 
 /* ══════════════════ Kasa ══════════════════ */
 
+/** Etkinlik ödemesinin kasadaki dosya bilgisi (modül 37). @param {any} event */
+const eventRef = (event) => ({ id: event.id, code: event.code, name: event.name, status: event.status, clientName: event.client?.name ?? null });
+
 /**
  * Kasa görünümü: günün işlenen hareketleri yöntem (ve döviz) bazında,
  * onay bekleyenler. Gün verilmezse iş günü. `mine`: yalnızca oturumdaki
  * kişinin aldıkları (kendi çekmecesi).
+ *
+ * Etkinlik ödemeleri (modül 37, etkinliğin kendi hesabı) aynı kasaya girer:
+ * toplamlar iki kaynağın gruplarından tek hesapla çıkar, `origins` kaynak
+ * bazında neti verir. Etkinlik ödemesi otelin para biriminde alınır (kur yok).
  *
  * @param {string} hotelId
  * @param {{ date?: string, mine: boolean }} query
@@ -1327,7 +1335,8 @@ export async function getCashSummary(hotelId, query) {
   const date = query.date ?? businessDate;
   if (date > businessDate) throw new ValidationError('İleri tarihli kasa görüntülenmez.', { field: 'date' });
   const mine = query.mine ? currentActor() : null;
-  const [rows, pendingRows, pendingCount] = await Promise.all([
+  const byActor = mine ? { receivedBy: mine } : {};
+  const [rows, eventRows, pendingRows, pendingCount, eventPendingRows, eventPendingCount] = await Promise.all([
     prisma.$queryRaw`
       SELECT p."method", p."currency", p."kind", COUNT(*)::int AS "count",
              SUM(p."amount")::text AS "amount", SUM(p."folioAmount")::text AS "folioAmount"
@@ -1335,15 +1344,36 @@ export async function getCashSummary(hotelId, query) {
       WHERE p."hotelId" = ${hotelId} AND p."businessDate" = ${date}::date AND p."status" = 'POSTED'
         AND p."deletedAt" IS NULL ${mine ? Prisma.sql`AND p."receivedBy" = ${mine}` : Prisma.empty}
       GROUP BY 1, 2, 3`,
+    prisma.$queryRaw`
+      SELECT p."method", p."currency", p."kind", COUNT(*)::int AS "count",
+             SUM(p."amount")::text AS "amount", SUM(p."amount")::text AS "folioAmount"
+      FROM "EventPayment" p
+      WHERE p."hotelId" = ${hotelId} AND p."businessDate" = ${date}::date AND p."status" = 'POSTED'
+        ${mine ? Prisma.sql`AND p."receivedBy" = ${mine}` : Prisma.empty}
+      GROUP BY 1, 2, 3`,
     prisma.payment.findMany({
-      where: { hotelId, status: 'PENDING', ...(mine ? { receivedBy: mine } : {}) },
+      where: { hotelId, status: 'PENDING', ...byActor },
       select: { ...PAYMENT_SELECT, reservation: { select: STAY_REF_SELECT } },
       orderBy: [{ receivedAt: 'asc' }, { id: 'asc' }],
       take: CASH_PENDING_LIMIT,
     }),
-    prisma.payment.count({ where: { hotelId, status: 'PENDING', ...(mine ? { receivedBy: mine } : {}) } }),
+    prisma.payment.count({ where: { hotelId, status: 'PENDING', ...byActor } }),
+    prisma.eventPayment.findMany({
+      where: { hotelId, status: 'PENDING', ...byActor },
+      select: { ...EVENT_PAYMENT_SELECT, event: { select: EVENT_REF_SELECT } },
+      orderBy: [{ receivedAt: 'asc' }, { id: 'asc' }],
+      take: CASH_PENDING_LIMIT,
+    }),
+    prisma.eventPayment.count({ where: { hotelId, status: 'PENDING', ...byActor } }),
   ]);
-  const summary = summarizeCash(rows, PAYMENT_METHODS);
+  const summary = summarizeCash([...rows, ...eventRows], PAYMENT_METHODS);
+  // En uzun bekleyen en üstte; iki kaynak birlikte sıralanıp üst sınırla kesilir.
+  const pendingItems = [
+    ...pendingRows.map((row) => ({ ...toPaymentDto(row), origin: 'FOLIO', stay: stayRef(row.reservation), event: null })),
+    ...eventPendingRows.map((row) => ({ ...toEventPaymentDto(row), origin: 'EVENT', source: null, exchangeRate: null, folioAmount: money(row.amount), converted: money(row.amount), stay: null, event: eventRef(row.event) })),
+  ]
+    .sort((a, b) => a.receivedAt.localeCompare(b.receivedAt) || a.id.localeCompare(b.id))
+    .slice(0, CASH_PENDING_LIMIT);
   return {
     date,
     businessDate,
@@ -1351,42 +1381,67 @@ export async function getCashSummary(hotelId, query) {
     currency: hotel.currency,
     mine: Boolean(mine),
     ...summary,
-    pending: {
-      count: pendingCount,
-      items: pendingRows.map((row) => ({ ...toPaymentDto(row), stay: stayRef(row.reservation) })),
-    },
+    origins: { FOLIO: summarizeCash(rows, PAYMENT_METHODS).total.net, EVENT: summarizeCash(eventRows, PAYMENT_METHODS).total.net },
+    pending: { count: pendingCount + eventPendingCount, items: pendingItems },
   };
 }
 
 /**
  * Kasa hareketleri: günün işlenen satırları (son işlenen önce), imleçli; yöntem,
- * tür ve "benim" süzgeciyle.
+ * tür, kaynak (folyo / etkinlik) ve "benim" süzgeciyle.
+ *
+ * İki tablo aynı imleçle (işlenme anı + kimlik) okunur: her birinden en fazla
+ * `limit + 1` satır alınıp birlikte sıralanır, sayfa ilk `limit` satırdır. İmleç
+ * sıralamanın son satırı olduğu için iki kaynakta da kayma / tekrar olmaz.
+ *
  * @param {string} hotelId
- * @param {{ date?: string, mine: boolean, method?: string, kind?: string, cursor?: string, limit: number }} query
+ * @param {{ date?: string, mine: boolean, method?: string, kind?: string, origin?: 'FOLIO' | 'EVENT', cursor?: string, limit: number }} query
  */
 export async function listCashMovements(hotelId, query) {
   const businessDate = await businessDay(hotelId);
   const date = query.date ?? businessDate;
   const cursor = parseCursor(query.cursor);
-  const rows = await prisma.payment.findMany({
-    where: {
-      hotelId,
-      businessDate: dayStart(date),
-      status: 'POSTED',
-      ...(query.mine ? { receivedBy: currentActor() } : {}),
-      ...(query.method ? { method: query.method } : {}),
-      ...(query.kind ? { kind: query.kind } : {}),
-      ...(cursor ? olderThan('postedAt', cursor) : {}),
-    },
-    select: { ...PAYMENT_SELECT, reservation: { select: STAY_REF_SELECT }, folio: { select: { window: true, payerName: true } } },
-    orderBy: [{ postedAt: 'desc' }, { id: 'desc' }],
-    take: query.limit + 1,
-  });
-  const page = rows.slice(0, query.limit);
+  const shared = {
+    hotelId,
+    businessDate: dayStart(date),
+    status: /** @type {const} */ ('POSTED'),
+    ...(query.mine ? { receivedBy: currentActor() } : {}),
+    ...(query.method ? { method: query.method } : {}),
+    ...(query.kind ? { kind: query.kind } : {}),
+    ...(cursor ? olderThan('postedAt', cursor) : {}),
+  };
+  const orderBy = [{ postedAt: /** @type {const} */ ('desc') }, { id: /** @type {const} */ ('desc') }];
+  const [folioRows, eventRows] = await Promise.all([
+    query.origin === 'EVENT'
+      ? []
+      : prisma.payment.findMany({
+          where: shared,
+          select: { ...PAYMENT_SELECT, reservation: { select: STAY_REF_SELECT }, folio: { select: { window: true, payerName: true } } },
+          orderBy,
+          take: query.limit + 1,
+        }),
+    query.origin === 'FOLIO'
+      ? []
+      : prisma.eventPayment.findMany({
+          where: shared,
+          select: { ...EVENT_PAYMENT_SELECT, event: { select: EVENT_REF_SELECT } },
+          orderBy,
+          take: query.limit + 1,
+        }),
+  ]);
+  const merged = [
+    ...folioRows.map((row) => ({ at: row.postedAt, id: row.id, dto: { ...toPaymentDto(row), origin: 'FOLIO', stay: stayRef(row.reservation), folioName: folioDisplayName(row.folio), event: null } })),
+    ...eventRows.map((row) => ({
+      at: row.postedAt,
+      id: row.id,
+      dto: { ...toEventPaymentDto(row), origin: 'EVENT', source: null, exchangeRate: null, folioAmount: money(row.amount), converted: money(row.amount), stay: null, folioName: null, event: eventRef(row.event) },
+    })),
+  ].sort((a, b) => b.at.getTime() - a.at.getTime() || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
+  const page = merged.slice(0, query.limit);
   const last = page.at(-1);
   return {
     date,
-    movements: page.map((row) => ({ ...toPaymentDto(row), stay: stayRef(row.reservation), folioName: folioDisplayName(row.folio) })),
-    nextCursor: rows.length > query.limit && last?.postedAt ? encodeCursor({ at: last.postedAt, id: last.id }) : null,
+    movements: page.map((entry) => entry.dto),
+    nextCursor: merged.length > query.limit && last?.at ? encodeCursor({ at: last.at, id: last.id }) : null,
   };
 }

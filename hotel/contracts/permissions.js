@@ -122,6 +122,15 @@ export const PERMISSIONS = Object.freeze({
   /** Onaylı hak edişi "ödendi" işaretlemek ve işareti gerekçeyle geri almak. */
   AGENCY_BONUS_PAY: 'agency_bonus.pay',
 
+  /** Banket / etkinlik (modül 37): etkinlik dosyaları, salon takvimi, belgeler ve ödemeleri görmek. */
+  BANQUET_VIEW: 'banquet.view',
+  /** Etkinlik açmak / düzenlemek, opsiyon, kesinleştirme, iptal, teklif / sözleşme / proforma üretmek. */
+  BANQUET_MANAGE: 'banquet.manage',
+  /** Salon, ekipman, fiyat ve banket politikası (opsiyon süresi, depozito, iptal kademeleri). */
+  BANQUET_SETUP: 'banquet.setup',
+  /** Etkinlik depozitosu ve ödemesi almak, iade / iptal istemek. */
+  BANQUET_PAYMENT: 'banquet.payment',
+
   /** Kanal yönetimi (modül 33): kanallar, eşleştirme, senkron logu, kanal rezervasyonları. */
   CHANNEL_MANAGER_VIEW: 'channel_manager.view',
   /** Kanal bağlamak / düzenlemek / senkrona almak, eşleştirme, stop-sale, elle senkron. */
@@ -190,6 +199,10 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.AGENCY_BONUS_VIEW]: 'Acente hedef / prim kurallarını, ilerlemeyi ve hak ediş raporunu görüntüle',
   [PERMISSIONS.AGENCY_BONUS_MANAGE]: 'Prim kuralı aç, düzenle, yürürlüğe al; hak edişi hesapla ve onaya gönder',
   [PERMISSIONS.AGENCY_BONUS_PAY]: 'Onaylı prim hak edişini ödendi işaretle',
+  [PERMISSIONS.BANQUET_VIEW]: 'Etkinlik dosyalarını, salon takvimini, belgeleri ve ödemeleri görüntüle',
+  [PERMISSIONS.BANQUET_MANAGE]: 'Etkinlik aç, opsiyonla, kesinleştir, iptal et; teklif / sözleşme / proforma üret',
+  [PERMISSIONS.BANQUET_SETUP]: 'Salon, ekipman, fiyat ve banket politikasını düzenle',
+  [PERMISSIONS.BANQUET_PAYMENT]: 'Etkinlik depozitosu / ödemesi al, iade ve iptal iste',
   [PERMISSIONS.CHANNEL_MANAGER_VIEW]: 'Kanalları, senkron logunu ve kanal rezervasyonlarını görüntüle',
   [PERMISSIONS.CHANNEL_MANAGER_MANAGE]: 'Kanal bağla, eşleştir, stop-sale koy, elle senkronla',
   [PERMISSIONS.ACTORS_VIEW]: 'Aktör panelini görüntüle',
@@ -263,6 +276,11 @@ export const PERMISSION_GROUPS = Object.freeze([
   { key: 'budget', label: 'Bütçe', permissions: [PERMISSIONS.BUDGET_VIEW, PERMISSIONS.BUDGET_MANAGE, PERMISSIONS.BUDGET_APPROVE] },
   { key: 'agencies', label: 'Acente ve kontrat', permissions: [PERMISSIONS.AGENCIES_VIEW, PERMISSIONS.AGENCIES_MANAGE] },
   { key: 'promotions', label: 'Promosyon ve kupon', permissions: [PERMISSIONS.PROMOTIONS_VIEW, PERMISSIONS.PROMOTIONS_MANAGE] },
+  {
+    key: 'banquet',
+    label: 'Banket ve etkinlik',
+    permissions: [PERMISSIONS.BANQUET_VIEW, PERMISSIONS.BANQUET_MANAGE, PERMISSIONS.BANQUET_SETUP, PERMISSIONS.BANQUET_PAYMENT],
+  },
   {
     key: 'agency_bonus',
     label: 'Acente primi',
@@ -359,6 +377,11 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.AGENCY_BONUS_VIEW,
     PERMISSIONS.AGENCY_BONUS_MANAGE,
     PERMISSIONS.AGENCY_BONUS_PAY,
+    // Satış / banket müdürlüğü: etkinlik satışı, salon ve fiyat tanımları, tahsilat.
+    PERMISSIONS.BANQUET_VIEW,
+    PERMISSIONS.BANQUET_MANAGE,
+    PERMISSIONS.BANQUET_SETUP,
+    PERMISSIONS.BANQUET_PAYMENT,
   ]),
   FRONT_DESK: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,
@@ -387,6 +410,9 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.LOST_ITEMS_VIEW,
     PERMISSIONS.LOST_ITEMS_RECORD,
     PERMISSIONS.LOST_ITEMS_RELEASE,
+    // Resepsiyon salon takvimini görür (bugün balo salonunda ne var) ve depozito alabilir.
+    PERMISSIONS.BANQUET_VIEW,
+    PERMISSIONS.BANQUET_PAYMENT,
   ]),
   HOUSEKEEPING: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,
@@ -435,9 +461,14 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     // Acente priminin hak edişini muhasebe izler ve ödendi işaretler; kuralı düzenlemez.
     PERMISSIONS.AGENCY_BONUS_VIEW,
     PERMISSIONS.AGENCY_BONUS_PAY,
+    // Etkinlik tahsilatı, depozito takibi ve proforma muhasebenin işi; satışı düzenlemez.
+    PERMISSIONS.BANQUET_VIEW,
+    PERMISSIONS.BANQUET_PAYMENT,
   ]),
   FNB: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,
+    // Mutfak ve servis etkinlik programını, kişi sayısını ve menü kalemlerini görür.
+    PERMISSIONS.BANQUET_VIEW,
     PERMISSIONS.REQUESTS_VIEW,
     PERMISSIONS.REQUESTS_MANAGE,
     // Restoranda / havuz barında unutulan eşyayı kaydeder.

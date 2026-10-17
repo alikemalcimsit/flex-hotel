@@ -2270,11 +2270,76 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 37. Satış projeleri & banket / etkinlik — arkadaşın
 **Gün sonu:** Düğün, toplantı gibi etkinlikler salon takviminde; teklif → sözleşme → fatura akışı çalışıyor.
-- [ ] Backend: Venue, Event, EventItem tabloları + API
-- [ ] Ekran: Salon tanımları (kapasite, düzen tipleri, saatlik/günlük fiyat)
-- [ ] Ekran: Etkinlik takvimi (salon × tarih)
-- [ ] Ekran: Etkinlik dosyası (müşteri, tarih, salon, kişi, düzen, ekipman, menü linki (43), fiyat)
-- [ ] Ekran: Teklif → sözleşme (PDF) → depozito → fatura (16'ya bağlanır)
+- [x] Backend: Venue, Event, EventItem tabloları + API
+- [x] Ekran: Salon tanımları (kapasite, düzen tipleri, saatlik/günlük fiyat)
+- [x] Ekran: Etkinlik takvimi (salon × tarih)
+- [x] Ekran: Etkinlik dosyası (müşteri, tarih, salon, kişi, düzen, ekipman, menü linki (43), fiyat) — menü bağı modül 43'te (aşağıda)
+- [x] Ekran: Teklif → sözleşme (PDF) → depozito → fatura (16'ya bağlanır) — "faturaya hazır" + proforma; resmî fatura 16 / 49
+
+> **📌 Modül 37 tamamlandı (17 Ekim 2026 — Ahmet).**
+>
+> **Kararlar (kullanıcı, 16 Ekim 2026):** etkinliğin **kendi hesabı** (folyo yok) ve ödemeleri kasada "Etkinlik" kaynağıyla; büyük
+> tahsilat / iade / hatalı girişin iptali onay kuyruğundan, **dört göz** (onay türü `EVENT_PAYMENT`); PDF **sunucuda** (pdfkit +
+> gömülü DejaVu); **sıralı opsiyon** (aynı saatte önce tutan 1. opsiyon, yalnız 1. kesinleşir, opsiyon günü geçince düşer);
+> fatura tarafı **"faturaya hazır" + proforma**, resmî fatura 16 / 49'da.
+>
+> **Veri** (migration `20261016090000_banquet_events` + `20261017090000_banquet_same_event_holds` + `20261017100000_banquet_hold_window_index`):
+> `Venue` (iki seviyeli **bölünebilir salon**: bütün → parçalar; düzen başına kapasite `VenueCapacity`; saatlik / yarım / tam gün
+> fiyatı; kurulum / söküm dakikası), `EventEquipment` (stoklu), `EventClient`, `EventSettings` (opsiyon süresi, teklif geçerliliği,
+> depozito %, imzalı sözleşme şartı, iptal kademeleri, sözleşme şartları), `Event` (talep → opsiyon → kesin → gerçekleşti; iptal /
+> kayıp; durum izi CHECK'i), `EventSession` (salon, düzen, kişi, otelin duvar saatiyle girilen başlangıç / bitiş), `EventVenueHold`
+> (oturumun **atomik salon parçası** başına tutma, kurulum / söküm dahil; **kesin tutmalar farklı etkinlikler arasında çakışamaz** —
+> EXCLUDE, aynı etkinliğin arka arkaya oturumları serbest), `EventItem` (kişi başı / adetli, indirim, vergi kategorisi; tutarlar
+> folyonun vergi motoruyla), `EventInstallment`, `EventPayment` (tahsilat +, iade −, iptal kaydı; tekrar gönderim anahtarı),
+> `EventDocument` (teklif / sözleşme / proforma: anlık görüntü + PDF, türe göre tek güncel sürüm — kısmi tekil index), `EventSequence`
+> (ETK / TKL / SZL / PRF-yıl-sıra; sürümler "TKL-2026-0007/2"). Uyarı türü `BANQUET`.
+>
+> **Kurallar** (`banquet/rules.js` + sözleşme, birim testli): salon kira önerisi (saat / yarım gün / gün, en ucuzu), atomik parça,
+> sıra (kesin hep önde; eşit anda kimlik), ekipman tepe kullanımı (süpürme çizgisi), faturalanacak kişi = kesinleşmeden garanti
+> (yoksa tahmin), gerçekleşince en çok (garanti, gerçekleşen); iptal kademesi **alt sınır** ("en az N gün kala"; politika 0 günü
+> içermek zorunda — yoksa son günler bedelsiz kalıyordu); ödeme planı dağıtımı ve önerisi; tahsilat / iade kuralı (kapanmış
+> dosyada kalan borçtan fazlası alınmaz ve yalnızca borcun üstündeki fazla iade edilir, alınmamış para iade edilmez, kaybedilen
+> dosya borçsuz); belge kuralları (teklif satışta,
+> sözleşme kesine kadar, proforma borç kesinleşince; karar günü; teklif geçerliliği).
+>
+> **Akış ve eşzamanlılık:** kilit sırası etkinlik → salon → ekipman. Kesinleştirme ve kesin dosyanın oturum değişikliği rezerve
+> edilen salonu + atomik parçalarını kilitler, salon tanımını **kilitten sonra** yeniden okur (kapasite / pasiflik yarışı yok); sıra,
+> kapasite, stok, imzalı sözleşme kilit altında denetlenir, son savunma veritabanı kısıtıdır. Salon / ekipman güncellemesi aynı
+> kilitleri alır; stok, ileri tarihli kesin ayrımların altına düşürülemez. Opsiyon bırakılınca / düşünce / dosya iptal ya da kaybedilince
+> sırası yükselen opsiyonun sorumlusuna, kesinleşen salonda bekleyenlere zil düşer. Tahsilat sürüm damgasını ilerletmez (açık
+> formlar bozulmaz). Zamanlanmış iş (15 dk): otelin iş günüyle opsiyon dolumu (kilit altında yeniden bakar), opsiyonun son günü,
+> gecikmiş taksit (günde bir), kapatılmamış kesin etkinlik hatırlatması.
+>
+> **API** (`/banquet`): özet, takvim (≤ 31 gün), salon uygunluğu (kim tutuyor, kaçıncı opsiyon olur, kira önerisi), salon /
+> ekipman / müşteri / politika, etkinlik (liste: durum / tür / tarih / arama / benim; ekran), oturum, kalemler, ödeme planı (+ öneri),
+> durum geçişleri, ödemeler (imleçli; tahsilat / iade / iptal isteği), belgeler (üret / karar / PDF). Kasa (17): özet ve hareketler
+> folyo + etkinlik birleşik (aynı imleç), kaynak süzgeci. İzinler `banquet.view` (müdür, ön büro, muhasebe, F&B), `.manage`,
+> `.setup` (müdür), `.payment` (müdür, ön büro, muhasebe). Canlı kanal `banquet.changed`; etkinlik ödemesi kasa kanalını da tazeler.
+>
+> **Ekran:** `/etkinlikler` (özet kutuları, dosya listesi), salon takvimi (salon × gün, kesin / 1. opsiyon / sırada renkleri, bütün
+> salon parçalarında da görünür), yeni dosya (müşteri ara / yeni müşteri), dosya ekranı: genel, program (uygunluk önizlemeli
+> oturum diyaloğu), fiyat kalemleri (tablo düzenleyici, kuruş hassasiyetli önizleme), ödemeler (plan + satırlar + tahsilat / iade /
+> hatalı giriş), belgeler (üret, kabul / ret / imza, PDF); salon ve tanımlar (salonlar, ekipman, müşteriler, politika — kademe
+> aralıkları okunur). Kasa ekranında etkinlik satırları ve bağlantılar; onay penceresinde etkinlik ödemesine bağlantı.
+>
+> **Ölçüm** (`scripts/perf-banquet.mjs`; 56 atomik salon, 34.963 etkinlik, 38.763 oturum, 36.582 tutma, 209.778 kalem, 46.199
+> ödeme, 20.000 müşteri): liste 26–84 ms (derin sayfa 500 dahil), etkinlik ekranı 10–29 ms, takvim 7 gün 16 ms / 31 gün 53 ms,
+> uygunluk 7 ms, özet 86–97 ms, gecikmiş taksit 44 ms, kasa özeti / hareketleri < 10 ms, dosya → oturum → kalem → opsiyon → kesin
+> 0,7–1,5 sn (beş işlem), iş turu 200 opsiyon dolumu 6,9 sn. Takvim sorgusu sıralı tarıyordu → `(hotelId, endAt)` index'i (geçmiş
+> birikse de tarama gelecek ufkuyla sınırlı).
+>
+> **Test:** kurallar 26 + PDF 3 + sözleşme 9 + form 5 birim; entegrasyon 16 (yaşam döngüsü ve tutarlar, garanti altı gerçekleşme,
+> sıralı opsiyon + haberler, bölünebilir salon, kurulum / söküm aralığı, aynı etkinliğin arka arkaya oturumları, eşzamanlı dört
+> kesinleştirme tek kazanan, kapasite / düzen / pasif salon, ekipman stoğu ve stok düşürme, opsiyon dolumu işi, gecikmiş taksit,
+> ödemeler + dört göz + iade sınırı + iptal kaydı + tekrar gönderim + kasa birleşimi ve imleci, iptal bedeli kopyası + iade uyarısı
+> + bedelli proforma, belgeler: sürüm / kabul / imzasız kesinleşmeme / eşzamanlı üretim / PDF ve izin, sürüm denetimi, izinler ve
+> otel kapsamı).
+>
+> **Yan düzeltmeler:** `ValidationError` artık `{ fields: {...} }` ayrıntısını da formun alanlarına bağlıyor (modül 35'in alan
+> hataları da yalnızca bildirimde kalıyordu).
+>
+> **Devir:** menü bağı **modül 43** (EventMenu etkinliğe bağlanınca kişi başı menü kalemi menüden gelir; bugün kalem serbest
+> metin); resmî fatura **16 / 49** (proforma ve "faturaya hazır" sayısı hazır); etkinlik carisi / alacak takibi ön muhasebe (47).
 
 ---
 

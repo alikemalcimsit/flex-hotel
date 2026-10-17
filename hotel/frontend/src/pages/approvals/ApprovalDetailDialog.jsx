@@ -49,6 +49,8 @@ const CLOCK_TICK_MS = 30_000;
  */
 const ENTITY_LINKS = Object.freeze({
   AgencyBonus: { to: (id) => `/acente-primleri/hak-edis/${id}`, permission: PERMISSIONS.AGENCY_BONUS_VIEW },
+  // Etkinlik ödemesi (modül 37): ödemenin etkinliği sorulup dosyanın Ödemeler sekmesine gidilir.
+  EventPayment: { to: (id) => `/etkinlikler/odeme/${id}`, permission: PERMISSIONS.BANQUET_VIEW },
 });
 
 export function ApprovalDetailDialog({ approvalId, canDecide, timeZone, initialMode = 'view', onClose }) {

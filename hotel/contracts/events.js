@@ -122,6 +122,14 @@ export const EVENT_LABELS = Object.freeze({
   'agency.bonus.tier_reached': 'Acente prim kademesine ulaştı',
   'agency.bonus.progress.refreshed': 'Acente hedef ilerlemesi tazelendi',
 
+  'banquet.venue.changed': 'Salon tanımı değişti',
+  'banquet.equipment.changed': 'Banket ekipmanı değişti',
+  'banquet.client.changed': 'Etkinlik müşterisi değişti',
+  'banquet.settings.changed': 'Banket politikası değişti',
+  'banquet.event.changed': 'Etkinlik dosyası değişti',
+  'banquet.document.changed': 'Etkinlik belgesi üretildi / değişti',
+  'banquet.payment.changed': 'Etkinlik ödemesi değişti',
+
   'promotion.changed': 'Promosyon değişti',
   'promotion.coupons.changed': 'Kuponlar değişti',
 

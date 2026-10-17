@@ -444,6 +444,7 @@ export const EVENT_CATALOG = Object.freeze({
       'CHANNEL_BOOKING',
       'CHANNEL_SYNC',
       'AGENCY_BONUS',
+      'BANQUET',
     ]),
     userId: z.string().uuid().nullable(),
     permission: z.string().nullable(),
@@ -661,6 +662,45 @@ export const EVENT_CATALOG = Object.freeze({
     agencyId: z.string().uuid(),
     contractId: z.string().uuid(),
     change: z.enum(['ADDED', 'REMOVED']),
+  }),
+
+  /* ── Banket / etkinlik (modül 37) ──
+     Salon takvimi, etkinlik dosyası ve kasa bunlarla canlı tazelenir
+     (`BANQUET_EVENTS`); yükte yalnızca kimlik. */
+
+  'banquet.venue.changed': hotelScoped.extend({ venueId: z.string().uuid(), change: z.enum(['CREATED', 'UPDATED']) }),
+  'banquet.equipment.changed': hotelScoped.extend({ equipmentId: z.string().uuid(), change: z.enum(['CREATED', 'UPDATED']) }),
+  'banquet.client.changed': hotelScoped.extend({ clientId: z.string().uuid(), change: z.enum(['CREATED', 'UPDATED']) }),
+  'banquet.settings.changed': hotelScoped,
+  /** Etkinlik dosyası: başlık, oturum, kalem, ödeme planı, durum (opsiyon, kesin, gerçekleşti, iptal, kayıp, opsiyon düştü). */
+  'banquet.event.changed': hotelScoped.extend({
+    eventId: z.string().uuid(),
+    change: z.enum([
+      'CREATED',
+      'UPDATED',
+      'SESSIONS',
+      'ITEMS',
+      'INSTALLMENTS',
+      'TENTATIVE',
+      'OPTION_EXTENDED',
+      'RELEASED',
+      'OPTION_EXPIRED',
+      'DEFINITE',
+      'COMPLETED',
+      'CANCELLED',
+      'LOST',
+    ]),
+  }),
+  'banquet.document.changed': hotelScoped.extend({
+    eventId: z.string().uuid(),
+    documentId: z.string().uuid(),
+    change: z.enum(['ISSUED', 'ACCEPTED', 'DECLINED', 'SIGNED']),
+  }),
+  /** Etkinlik ödemesi: alındı, onaya gitti, onaylandı / reddedildi, iptal edildi. Kasa ekranı da tazelenir. */
+  'banquet.payment.changed': hotelScoped.extend({
+    eventId: z.string().uuid(),
+    paymentId: z.string().uuid(),
+    change: z.enum(['RECEIVED', 'PENDING', 'POSTED', 'DECLINED', 'VOID_REQUESTED', 'VOIDED', 'VOID_DECLINED']),
   }),
 
   /* ── Acente bonusu (modül 35) ──
@@ -966,7 +1006,8 @@ export const FOLIO_EVENTS = Object.freeze(
 export const PAYMENT_EVENTS = Object.freeze(Object.keys(EVENT_CATALOG).filter((name) => name.startsWith('payment.')));
 
 /** Kasa görünümünü ve kur ekranını etkileyen olaylar (canlı yayın: `cash.changed`). */
-export const CASH_EVENTS = Object.freeze([...PAYMENT_EVENTS, 'exchange_rate.updated']);
+/** Kasa: folyo ödemeleri, kur ve etkinlik ödemeleri (modül 37, kaynak "Etkinlik"). */
+export const CASH_EVENTS = Object.freeze([...PAYMENT_EVENTS, 'exchange_rate.updated', 'banquet.payment.changed']);
 
 /** Minibar / çamaşırhane ekranlarını etkileyen olaylar (canlı yayın: `extras.changed`, modül 19). */
 export const EXTRAS_EVENTS = Object.freeze(['minibar.recorded', 'laundry.order.changed', 'extras.catalog.changed']);
@@ -988,6 +1029,17 @@ export const BUDGET_EVENTS = Object.freeze([
 
 /** Acente ve kontrat (modül 29): ekranlar bunlarla tazelenir (`agencies.changed` kanalı). */
 export const AGENCY_EVENTS = Object.freeze(['agency.changed', 'agency.contract.changed', 'agency.stop_sale.changed']);
+
+/** Banket / etkinlik (modül 37): ekranlar bunlarla tazelenir (`banquet.changed` kanalı). */
+export const BANQUET_EVENTS = Object.freeze([
+  'banquet.venue.changed',
+  'banquet.equipment.changed',
+  'banquet.client.changed',
+  'banquet.settings.changed',
+  'banquet.event.changed',
+  'banquet.document.changed',
+  'banquet.payment.changed',
+]);
 
 /** Acente bonusu (modül 35): ekranlar bunlarla tazelenir (`agency-bonus.changed` kanalı). */
 export const AGENCY_BONUS_EVENTS = Object.freeze([

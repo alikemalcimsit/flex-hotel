@@ -124,6 +124,13 @@ export const NAV_SECTIONS = Object.freeze([
         icon: 'coins',
         permission: PERMISSIONS.AGENCY_BONUS_VIEW,
       },
+      // Banket / etkinlik (modül 37): satış dosya açar, ön büro / muhasebe ödeme alır, mutfak programı görür.
+      {
+        label: 'Etkinlikler',
+        to: '/etkinlikler',
+        icon: 'calendar',
+        permission: PERMISSIONS.BANQUET_VIEW,
+      },
       // Promosyon ve kupon (modül 31): müdür düzenler, muhasebe kullanım raporunu görür.
       {
         label: 'Promosyonlar',

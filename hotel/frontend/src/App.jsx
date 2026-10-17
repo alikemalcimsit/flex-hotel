@@ -90,6 +90,13 @@ const NewBonusRulePage = lazy(() => import('./pages/agency-bonus/BonusRuleFormPa
 const EditBonusRulePage = lazy(() => import('./pages/agency-bonus/BonusRuleFormPage.jsx').then((m) => ({ default: m.EditBonusRulePage })));
 const BonusRulePage = lazy(() => import('./pages/agency-bonus/BonusRulePage.jsx').then((m) => ({ default: m.BonusRulePage })));
 const BonusSettlementPage = lazy(() => import('./pages/agency-bonus/BonusSettlementPage.jsx').then((m) => ({ default: m.BonusSettlementPage })));
+const BanquetLayout = lazy(() => import('./pages/banquet/BanquetLayout.jsx').then((m) => ({ default: m.BanquetLayout })));
+const BanquetEventsTab = lazy(() => import('./pages/banquet/EventsTab.jsx').then((m) => ({ default: m.EventsTab })));
+const BanquetCalendarTab = lazy(() => import('./pages/banquet/CalendarTab.jsx').then((m) => ({ default: m.CalendarTab })));
+const BanquetSetupTab = lazy(() => import('./pages/banquet/SetupTab.jsx').then((m) => ({ default: m.SetupTab })));
+const NewEventPage = lazy(() => import('./pages/banquet/EventFormPage.jsx').then((m) => ({ default: m.NewEventPage })));
+const BanquetEventPage = lazy(() => import('./pages/banquet/EventPage.jsx').then((m) => ({ default: m.EventPage })));
+const EventPaymentRedirect = lazy(() => import('./pages/banquet/EventPaymentRedirect.jsx').then((m) => ({ default: m.EventPaymentRedirect })));
 const PromotionsLayout = lazy(() => import('./pages/promotions/PromotionsLayout.jsx').then((m) => ({ default: m.PromotionsLayout })));
 const PromotionListTab = lazy(() => import('./pages/promotions/PromotionListTab.jsx').then((m) => ({ default: m.PromotionListTab })));
 const PromotionReportTab = lazy(() => import('./pages/promotions/PromotionReportTab.jsx').then((m) => ({ default: m.PromotionReportTab })));
@@ -454,6 +461,43 @@ export default function App() {
               element={
                 <RequirePermission permission={PERMISSIONS.AGENCY_BONUS_VIEW}>
                   <BonusSettlementPage />
+                </RequirePermission>
+              }
+            />
+            {/* Banket / etkinlik (modül 37): "yeni" ve "odeme/:id" statik parçaları kimlikli yoldan önce eşleşir. */}
+            <Route
+              path="etkinlikler"
+              element={
+                <RequirePermission permission={PERMISSIONS.BANQUET_VIEW}>
+                  <BanquetLayout />
+                </RequirePermission>
+              }
+            >
+              <Route index element={<BanquetEventsTab />} />
+              <Route path="takvim" element={<BanquetCalendarTab />} />
+              <Route path="tanimlar" element={<BanquetSetupTab />} />
+            </Route>
+            <Route
+              path="etkinlikler/yeni"
+              element={
+                <RequirePermission permission={PERMISSIONS.BANQUET_MANAGE}>
+                  <NewEventPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="etkinlikler/odeme/:paymentId"
+              element={
+                <RequirePermission permission={PERMISSIONS.BANQUET_VIEW}>
+                  <EventPaymentRedirect />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="etkinlikler/:eventId"
+              element={
+                <RequirePermission permission={PERMISSIONS.BANQUET_VIEW}>
+                  <BanquetEventPage />
                 </RequirePermission>
               }
             />
