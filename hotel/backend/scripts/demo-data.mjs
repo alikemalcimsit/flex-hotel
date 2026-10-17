@@ -26,6 +26,10 @@ import { randomUUID } from 'node:crypto';
  *   adresi yok (sunucu dışarıya istek atmaz). Gelecekteki OTA
  *   rezervasyonlarının bir kısmı bu kanalın kayıtlarına bağlı (çoğu işlenmiş,
  *   birkaçı "doğrulanmalı"). Aynı `createdBy` ile tanınır, `--reset` siler.
+ * - Banket (modül 37, `demo-banquet.mjs`): bölünebilir balo salonu, teras, toplantı
+ *   odaları, ekipman, müşteriler, politika ve her durumda etkinlik (gerçekleşmiş +
+ *   proforma, iptal + onay bekleyen iade, kongre, sıralı opsiyon, gecikmiş taksit,
+ *   teklif bekleyen talepler, kaybedilen). `--reset` belge dosyalarıyla siler.
  */
 
 if (process.env.DEMO_CONFIRM !== 'DEMO') {
@@ -37,6 +41,8 @@ const core = await import('@hotelos/core');
 const contracts = await import('@hotelos/hotel-contracts');
 const { prisma } = await import('../src/db.js');
 const budget = await import('../src/modules/budget/service.js');
+const { removeFiles } = await import('../src/lib/file-storage.js');
+const { resetBanquetDemo, seedBanquetDemo } = await import('./demo-banquet.mjs');
 
 const HISTORY_DAYS = 400;
 const FUTURE_DAYS = 75;
@@ -65,10 +71,14 @@ const existingDemo =
   (await prisma.agency.count({ where: { hotelId, createdBy: ACTOR } })) +
   (await prisma.promotion.count({ where: { hotelId, createdBy: ACTOR } })) +
   (await prisma.channel.count({ where: { hotelId, createdBy: ACTOR } })) +
-  (await prisma.agencyBonusRule.count({ where: { hotelId, createdBy: ACTOR } }));
+  (await prisma.agencyBonusRule.count({ where: { hotelId, createdBy: ACTOR } })) +
+  (await prisma.venue.count({ where: { hotelId, createdBy: ACTOR } }));
 if (process.argv.includes('--reset')) {
+  let banquetFiles = [];
   await prisma.$transaction(
     async (tx) => {
+      // Demo banket (modül 37): etkinlikler ödemeleri, onayları, belgeleriyle; salon, ekipman, müşteri.
+      banquetFiles = await resetBanquetDemo(tx, hotelId, ACTOR);
       // Demo prim kuralları (modül 35): demo acentelere bağlı bütün kurallar (personelin demo acenteye
       // açtığı da — acente silinecek). Hak ediş satırları rezervasyona bağlı: önce hak edişler (satırlar
       // onlarla gider), onların onay istekleri ve zil uyarıları, sonra kurallar.
@@ -122,6 +132,9 @@ if (process.argv.includes('--reset')) {
     },
     { timeout: 120_000 },
   );
+  // Belge PDF'leri diskte: kayıtlar gittikten sonra silinir (silinemeyen yetim kalır, log'a yazılır).
+  const leftover = await removeFiles(banquetFiles);
+  if (leftover.length) console.error(`${leftover.length} banket belgesi diskten silinemedi`);
   console.log('Önceki demo veri silindi.');
 } else if (existingDemo > 0) {
   console.error('Demo veri zaten var; silip yeniden üretmek için --reset ile çalıştırın.');
@@ -811,6 +824,14 @@ if (sellableAgencies.length) {
 }
 await asActor(() => bonusProgress.refreshProgress(hotelId, { announce: false }));
 
+// ── Banket / etkinlik (modül 37): salonlar, ekipman, müşteriler, politika ve her durumda etkinlik ──
+let banquetSummary = null;
+try {
+  banquetSummary = await seedBanquetDemo({ prisma, core, contracts, hotelId, today, actor: ACTOR, approver: DEMO_APPROVER, desk: DEMO_ACCOUNTANT, addDays });
+} catch (error) {
+  console.error(`Banket adımı tamamlanamadı: ${error.message}`);
+}
+
 // Odaların anlık durumu: içeride kimse varsa dolu, boşların bir kısmı kirli.
 const inHouse = new Set(reservations.filter((entry) => entry.row.status === 'CHECKED_IN').map((entry) => entry.row.roomId));
 await prisma.room.updateMany({ where: { hotelId, id: { in: [...inHouse] } }, data: { occupancy: 'OCCUPIED' } });
@@ -864,6 +885,9 @@ console.log(
     `${nights.length} gece, ${items.length} folyo kalemi, ${payments.length} ödeme, ${AGENCY_SEEDS.length} acente, ` +
     `${PROMOTION_SEEDS.length} promosyon (${reservations.filter((entry) => entry.row.promotionId).length} promosyonlu rezervasyon, ` +
     `${reservations.filter((entry) => entry.row.couponId).length} kuponlu), 1 kanal (${otaUpcoming.length} kanal rezervasyonu), ` +
-    `${await prisma.agencyBonusRule.count({ where: { hotelId, createdBy: ACTOR } })} prim kuralı (${bonusCount} hak ediş).`,
+    `${await prisma.agencyBonusRule.count({ where: { hotelId, createdBy: ACTOR } })} prim kuralı (${bonusCount} hak ediş)` +
+    (banquetSummary
+      ? `, ${banquetSummary.venues} salon, ${banquetSummary.events} etkinlik (${banquetSummary.documents} belge, ${banquetSummary.payments} ödeme).`
+      : '.'),
 );
 await prisma.$disconnect();

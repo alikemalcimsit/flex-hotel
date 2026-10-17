@@ -29,6 +29,7 @@ const KIND_ICONS = Object.freeze({
   CHANNEL_BOOKING: 'globe',
   CHANNEL_SYNC: 'refresh',
   AGENCY_BONUS: 'coins',
+  BANQUET: 'calendar',
 });
 
 const SEVERITY_TONES = Object.freeze({

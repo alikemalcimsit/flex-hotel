@@ -151,6 +151,7 @@ export * from './budget.js';
 export * from './agencies.js';
 export * from './promotions.js';
 export * from './agency-bonus.js';
+export * from './banquet.js';
 export * from './channel-manager.js';
 export * from './events.js';
 export { displayPhone, internationalPhone } from './phone.js';

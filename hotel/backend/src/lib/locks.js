@@ -26,6 +26,8 @@
  * servisi çağırmadan önce kanal rezervasyonunu tutar. Modül 35: prim kuralı →
  * hak ediş (ikisi de rezervasyon kilitlemez; hak ediş hesabı rezervasyonları
  * yalnızca okur). Onay kararı hak edişi commit'ten sonra, ayrı işlemde kilitler.
+ * Modül 37: etkinlik → salon → ekipman → etkinlik ödemesi (etkinlik konaklama
+ * tablolarına dokunmaz).
  *
  * Soft-delete edilmiş satırlar kilitlenmez ve "bulunamadı" sayılır.
  */
@@ -182,6 +184,43 @@ export function lockAgencyBonusRules(tx, hotelId, ruleIds) {
  */
 export function lockAgencyBonuses(tx, hotelId, bonusIds) {
   return lockPlainRows(tx, 'AgencyBonus', hotelId, bonusIds, false);
+}
+
+/**
+ * Etkinlik dosyası (modül 37): başlığı, oturumu, kalemi, ödeme planı, durumu, belgesi ya
+ * da ödemesi değişen etkinlik özel kilitlenir; toplamları bu kilit altında yeniden yazılır.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} eventIds
+ */
+export function lockEvents(tx, hotelId, eventIds) {
+  return lockPlainRows(tx, 'Event', hotelId, eventIds, false);
+}
+
+/**
+ * Salon (modül 37): kesinleştirme ve kesin etkinliğin oturum değişikliği, ilgili atomik
+ * salon parçalarını kilitleyip sırayı / çakışmayı denetler — aynı anda iki etkinlik aynı
+ * salonda "1. opsiyon"dan kesine geçemez. Sıra: etkinlik → salon → ekipman.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} venueIds
+ */
+export function lockVenues(tx, hotelId, venueIds) {
+  return lockPlainRows(tx, 'Venue', hotelId, venueIds, false);
+}
+
+/**
+ * Banket ekipmanı (modül 37): stok denetimi (kesin etkinliklerde aynı saatte stoktan
+ * fazlası ayrılamaz) ekipman satırı kilitliyken yapılır.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} equipmentIds
+ */
+export function lockEventEquipment(tx, hotelId, equipmentIds) {
+  return lockPlainRows(tx, 'EventEquipment', hotelId, equipmentIds, false);
 }
 
 /**

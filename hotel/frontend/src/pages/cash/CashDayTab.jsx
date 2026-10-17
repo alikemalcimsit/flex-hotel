@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { CASH_PAGE_SIZE, PAYMENT_KINDS, PAYMENT_METHODS } from '@hotelos/hotel-contracts';
+import { CASH_ORIGINS, CASH_ORIGIN_LABELS, CASH_PAGE_SIZE, PAYMENT_KINDS, PAYMENT_METHODS } from '@hotelos/hotel-contracts';
 import { Alert, Badge, Button, Card, EmptyState, Icon, Input, Select, Spinner } from '@hotelos/ui';
 import { QueryFallback } from '../../components/QueryFallback.jsx';
 import { Switch } from '../../components/Switch.jsx';
 import { api, withQuery } from '../../lib/api.js';
+import { eventPath } from '../../lib/banquet.js';
 import { folioPath } from '../../lib/folios.js';
 import { formatDate, formatMoney } from '../../lib/format.js';
 import {
@@ -42,6 +43,7 @@ export function CashDayTab() {
   const mine = params.get('benim') === '1';
   const [method, setMethod] = useState('');
   const [kind, setKind] = useState('');
+  const [origin, setOrigin] = useState('');
   const setParam = (key, value) =>
     setParams(
       (current) => {
@@ -64,7 +66,7 @@ export function CashDayTab() {
     queryFn: () => api(withQuery('/payments/cash/summary', { date, mine })),
     refetchInterval: date || isLive ? false : OFFLINE_REFRESH_MS,
   });
-  const movementFilters = { date, mine, method: method || undefined, kind: kind || undefined };
+  const movementFilters = { date, mine, method: method || undefined, kind: kind || undefined, origin: origin || undefined };
   const movements = useInfiniteQuery({
     queryKey: cashKeys.movements(movementFilters),
     queryFn: ({ pageParam }) => api(withQuery('/payments/cash/movements', { ...movementFilters, cursor: pageParam ?? undefined, limit: CASH_PAGE_SIZE })),
@@ -116,6 +118,13 @@ export function CashDayTab() {
               value={kind}
               onChange={(event) => setKind(event.target.value)}
               options={[{ value: '', label: 'Bütün türler' }, ...PAYMENT_KINDS.map((value) => ({ value, label: kindLabel(value) }))]}
+            />
+            <Select
+              compact
+              label="Kaynak"
+              value={origin}
+              onChange={(event) => setOrigin(event.target.value)}
+              options={[{ value: '', label: 'Bütün kaynaklar' }, ...CASH_ORIGINS.map((value) => ({ value, label: CASH_ORIGIN_LABELS[value] }))]}
             />
           </div>
         </div>
@@ -183,6 +192,12 @@ function MethodTotals({ data }) {
               </tr>
             </tfoot>
           </table>
+          {data.origins && Number(data.origins.EVENT) !== 0 && (
+            <p className="mt-2 text-sm text-ink-soft">
+              Kaynak: {CASH_ORIGIN_LABELS.FOLIO} <strong className="tabular-nums">{formatMoney(data.origins.FOLIO, currency)}</strong> · {CASH_ORIGIN_LABELS.EVENT}{' '}
+              <strong className="tabular-nums">{formatMoney(data.origins.EVENT, currency)}</strong>
+            </p>
+          )}
           <p className="mt-2 text-xs text-ink-muted">
             İptal: hatalı girişin düzeltmesi (iptal kaydının günü). Dövizde parantez içi folyoya giren karşılık; nakit dövizi çekmecede kendi para biriminde sayın.
           </p>
@@ -225,6 +240,11 @@ function PendingPayments({ pending, currency, canDecide }) {
                 oda {row.stay.roomNumber ?? '—'} · {row.stay.guestName}
               </Link>
             )}
+            {row.event && (
+              <Link className="text-info-ink underline-offset-2 hover:underline" to={eventPath(row.event.id, 'odemeler')}>
+                etkinlik {row.event.code} · {row.event.name}
+              </Link>
+            )}
             <span className="text-xs text-ink-muted">
               {formatDate(row.receivedAt)} · {row.receivedBy}
             </span>
@@ -258,7 +278,7 @@ function Movements({ query, currency }) {
           <thead className="border-b border-line bg-surface-muted text-left text-[0.7rem] uppercase tracking-[0.08em] text-ink-muted">
             <tr>
               <th scope="col" className="px-4 py-3 font-bold">Saat</th>
-              <th scope="col" className="px-4 py-3 font-bold">Konaklama</th>
+              <th scope="col" className="px-4 py-3 font-bold">Konaklama / etkinlik</th>
               <th scope="col" className="px-4 py-3 font-bold">Yöntem / tür</th>
               <th scope="col" className="px-4 py-3 text-right font-bold">Tutar</th>
               <th scope="col" className="px-4 py-3 font-bold">Referans</th>
@@ -272,16 +292,30 @@ function Movements({ query, currency }) {
                 <tr key={row.id} className={row.voided ? 'bg-surface-muted' : ''}>
                   <td className="whitespace-nowrap px-4 py-2.5 align-top tabular-nums">{timeFormatter.format(new Date(row.postedAt))}</td>
                   <td className="px-4 py-2.5 align-top">
-                    {row.stay ? (
-                      <Link className="font-semibold text-info-ink underline-offset-2 hover:underline" to={folioPath(row.stay.id, row.folioId)}>
-                        oda {row.stay.roomNumber ?? '—'} · {row.stay.guestName}
-                      </Link>
+                    {row.event ? (
+                      <>
+                        <Link className="font-semibold text-info-ink underline-offset-2 hover:underline" to={eventPath(row.event.id, 'odemeler')}>
+                          {row.event.name}
+                        </Link>
+                        <span className="block text-xs text-ink-muted">
+                          {CASH_ORIGIN_LABELS.EVENT} · {row.event.code}
+                          {row.event.clientName ? ` · ${row.event.clientName}` : ''}
+                        </span>
+                      </>
                     ) : (
-                      '—'
+                      <>
+                        {row.stay ? (
+                          <Link className="font-semibold text-info-ink underline-offset-2 hover:underline" to={folioPath(row.stay.id, row.folioId)}>
+                            oda {row.stay.roomNumber ?? '—'} · {row.stay.guestName}
+                          </Link>
+                        ) : (
+                          '—'
+                        )}
+                        <span className="block text-xs text-ink-muted">
+                          {row.stay?.confirmationCode} · {row.folioName}
+                        </span>
+                      </>
                     )}
-                    <span className="block text-xs text-ink-muted">
-                      {row.stay?.confirmationCode} · {row.folioName}
-                    </span>
                   </td>
                   <td className="px-4 py-2.5 align-top">
                     <span className="flex items-center gap-1.5">
@@ -290,7 +324,7 @@ function Movements({ query, currency }) {
                     </span>
                     <span className="block text-xs text-ink-muted">
                       {kindLabel(row.kind)}
-                      {row.kind === 'PAYMENT' && row.source !== 'DESK' ? ` · ${sourceLabel(row.source)}` : ''}
+                      {row.kind === 'PAYMENT' && row.source && row.source !== 'DESK' ? ` · ${sourceLabel(row.source)}` : ''}
                       {row.voided ? ' · iptal edildi' : ''}
                     </span>
                   </td>

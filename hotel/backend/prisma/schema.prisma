@@ -222,6 +222,8 @@ enum StaffAlertKind {
   CHANNEL_SYNC
   /// Acente prim kademesine ulaştı, dönem sonu hak edişi hesaplandı ya da kararı çıktı — modül 35.
   AGENCY_BONUS
+  /// Etkinlik: opsiyon düştü / 1. opsiyon oldu, depozito gecikti, gerçekleşti olarak kapatılmalı — modül 37.
+  BANQUET
 }
 
 /// Rezervasyon fiyatının kaynağı (modül 4): sistem hesabı ya da yetkili
@@ -337,6 +339,85 @@ enum PromotionDiscountType {
   PERCENT
   AMOUNT
   FREE_NIGHTS
+}
+
+/// Banket / etkinlik (modül 37): salonun oturma düzeni (kapasite düzene göre).
+enum VenueLayout {
+  THEATER
+  CLASSROOM
+  U_SHAPE
+  BOARDROOM
+  BANQUET
+  CABARET
+  COCKTAIL
+}
+
+enum VenueStatus {
+  ACTIVE
+  PASSIVE
+}
+
+enum EventClientType {
+  COMPANY
+  PERSON
+}
+
+enum EventType {
+  WEDDING
+  ENGAGEMENT
+  MEETING
+  CONFERENCE
+  GALA
+  BIRTHDAY
+  COCKTAIL
+  OTHER
+}
+
+/// Talep → opsiyonlu → kesin → gerçekleşti; kesin iptal edilebilir, talep / opsiyon kaybedilebilir.
+enum EventStatus {
+  INQUIRY
+  TENTATIVE
+  DEFINITE
+  COMPLETED
+  CANCELLED
+  LOST
+}
+
+/// Salon tutma: opsiyon (sıralı, çakışabilir) ya da kesin (çakışamaz — EXCLUDE).
+enum EventHoldStatus {
+  TENTATIVE
+  DEFINITE
+}
+
+enum EventItemCategory {
+  VENUE
+  FNB
+  BEVERAGE
+  EQUIPMENT
+  SERVICE
+  OTHER
+}
+
+enum EventItemUnit {
+  PERSON
+  PIECE
+  HOUR
+  DAY
+  PACKAGE
+}
+
+enum EventDocumentKind {
+  OFFER
+  CONTRACT
+  PROFORMA
+}
+
+enum EventDocumentStatus {
+  ISSUED
+  ACCEPTED
+  DECLINED
+  SIGNED
+  SUPERSEDED
 }
 
 /// Acente prim kuralının ölçütü (modül 35): hedefin ve kademe eşiklerinin birimi.
@@ -624,6 +705,13 @@ model Hotel {
   channels              Channel[]
   agencyBonusRules      AgencyBonusRule[]
   agencyBonuses         AgencyBonus[]
+  venues                Venue[]
+  eventEquipment        EventEquipment[]
+  eventClients          EventClient[]
+  eventSettings         EventSettings?
+  events                Event[]
+  eventPayments         EventPayment[]
+  eventDocuments        EventDocument[]
 }
 
 model User {
@@ -831,6 +919,7 @@ model Approval {
   pendingActions PendingAction[]
   payments       Payment[]
   agencyBonuses  AgencyBonus[]
+  eventPayments  EventPayment[]
 
   // Bekleyenler (eskiden yeniye) ve geçmiş (yeni karar önce), imleçli.
   @@index([hotelId, status, createdAt, id])
@@ -3262,4 +3351,373 @@ model AgencyBonusLine {
   @@index([bonusId, nights, id])
   // Rezervasyonun hangi hak edişlere girdiği.
   @@index([reservationId])
+}
+
+/// Salon (modül 37). Bölünebilir salon: bütün (`parentId` boş, parçaları var) ve parçaları
+/// (`parentId` = bütün). Bütün satılınca parçaları da dolar; parça satılınca bütün dolar —
+/// salon tutma satırları "atomik parça" başına yazıldığı için veritabanı kısıtı bunu da korur.
+model Venue {
+  id              String      @id @default(uuid())
+  hotelId         String
+  code            String
+  name            String
+  description     String?
+  parentId        String?
+  areaSqm         Decimal?    @db.Decimal(8, 2)
+  hourlyRate      Decimal?    @db.Decimal(12, 2)
+  halfDayRate     Decimal?    @db.Decimal(12, 2)
+  dayRate         Decimal?    @db.Decimal(12, 2)
+  /// Oturumdan önce / sonra salonun hazırlık süresi (dakika): salon bu sürede de doludur.
+  setupMinutes    Int         @default(60)
+  teardownMinutes Int         @default(60)
+  status          VenueStatus @default(ACTIVE)
+  createdBy       String
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  hotel      Hotel            @relation(fields: [hotelId], references: [id])
+  parent     Venue?           @relation("VenueParts", fields: [parentId], references: [id], onDelete: Restrict)
+  parts      Venue[]          @relation("VenueParts")
+  capacities VenueCapacity[]
+  sessions   EventSession[]
+  holds      EventVenueHold[]
+
+  @@unique([hotelId, code])
+  @@index([hotelId, status, code])
+  @@index([parentId])
+}
+
+/// Salonun düzene göre kapasitesi.
+model VenueCapacity {
+  id       String      @id @default(uuid())
+  venueId  String
+  layout   VenueLayout
+  capacity Int
+
+  venue Venue @relation(fields: [venueId], references: [id], onDelete: Cascade)
+
+  @@unique([venueId, layout])
+}
+
+/// Banket ekipmanı (projeksiyon, ses sistemi, sahne…): stoklu; aynı saatte stoktan fazlası ayrılamaz.
+model EventEquipment {
+  id            String   @id @default(uuid())
+  hotelId       String
+  code          String
+  name          String
+  unitPrice     Decimal  @db.Decimal(12, 2)
+  stockQuantity Int
+  isActive      Boolean  @default(true)
+  createdBy     String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  hotel Hotel       @relation(fields: [hotelId], references: [id])
+  items EventItem[]
+
+  @@unique([hotelId, code])
+  @@index([hotelId, isActive, name])
+}
+
+/// Etkinlik müşterisi (firma ya da kişi): tekrar eden müşteri için kart.
+model EventClient {
+  id          String          @id @default(uuid())
+  hotelId     String
+  type        EventClientType
+  name        String
+  contactName String?
+  phone       String?
+  email       String?
+  taxOffice   String?
+  taxNumber   String?
+  address     String?
+  notes       String?
+  createdBy   String
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  hotel  Hotel   @relation(fields: [hotelId], references: [id])
+  events Event[]
+
+  @@index([hotelId, name])
+  @@index([name(ops: raw("gin_trgm_ops"))], map: "EventClient_name_trgm_idx", type: Gin)
+}
+
+/// Otelin banket politikası (tek satır): opsiyon süresi, teklif geçerliliği, depozito, iptal kademeleri.
+model EventSettings {
+  hotelId               String   @id
+  optionDays            Int      @default(7)
+  offerValidityDays     Int      @default(14)
+  depositPct            Decimal  @default(30) @db.Decimal(5, 2)
+  requireSignedContract Boolean  @default(true)
+  /// [{ daysBefore, feePct }]: etkinliğe en az N gün kala iptalde bedel yüzdesi.
+  cancellationTiers     Json     @default("[]")
+  contractTerms         String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+}
+
+/// Numara serisi (otel × tür × yıl): etkinlik, teklif, sözleşme, proforma.
+model EventSequence {
+  hotelId String
+  kind    String
+  year    Int
+  last    Int
+
+  @@id([hotelId, kind, year])
+}
+
+/// Etkinlik dosyası (modül 37). Tutarlar kalemlerden ve ödemelerden yeniden hesaplanan
+/// denormalize toplamlardır (kalem / kişi / ödeme yazan işlem aynı transaction'da yazar).
+model Event {
+  id                String      @id @default(uuid())
+  hotelId           String
+  code              String
+  name              String
+  type              EventType
+  clientId          String
+  /// Satış sorumlusu (personel e-postası).
+  ownerEmail        String
+  status            EventStatus @default(INQUIRY)
+  expectedPax       Int
+  guaranteedPax     Int?
+  actualPax         Int?
+  /// Faturalanacak kişi (kişi başı kalemlerin miktarı): kesin öncesi garanti ya da tahmin,
+  /// gerçekleşince en çok (garanti, gerçekleşen).
+  billablePax       Int         @default(0)
+  /// Opsiyonun son günü (dahil) ve opsiyona alındığı an (opsiyon sırası için).
+  optionUntil       DateTime?   @db.Date
+  optionedAt        DateTime?
+  /// Oturumların kapsadığı aralık (liste ve takvim için).
+  firstStartAt      DateTime?
+  lastEndAt         DateTime?
+  currency          String
+  netTotal          Decimal     @default(0) @db.Decimal(14, 2)
+  taxTotal          Decimal     @default(0) @db.Decimal(14, 2)
+  grandTotal        Decimal     @default(0) @db.Decimal(14, 2)
+  /// Bakiyeye girmiş ödemelerin toplamı (tahsilat − iade ± iptal).
+  paidTotal         Decimal     @default(0) @db.Decimal(14, 2)
+  /// Kesinleşirken politikadan kopyalanan iptal kademeleri ve iptalde hesaplanan bedel.
+  cancellationTiers Json?
+  cancellationFee   Decimal?    @db.Decimal(14, 2)
+  definiteAt        DateTime?
+  definiteBy        String?
+  completedAt       DateTime?
+  completedBy       String?
+  cancelledAt       DateTime?
+  cancelledBy       String?
+  cancelReason      String?
+  lostAt            DateTime?
+  lostBy            String?
+  lostReason        String?
+  notes             String?
+  createdBy         String
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  hotel        Hotel              @relation(fields: [hotelId], references: [id])
+  client       EventClient        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  sessions     EventSession[]
+  holds        EventVenueHold[]
+  items        EventItem[]
+  installments EventInstallment[]
+  payments     EventPayment[]
+  documents    EventDocument[]
+
+  @@unique([hotelId, code])
+  // Liste: duruma göre / tarihe göre (imleç: id); müşterinin ve sorumlunun etkinlikleri.
+  @@index([hotelId, status, firstStartAt, id])
+  @@index([hotelId, firstStartAt, id])
+  @@index([hotelId, clientId, firstStartAt])
+  @@index([hotelId, ownerEmail, firstStartAt])
+  // Opsiyon süresi dolumu taraması.
+  @@index([status, optionUntil])
+  @@index([name(ops: raw("gin_trgm_ops"))], map: "Event_name_trgm_idx", type: Gin)
+}
+
+/// Etkinliğin oturumu (program satırı): salon × saat × düzen × kişi. Saatler gerçek an (UTC).
+model EventSession {
+  id              String      @id @default(uuid())
+  hotelId         String
+  eventId         String
+  title           String
+  venueId         String
+  layout          VenueLayout
+  pax             Int
+  startAt         DateTime
+  endAt           DateTime
+  setupMinutes    Int
+  teardownMinutes Int
+  notes           String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  event Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  venue Venue            @relation(fields: [venueId], references: [id], onDelete: Restrict)
+  holds EventVenueHold[]
+  items EventItem[]
+
+  @@index([eventId, startAt])
+  @@index([hotelId, venueId, startAt])
+}
+
+/// Salon tutma: oturumun kapladığı her atomik salon parçası için bir satır (kurulum ve söküm
+/// dahil aralık). Kesin tutmalar çakışamaz (EXCLUDE); opsiyonlar çakışır, sırası `heldAt`.
+model EventVenueHold {
+  id        String          @id @default(uuid())
+  hotelId   String
+  eventId   String
+  sessionId String
+  venueId   String
+  startAt   DateTime
+  endAt     DateTime
+  status    EventHoldStatus
+  /// Opsiyon sırası bu ana göre (önce tutan önde). Oturumun salonu / saati değişince yenilenir.
+  heldAt    DateTime
+  createdAt DateTime        @default(now())
+
+  event   Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  session EventSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  venue   Venue        @relation(fields: [venueId], references: [id], onDelete: Restrict)
+
+  // Takvim ve çakışma: salonun belli aralıktaki tutmaları.
+  @@index([hotelId, venueId, startAt, endAt])
+  // Otelin takvim penceresi: "pencere başında sonra biten" tutmalar — geçmiş birikse de tarama gelecek ufkuyla sınırlı.
+  @@index([hotelId, endAt])
+  @@index([eventId])
+  @@index([sessionId])
+}
+
+/// Etkinlik kalemi. Tutarlar folyonun vergi motoruyla hesaplanıp yazılır (kişi başı kalemde
+/// miktar faturalanacak kişi sayısıdır: `billedQuantity`).
+model EventItem {
+  id             String            @id @default(uuid())
+  hotelId        String
+  eventId        String
+  sessionId      String?
+  equipmentId    String?
+  category       EventItemCategory
+  description    String
+  perPerson      Boolean           @default(false)
+  quantity       Decimal           @db.Decimal(12, 2)
+  billedQuantity Decimal           @db.Decimal(12, 2)
+  unit           EventItemUnit
+  unitPrice      Decimal           @db.Decimal(12, 2)
+  discountPct    Decimal           @default(0) @db.Decimal(5, 2)
+  taxCategory    String
+  netAmount      Decimal           @db.Decimal(14, 2)
+  taxAmount      Decimal           @db.Decimal(14, 2)
+  total          Decimal           @db.Decimal(14, 2)
+  taxLines       Json              @default("[]")
+  sortOrder      Int
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  event     Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  session   EventSession?   @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  equipment EventEquipment? @relation(fields: [equipmentId], references: [id], onDelete: Restrict)
+
+  @@index([eventId, sortOrder])
+  // Ekipman stoku: aynı ekipmanın oturumlardaki ayrımları.
+  @@index([equipmentId, sessionId])
+  @@index([sessionId])
+}
+
+/// Ödeme planı taksiti (depozito, ara ödeme, kalan). Ödenen tutar vadesi eskiden yeniye dağıtılır.
+model EventInstallment {
+  id        String   @id @default(uuid())
+  hotelId   String
+  eventId   String
+  label     String
+  dueDate   DateTime @db.Date
+  amount    Decimal  @db.Decimal(14, 2)
+  sortOrder Int
+  createdAt DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId, dueDate])
+  // Gecikme taraması.
+  @@index([hotelId, dueDate])
+}
+
+/// Etkinlik ödemesi (depozito, ödeme, iade, iptal kaydı). Kasa ekranına (modül 17) "Etkinlik"
+/// kaynağıyla girer. Kurallar konaklama tahsilatıyla aynı: büyük ödeme ve iade onaya gider,
+/// iptal ters kayıtla yapılır (dört göz).
+model EventPayment {
+  id              String        @id @default(uuid())
+  hotelId         String
+  eventId         String
+  kind            PaymentKind   @default(PAYMENT)
+  status          PaymentStatus @default(POSTED)
+  method          PaymentMethod
+  /// Tahsilatta artı, iadede eksi; iptal kaydında asıl satırın tersi.
+  amount          Decimal       @db.Decimal(14, 2)
+  currency        String
+  businessDate    DateTime      @db.Date
+  reference       String?
+  note            String?
+  sourceKey       String?
+  receivedBy      String
+  receivedAt      DateTime      @default(now())
+  postedAt        DateTime?
+  approvalId      String?
+  declinedAt      DateTime?
+  reversalOfId    String?       @unique
+  voidedAt        DateTime?
+  voidedBy        String?
+  voidReason      String?
+  voidApprovalId  String?
+  voidRequestedAt DateTime?
+  voidRequestedBy String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  hotel      Hotel         @relation(fields: [hotelId], references: [id])
+  event      Event         @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  approval   Approval?     @relation(fields: [approvalId], references: [id], onDelete: Restrict)
+  reversalOf EventPayment? @relation("EventPaymentReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversal   EventPayment? @relation("EventPaymentReversal")
+
+  @@unique([hotelId, sourceKey])
+  @@index([eventId, receivedAt, id])
+  // Kasa: günün işlenen hareketleri ve onay bekleyenler.
+  @@index([hotelId, businessDate, postedAt, id])
+  @@index([hotelId, status, receivedAt])
+  @@index([approvalId])
+  @@index([voidApprovalId])
+}
+
+/// Etkinlik belgesi (teklif, sözleşme, proforma): üretildiği andaki veriyle dondurulmuş ve PDF'i
+/// sunucu diskinde saklanan sürüm.
+model EventDocument {
+  id           String              @id @default(uuid())
+  hotelId      String
+  eventId      String
+  kind         EventDocumentKind
+  number       String
+  version      Int
+  status       EventDocumentStatus @default(ISSUED)
+  snapshot     Json
+  fileKey      String
+  fileSize     Int
+  grandTotal   Decimal             @db.Decimal(14, 2)
+  validUntil   DateTime?           @db.Date
+  /// Kabul / ret / imza kaydı (gün ve kaydeden).
+  decisionDate DateTime?           @db.Date
+  decidedBy    String?
+  decidedAt    DateTime?
+  note         String?
+  issuedBy     String
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+  event Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
+
+  @@unique([hotelId, number])
+  @@unique([eventId, kind, version])
+  @@index([eventId, kind, createdAt])
 }

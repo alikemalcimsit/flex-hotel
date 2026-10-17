@@ -288,10 +288,15 @@ export const cashSummaryQuerySchema = z.object({
   mine: queryBoolean.default(false),
 });
 
+/** Kasa hareketinin kaynağı: konaklama folyosu ya da etkinlik hesabı (modül 37). */
+export const CASH_ORIGINS = Object.freeze(['FOLIO', 'EVENT']);
+export const CASH_ORIGIN_LABELS = Object.freeze({ FOLIO: 'Konaklama', EVENT: 'Etkinlik' });
+
 /** Kasa hareketleri: günün işlenen ödemeleri (son işlenen önce), imleçli. */
 export const cashMovementsQuerySchema = cashSummaryQuerySchema.extend({
   method: z.enum(PAYMENT_METHODS, { error: 'Geçersiz yöntem' }).optional(),
   kind: z.enum(PAYMENT_KINDS, { error: 'Geçersiz tür' }).optional(),
+  origin: z.enum(CASH_ORIGINS, { error: 'Geçersiz kaynak' }).optional(),
   cursor: z.string().trim().max(200).optional(),
   limit: z.coerce
     .number({ error: 'Sayfa boyutu sayı olmalı' })

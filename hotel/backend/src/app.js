@@ -28,6 +28,8 @@ import { dashboardCacheStats } from './modules/dashboard/service.js';
 import { agencyRoutes } from './modules/agencies/routes.js';
 import { agencyBonusRoutes } from './modules/agency-bonus/routes.js';
 import { registerAgencyBonusSubscribers } from './modules/agency-bonus/subscribers.js';
+import { banquetRoutes } from './modules/banquet/routes.js';
+import { registerBanquetSubscribers } from './modules/banquet/subscribers.js';
 import { promotionRoutes } from './modules/promotions/routes.js';
 import { channelManagerRoutes, channexWebhookRoutes, icalExportRoutes } from './modules/channel-manager/routes.js';
 import { budgetRoutes } from './modules/budget/routes.js';
@@ -148,6 +150,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   registerFolioSubscribers();
   registerPaymentSubscribers();
   registerAgencyBonusSubscribers();
+  registerBanquetSubscribers();
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
@@ -321,6 +324,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   await app.register(budgetRoutes, { prefix: '/budgets' });
   await app.register(agencyRoutes, { prefix: '/agencies' });
   await app.register(agencyBonusRoutes, { prefix: '/agency-bonus' });
+  await app.register(banquetRoutes, { prefix: '/banquet' });
   await app.register(promotionRoutes, { prefix: '/promotions' });
   await app.register(channelManagerRoutes, { prefix: '/channel-manager' });
   await app.register(manualTaskRoutes, { prefix: '/manual-tasks' });

@@ -63,14 +63,19 @@ export class StaleWriteError extends ConflictError {
 
 /**
  * Girdi iş kuralına takıldı (zod'un yakalayamadığı semantik doğrulama).
- * `details.field` verilirse hata, şema hatalarıyla aynı biçimde (`fields`)
+ * `details.field` (tek alan, mesaj hatanın kendisi) ya da `details.fields`
+ * (alan → mesaj) verilirse hata, şema hatalarıyla aynı biçimde (`fields`)
  * döner: form mesajı ilgili alanın altında gösterir.
  */
 export class ValidationError extends AppError {
   constructor(message, details) {
     super(message, { statusCode: 422, code: 'VALIDATION', details });
-    const field = /** @type {{ field?: unknown } | undefined} */ (details)?.field;
-    this.fields = typeof field === 'string' ? { [field]: message } : undefined;
+    const { field, fields } = /** @type {{ field?: unknown, fields?: unknown }} */ (details ?? {});
+    if (typeof field === 'string') this.fields = { [field]: message };
+    else if (fields && typeof fields === 'object' && !Array.isArray(fields)) {
+      const entries = Object.entries(fields).filter(([, text]) => typeof text === 'string');
+      this.fields = entries.length ? Object.fromEntries(entries) : undefined;
+    } else this.fields = undefined;
   }
 }
 
@@ -319,6 +324,47 @@ const CONSTRAINT_RULES = Object.freeze({
   AgencyBonus_currency_code: { code: 'CONSTRAINT', message: 'Hak edişin para birimi üç harfli kod olmalı.' },
   AgencyBonus_status_trail: { code: 'CONSTRAINT', message: 'Hak edişin durumu ile onay / ödeme kaydı uyuşmuyor.' },
   AgencyBonusLine_nights_valid: { code: 'CONSTRAINT', message: 'Hak ediş satırının gecesi eksi olamaz.' },
+  Venue_hotelId_code_key: { code: 'DUPLICATE', message: 'Bu kodlu bir salon zaten var.' },
+  Venue_name_not_blank: { code: 'CONSTRAINT', message: 'Salon adı en az 2 karakter olmalı.' },
+  Venue_rates_valid: { code: 'CONSTRAINT', message: 'Salon fiyatları ve alanı (girildiyse) 0\'dan büyük olmalı.' },
+  Venue_buffers_valid: { code: 'CONSTRAINT', message: 'Kurulum / söküm süresi 0–720 dakika olmalı.' },
+  Venue_not_own_part: { code: 'CONSTRAINT', message: 'Salon kendisinin parçası olamaz.' },
+  VenueCapacity_valid: { code: 'CONSTRAINT', message: 'Kapasite 1–10.000 arası olmalı.' },
+  VenueCapacity_venueId_layout_key: { code: 'DUPLICATE', message: 'Bu düzenin kapasitesi zaten yazılmış.' },
+  EventEquipment_hotelId_code_key: { code: 'DUPLICATE', message: 'Bu kodlu bir ekipman zaten var.' },
+  EventEquipment_valid: { code: 'CONSTRAINT', message: 'Ekipman fiyatı eksi olamaz, stok 0–10.000 olmalı.' },
+  EventClient_name_not_blank: { code: 'CONSTRAINT', message: 'Müşteri adı en az 2 karakter olmalı.' },
+  EventSettings_valid: { code: 'CONSTRAINT', message: 'Banket politikası değerleri sınır dışında.' },
+  EventSequence_valid: { code: 'CONSTRAINT', message: 'Belge numara serisi tutarsız.' },
+  Event_hotelId_code_key: { code: 'DUPLICATE', message: 'Etkinlik numarası çakıştı; tekrar deneyin.' },
+  Event_name_not_blank: { code: 'CONSTRAINT', message: 'Etkinlik adı en az 2 karakter olmalı.' },
+  Event_pax_valid: { code: 'CONSTRAINT', message: 'Kişi sayıları 1–10.000 arası olmalı.' },
+  Event_totals_valid: { code: 'CONSTRAINT', message: 'Etkinlik tutarları tutarsız.' },
+  Event_span_valid: { code: 'CONSTRAINT', message: 'Etkinliğin tarih aralığı tutarsız.' },
+  Event_currency_code: { code: 'CONSTRAINT', message: 'Etkinlik para birimi üç harfli kod olmalı.' },
+  Event_status_trail: { code: 'CONSTRAINT', message: 'Etkinliğin durumu ile opsiyon / kesin / iptal kaydı uyuşmuyor.' },
+  EventSession_time_valid: { code: 'CONSTRAINT', message: 'Oturumun bitişi başlangıçtan sonra olmalı ve en fazla 72 saat sürebilir.' },
+  EventSession_pax_valid: { code: 'CONSTRAINT', message: 'Oturum kişi sayısı 1–10.000 arası olmalı.' },
+  EventSession_buffers_valid: { code: 'CONSTRAINT', message: 'Kurulum / söküm süresi 0–720 dakika olmalı.' },
+  EventSession_title_not_blank: { code: 'CONSTRAINT', message: 'Oturum adı en az 2 karakter olmalı.' },
+  EventVenueHold_time_valid: { code: 'CONSTRAINT', message: 'Salon tutma aralığı tutarsız.' },
+  EventVenueHold_no_double_definite: {
+    code: 'VENUE_TAKEN',
+    message: 'Salon bu saatlerde başka bir kesin etkinliğe ait (kurulum ve söküm dahil). Aynı salon aynı saatte iki etkinliğe kesin verilemez.',
+  },
+  EventItem_amounts_valid: { code: 'CONSTRAINT', message: 'Kalem tutarları tutarsız.' },
+  EventItem_equipment_valid: { code: 'CONSTRAINT', message: 'Ekipman kalemi bir oturuma bağlı olmalı ve adedi tam sayı olmalı.' },
+  EventItem_per_person_unit: { code: 'CONSTRAINT', message: 'Kişi başı kalemin birimi kişi olmalı.' },
+  EventInstallment_valid: { code: 'CONSTRAINT', message: 'Taksit tutarı 0\'dan büyük olmalı.' },
+  EventPayment_amount_sign: { code: 'CONSTRAINT', message: 'Ödeme tutarının işareti türüyle uyuşmuyor.' },
+  EventPayment_currency_code: { code: 'CONSTRAINT', message: 'Ödeme para birimi üç harfli kod olmalı.' },
+  EventPayment_status_trail: { code: 'CONSTRAINT', message: 'Ödemenin durumu ile onay kaydı uyuşmuyor.' },
+  EventPayment_method_valid: { code: 'CONSTRAINT', message: 'Etkinlikte bu ödeme yöntemi kullanılamaz.' },
+  EventPayment_hotelId_sourceKey_key: { code: 'DUPLICATE', message: 'Bu ödeme isteği zaten işlendi.' },
+  EventDocument_valid: { code: 'CONSTRAINT', message: 'Belge kaydı tutarsız.' },
+  EventDocument_status_by_kind: { code: 'CONSTRAINT', message: 'Belge türü bu durumu alamaz.' },
+  EventDocument_decision_trail: { code: 'CONSTRAINT', message: 'Belgenin kabul / imza kaydı eksik.' },
+  EventDocument_one_current_per_kind: { code: 'DOCUMENT_RACE', message: 'Bu türden belge az önce başka bir işlemle üretildi; sayfayı yenileyin.' },
 });
 
 /**
