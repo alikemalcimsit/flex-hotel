@@ -30,6 +30,7 @@ const KIND_ICONS = Object.freeze({
   CHANNEL_SYNC: 'refresh',
   AGENCY_BONUS: 'coins',
   BANQUET: 'calendar',
+  POS: 'utensils',
 });
 
 const SEVERITY_TONES = Object.freeze({

@@ -2347,23 +2347,96 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 38. Menü & reçete — Ali Kemal
 **Gün sonu:** Restoran menüsü ve her ürünün reçetesi tanımlı; ürün maliyeti otomatik hesaplanıyor.
-- [ ] Backend: MenuCategory, MenuItem, Recipe, RecipeLine tabloları + API
+- [ ] Backend: MenuCategory, MenuItem, Recipe, RecipeLine tabloları + API — **MenuCategory / MenuItem + API modül 39'da yapıldı** (aşağıdaki not); Recipe / RecipeLine Ali'de
 - [ ] Backend: maliyet hesabı (reçete satırları × stok birim maliyeti)
-- [ ] Ekran: Menü grupları ve ürünler (ad, fiyat, KDV, görsel, aktif)
+- [ ] Ekran: Menü grupları ve ürünler (ad, fiyat, KDV, görsel, aktif) — **görsel dışında modül 39'da yapıldı** (`/pos/tanimlar`)
 - [ ] Ekran: Reçete editörü (ürün → malzeme + miktar + birim)
 - [ ] Ekran: Maliyet / kâr marjı tablosu
 - [ ] Ekran: QR menü için public JSON çıktısı (53 kullanır)
 
+> **📌 Ali'ye not (modül 39, 20 Ekim 2026 — Ahmet):** kullanıcı kararıyla 38'in **menü kısmı** POS'la birlikte yapıldı:
+> `MenuCategory` (ad, sıra, aktif, satıldığı satış noktaları — boşsa her yer) ve `MenuItem` (grup, kod, ad, açıklama, **vergi dahil**
+> fiyat, vergi kategorisi, mutfak istasyonu HOT / COLD / BAR / PASTRY / NONE, aktif, sıra, "tükendi"); API `/pos/menu/categories`,
+> `/pos/menu/items` (+ `/sold-out`), tanım ekranı `/pos/tanimlar`, izin `pos.setup`. Silme yok (satılan ürün pasife alınır; adisyon
+> kalemi gönderildiği anki ad / fiyat / vergi / istasyonu kopyalar). **Sende kalan:** Recipe / RecipeLine, maliyet ve kâr marjı,
+> ürün görseli, QR menü JSON'u — `MenuItem`'a bağlanabilir. Stok düşümü için POS `fnb.order.paid` yayınlıyor (modül 39 notu).
+
 ### 39. Restoran POS — arkadaşın
 **Gün sonu:** Garson masayı açıp sipariş giriyor, adisyon kapatıyor, ödeme alıyor veya odaya yazıyor.
-- [ ] Backend: Table, Order, OrderLine, Check tabloları + API
-- [ ] Backend: adisyon bölme / ikram / indirim servisleri; "odaya yaz" → `fnb.order.charged`
-- [ ] Ekran: Masa planı (salon seçimi, masa kutuları: boş / dolu / hesap istiyor)
-- [ ] Ekran: Sipariş ekranı (dokunmatik; ürün grupları, adet, not, gönder)
-- [ ] Ekran: Adisyon (kalemler, böl, ikram, indirim, kapat)
-- [ ] Ekran: Ödeme (nakit / kart / odaya yaz; oda seçimi)
-- [ ] Ekran: Garson vardiya raporu
-- [ ] Aktör: fnb-worker paketi (`order.placed` → mutfak; `order.paid` → stok düşümü event'i; `fnb.order.charged` → billing-worker folyo kalemi)
+- [x] Backend: Table, Order, OrderLine, Check tabloları + API
+- [x] Backend: adisyon bölme / ikram / indirim servisleri; "odaya yaz" → `fnb.order.charged`
+- [x] Ekran: Masa planı (salon seçimi, masa kutuları: boş / dolu / hesap istiyor)
+- [x] Ekran: Sipariş ekranı (dokunmatik; ürün grupları, adet, not, gönder)
+- [x] Ekran: Adisyon (kalemler, böl, ikram, indirim, kapat)
+- [x] Ekran: Ödeme (nakit / kart / odaya yaz; oda seçimi)
+- [x] Ekran: Garson vardiya raporu
+- [ ] Aktör: fnb-worker paketi (`order.placed` → mutfak; `order.paid` → stok düşümü event'i; `fnb.order.charged` → billing-worker folyo kalemi) — **kullanıcı kararı:** olaylar yayında (`fnb.order.placed`, `fnb.order.paid`; `fnb.order.charged` billing-worker'da işleniyor); paket tüketicileriyle (40 KDS, 44 stok) kurulacak
+
+> **📌 Modül 39 tamamlandı (20 Ekim 2026 — Ahmet).**
+>
+> **Kararlar (kullanıcı):** 38'in menü kısmı burada (yukarıdaki not); adisyonun **kendi ödemesi** (`PosPayment`, kasada "Restoran"
+> kaynağı, parayı alan garsonun vardiya kasasına); ikram / iptal / indirim **şef garson yetkisi + gerekçe**, politikadaki eşiğe eşit
+> ya da üstü **dört göz** (onay türü `POS_ADJUSTMENT`); büyük tahsilat ve hatalı girişin iptali dört göz (`POS_PAYMENT`); **vardiya
+> aç / kapat + nakit sayımı**; fnb-worker paketi 40 / 44 ile (olaylar şimdi).
+>
+> **Veri** (migration `20261018090000_restaurant_pos`): `PosOutlet` (odaya yaz açık / kapalı), `PosTable` (bölüm, kişi), `MenuCategory`,
+> `MenuItem` (trigram ad araması), `PosSettings` (onay eşiği, kasa farkı uyarısı), `PosShift` (avans, beklenen / sayılan nakit,
+> fark; bir garsona tek açık vardiya — kısmi tekil index), `PosCheck` (ADS-yıl-sıra; toplamlar, vergi, alınan, odaya yazılan;
+> durum izi CHECK'i: kapanmışta alınan + odaya = toplam), `PosOrder` (sipariş turu, mutfak durumu 40 için `NEW`), `PosOrderLine`
+> (anlık ad / fiyat / vergi / istasyon, iptal + ikram adedi, kapanış iş günü), `PosAdjustment` (ikram / iptal + zayi / indirim; onay
+> izi), `PosPayment` (nakit / kart; iptal kaydı asıl satırın tersi), `PosRoomCharge` (konaklama, olay kimliği), `PosSequence`.
+> Uyarı türü `POS`; izinler `pos.operate` (garson; F&B rolü), `pos.supervise` (şef garson), `pos.setup`, `pos.report` (muhasebe).
+>
+> **Kurallar** (`pos/rules.js`, birim testli): kalem tutarı (iptal / ikram düşülür), indirim (yüzde kuruşa, tutar ara toplamı aşmaz)
+> vergi kategorilerine **kuruş kuruş** dağıtılır, vergi **kategori başına** folyonun motoruyla (dahil + hariç); **odaya yaz kalemleri**
+> kategori başına brüt — folyo aynı motorla toplamı **birebir** bulur; hariç vergi (servis) kuruşu yüzünden yazılamayan tutar
+> reddedilir ve en yakın iki tutar önerilir. Bölme planı (serbest adet, onay bekleyen kalem taşınmaz), vardiya kasası (avans +
+> işlenmiş nakit − iptal), fark uyarısı, hesap bölüşme (kişi başı).
+>
+> **Akış ve eşzamanlılık:** kilit sırası vardiya → adisyon → rezervasyon. Adisyon açma, ödeme, devir, yeniden açma vardiyayı
+> **paylaşımlı**, kapanış **özel** kilitler (sayım sırasında kasaya para girmez). İstek kimliği (`requestId`) adisyon, sipariş turu,
+> ödeme ve odaya yazmanın anahtarı: çift dokunuş / ağ tekrarı ikinci kayıt açmaz (eşzamanlı aynı istek de). Ödeme sürüm damgasını
+> ilerletmez (aynı anda sipariş giren garsonun ekranı bozulmaz). Onay bekleyen düzeltme varken ödeme alınmaz; bekleyen ödeme varken
+> toplam değişmez; bekleyen iş varken adisyon kapanmaz, vardiya kapanmaz. Onaylanan düzeltme ödemeyi aşacaksa uygulanmaz (isteyene
+> "uygulanamadı"). Yeniden açma: aynı iş günü, vardiya açık, odaya yazılmamış. Birleştirmede turlar devam numarasıyla taşınır.
+> Zamanlanmış iş (15 dk): 16 saati geçen vardiya, 8 saati geçen adisyon → şef garsona bir kez.
+>
+> **Olaylar:** ekran kanalı `pos.changed` (`pos.*`); iş olayları **`fnb.order.placed`** (tur gönderildi: nokta, masa, kişi, garson,
+> kalem kimliği / ad / adet / istasyon / not — 40 KDS ve fnb-worker için) ve **`fnb.order.paid`** (adisyon kapandı: ürün başına
+> satılan / ikram / zayi adet — 44 stok düşümü için; yeniden açılıp kapanırsa yeniden yayınlanır, tüketici son yayını esas alır);
+> odaya yaz **`fnb.order.charged`** (billing-worker kalemleri vergi kategorisiyle işler — dış harcama kalemine isteğe bağlı
+> `taxCategory` eklendi, minibar / çamaşır etkilenmez).
+>
+> **API** (`/pos`): terminal (tek çağrı), masa planı, adisyon (liste: durum / nokta / garson / kapanış günü / numara ya da masa
+> araması; ekran; aç, kişi / not, tur, hesap iste, düzeltme, böl, taşı, birleştir, devret, kapat, boş iptal, yeniden aç), ödeme ve
+> iptal isteği, içerideki misafir araması, odaya yaz, vardiya (aç, benim, açık garsonlar, liste, ekran, kapat, rapor), satış raporu
+> (≤ 31 gün), tanımlar. Kasa (17) üç kaynak: folyo + etkinlik + **restoran** (özet, bekleyenler, imleçli hareketler).
+>
+> **Ekran:** `/pos/masalar` (vardiya çubuğu, satış noktası, bölüm bölüm masa kutuları: boş / dolu / hesap istiyor, süre, tutar;
+> masasız adisyonlar), adisyon ekranı `/pos/adisyon/:id` (dokunmatik menü + arama + sepet + not + gönder; turlar ve kalemler,
+> kalem başına ikram / iptal + zayi; indirim; toplam ve vergi dökümü; ödeme: nakit / kart, kişi başı, hızlı nakit, para üstü; odaya
+> yaz: oda / soyadı araması, yuvarlama önerisi; böl / taşı / birleştir / devret; hesap fişi ve tur başına mutfak fişi — **bilgi
+> fişi**, mali ÖKC entegrasyonu kapsam dışı), adisyonlar, vardiyalar + vardiya ekranı (kasa, kapanış, fark önizlemesi, rapor,
+> yazdırılabilir vardiya fişi), satış raporu, menü ve tanımlar. Kasa ekranında "Restoran" kaynağı; onay penceresinden adisyona geçiş.
+>
+> **Ölçüm** (`scripts/perf-pos.mjs`; 6 nokta, 420 masa, 600 ürün, ~587.000 adisyon, 1,76 milyon kalem, 300 açık adisyon): terminal
+> 25 ms, masa planı 11 ms, adisyon ekranı 11 ms, liste 53–67 ms (derin sayfa 2000 dahil), numara araması 12 ms, masa adıyla arama
+> 24 ms, vardiya raporu 13 ms, satış raporu 1 gün 7 ms / 31 gün 133 ms, kasa < 15 ms, aç → 20 kalem → böl → öde 384 ms. Bulunup
+> düzeltilen: numara araması masa adıyla OR'lanınca tarih index'iyle bütün geçmişi tarıyordu (1,1 sn) → eşleşme kümesi ayrı
+> (MATERIALIZED) + `(tableId, openedAt)` index'i; ürün kırılımı kalem tablosunu baştan sona okuyordu (616 ms) → kalemde kapanış iş
+> günü + `(hotelId, businessDate)` index'i.
+>
+> **Test:** kurallar 16 + sözleşme 10 + ön yüz (sepet / fiş) 10 birim; entegrasyon 12 (tanımlar, vardiyasız işlem yok + tek açık
+> vardiya + çift dokunuşta tek adisyon / tur, fiyat kopyası, masa durumu, arama; düzeltme eşik altı / dört göz / red / indirimin yerine
+> geçmesi / ödemeyi aşan; ödeme kısmi / fazla / tekrar / eşzamanlı iki tam ödeme tek kazanan / sürüm / büyük ödeme onayı; ödeme
+> iptali + yeniden açma; odaya yaz → folyo birebir, kapalı nokta, çıkmış misafir, yuvarlama önerisi; böl / taşı / birleştir / devir;
+> vardiya kapanışı + fark uyarısı + rapor + kasa birleşimi + satış raporu + iş olayları; zamanlanmış iş; izinler ve otel kapsamı).
+>
+> **Yan düzeltmeler:** olay kataloğunda `staff.alert.raised` türlerine `POS` (eksik kalsa uyarı yazan işlem düşerdi); rapor
+> tarih alanı takvimde olmayan günü ("2026-02-31") reddediyor.
+>
+> **Devir:** fnb-worker paketi 40 (KDS; `PosOrder.status` NEW → … ve `fnb.order.placed`) ve 44 (stok; `fnb.order.paid`) ile; reçete /
+> maliyet 38; oda servisi 41 (`fnb.order.charged` ve POS servisleri hazır); mali fiş / ÖKC entegrasyonu yasal entegrasyonlarda.
 
 ### 40. Mutfak ekranı (KDS) — Ali Kemal
 **Gün sonu:** Mutfaktaki tablette siparişler sırayla görünüyor, süre sayıyor, "hazır" deyince garsona haber gidiyor.

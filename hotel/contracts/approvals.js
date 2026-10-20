@@ -28,6 +28,8 @@ export const APPROVAL_TYPES = Object.freeze([
   'PAYMENT_VOID',
   'AGENCY_BONUS',
   'EVENT_PAYMENT',
+  'POS_ADJUSTMENT',
+  'POS_PAYMENT',
   'OTHER',
 ]);
 
@@ -40,6 +42,8 @@ export const APPROVAL_TYPE_LABELS = Object.freeze({
   PAYMENT_VOID: 'Ödeme iptali',
   AGENCY_BONUS: 'Acente prim hak edişi',
   EVENT_PAYMENT: 'Etkinlik ödemesi (büyük ödeme, iade, iptal)',
+  POS_ADJUSTMENT: 'Adisyon düzeltmesi (ikram, iptal, indirim)',
+  POS_PAYMENT: 'Restoran ödemesi (büyük ödeme, hatalı giriş iptali)',
   OTHER: 'Diğer',
 });
 
@@ -51,7 +55,16 @@ export const APPROVAL_TYPE_LABELS = Object.freeze({
  * çıkarır. İkinci bir yetkili görmeli. Reddetmek (isteği geri çekmek)
  * serbesttir: iş yapılmaz, zarar yok.
  */
-export const APPROVAL_SELF_DECISION_FORBIDDEN_TYPES = Object.freeze(['FOLIO_VOID', 'PAYMENT_VOID', 'REFUND', 'LARGE_PAYMENT', 'AGENCY_BONUS', 'EVENT_PAYMENT']);
+export const APPROVAL_SELF_DECISION_FORBIDDEN_TYPES = Object.freeze([
+  'FOLIO_VOID',
+  'PAYMENT_VOID',
+  'REFUND',
+  'LARGE_PAYMENT',
+  'AGENCY_BONUS',
+  'EVENT_PAYMENT',
+  'POS_ADJUSTMENT',
+  'POS_PAYMENT',
+]);
 
 /**
  * Bu kişi bu onayı kendi isteği olduğu için onaylayamıyor mu? Onaylayamıyorsa sebep.

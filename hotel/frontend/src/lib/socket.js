@@ -67,6 +67,8 @@ export const AGENCY_BONUS_CHANNEL = 'agency-bonus.changed';
 export const PROMOTION_CHANNEL = 'promotions.changed';
 /** Banket / etkinlik (modül 37): salon takvimi, etkinlik dosyası, belge, ödeme ve tanımlar. */
 export const BANQUET_CHANNEL = 'banquet.changed';
+/** Restoran POS (modül 39): masa planı, adisyon, sipariş turu, ödeme, vardiya ve tanımlar. */
+export const POS_CHANNEL = 'pos.changed';
 /** Kanal yönetimi (modül 33): kanal ayarı, eşleştirme, stop-sale, senkron logu, kanal rezervasyonları. */
 export const CHANNEL_MANAGER_CHANNEL = 'channel-manager.changed';
 

@@ -77,6 +77,11 @@ const externalCharge = hotelScoped
           description: z.string().min(1).max(200),
           unitPrice: z.string().regex(/^\d+(\.\d{1,2})?$/, 'birim fiyat "45.50" biçiminde olmalı'),
           quantity: z.number().int().min(1).max(999),
+          /**
+           * Vergi kategorisi; yoksa kaynağınki (restoran FNB, minibar MINIBAR…). Restoran
+           * adisyonu karışık kategorili olabilir (yiyecek + perakende).
+           */
+          taxCategory: z.string().min(1).max(20).optional(),
         }),
       )
       .min(1)
@@ -445,6 +450,7 @@ export const EVENT_CATALOG = Object.freeze({
       'CHANNEL_SYNC',
       'AGENCY_BONUS',
       'BANQUET',
+      'POS',
     ]),
     userId: z.string().uuid().nullable(),
     permission: z.string().nullable(),
@@ -701,6 +707,96 @@ export const EVENT_CATALOG = Object.freeze({
     eventId: z.string().uuid(),
     paymentId: z.string().uuid(),
     change: z.enum(['RECEIVED', 'PENDING', 'POSTED', 'DECLINED', 'VOID_REQUESTED', 'VOIDED', 'VOID_DECLINED']),
+  }),
+
+  /* ── Restoran POS (modül 39) ──
+     Masa planı, adisyon ekranı ve mutfak ekranı (modül 40) bunlarla canlı tazelenir
+     (`POS_EVENTS`); yükte yalnızca kimlik ve süzgeç alanları. */
+
+  /** Satış noktası, masa, menü grubu / ürünü (tükendi dahil) ya da politika değişti. */
+  'pos.setup.changed': hotelScoped.extend({ entity: z.enum(['OUTLET', 'TABLE', 'CATEGORY', 'ITEM', 'SETTINGS']), entityId: z.string().min(1) }),
+  /** Adisyon açıldı / değişti / kapandı (masa planı bu olayla tazelenir). */
+  'pos.check.changed': hotelScoped.extend({
+    checkId: z.string().uuid(),
+    outletId: z.string().uuid(),
+    tableId: z.string().uuid().nullable(),
+    change: z.enum(['OPENED', 'UPDATED', 'BILL', 'ADJUSTED', 'SPLIT', 'MOVED', 'MERGED', 'TRANSFERRED', 'CLOSED', 'VOIDED', 'REOPENED']),
+  }),
+  /** Sipariş turu mutfağa gönderildi: mutfak ekranı (modül 40) kalemleri istasyonlara dağıtır. */
+  'pos.order.sent': hotelScoped.extend({
+    checkId: z.string().uuid(),
+    orderId: z.string().uuid(),
+    outletId: z.string().uuid(),
+    stations: z.array(z.string()).max(10),
+  }),
+  /** Restoran ödemesi alındı, onaya gitti, onaylandı / reddedildi, iptal edildi. Kasa ekranı da tazelenir. */
+  'pos.payment.changed': hotelScoped.extend({
+    checkId: z.string().uuid(),
+    paymentId: z.string().uuid(),
+    change: z.enum(['RECEIVED', 'PENDING', 'POSTED', 'DECLINED', 'VOID_REQUESTED', 'VOIDED', 'VOID_DECLINED']),
+  }),
+  /** Garson vardiyası açıldı / kapandı. */
+  'pos.shift.changed': hotelScoped.extend({ shiftId: z.string().uuid(), change: z.enum(['OPENED', 'CLOSED']) }),
+
+  /* ── Restoran siparişinin iş olayları (yayıncı modül 39; tüketiciler: fnb-worker, mutfak ekranı 40,
+     stok 44). Ekran tazelemesi değil, iş sözleşmesi: yük kendine yeter (tüketici POS tablosunu okumaz). ── */
+
+  /**
+   * Sipariş turu mutfağa gönderildi ("Gönder"). Kalemler gönderildiği anki ad, adet, istasyon ve
+   * notla; mutfağa gitmeyen (istasyonu NONE) kalemler de listede (tüketici süzer). Tur bir kez
+   * yayınlanır (istek kimliğiyle tekrar gönderim yeni tur açmaz).
+   */
+  'fnb.order.placed': hotelScoped.extend({
+    checkId: z.string().uuid(),
+    orderId: z.string().uuid(),
+    outletId: z.string().uuid(),
+    outletName: z.string().min(1),
+    /** Adisyon no ("ADS-2026-000123"). */
+    number: z.string().min(1).max(40),
+    /** Turun sırası (adisyon içinde 1, 2, …). */
+    seq: z.number().int().min(1),
+    tableName: z.string().nullable(),
+    covers: z.number().int().min(1),
+    waiterEmail: z.string().min(1),
+    lines: z
+      .array(
+        z.object({
+          lineId: z.string().uuid(),
+          menuItemId: z.string().uuid(),
+          name: z.string().min(1),
+          quantity: z.number().int().min(1),
+          station: z.enum(['HOT', 'COLD', 'BAR', 'PASTRY', 'NONE']),
+          note: z.string().nullable(),
+        }),
+      )
+      .min(1)
+      .max(60),
+  }),
+  /**
+   * Adisyon kapandı (ödendi / odaya yazıldı): ürün başına satılan, ikram edilen ve zayi (hazırlanıp
+   * iptal edilen) adet — stok düşümü bunlardan (hazırlanmadan iptal edilen düşülmez). Adisyon
+   * yeniden açılıp tekrar kapanırsa yeniden yayınlanır: tüketici adisyon kimliğine göre **son
+   * yayını** esas alır (`closedAt` sırası; fark kadar düzeltir).
+   */
+  'fnb.order.paid': hotelScoped.extend({
+    checkId: z.string().uuid(),
+    outletId: z.string().uuid(),
+    number: z.string().min(1).max(40),
+    /** Kapandığı iş günü "YYYY-AA-GG". */
+    businessDate: isoDay,
+    closedAt: z.string().datetime(),
+    grandTotal: moneyText,
+    items: z
+      .array(
+        z.object({
+          menuItemId: z.string().uuid(),
+          name: z.string().min(1),
+          sold: z.number().int().min(0),
+          comped: z.number().int().min(0),
+          wasted: z.number().int().min(0),
+        }),
+      )
+      .max(400),
   }),
 
   /* ── Acente bonusu (modül 35) ──
@@ -1007,7 +1103,7 @@ export const PAYMENT_EVENTS = Object.freeze(Object.keys(EVENT_CATALOG).filter((n
 
 /** Kasa görünümünü ve kur ekranını etkileyen olaylar (canlı yayın: `cash.changed`). */
 /** Kasa: folyo ödemeleri, kur ve etkinlik ödemeleri (modül 37, kaynak "Etkinlik"). */
-export const CASH_EVENTS = Object.freeze([...PAYMENT_EVENTS, 'exchange_rate.updated', 'banquet.payment.changed']);
+export const CASH_EVENTS = Object.freeze([...PAYMENT_EVENTS, 'exchange_rate.updated', 'banquet.payment.changed', 'pos.payment.changed']);
 
 /** Minibar / çamaşırhane ekranlarını etkileyen olaylar (canlı yayın: `extras.changed`, modül 19). */
 export const EXTRAS_EVENTS = Object.freeze(['minibar.recorded', 'laundry.order.changed', 'extras.catalog.changed']);
@@ -1029,6 +1125,9 @@ export const BUDGET_EVENTS = Object.freeze([
 
 /** Acente ve kontrat (modül 29): ekranlar bunlarla tazelenir (`agencies.changed` kanalı). */
 export const AGENCY_EVENTS = Object.freeze(['agency.changed', 'agency.contract.changed', 'agency.stop_sale.changed']);
+
+/** Restoran POS (modül 39): masa planı, adisyon, vardiya ve tanım ekranları (`pos.changed` kanalı). */
+export const POS_EVENTS = Object.freeze(['pos.setup.changed', 'pos.check.changed', 'pos.order.sent', 'pos.payment.changed', 'pos.shift.changed']);
 
 /** Banket / etkinlik (modül 37): ekranlar bunlarla tazelenir (`banquet.changed` kanalı). */
 export const BANQUET_EVENTS = Object.freeze([

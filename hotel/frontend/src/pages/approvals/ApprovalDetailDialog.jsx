@@ -51,6 +51,9 @@ const ENTITY_LINKS = Object.freeze({
   AgencyBonus: { to: (id) => `/acente-primleri/hak-edis/${id}`, permission: PERMISSIONS.AGENCY_BONUS_VIEW },
   // Etkinlik ödemesi (modül 37): ödemenin etkinliği sorulup dosyanın Ödemeler sekmesine gidilir.
   EventPayment: { to: (id) => `/etkinlikler/odeme/${id}`, permission: PERMISSIONS.BANQUET_VIEW },
+  // Restoran (modül 39): ödemenin / düzeltmenin adisyonu sorulup adisyon ekranına gidilir.
+  PosPayment: { to: (id) => `/pos/odeme/${id}`, permission: PERMISSIONS.POS_OPERATE },
+  PosAdjustment: { to: (id) => `/pos/duzeltme/${id}`, permission: PERMISSIONS.POS_OPERATE },
 });
 
 export function ApprovalDetailDialog({ approvalId, canDecide, timeZone, initialMode = 'view', onClose }) {

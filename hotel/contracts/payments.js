@@ -289,8 +289,8 @@ export const cashSummaryQuerySchema = z.object({
 });
 
 /** Kasa hareketinin kaynağı: konaklama folyosu ya da etkinlik hesabı (modül 37). */
-export const CASH_ORIGINS = Object.freeze(['FOLIO', 'EVENT']);
-export const CASH_ORIGIN_LABELS = Object.freeze({ FOLIO: 'Konaklama', EVENT: 'Etkinlik' });
+export const CASH_ORIGINS = Object.freeze(['FOLIO', 'EVENT', 'POS']);
+export const CASH_ORIGIN_LABELS = Object.freeze({ FOLIO: 'Konaklama', EVENT: 'Etkinlik', POS: 'Restoran' });
 
 /** Kasa hareketleri: günün işlenen ödemeleri (son işlenen önce), imleçli. */
 export const cashMovementsQuerySchema = cashSummaryQuerySchema.extend({

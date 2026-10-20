@@ -432,6 +432,7 @@ export const STAFF_ALERT_KINDS = Object.freeze([
   'CHANNEL_SYNC',
   'AGENCY_BONUS',
   'BANQUET',
+  'POS',
 ]);
 
 export const STAFF_ALERT_KIND_LABELS = Object.freeze({
@@ -451,6 +452,7 @@ export const STAFF_ALERT_KIND_LABELS = Object.freeze({
   CHANNEL_SYNC: 'Kanal senkronu başarısız',
   AGENCY_BONUS: 'Acente primi (kademe, hak ediş)',
   BANQUET: 'Banket (opsiyon, depozito, etkinlik)',
+  POS: 'Restoran POS (vardiya, adisyon, odaya yaz)',
 });
 
 export const STAFF_ALERT_SEVERITIES = Object.freeze(['INFO', 'WARNING', 'CRITICAL']);

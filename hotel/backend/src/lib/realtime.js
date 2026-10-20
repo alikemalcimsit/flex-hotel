@@ -5,6 +5,7 @@ import {
   AGENCY_EVENTS,
   AGENCY_BONUS_EVENTS,
   BANQUET_EVENTS,
+  POS_EVENTS,
   PROMOTION_EVENTS,
   CHANNEL_EVENTS as CHANNEL_MANAGER_EVENTS,
   EXTRAS_EVENTS,
@@ -107,6 +108,9 @@ export const AGENCY_BONUS_CHANNEL = 'agency-bonus.changed';
 /** Banket / etkinlik (modül 37): salon, ekipman, müşteri, politika, etkinlik dosyası, belge, ödeme; salon takvimi. */
 export const BANQUET_CHANNEL = 'banquet.changed';
 
+/** Restoran POS (modül 39): masa planı, adisyon, sipariş turu, ödeme, vardiya, tanımlar. */
+export const POS_CHANNEL = 'pos.changed';
+
 /** Promosyon ve kupon (modül 31): promosyon, kupon üretimi / kapatma. */
 export const PROMOTION_CHANNEL = 'promotions.changed';
 
@@ -142,6 +146,7 @@ const CHANNEL_EVENTS = Object.freeze({
   [AGENCY_CHANNEL]: AGENCY_EVENTS,
   [AGENCY_BONUS_CHANNEL]: AGENCY_BONUS_EVENTS,
   [BANQUET_CHANNEL]: BANQUET_EVENTS,
+  [POS_CHANNEL]: POS_EVENTS,
   [PROMOTION_CHANNEL]: PROMOTION_EVENTS,
   [CHANNEL_MANAGER_CHANNEL]: CHANNEL_MANAGER_EVENTS,
 });

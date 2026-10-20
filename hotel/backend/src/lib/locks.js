@@ -28,6 +28,8 @@
  * yalnızca okur). Onay kararı hak edişi commit'ten sonra, ayrı işlemde kilitler.
  * Modül 37: etkinlik → salon → ekipman → etkinlik ödemesi (etkinlik konaklama
  * tablolarına dokunmaz).
+ * Modül 39: vardiya → adisyon (birden fazlası kimlik sırasıyla) → rezervasyon (odaya
+ * yaz yalnızca okur; folyoya kalem aktör yazar).
  *
  * Soft-delete edilmiş satırlar kilitlenmez ve "bulunamadı" sayılır.
  */
@@ -209,6 +211,32 @@ export function lockEvents(tx, hotelId, eventIds) {
  */
 export function lockVenues(tx, hotelId, venueIds) {
   return lockPlainRows(tx, 'Venue', hotelId, venueIds, false);
+}
+
+/**
+ * Garson vardiyası (modül 39): ödeme ve adisyon açma `shared` alır (vardiya açıkken),
+ * kapanış özel alır — sayım yapılırken kasaya yeni para girmez.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} shiftIds
+ * @param {{ shared?: boolean }} [options]
+ */
+export function lockPosShifts(tx, hotelId, shiftIds, { shared = false } = {}) {
+  return lockPlainRows(tx, 'PosShift', hotelId, shiftIds, shared);
+}
+
+/**
+ * Adisyon (modül 39): kalem, düzeltme, ödeme, bölme / birleştirme / taşıma yazan işlem
+ * adisyonu özel kilitler; toplamlar bu kilit altında yeniden yazılır. Birden fazla
+ * adisyon (birleştirme, bölme) kimlik sırasıyla kilitlenir.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} checkIds
+ */
+export function lockPosChecks(tx, hotelId, checkIds) {
+  return lockPlainRows(tx, 'PosCheck', hotelId, checkIds, false);
 }
 
 /**
