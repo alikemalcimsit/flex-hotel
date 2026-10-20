@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   LAUNDRY_MAX_DUE_DAYS,
+  consumptionListQuerySchema,
+  extrasReportQuerySchema,
   laundryDueAtError,
   laundryItemInputSchema,
   laundryOrderSchema,
@@ -103,5 +105,16 @@ describe('çamaşır siparişi', () => {
     const now = new Date('2026-10-04T12:00:00Z');
     assert.equal(laundryOverdue({ status: 'READY', dueAt: '2026-10-04T11:00:00Z' }, now), true);
     assert.equal(laundryOverdue({ status: 'DELIVERED', dueAt: '2026-10-04T11:00:00Z' }, now), false);
+  });
+});
+
+describe('gün sorgusu', () => {
+  it('takvimde olmayan gün reddedilir (rapor ham SQL ::date ile 500 vermesin)', () => {
+    for (const schema of [consumptionListQuerySchema, extrasReportQuerySchema]) {
+      const invalid = schema.safeParse({ date: '2026-02-31' });
+      assert.equal(invalid.success, false);
+      assert.deepEqual([invalid.error.issues[0].path, invalid.error.issues[0].message], [['date'], 'Tarih geçersiz']);
+      assert.equal(schema.parse({ date: '2026-02-28' }).date, '2026-02-28');
+    }
   });
 });

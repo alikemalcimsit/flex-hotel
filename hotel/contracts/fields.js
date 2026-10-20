@@ -33,6 +33,19 @@ export function decimalField({ scale, min, max, label }) {
     });
 }
 
+/** Metnin başındaki "YYYY-AA-GG" günü (ardından saat gelebilir; baştaki boşluğu V8 yutar). */
+const LEADING_ISO_DAY = /^\s*(\d{4}-\d{2}-\d{2})/;
+
+/**
+ * "YYYY-AA-GG" takvimde var olan bir gün mü? Gidiş-dönüş: `Date` 31 Şubat'ı reddetmez,
+ * 3 Mart'a kaydırır — geri yazılan gün girilenle aynı değilse gün yoktur.
+ * @param {string} day
+ */
+function isCalendarDayText(day) {
+  const parsed = new Date(`${day}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === day;
+}
+
 /**
  * Gün hassasiyetli tarih. `<input type="date">` "YYYY-MM-DD" gönderir → UTC gün başı.
  *
@@ -40,12 +53,36 @@ export function decimalField({ scale, min, max, label }) {
  * (bitiş ≥ başlangıç, en fazla N gün) bozuk `Date` ile çalışıp `toISOString`'de
  * çökmesin — boş tarihli form doğrulaması tarayıcıda sessizce dururdu, sorgu
  * parametresindeki bozuk tarih sunucuda 400 yerine 500 olurdu.
+ *
+ * "YYYY-AA-GG" ile başlayan metnin (yalın gün ya da saatli/ofsetli ISO damgası) günü
+ * dönüşümden **önce** denetlenir: `new Date("2026-02-31")` hata vermez, 3 Mart olur;
+ * yanlış gün sessizce kaydedilir/filtrelenirdi. `Date` nesnesi ve diğer metinler eskisi gibi.
  */
 export const dateField = z
   .union([z.string(), z.date()])
   .refine((value) => value !== '', { message: 'Tarih seçin', abort: true })
+  .refine(
+    (value) => {
+      if (typeof value !== 'string') return true;
+      const day = LEADING_ISO_DAY.exec(value)?.[1];
+      return day === undefined || isCalendarDayText(day);
+    },
+    { message: 'Geçersiz tarih', abort: true },
+  )
   .transform((value) => (value instanceof Date ? value : new Date(value)))
   .refine((value) => !Number.isNaN(value.getTime()), { message: 'Geçersiz tarih', abort: true });
+
+/**
+ * "YYYY-AA-GG" gün metni (sorgu parametresi; sunucu `${gün}::date` ile ham SQL'e verir).
+ *
+ * Biçim tek başına yetmez: "2026-02-31" kalıba uyar ama PostgreSQL'de "date/time field
+ * value out of range" olur (400 yerine 500), `Date`'te de sessizce 3 Mart'a kayar.
+ * Gidiş-dönüş ile takvimde olmayan gün reddedilir.
+ */
+export const isoDayField = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Tarih YYYY-AA-GG biçiminde olmalı')
+  .refine(isCalendarDayText, { message: 'Tarih geçersiz' });
 
 /**
  * Optimistic lock alanı: istemci en son gördüğü `updatedAt` değerini geri yollar.
