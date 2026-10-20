@@ -97,6 +97,17 @@ const BanquetSetupTab = lazy(() => import('./pages/banquet/SetupTab.jsx').then((
 const NewEventPage = lazy(() => import('./pages/banquet/EventFormPage.jsx').then((m) => ({ default: m.NewEventPage })));
 const BanquetEventPage = lazy(() => import('./pages/banquet/EventPage.jsx').then((m) => ({ default: m.EventPage })));
 const EventPaymentRedirect = lazy(() => import('./pages/banquet/EventPaymentRedirect.jsx').then((m) => ({ default: m.EventPaymentRedirect })));
+const PosLayout = lazy(() => import('./pages/pos/PosLayout.jsx').then((m) => ({ default: m.PosLayout })));
+const PosHome = lazy(() => import('./pages/pos/PosLayout.jsx').then((m) => ({ default: m.PosHome })));
+const PosTerminalPage = lazy(() => import('./pages/pos/TerminalPage.jsx').then((m) => ({ default: m.TerminalPage })));
+const PosChecksPage = lazy(() => import('./pages/pos/ChecksPage.jsx').then((m) => ({ default: m.ChecksPage })));
+const PosShiftsPage = lazy(() => import('./pages/pos/ShiftsPage.jsx').then((m) => ({ default: m.ShiftsPage })));
+const PosShiftPage = lazy(() => import('./pages/pos/ShiftPage.jsx').then((m) => ({ default: m.ShiftPage })));
+const PosSalesReportPage = lazy(() => import('./pages/pos/SalesReportPage.jsx').then((m) => ({ default: m.SalesReportPage })));
+const PosSetupPage = lazy(() => import('./pages/pos/SetupPage.jsx').then((m) => ({ default: m.SetupPage })));
+const PosCheckPage = lazy(() => import('./pages/pos/CheckPage.jsx').then((m) => ({ default: m.CheckPage })));
+const PosPaymentRedirect = lazy(() => import('./pages/pos/PosRedirects.jsx').then((m) => ({ default: m.PosPaymentRedirect })));
+const PosAdjustmentRedirect = lazy(() => import('./pages/pos/PosRedirects.jsx').then((m) => ({ default: m.PosAdjustmentRedirect })));
 const PromotionsLayout = lazy(() => import('./pages/promotions/PromotionsLayout.jsx').then((m) => ({ default: m.PromotionsLayout })));
 const PromotionListTab = lazy(() => import('./pages/promotions/PromotionListTab.jsx').then((m) => ({ default: m.PromotionListTab })));
 const PromotionReportTab = lazy(() => import('./pages/promotions/PromotionReportTab.jsx').then((m) => ({ default: m.PromotionReportTab })));
@@ -499,6 +510,89 @@ export default function App() {
                 <RequirePermission permission={PERMISSIONS.BANQUET_VIEW}>
                   <BanquetEventPage />
                 </RequirePermission>
+              }
+            />
+            {/* Restoran POS (modül 39): sekmeli kabuk; adisyon ve vardiya ekranı kabuğun dışında, tam genişlik. */}
+            <Route
+              path="pos"
+              element={
+                <RequireAnyPermission permissions={[PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT, PERMISSIONS.POS_SETUP]}>
+                  <PosLayout />
+                </RequireAnyPermission>
+              }
+            >
+              <Route index element={<PosHome />} />
+              <Route
+                path="masalar"
+                element={
+                  <RequirePermission permission={PERMISSIONS.POS_OPERATE}>
+                    <PosTerminalPage />
+                  </RequirePermission>
+                }
+              />
+              <Route
+                path="adisyonlar"
+                element={
+                  <RequireAnyPermission permissions={[PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT]}>
+                    <PosChecksPage />
+                  </RequireAnyPermission>
+                }
+              />
+              <Route
+                path="vardiyalar"
+                element={
+                  <RequireAnyPermission permissions={[PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT]}>
+                    <PosShiftsPage />
+                  </RequireAnyPermission>
+                }
+              />
+              <Route
+                path="vardiyalar/:shiftId"
+                element={
+                  <RequireAnyPermission permissions={[PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT]}>
+                    <PosShiftPage />
+                  </RequireAnyPermission>
+                }
+              />
+              <Route
+                path="rapor"
+                element={
+                  <RequirePermission permission={PERMISSIONS.POS_REPORT}>
+                    <PosSalesReportPage />
+                  </RequirePermission>
+                }
+              />
+              <Route
+                path="tanimlar"
+                element={
+                  <RequirePermission permission={PERMISSIONS.POS_SETUP}>
+                    <PosSetupPage />
+                  </RequirePermission>
+                }
+              />
+            </Route>
+            <Route
+              path="pos/adisyon/:checkId"
+              element={
+                <RequireAnyPermission permissions={[PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT]}>
+                  <PosCheckPage />
+                </RequireAnyPermission>
+              }
+            />
+            <Route
+              path="pos/odeme/:paymentId"
+              element={
+                <RequireAnyPermission permissions={[PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT]}>
+                  <PosPaymentRedirect />
+                </RequireAnyPermission>
+              }
+            />
+            <Route
+              path="pos/duzeltme/:adjustmentId"
+              element={
+                <RequireAnyPermission permissions={[PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT]}>
+                  <PosAdjustmentRedirect />
+                </RequireAnyPermission>
               }
             />
             {/* Promosyon ve kupon (modül 31): "yeni" ve "rapor" statik parçaları kimlikli yoldan önce eşleşir. */}

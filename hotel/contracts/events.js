@@ -129,6 +129,13 @@ export const EVENT_LABELS = Object.freeze({
   'banquet.event.changed': 'Etkinlik dosyası değişti',
   'banquet.document.changed': 'Etkinlik belgesi üretildi / değişti',
   'banquet.payment.changed': 'Etkinlik ödemesi değişti',
+  'pos.setup.changed': 'POS tanımı değişti (satış noktası, masa, menü, politika)',
+  'pos.check.changed': 'Adisyon değişti',
+  'pos.order.sent': 'Sipariş mutfağa gönderildi',
+  'pos.payment.changed': 'Restoran ödemesi değişti',
+  'pos.shift.changed': 'Garson vardiyası açıldı / kapandı',
+  'fnb.order.placed': 'Restoran siparişi mutfağa gitti (iş olayı)',
+  'fnb.order.paid': 'Restoran adisyonu kapandı: satılanlar (iş olayı)',
 
   'promotion.changed': 'Promosyon değişti',
   'promotion.coupons.changed': 'Kuponlar değişti',

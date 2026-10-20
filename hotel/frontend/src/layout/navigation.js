@@ -131,6 +131,20 @@ export const NAV_SECTIONS = Object.freeze([
         icon: 'calendar',
         permission: PERMISSIONS.BANQUET_VIEW,
       },
+      // Restoran POS (modül 39): garson masa planı ve adisyon; şef garson düzeltme; muhasebe rapor; müdür tanımlar.
+      {
+        label: 'Restoran',
+        to: '/pos',
+        icon: 'utensils',
+        anyPermission: [PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT, PERMISSIONS.POS_SETUP],
+        children: [
+          { label: 'Masa planı', to: '/pos/masalar', icon: 'utensils', permission: PERMISSIONS.POS_OPERATE },
+          { label: 'Adisyonlar', to: '/pos/adisyonlar', icon: 'list', anyPermission: [PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT] },
+          { label: 'Vardiyalar', to: '/pos/vardiyalar', icon: 'clock', anyPermission: [PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT] },
+          { label: 'Satış raporu', to: '/pos/rapor', icon: 'chart', permission: PERMISSIONS.POS_REPORT },
+          { label: 'Menü ve tanımlar', to: '/pos/tanimlar', icon: 'settings', permission: PERMISSIONS.POS_SETUP },
+        ],
+      },
       // Promosyon ve kupon (modül 31): müdür düzenler, muhasebe kullanım raporunu görür.
       {
         label: 'Promosyonlar',

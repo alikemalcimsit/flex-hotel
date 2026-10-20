@@ -7,6 +7,7 @@ import {
   FOLIO_ROUTABLE_TYPES,
   PERMISSIONS,
   RESERVATION_COUNT_CAP,
+  TAX_APPLIES_TO,
   folioActionError,
   folioDisplayName,
   folioItemActionError,
@@ -1841,7 +1842,7 @@ const EXTERNAL_CHARGE_TYPES = Object.freeze({ FNB_ORDER: 'FNB', MINIBAR: 'MINIBA
  * aynı. Aynı olay iki kez gelse de kalemler tek yazılır (`evt:<olay>:<sıra>`).
  *
  * @param {string} hotelId
- * @param {{ reservationId: string | null, roomId: string | null, reference: string, items: Array<{ description: string, unitPrice: string, quantity: number }> }} charge
+ * @param {{ reservationId: string | null, roomId: string | null, reference: string, items: Array<{ description: string, unitPrice: string, quantity: number, taxCategory?: string }> }} charge
  * @param {{ source: 'FNB_ORDER' | 'MINIBAR' | 'LAUNDRY', eventId: string }} options
  */
 export async function postExternalCharge(hotelId, charge, { source, eventId }) {
@@ -1873,7 +1874,8 @@ export async function postExternalCharge(hotelId, charge, { source, eventId }) {
     const specs = charge.items.map((item, index) => ({
       reservationId: stay.id,
       type,
-      taxCategory: type,
+      // Kalem kendi kategorisini taşıyabilir (karışık kategorili adisyon); yoksa kaynağınki.
+      taxCategory: item.taxCategory && TAX_APPLIES_TO.includes(item.taxCategory) ? item.taxCategory : type,
       description: `${item.description} (${charge.reference})`.slice(0, 200),
       amount: money(item.unitPrice),
       quantity: item.quantity,

@@ -224,6 +224,8 @@ enum StaffAlertKind {
   AGENCY_BONUS
   /// Etkinlik: opsiyon düştü / 1. opsiyon oldu, depozito gecikti, gerçekleşti olarak kapatılmalı — modül 37.
   BANQUET
+  /// Restoran POS: kasa farkı, uzun açık kalan vardiya / adisyon, odaya yazılamayan adisyon — modül 39.
+  POS
 }
 
 /// Rezervasyon fiyatının kaynağı (modül 4): sistem hesabı ya da yetkili
@@ -712,6 +714,13 @@ model Hotel {
   events                Event[]
   eventPayments         EventPayment[]
   eventDocuments        EventDocument[]
+  posOutlets            PosOutlet[]
+  menuCategories        MenuCategory[]
+  menuItems             MenuItem[]
+  posSettings           PosSettings?
+  posShifts             PosShift[]
+  posChecks             PosCheck[]
+  posPayments           PosPayment[]
 }
 
 model User {
@@ -920,6 +929,8 @@ model Approval {
   payments       Payment[]
   agencyBonuses  AgencyBonus[]
   eventPayments  EventPayment[]
+  posPayments    PosPayment[]
+  posAdjustments PosAdjustment[]
 
   // Bekleyenler (eskiden yeniye) ve geçmiş (yeni karar önce), imleçli.
   @@index([hotelId, status, createdAt, id])
@@ -1448,6 +1459,7 @@ model Reservation {
   guestRequests       GuestRequest[]
   notifications       Notification[]
   agencyBonusLines    AgencyBonusLine[]
+  posRoomCharges      PosRoomCharge[]
 
   // Müsaitlik sorgusunun sıcak yolu: "şu otelde, şu oda tipinde, şu tarihlerde
   // envanteri tüketen rezervasyonlar". Dolu bir otelde saniyede onlarca kez çalışır.
@@ -3720,4 +3732,437 @@ model EventDocument {
   @@unique([hotelId, number])
   @@unique([eventId, kind, version])
   @@index([eventId, kind, createdAt])
+}
+
+/**
+ * ════════════════════════════════════════════════════════════════════════
+ * Restoran POS (modül 39) ve menü (modül 38'in menü kısmı)
+ * ════════════════════════════════════════════════════════════════════════
+ */
+
+/// Ürünün hazırlandığı istasyon: mutfak ekranı (modül 40) bu alana göre süzer; NONE mutfağa gitmez.
+enum PosStation {
+  HOT
+  COLD
+  BAR
+  PASTRY
+  NONE
+}
+
+/// Açık → kapandı (bakiye sıfır); hiç kalemi olmayan adisyon "iptal (boş)" kapanır.
+enum PosCheckStatus {
+  OPEN
+  CLOSED
+  VOID
+}
+
+/// Sipariş turunun mutfak durumu (modül 40 ilerletir): yeni → hazırlanıyor → hazır → servis edildi.
+enum PosOrderStatus {
+  NEW
+  PREPARING
+  READY
+  SERVED
+}
+
+/// İkram (kalem bedava), iptal (kalem düşer; zayi işaretlenebilir), indirim (adisyona).
+enum PosAdjustmentKind {
+  COMP
+  VOID
+  DISCOUNT
+}
+
+/// Eşik altı düzeltme hemen uygulanır; eşik üstü onay bekler (dört göz).
+enum PosAdjustmentStatus {
+  APPLIED
+  PENDING
+  DECLINED
+}
+
+enum PosShiftStatus {
+  OPEN
+  CLOSED
+}
+
+/// Satış noktası (restoran, lobi bar, havuz bar).
+model PosOutlet {
+  id              String   @id @default(uuid())
+  hotelId         String
+  code            String
+  name            String
+  /// İçerideki misafirin folyosuna yazılabilir mi.
+  allowRoomCharge Boolean  @default(true)
+  isActive        Boolean  @default(true)
+  sortOrder       Int      @default(0)
+  createdBy       String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  hotel  Hotel      @relation(fields: [hotelId], references: [id])
+  tables PosTable[]
+  checks PosCheck[]
+  shifts PosShift[]
+  orders PosOrder[]
+
+  @@unique([hotelId, code])
+  @@index([hotelId, isActive, sortOrder])
+}
+
+model PosTable {
+  id        String   @id @default(uuid())
+  hotelId   String
+  outletId  String
+  name      String
+  seats     Int      @default(4)
+  /// Masa planında bölüm (iç salon, teras, bahçe).
+  zone      String?
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  outlet PosOutlet  @relation(fields: [outletId], references: [id], onDelete: Restrict)
+  checks PosCheck[]
+
+  @@unique([outletId, name])
+  @@index([hotelId, outletId, sortOrder])
+}
+
+/// Menü grubu (modül 38'in menü kısmı). `outletIds` boşsa bütün satış noktalarında satılır.
+model MenuCategory {
+  id        String   @id @default(uuid())
+  hotelId   String
+  name      String
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  outletIds String[] @default([])
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  hotel Hotel      @relation(fields: [hotelId], references: [id])
+  items MenuItem[]
+
+  @@unique([hotelId, name])
+  @@index([hotelId, sortOrder])
+}
+
+/// Menü ürünü: vergi dahil fiyat, vergi kategorisi (otelin vergi ayarı), mutfak istasyonu.
+model MenuItem {
+  id          String     @id @default(uuid())
+  hotelId     String
+  categoryId  String
+  code        String?
+  name        String
+  description String?
+  price       Decimal    @db.Decimal(12, 2)
+  taxCategory String     @default("FNB")
+  station     PosStation @default(HOT)
+  isActive    Boolean    @default(true)
+  /// Servis sırasında "tükendi" (şef garson açar / kapatır); siparişe eklenemez.
+  soldOut     Boolean    @default(false)
+  sortOrder   Int        @default(0)
+  createdBy   String
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  hotel    Hotel          @relation(fields: [hotelId], references: [id])
+  category MenuCategory   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  lines    PosOrderLine[]
+
+  @@unique([hotelId, code])
+  @@unique([categoryId, name])
+  @@index([hotelId, categoryId, sortOrder])
+  @@index([name(ops: raw("gin_trgm_ops"))], map: "MenuItem_name_trgm_idx", type: Gin)
+}
+
+/// POS politikası (otel başına tek satır).
+model PosSettings {
+  hotelId                  String   @id
+  /// İkram / indirim / iptal bu tutar ve üstündeyse dört göz onaya gider (0: onay yok).
+  adjustmentApprovalAmount Decimal  @default(1000) @db.Decimal(12, 2)
+  /// Vardiya kapanışında bu tutarı aşan nakit farkı yöneticiye uyarı düşürür.
+  cashVarianceAlert        Decimal  @default(100) @db.Decimal(12, 2)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+}
+
+/// Adisyon numara serisi (otel × tür × yıl).
+model PosSequence {
+  hotelId String
+  kind    String
+  year    Int
+  last    Int
+
+  @@id([hotelId, kind, year])
+}
+
+/// Garson vardiyası: kasa avansıyla açılır; kapanışta nakit sayılır, beklenenle fark kaydedilir.
+model PosShift {
+  id           String         @id @default(uuid())
+  hotelId      String
+  waiterEmail  String
+  outletId     String?
+  status       PosShiftStatus @default(OPEN)
+  openingFloat Decimal        @db.Decimal(12, 2)
+  /// Açıldığı iş günü (rapor süzgeci).
+  businessDate DateTime       @db.Date
+  openedAt     DateTime       @default(now())
+  closedAt     DateTime?
+  closedBy     String?
+  countedCash  Decimal?       @db.Decimal(12, 2)
+  expectedCash Decimal?       @db.Decimal(12, 2)
+  variance     Decimal?       @db.Decimal(12, 2)
+  note         String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  hotel    Hotel        @relation(fields: [hotelId], references: [id])
+  outlet   PosOutlet?   @relation(fields: [outletId], references: [id], onDelete: Restrict)
+  checks   PosCheck[]
+  payments PosPayment[]
+
+  @@index([hotelId, status, waiterEmail])
+  @@index([hotelId, openedAt, id])
+  @@index([hotelId, waiterEmail, openedAt])
+}
+
+/// Adisyon: masada (ya da masasız) açılır, sipariş turlarıyla dolar, ödemeyle kapanır.
+model PosCheck {
+  id              String         @id @default(uuid())
+  hotelId         String
+  outletId        String
+  tableId         String?
+  number          String
+  status          PosCheckStatus @default(OPEN)
+  covers          Int            @default(1)
+  note            String?
+  /// Sahibi olan garson ve vardiyası (devirle değişir).
+  waiterEmail     String
+  shiftId         String
+  sourceKey       String?
+  openedAt        DateTime       @default(now())
+  openedBy        String
+  billRequestedAt DateTime?
+  closedAt        DateTime?
+  closedBy        String?
+  /// Kapandığı iş günü (satış raporu).
+  businessDate    DateTime?      @db.Date
+  voidedAt        DateTime?
+  voidedBy        String?
+  reopenedAt      DateTime?
+  reopenedBy      String?
+  reopenReason    String?
+  /// Bölünerek açıldıysa kaynak adisyon.
+  splitFromId     String?
+  /// Kalemlerin brüt toplamı (iptal ve ikram düşülmüş), indirim, vergi dökümü ve tahsilat.
+  subtotal        Decimal        @default(0) @db.Decimal(14, 2)
+  compTotal       Decimal        @default(0) @db.Decimal(14, 2)
+  voidTotal       Decimal        @default(0) @db.Decimal(14, 2)
+  discountPct     Decimal?       @db.Decimal(5, 2)
+  discountTotal   Decimal        @default(0) @db.Decimal(14, 2)
+  netTotal        Decimal        @default(0) @db.Decimal(14, 2)
+  taxTotal        Decimal        @default(0) @db.Decimal(14, 2)
+  grandTotal      Decimal        @default(0) @db.Decimal(14, 2)
+  paidTotal       Decimal        @default(0) @db.Decimal(14, 2)
+  roomChargeTotal Decimal        @default(0) @db.Decimal(14, 2)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  hotel       Hotel           @relation(fields: [hotelId], references: [id])
+  outlet      PosOutlet       @relation(fields: [outletId], references: [id], onDelete: Restrict)
+  table       PosTable?       @relation(fields: [tableId], references: [id], onDelete: Restrict)
+  shift       PosShift        @relation(fields: [shiftId], references: [id], onDelete: Restrict)
+  splitFrom   PosCheck?       @relation("PosCheckSplit", fields: [splitFromId], references: [id], onDelete: Restrict)
+  splits      PosCheck[]      @relation("PosCheckSplit")
+  orders      PosOrder[]
+  lines       PosOrderLine[]
+  adjustments PosAdjustment[]
+  payments    PosPayment[]
+  roomCharges PosRoomCharge[]
+
+  @@unique([hotelId, number])
+  @@unique([hotelId, sourceKey])
+  // Masa planı: satış noktasının açık adisyonları.
+  @@index([hotelId, status, outletId, tableId])
+  // Adisyon listesi (en yeni açılan önce) ve satış raporu (kapanış iş günü).
+  @@index([hotelId, openedAt, id])
+  @@index([hotelId, businessDate, outletId])
+  // Masa adıyla arama: masanın adisyonları, en yeni önce.
+  @@index([tableId, openedAt])
+  // Numara araması ("123", "000123").
+  @@index([number(ops: raw("gin_trgm_ops"))], map: "PosCheck_number_trgm_idx", type: Gin)
+  @@index([shiftId, status])
+  @@index([hotelId, waiterEmail, status])
+}
+
+/// Sipariş turu ("Gönder"): mutfağa giden kalemler; durumunu mutfak ekranı (modül 40) ilerletir.
+model PosOrder {
+  id        String         @id @default(uuid())
+  hotelId   String
+  checkId   String
+  outletId  String
+  /// Adisyondaki tur numarası (1, 2, 3…).
+  seq       Int
+  status    PosOrderStatus @default(NEW)
+  sourceKey String
+  sentAt    DateTime       @default(now())
+  sentBy    String
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  check  PosCheck       @relation(fields: [checkId], references: [id], onDelete: Restrict)
+  outlet PosOutlet      @relation(fields: [outletId], references: [id], onDelete: Restrict)
+  lines  PosOrderLine[]
+
+  @@unique([hotelId, sourceKey])
+  @@unique([checkId, seq])
+  // Mutfak ekranı: satış noktasının bekleyen turları.
+  @@index([hotelId, outletId, status, sentAt])
+}
+
+/// Sipariş kalemi: ürünün adı, fiyatı, vergi kategorisi ve istasyonu gönderildiği anki kopyadır.
+model PosOrderLine {
+  id             String     @id @default(uuid())
+  hotelId        String
+  checkId        String
+  orderId        String
+  menuItemId     String
+  name           String
+  station        PosStation
+  taxCategory    String
+  unitPrice      Decimal    @db.Decimal(12, 2)
+  quantity       Int
+  /// Uygulanmış iptal ve ikram adetleri (onay bekleyenler düzeltme kaydında).
+  voidedQuantity Int        @default(0)
+  compedQuantity Int        @default(0)
+  note           String?
+  sortOrder      Int
+  /// Adisyonun kapandığı iş günü (kapanışta yazılır, yeniden açılınca silinir): ürün satış
+  /// raporu kalemleri adisyona dönmeden gün aralığıyla okur.
+  businessDate   DateTime?  @db.Date
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  check       PosCheck        @relation(fields: [checkId], references: [id], onDelete: Restrict)
+  order       PosOrder        @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  menuItem    MenuItem        @relation(fields: [menuItemId], references: [id], onDelete: Restrict)
+  adjustments PosAdjustment[]
+
+  @@index([checkId, sortOrder])
+  @@index([orderId])
+  // Ürün satış raporu (kapanış iş günü aralığı).
+  @@index([hotelId, businessDate])
+}
+
+/// İkram / iptal / indirim: kim, neden, ne kadar; eşik üstüyse onay kaydıyla.
+model PosAdjustment {
+  id             String              @id @default(uuid())
+  hotelId        String
+  checkId        String
+  kind           PosAdjustmentKind
+  lineId         String?
+  quantity       Int?
+  /// İptal edilen kalem hazırlanmıştı (zayi).
+  waste          Boolean             @default(false)
+  discountPct    Decimal?            @db.Decimal(5, 2)
+  discountAmount Decimal?            @db.Decimal(14, 2)
+  /// İstek anındaki para etkisi (eşik denetimi ve rapor).
+  value          Decimal             @db.Decimal(14, 2)
+  reason         String
+  status         PosAdjustmentStatus
+  requestedBy    String
+  requestedAt    DateTime            @default(now())
+  approvalId     String?
+  decidedAt      DateTime?
+  decidedBy      String?
+  /// Yeni indirim eskisinin yerine geçti.
+  supersededAt   DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  check    PosCheck      @relation(fields: [checkId], references: [id], onDelete: Restrict)
+  line     PosOrderLine? @relation(fields: [lineId], references: [id], onDelete: Restrict)
+  approval Approval?     @relation(fields: [approvalId], references: [id], onDelete: Restrict)
+
+  @@index([checkId, status])
+  @@index([approvalId])
+  // İkram / iptal / indirim raporu.
+  @@index([hotelId, kind, requestedAt])
+}
+
+/// Restoran ödemesi (nakit / kart): adisyonun kendi hesabı; kasada "Restoran" kaynağı.
+model PosPayment {
+  id              String        @id @default(uuid())
+  hotelId         String
+  checkId         String
+  /// Parayı alanın vardiyası (kasa sayımı bununla).
+  shiftId         String
+  kind            PaymentKind   @default(PAYMENT)
+  status          PaymentStatus @default(POSTED)
+  method          PaymentMethod
+  /// Tahsilatta artı; iptal kaydında asıl satırın tersi.
+  amount          Decimal       @db.Decimal(14, 2)
+  currency        String
+  businessDate    DateTime      @db.Date
+  reference       String?
+  sourceKey       String?
+  receivedBy      String
+  receivedAt      DateTime      @default(now())
+  postedAt        DateTime?
+  approvalId      String?
+  declinedAt      DateTime?
+  reversalOfId    String?       @unique
+  voidedAt        DateTime?
+  voidedBy        String?
+  voidReason      String?
+  voidApprovalId  String?
+  voidRequestedAt DateTime?
+  voidRequestedBy String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  hotel      Hotel       @relation(fields: [hotelId], references: [id])
+  check      PosCheck    @relation(fields: [checkId], references: [id], onDelete: Restrict)
+  shift      PosShift    @relation(fields: [shiftId], references: [id], onDelete: Restrict)
+  approval   Approval?   @relation(fields: [approvalId], references: [id], onDelete: Restrict)
+  reversalOf PosPayment? @relation("PosPaymentReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversal   PosPayment? @relation("PosPaymentReversal")
+
+  @@unique([hotelId, sourceKey])
+  @@index([checkId, receivedAt, id])
+  // Kasa: günün işlenen hareketleri ve onay bekleyenler.
+  @@index([hotelId, businessDate, postedAt, id])
+  @@index([hotelId, status, receivedAt])
+  // Vardiya kasası.
+  @@index([shiftId, method])
+  @@index([approvalId])
+  @@index([voidApprovalId])
+}
+
+/// Odaya yazılan adisyon tutarı: içerideki misafirin folyosuna `fnb.order.charged` ile işlenir.
+model PosRoomCharge {
+  id            String   @id @default(uuid())
+  hotelId       String
+  checkId       String
+  reservationId String
+  roomNumber    String
+  guestName     String
+  amount        Decimal  @db.Decimal(14, 2)
+  /// Folyoya giden olay (işlenme durumu `evt:<olay>:0` kalem anahtarından okunur).
+  eventId       String
+  sourceKey     String
+  chargedBy     String
+  chargedAt     DateTime @default(now())
+  businessDate  DateTime @db.Date
+  createdAt     DateTime @default(now())
+
+  check       PosCheck    @relation(fields: [checkId], references: [id], onDelete: Restrict)
+  reservation Reservation @relation(fields: [reservationId], references: [id], onDelete: Restrict)
+
+  @@unique([hotelId, sourceKey])
+  @@index([checkId])
+  @@index([hotelId, businessDate])
+  @@index([reservationId])
 }

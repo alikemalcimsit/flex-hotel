@@ -9,6 +9,7 @@ import { api, withQuery } from '../../lib/api.js';
 import { eventPath } from '../../lib/banquet.js';
 import { folioPath } from '../../lib/folios.js';
 import { formatDate, formatMoney } from '../../lib/format.js';
+import { checkPath } from '../../lib/pos.js';
 import {
   PAYMENT_METHOD_ICONS,
   absolute,
@@ -192,10 +193,15 @@ function MethodTotals({ data }) {
               </tr>
             </tfoot>
           </table>
-          {data.origins && Number(data.origins.EVENT) !== 0 && (
+          {data.origins && (Number(data.origins.EVENT) !== 0 || Number(data.origins.POS) !== 0) && (
             <p className="mt-2 text-sm text-ink-soft">
-              Kaynak: {CASH_ORIGIN_LABELS.FOLIO} <strong className="tabular-nums">{formatMoney(data.origins.FOLIO, currency)}</strong> · {CASH_ORIGIN_LABELS.EVENT}{' '}
-              <strong className="tabular-nums">{formatMoney(data.origins.EVENT, currency)}</strong>
+              Kaynak:{' '}
+              {CASH_ORIGINS.map((origin, index) => (
+                <span key={origin}>
+                  {index > 0 && ' · '}
+                  {CASH_ORIGIN_LABELS[origin]} <strong className="tabular-nums">{formatMoney(data.origins[origin] ?? '0', currency)}</strong>
+                </span>
+              ))}
             </p>
           )}
           <p className="mt-2 text-xs text-ink-muted">
@@ -245,6 +251,12 @@ function PendingPayments({ pending, currency, canDecide }) {
                 etkinlik {row.event.code} · {row.event.name}
               </Link>
             )}
+            {row.pos && (
+              <Link className="text-info-ink underline-offset-2 hover:underline" to={checkPath(row.pos.id)}>
+                {row.pos.outletName} · {row.pos.number}
+                {row.pos.tableName ? ` · masa ${row.pos.tableName}` : ''}
+              </Link>
+            )}
             <span className="text-xs text-ink-muted">
               {formatDate(row.receivedAt)} · {row.receivedBy}
             </span>
@@ -278,7 +290,7 @@ function Movements({ query, currency }) {
           <thead className="border-b border-line bg-surface-muted text-left text-[0.7rem] uppercase tracking-[0.08em] text-ink-muted">
             <tr>
               <th scope="col" className="px-4 py-3 font-bold">Saat</th>
-              <th scope="col" className="px-4 py-3 font-bold">Konaklama / etkinlik</th>
+              <th scope="col" className="px-4 py-3 font-bold">Konaklama / etkinlik / adisyon</th>
               <th scope="col" className="px-4 py-3 font-bold">Yöntem / tür</th>
               <th scope="col" className="px-4 py-3 text-right font-bold">Tutar</th>
               <th scope="col" className="px-4 py-3 font-bold">Referans</th>
@@ -292,7 +304,17 @@ function Movements({ query, currency }) {
                 <tr key={row.id} className={row.voided ? 'bg-surface-muted' : ''}>
                   <td className="whitespace-nowrap px-4 py-2.5 align-top tabular-nums">{timeFormatter.format(new Date(row.postedAt))}</td>
                   <td className="px-4 py-2.5 align-top">
-                    {row.event ? (
+                    {row.pos ? (
+                      <>
+                        <Link className="font-semibold text-info-ink underline-offset-2 hover:underline" to={checkPath(row.pos.id)}>
+                          {row.pos.outletName}
+                          {row.pos.tableName ? ` · masa ${row.pos.tableName}` : ''}
+                        </Link>
+                        <span className="block text-xs text-ink-muted">
+                          {CASH_ORIGIN_LABELS.POS} · {row.pos.number}
+                        </span>
+                      </>
+                    ) : row.event ? (
                       <>
                         <Link className="font-semibold text-info-ink underline-offset-2 hover:underline" to={eventPath(row.event.id, 'odemeler')}>
                           {row.event.name}

@@ -131,6 +131,15 @@ export const PERMISSIONS = Object.freeze({
   /** Etkinlik depozitosu ve ödemesi almak, iade / iptal istemek. */
   BANQUET_PAYMENT: 'banquet.payment',
 
+  /** Restoran POS (modül 39): vardiya açmak, adisyon açmak, sipariş göndermek, ödeme almak, odaya yazmak. */
+  POS_OPERATE: 'pos.operate',
+  /** Şef garson / müdür: ikram, indirim, gönderilmiş kalemin iptali, adisyonu başka garsona devretmek, kapanmış adisyonu açmak, ürünü "tükendi" yapmak. */
+  POS_SUPERVISE: 'pos.supervise',
+  /** Satış noktası, masa, menü (grup / ürün / fiyat) ve POS politikası. */
+  POS_SETUP: 'pos.setup',
+  /** Vardiya raporları, kapanmış adisyonlar, garson performansı. */
+  POS_REPORT: 'pos.report',
+
   /** Kanal yönetimi (modül 33): kanallar, eşleştirme, senkron logu, kanal rezervasyonları. */
   CHANNEL_MANAGER_VIEW: 'channel_manager.view',
   /** Kanal bağlamak / düzenlemek / senkrona almak, eşleştirme, stop-sale, elle senkron. */
@@ -203,6 +212,10 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.BANQUET_MANAGE]: 'Etkinlik aç, opsiyonla, kesinleştir, iptal et; teklif / sözleşme / proforma üret',
   [PERMISSIONS.BANQUET_SETUP]: 'Salon, ekipman, fiyat ve banket politikasını düzenle',
   [PERMISSIONS.BANQUET_PAYMENT]: 'Etkinlik depozitosu / ödemesi al, iade ve iptal iste',
+  [PERMISSIONS.POS_OPERATE]: 'POS: vardiya aç / kapat, adisyon aç, sipariş gönder, ödeme al, odaya yaz',
+  [PERMISSIONS.POS_SUPERVISE]: 'POS: ikram, indirim, gönderilmiş kalemi iptal et, adisyonu devret / yeniden aç, ürünü tükendi yap',
+  [PERMISSIONS.POS_SETUP]: 'POS: satış noktası, masa, menü ve politikayı düzenle',
+  [PERMISSIONS.POS_REPORT]: 'POS: vardiya raporlarını ve kapanmış adisyonları görüntüle',
   [PERMISSIONS.CHANNEL_MANAGER_VIEW]: 'Kanalları, senkron logunu ve kanal rezervasyonlarını görüntüle',
   [PERMISSIONS.CHANNEL_MANAGER_MANAGE]: 'Kanal bağla, eşleştir, stop-sale koy, elle senkronla',
   [PERMISSIONS.ACTORS_VIEW]: 'Aktör panelini görüntüle',
@@ -280,6 +293,11 @@ export const PERMISSION_GROUPS = Object.freeze([
     key: 'banquet',
     label: 'Banket ve etkinlik',
     permissions: [PERMISSIONS.BANQUET_VIEW, PERMISSIONS.BANQUET_MANAGE, PERMISSIONS.BANQUET_SETUP, PERMISSIONS.BANQUET_PAYMENT],
+  },
+  {
+    key: 'pos',
+    label: 'Restoran POS ve menü',
+    permissions: [PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_SUPERVISE, PERMISSIONS.POS_SETUP, PERMISSIONS.POS_REPORT],
   },
   {
     key: 'agency_bonus',
@@ -382,6 +400,11 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.BANQUET_MANAGE,
     PERMISSIONS.BANQUET_SETUP,
     PERMISSIONS.BANQUET_PAYMENT,
+    // F&B müdürlüğü: servis, ikram / indirim / iptal yetkisi, menü ve fiyat, vardiya raporları.
+    PERMISSIONS.POS_OPERATE,
+    PERMISSIONS.POS_SUPERVISE,
+    PERMISSIONS.POS_SETUP,
+    PERMISSIONS.POS_REPORT,
   ]),
   FRONT_DESK: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,
@@ -464,6 +487,8 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     // Etkinlik tahsilatı, depozito takibi ve proforma muhasebenin işi; satışı düzenlemez.
     PERMISSIONS.BANQUET_VIEW,
     PERMISSIONS.BANQUET_PAYMENT,
+    // Restoran vardiya kasası ve adisyonları muhasebe izler; servis yapmaz.
+    PERMISSIONS.POS_REPORT,
   ]),
   FNB: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,
@@ -474,6 +499,9 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     // Restoranda / havuz barında unutulan eşyayı kaydeder.
     PERMISSIONS.LOST_ITEMS_VIEW,
     PERMISSIONS.LOST_ITEMS_RECORD,
+    // Garson: vardiya, adisyon, sipariş, ödeme, odaya yaz. İkram / indirim / iptal şef garson
+    // yetkisidir (`pos.supervise`); otel rol matrisinden F&B'ye açabilir.
+    PERMISSIONS.POS_OPERATE,
   ]),
 });
 
