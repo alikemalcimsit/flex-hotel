@@ -1,5 +1,5 @@
 import { normalizeDecimalString } from './decimal.js';
-import { decimalField, expectedUpdatedAt, listQuerySchema, queryBoolean } from './fields.js';
+import { decimalField, expectedUpdatedAt, isoDayField, listQuerySchema, queryBoolean } from './fields.js';
 import { z } from './locale.js';
 
 /**
@@ -278,7 +278,7 @@ export const minibarConsumptionSchema = z
   });
 
 export const consumptionListQuerySchema = z.object({
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Tarih YYYY-AA-GG biçiminde olmalı').optional(),
+  date: isoDayField.optional(),
   roomId: uuid('Geçersiz oda').optional(),
   cursor: z.string().trim().max(200).optional(),
   limit: z.coerce
@@ -331,7 +331,7 @@ export const laundryListQuerySchema = listQuerySchema.extend({
 });
 
 export const extrasReportQuerySchema = z.object({
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Tarih YYYY-AA-GG biçiminde olmalı').optional(),
+  date: isoDayField.optional(),
 });
 
 export const extrasIdParamSchema = z.object({ id: uuid('Geçersiz kayıt') });

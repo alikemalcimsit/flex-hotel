@@ -1,5 +1,5 @@
 import { normalizeDecimalString } from './decimal.js';
-import { queryBoolean } from './fields.js';
+import { isoDayField, queryBoolean } from './fields.js';
 import { PAYMENT_METHODS } from './folios.js';
 import { looksLikeCardNumber } from './front-desk.js';
 import { z } from './locale.js';
@@ -279,8 +279,6 @@ export const exchangeRateHistoryQuerySchema = z.object({
     .default(EXCHANGE_RATE_HISTORY_PAGE_SIZE),
 });
 
-const isoDayField = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Tarih YYYY-AA-GG biçiminde olmalı');
-
 /** Kasa görünümü: günün toplamları (gün verilmezse iş günü). */
 export const cashSummaryQuerySchema = z.object({
   date: isoDayField.optional(),
@@ -288,7 +286,7 @@ export const cashSummaryQuerySchema = z.object({
   mine: queryBoolean.default(false),
 });
 
-/** Kasa hareketinin kaynağı: konaklama folyosu ya da etkinlik hesabı (modül 37). */
+/** Kasa hareketinin kaynağı: konaklama folyosu, etkinlik hesabı (modül 37) ya da restoran adisyonu (modül 39). */
 export const CASH_ORIGINS = Object.freeze(['FOLIO', 'EVENT', 'POS']);
 export const CASH_ORIGIN_LABELS = Object.freeze({ FOLIO: 'Konaklama', EVENT: 'Etkinlik', POS: 'Restoran' });
 

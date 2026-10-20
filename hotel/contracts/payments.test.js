@@ -5,6 +5,8 @@ import { folioActionError } from './folios.js';
 import {
   PAYMENT_REFERENCE_REQUIRED_METHODS,
   REFUND_METHODS,
+  cashMovementsQuerySchema,
+  cashSummaryQuerySchema,
   exchangeRatesInputSchema,
   paymentCurrencyError,
   paymentQuoteSchema,
@@ -125,5 +127,19 @@ describe('folyo kapatma', () => {
     const open = { status: 'OPEN' };
     assert.match(folioActionError(open, 'close', { balanceZero: true, pendingPayments: 1 }), /onay bekleyen ödeme ya da iade/);
     assert.equal(folioActionError(open, 'close', { balanceZero: true, pendingPayments: 0 }), null);
+  });
+});
+
+describe('kasa günü', () => {
+  it('takvimde olmayan gün 400 olur (ham SQL ::date 500 vermesin); biçim hatası kendi mesajıyla', () => {
+    for (const schema of [cashSummaryQuerySchema, cashMovementsQuerySchema]) {
+      const invalid = schema.safeParse({ date: '2026-02-31' });
+      assert.equal(invalid.success, false);
+      assert.deepEqual([invalid.error.issues[0].path, invalid.error.issues[0].message], [['date'], 'Tarih geçersiz']);
+      assert.equal(schema.safeParse({ date: '2026-02-29' }).success, false, '2026 artık yıl değil');
+      assert.equal(schema.parse({ date: '2026-02-28' }).date, '2026-02-28');
+      assert.equal(schema.parse({ date: '2028-02-29' }).date, '2028-02-29');
+      assert.equal(schema.safeParse({ date: '2026-2-28' }).error.issues[0].message, 'Tarih YYYY-AA-GG biçiminde olmalı');
+    }
   });
 });

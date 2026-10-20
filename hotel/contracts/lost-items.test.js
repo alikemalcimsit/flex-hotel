@@ -87,6 +87,15 @@ describe('lostItemSettingsSchema / lostItemListQuerySchema', () => {
     assert.equal(parsed.valuable, false);
     assert.equal(parsed.view, 'OPEN');
   });
+
+  it('takvimde olmayan gün reddedilir (3 Mart\'a kaymaz, 500 olmaz)', () => {
+    for (const field of ['from', 'to']) {
+      const invalid = lostItemListQuerySchema.safeParse({ [field]: '2026-02-31' });
+      assert.equal(invalid.success, false);
+      assert.deepEqual([invalid.error.issues[0].path, invalid.error.issues[0].message], [[field], 'Tarih geçersiz']);
+      assert.equal(lostItemListQuerySchema.parse({ [field]: '2026-02-28' })[field], '2026-02-28');
+    }
+  });
 });
 
 describe('saklama süresi', () => {

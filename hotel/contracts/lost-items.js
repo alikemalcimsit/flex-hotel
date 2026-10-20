@@ -1,5 +1,5 @@
 import { normalizeDecimalString } from './decimal.js';
-import { expectedUpdatedAt, listQuerySchema, queryBoolean } from './fields.js';
+import { expectedUpdatedAt, isoDayField, listQuerySchema, queryBoolean } from './fields.js';
 import { z } from './locale.js';
 
 /**
@@ -161,8 +161,6 @@ const optionalText = ({ label, max }) =>
     .transform((value) => value || null)
     .nullish();
 
-const isoDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Tarih YYYY-AA-GG biçiminde olmalı');
-
 const timestampField = (label) =>
   z
     .union([z.string(), z.date()], { error: `${label} zorunlu` })
@@ -311,8 +309,8 @@ export const lostItemListQuerySchema = listQuerySchema.extend({
   category: z.enum(LOST_ITEM_CATEGORIES, { error: 'Geçersiz kategori' }).optional(),
   valuable: queryBoolean.optional(),
   /** Bulunma günü aralığı (iş günü, dahil). */
-  from: isoDay.optional(),
-  to: isoDay.optional(),
+  from: isoDayField.optional(),
+  to: isoDayField.optional(),
   pageSize: z.coerce
     .number({ error: 'Sayfa boyutu sayı olmalı' })
     .int()
