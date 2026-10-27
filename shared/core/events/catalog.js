@@ -737,6 +737,17 @@ export const EVENT_CATALOG = Object.freeze({
   }),
   /** Garson vardiyası açıldı / kapandı. */
   'pos.shift.changed': hotelScoped.extend({ shiftId: z.string().uuid(), change: z.enum(['OPENED', 'CLOSED']) }),
+  /**
+   * Oda servisi siparişi (modül 41) açıldı / kabul edildi / reddedildi / mutfağa düştü / adım ilerledi / teslim
+   * edildi / iptal edildi / tepsisi toplandı. Teslim panosu, hazırlık listesi ve misafir sayfası (modül 53) tazelenir.
+   */
+  'pos.room_service.changed': hotelScoped.extend({
+    orderId: z.string().uuid(),
+    outletId: z.string().uuid(),
+    reservationId: z.string().uuid(),
+    status: z.enum(['REQUESTED', 'SCHEDULED', 'RECEIVED', 'PREPARING', 'READY', 'ON_THE_WAY', 'DELIVERED', 'CANCELLED', 'REJECTED']),
+    change: z.enum(['CREATED', 'ACCEPTED', 'REJECTED', 'RELEASED', 'ADVANCED', 'DELIVERED', 'CANCELLED', 'TRAY_COLLECTED', 'UPDATED']),
+  }),
 
   /* ── Restoran siparişinin iş olayları (yayıncı modül 39; tüketiciler: fnb-worker, mutfak ekranı 40,
      stok 44). Ekran tazelemesi değil, iş sözleşmesi: yük kendine yeter (tüketici POS tablosunu okumaz). ── */
@@ -756,6 +767,9 @@ export const EVENT_CATALOG = Object.freeze({
     /** Turun sırası (adisyon içinde 1, 2, …). */
     seq: z.number().int().min(1),
     tableName: z.string().nullable(),
+    /** Oda servisi turu (modül 41): teslim edilecek oda ve istenen teslim anı (hemen ise boş). Salonda yok. */
+    roomNumber: z.string().min(1).max(20).nullable().default(null),
+    deliverAt: z.string().datetime().nullable().default(null),
     covers: z.number().int().min(1),
     waiterEmail: z.string().min(1),
     lines: z
@@ -1126,8 +1140,8 @@ export const BUDGET_EVENTS = Object.freeze([
 /** Acente ve kontrat (modül 29): ekranlar bunlarla tazelenir (`agencies.changed` kanalı). */
 export const AGENCY_EVENTS = Object.freeze(['agency.changed', 'agency.contract.changed', 'agency.stop_sale.changed']);
 
-/** Restoran POS (modül 39): masa planı, adisyon, vardiya ve tanım ekranları (`pos.changed` kanalı). */
-export const POS_EVENTS = Object.freeze(['pos.setup.changed', 'pos.check.changed', 'pos.order.sent', 'pos.payment.changed', 'pos.shift.changed']);
+/** Restoran POS (modül 39) ve oda servisi (41): masa planı, adisyon, vardiya, teslim panosu ve tanım ekranları (`pos.changed` kanalı). */
+export const POS_EVENTS = Object.freeze(['pos.setup.changed', 'pos.check.changed', 'pos.order.sent', 'pos.payment.changed', 'pos.shift.changed', 'pos.room_service.changed']);
 
 /** Banket / etkinlik (modül 37): ekranlar bunlarla tazelenir (`banquet.changed` kanalı). */
 export const BANQUET_EVENTS = Object.freeze([

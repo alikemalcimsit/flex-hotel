@@ -139,6 +139,7 @@ export const NAV_SECTIONS = Object.freeze([
         anyPermission: [PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT, PERMISSIONS.POS_SETUP],
         children: [
           { label: 'Masa planı', to: '/pos/masalar', icon: 'utensils', permission: PERMISSIONS.POS_OPERATE },
+          { label: 'Oda servisi', to: '/pos/oda-servisi', icon: 'bed', anyPermission: [PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT] },
           { label: 'Adisyonlar', to: '/pos/adisyonlar', icon: 'list', anyPermission: [PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT] },
           { label: 'Vardiyalar', to: '/pos/vardiyalar', icon: 'clock', anyPermission: [PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT] },
           { label: 'Satış raporu', to: '/pos/rapor', icon: 'chart', permission: PERMISSIONS.POS_REPORT },
@@ -172,6 +173,13 @@ export const NAV_SECTIONS = Object.freeze([
         icon: 'clipboard',
         badge: 'requests',
         permission: PERMISSIONS.REQUESTS_VIEW,
+      },
+      // Oda servisi tepsileri (modül 41): kat görevlisi ve oda servisi toplar.
+      {
+        label: 'Toplanacak tepsiler',
+        to: '/oda-servisi/tepsiler',
+        icon: 'checkCheck',
+        anyPermission: [PERMISSIONS.POS_OPERATE, PERMISSIONS.REQUESTS_MANAGE],
       },
       {
         label: 'Odalar',

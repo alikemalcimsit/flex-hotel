@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from './api.js';
 import { formatDateTime } from './timeFormat.js';
-import { useHotelSettings } from './useHotel.js';
+import { useHotelContext } from './useHotel.js';
 import { reservationKeys } from './reservations.js';
 import { CHANNEL_MANAGER_CHANNEL } from './socket.js';
 import { useLiveChannel } from './useLiveChannel.js';
@@ -54,7 +54,7 @@ export function useChannel(id) {
  * ve log zamanı, personelin bulunduğu yerin değil otelin saatidir.
  */
 export function useChannelTime() {
-  const timeZone = useHotelSettings().data?.timezone;
+  const timeZone = useHotelContext().data?.timezone;
   return useCallback((value) => formatDateTime(value, timeZone), [timeZone]);
 }
 

@@ -719,6 +719,8 @@ model Hotel {
   menuItems             MenuItem[]
   posSettings           PosSettings?
   posShifts             PosShift[]
+  roomServiceOrders     RoomServiceOrder[]
+  roomServiceLinks      RoomServiceLink[]
   posChecks             PosCheck[]
   posPayments           PosPayment[]
 }
@@ -1285,6 +1287,8 @@ model Room {
   lostItems           LostItem[]
   minibarConsumptions MinibarConsumption[]
   laundryOrders       LaundryOrder[]
+  roomServiceOrders   RoomServiceOrder[]
+  roomServiceLinks    RoomServiceLink[]
 
   // Oda numarası benzersizliği de kısmi index ile (bkz. RoomType açıklaması):
   // silinen 101 numaralı oda sonradan tekrar açılabilmeli.
@@ -1460,6 +1464,8 @@ model Reservation {
   notifications       Notification[]
   agencyBonusLines    AgencyBonusLine[]
   posRoomCharges      PosRoomCharge[]
+  roomServiceOrders   RoomServiceOrder[]
+  roomServiceLinks    RoomServiceLink[]
 
   // Müsaitlik sorgusunun sıcak yolu: "şu otelde, şu oda tipinde, şu tarihlerde
   // envanteri tüketen rezervasyonlar". Dolu bir otelde saniyede onlarca kez çalışır.
@@ -1809,13 +1815,15 @@ model GuestRequest {
   updatedAt        DateTime             @updatedAt
   deletedAt        DateTime?
 
-  hotel        Hotel         @relation(fields: [hotelId], references: [id])
-  reservation  Reservation?  @relation(fields: [reservationId], references: [id])
-  guest        Guest?        @relation(fields: [guestId], references: [id])
-  room         Room?         @relation(fields: [roomId], references: [id])
-  conversation Conversation? @relation(fields: [conversationId], references: [id])
-  message      Message?      @relation(fields: [messageId], references: [id])
-  assignedTo   User?         @relation("GuestRequestAssignee", fields: [assignedToId], references: [id])
+  hotel             Hotel              @relation(fields: [hotelId], references: [id])
+  reservation       Reservation?       @relation(fields: [reservationId], references: [id])
+  guest             Guest?             @relation(fields: [guestId], references: [id])
+  room              Room?              @relation(fields: [roomId], references: [id])
+  conversation      Conversation?      @relation(fields: [conversationId], references: [id])
+  message           Message?           @relation(fields: [messageId], references: [id])
+  assignedTo        User?              @relation("GuestRequestAssignee", fields: [assignedToId], references: [id])
+  /// Oda servisi siparişine çevrildiyse (modül 41; aynı anda tek açık sipariş — teslim / iptal sonrası yeniden açılan istek yeniden çevrilir).
+  roomServiceOrders RoomServiceOrder[]
 
   // İş listesi: "açık istekler, süresi en yakın önce".
   @@index([hotelId, status, dueAt])
@@ -3783,25 +3791,60 @@ enum PosShiftStatus {
   CLOSED
 }
 
+/// Satış noktasının türü: masalı salon (restoran, bar) ya da oda servisi (masasız; teslim panosuyla, modül 41).
+enum PosOutletKind {
+  DINING
+  ROOM_SERVICE
+}
+
+/// Menüde görünmeyen, sistemin eklediği ürün (oda servisi tepsi ücreti; fiyatı politikadan).
+enum PosSystemItem {
+  TRAY_CHARGE
+}
+
+/// Oda servisi siparişinin kaynağı: personel (telefon, kat), misafirin QR bağlantısı, misafir isteği (modül 7).
+enum RoomServiceSource {
+  STAFF
+  GUEST
+  REQUEST
+}
+
+/// Oda servisi akışı (modül 41): misafirden gelen kabul bekler (REQUESTED); ileri saatli olan zamanı gelince
+/// mutfağa düşer (SCHEDULED); mutfakta → hazırlanıyor → hazır → yolda → teslim. İptal teslimden önce; ret kabulden önce.
+enum RoomServiceStatus {
+  REQUESTED
+  SCHEDULED
+  RECEIVED
+  PREPARING
+  READY
+  ON_THE_WAY
+  DELIVERED
+  CANCELLED
+  REJECTED
+}
+
 /// Satış noktası (restoran, lobi bar, havuz bar).
 model PosOutlet {
-  id              String   @id @default(uuid())
+  id              String        @id @default(uuid())
   hotelId         String
   code            String
   name            String
   /// İçerideki misafirin folyosuna yazılabilir mi.
-  allowRoomCharge Boolean  @default(true)
-  isActive        Boolean  @default(true)
-  sortOrder       Int      @default(0)
+  allowRoomCharge Boolean       @default(true)
+  /// Salon (masa planı) ya da oda servisi (teslim panosu; odaya yazma açık olmalı).
+  kind            PosOutletKind @default(DINING)
+  isActive        Boolean       @default(true)
+  sortOrder       Int           @default(0)
   createdBy       String
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
-  hotel  Hotel      @relation(fields: [hotelId], references: [id])
-  tables PosTable[]
-  checks PosCheck[]
-  shifts PosShift[]
-  orders PosOrder[]
+  hotel             Hotel              @relation(fields: [hotelId], references: [id])
+  tables            PosTable[]
+  checks            PosCheck[]
+  shifts            PosShift[]
+  orders            PosOrder[]
+  roomServiceOrders RoomServiceOrder[]
 
   @@unique([hotelId, code])
   @@index([hotelId, isActive, sortOrder])
@@ -3835,6 +3878,8 @@ model MenuCategory {
   sortOrder Int      @default(0)
   isActive  Boolean  @default(true)
   outletIds String[] @default([])
+  /// Sistemin açtığı gizli grup (tepsi ücreti gibi menüde görünmeyen ürünler; otel başına tek).
+  system    Boolean  @default(false)
   createdBy String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3848,22 +3893,24 @@ model MenuCategory {
 
 /// Menü ürünü: vergi dahil fiyat, vergi kategorisi (otelin vergi ayarı), mutfak istasyonu.
 model MenuItem {
-  id          String     @id @default(uuid())
+  id          String         @id @default(uuid())
   hotelId     String
   categoryId  String
   code        String?
   name        String
   description String?
-  price       Decimal    @db.Decimal(12, 2)
-  taxCategory String     @default("FNB")
-  station     PosStation @default(HOT)
-  isActive    Boolean    @default(true)
+  price       Decimal        @db.Decimal(12, 2)
+  taxCategory String         @default("FNB")
+  station     PosStation     @default(HOT)
+  isActive    Boolean        @default(true)
   /// Servis sırasında "tükendi" (şef garson açar / kapatır); siparişe eklenemez.
-  soldOut     Boolean    @default(false)
-  sortOrder   Int        @default(0)
+  soldOut     Boolean        @default(false)
+  /// Sistem ürünü (menüde ve tanımlarda görünmez; fiyatı politikadan): türü başına otelde tek.
+  system      PosSystemItem?
+  sortOrder   Int            @default(0)
   createdBy   String
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 
   hotel    Hotel          @relation(fields: [hotelId], references: [id])
   category MenuCategory   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
@@ -3871,6 +3918,7 @@ model MenuItem {
 
   @@unique([hotelId, code])
   @@unique([categoryId, name])
+  @@unique([hotelId, system])
   @@index([hotelId, categoryId, sortOrder])
   @@index([name(ops: raw("gin_trgm_ops"))], map: "MenuItem_name_trgm_idx", type: Gin)
 }
@@ -3882,6 +3930,14 @@ model PosSettings {
   adjustmentApprovalAmount Decimal  @default(1000) @db.Decimal(12, 2)
   /// Vardiya kapanışında bu tutarı aşan nakit farkı yöneticiye uyarı düşürür.
   cashVarianceAlert        Decimal  @default(100) @db.Decimal(12, 2)
+  /// Oda servisi (modül 41): sipariş başına tepsi ücreti (0 = yok), teslim hedefi (dakika), ileri saatli siparişin
+  /// teslimden kaç dakika önce mutfağa düşeceği, teslimden kaç dakika sonra toplanmayan tepsinin uyarı düşüreceği,
+  /// misafirin QR bağlantısıyla sipariş verip veremeyeceği.
+  trayCharge               Decimal  @default(0) @db.Decimal(12, 2)
+  deliveryTargetMinutes    Int      @default(30)
+  prepLeadMinutes          Int      @default(30)
+  trayAlertMinutes         Int      @default(90)
+  guestOrderingEnabled     Boolean  @default(false)
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 
@@ -3970,17 +4026,18 @@ model PosCheck {
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
-  hotel       Hotel           @relation(fields: [hotelId], references: [id])
-  outlet      PosOutlet       @relation(fields: [outletId], references: [id], onDelete: Restrict)
-  table       PosTable?       @relation(fields: [tableId], references: [id], onDelete: Restrict)
-  shift       PosShift        @relation(fields: [shiftId], references: [id], onDelete: Restrict)
-  splitFrom   PosCheck?       @relation("PosCheckSplit", fields: [splitFromId], references: [id], onDelete: Restrict)
-  splits      PosCheck[]      @relation("PosCheckSplit")
+  hotel       Hotel             @relation(fields: [hotelId], references: [id])
+  outlet      PosOutlet         @relation(fields: [outletId], references: [id], onDelete: Restrict)
+  table       PosTable?         @relation(fields: [tableId], references: [id], onDelete: Restrict)
+  shift       PosShift          @relation(fields: [shiftId], references: [id], onDelete: Restrict)
+  splitFrom   PosCheck?         @relation("PosCheckSplit", fields: [splitFromId], references: [id], onDelete: Restrict)
+  splits      PosCheck[]        @relation("PosCheckSplit")
   orders      PosOrder[]
   lines       PosOrderLine[]
   adjustments PosAdjustment[]
   payments    PosPayment[]
   roomCharges PosRoomCharge[]
+  roomService RoomServiceOrder?
 
   @@unique([hotelId, number])
   @@unique([hotelId, sourceKey])
@@ -4165,4 +4222,120 @@ model PosRoomCharge {
   @@index([checkId])
   @@index([hotelId, businessDate])
   @@index([reservationId])
+}
+
+/// Oda servisi siparişi (modül 41): odaya teslim kaydı. Mutfağa düşünce (hemen, kabulde ya da zamanı gelince) bir
+/// adisyon ve sipariş turu açılır; teslimde kapıda alınan ödeme ve kalanın odaya yazılmasıyla adisyon kapanır.
+/// Misafirden gelen (kabul bekleyen) ve ileri saatli sipariş mutfağa düşene kadar adisyonsuzdur; kalemleri `items`'tadır.
+model RoomServiceOrder {
+  id              String            @id @default(uuid())
+  hotelId         String
+  outletId        String
+  /// "OS-2026-000123".
+  number          String
+  checkId         String?           @unique
+  reservationId   String
+  roomId          String
+  /// Sipariş anındaki oda ve misafir (teslim fişi; konaklama sonra oda değiştirse de iz kalır).
+  roomNumber      String
+  guestName       String
+  source          RoomServiceSource
+  guestRequestId  String?
+  /// Misafir siparişinin geldiği QR bağlantısı.
+  linkId          String?
+  status          RoomServiceStatus
+  covers          Int               @default(1)
+  note            String?
+  /// İstenen teslim anı (boş = hemen).
+  deliverAt       DateTime?
+  /// İleri saatli siparişin mutfağa düşeceği an (teslim − hazırlık payı).
+  releaseAt       DateTime?
+  /// Teslim hedefi: istenen an ya da mutfağa düşüş + hedef süre (gecikme uyarısı ve zamanında teslim oranı buna göre).
+  dueAt           DateTime
+  /// Sipariş edilen kalemlerin kopyası (ad, fiyat, istasyon, adet, not): kabul / mutfağa düşüş öncesi tek kaynak;
+  /// sonrası hazırlık listesi ve geçmiş için. Adisyonun kalemleri ayrıca `PosOrderLine`'dadır.
+  items           Json
+  /// Kalemlerin vergi dahil tutarı (tepsi ücreti hariç; misafire gösterilen tahmini tutar).
+  itemsTotal      Decimal           @db.Decimal(14, 2)
+  /// Tepsi bırakılacak mı (içecekte olmayabilir): toplanma takibi buna göre.
+  trayExpected    Boolean           @default(true)
+  sourceKey       String
+  createdBy       String
+  createdAt       DateTime          @default(now())
+  acceptedAt      DateTime?
+  acceptedBy      String?
+  rejectedAt      DateTime?
+  rejectedBy      String?
+  rejectReason    String?
+  /// Mutfağa düştüğü an.
+  receivedAt      DateTime?
+  preparingAt     DateTime?
+  readyAt         DateTime?
+  dispatchedAt    DateTime?
+  /// Siparişi götüren personel.
+  runnerEmail     String?
+  deliveredAt     DateTime?
+  deliveredBy     String?
+  cancelledAt     DateTime?
+  cancelledBy     String?
+  cancelReason    String?
+  trayCollectedAt DateTime?
+  trayCollectedBy String?
+  /// Zamanlanmış uyarıların düştüğü an (aynı sipariş için bir kez): gecikti, tepsi toplanmadı, misafir siparişi /
+  /// zamanı gelen sipariş bekliyor, konaklama bitti ama sipariş açık.
+  lateAlertedAt   DateTime?
+  trayAlertedAt   DateTime?
+  waitAlertedAt   DateTime?
+  stayAlertedAt   DateTime?
+  updatedAt       DateTime          @updatedAt
+
+  hotel        Hotel            @relation(fields: [hotelId], references: [id])
+  outlet       PosOutlet        @relation(fields: [outletId], references: [id], onDelete: Restrict)
+  check        PosCheck?        @relation(fields: [checkId], references: [id], onDelete: Restrict)
+  reservation  Reservation      @relation(fields: [reservationId], references: [id], onDelete: Restrict)
+  room         Room             @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  guestRequest GuestRequest?    @relation(fields: [guestRequestId], references: [id], onDelete: Restrict)
+  link         RoomServiceLink? @relation(fields: [linkId], references: [id], onDelete: Restrict)
+
+  @@unique([hotelId, number])
+  @@unique([hotelId, sourceKey])
+  // Pano sütunları (teslim hedefine göre) ve gecikme taraması.
+  @@index([hotelId, status, dueAt])
+  // İleri saatli siparişlerin mutfağa düşürülmesi ve hazırlık listesi (teslim anına göre).
+  @@index([hotelId, status, releaseAt])
+  @@index([hotelId, deliverAt])
+  // Toplanacak tepsiler ve teslim süresi raporu.
+  @@index([hotelId, status, deliveredAt])
+  // Geçmiş (en yeni önce) ve oda numarasıyla arama.
+  @@index([hotelId, createdAt, id])
+  @@index([hotelId, roomNumber, createdAt])
+  @@index([reservationId, status])
+  @@index([linkId, status])
+  @@index([guestRequestId])
+  // Numara ve misafir adı araması.
+  @@index([number(ops: raw("gin_trgm_ops"))], map: "RoomServiceOrder_number_trgm_idx", type: Gin)
+  @@index([guestName(ops: raw("gin_trgm_ops"))], map: "RoomServiceOrder_guestName_trgm_idx", type: Gin)
+}
+
+/// Misafirin QR ile sipariş bağlantısı (modül 41; misafir sayfası modül 53): konaklamaya ve odaya bağlı, imzalı.
+/// Oda değişince, çıkışta ya da personel yenileyince geçersizdir; konaklamada aynı anda tek geçerli bağlantı olur.
+model RoomServiceLink {
+  id            String    @id @default(uuid())
+  hotelId       String
+  reservationId String
+  roomId        String
+  /// İmzaya giren rastgele değer: veritabanı sızsa da bağlantı imza anahtarı olmadan üretilemez.
+  nonce         String
+  createdBy     String
+  createdAt     DateTime  @default(now())
+  revokedAt     DateTime?
+  revokedBy     String?
+  lastUsedAt    DateTime?
+
+  hotel       Hotel              @relation(fields: [hotelId], references: [id])
+  reservation Reservation        @relation(fields: [reservationId], references: [id], onDelete: Restrict)
+  room        Room               @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  orders      RoomServiceOrder[]
+
+  @@index([reservationId, revokedAt])
 }

@@ -1,4 +1,4 @@
-import { POS_STATION_LABELS, equalShares } from '@hotelos/hotel-contracts';
+import { POS_STATION_LABELS, ROOM_SERVICE_SOURCE_LABELS, equalShares, utcToZonedWallTime } from '@hotelos/hotel-contracts';
 
 /**
  * POS fişleri (modül 39): hesap (bilgi) fişi ve mutfak fişi. Fiş ayrı bir pencerede 80 mm
@@ -135,6 +135,69 @@ export function shiftSlipHtml(report, methodLabels) {
     '</table>' +
     (report.topItems.length ? '<h2>En çok satan</h2><table>' + report.topItems.map((item) => line(`${item.quantity} × ${item.name}`, amount(item.amount))).join('') + '</table>' : '');
   return documentOf(`Vardiya ${shift.waiterEmail}`, body);
+}
+
+/** Otelin saati "26.10 07:30". @param {string | null} value @param {string} timeZone */
+const hotelClock = (value, timeZone) => {
+  if (!value) return '—';
+  const wall = utcToZonedWallTime(value, timeZone);
+  return `${wall.slice(8, 10)}.${wall.slice(5, 7)} ${wall.slice(11, 16)}`;
+};
+
+/**
+ * Oda servisi teslim fişi (modül 41): götürenin tepsideki fişi — oda, misafir, sipariş no, istenen / hedef saat,
+ * kalemler (notlarıyla), misafirin notu, tutar. Saatler otelin saatiyle.
+ * @param {any} order `GET /pos/room-service/orders/:id` yanıtı
+ * @param {string} timeZone
+ */
+export function roomServiceSlipHtml(order, timeZone) {
+  const room = order.movedTo ?? order.roomNumber;
+  const items = order.items
+    .map((item) => `<tr><td>${item.quantity} × ${escapeHtml(item.name)}${item.note ? `<div class="note">${escapeHtml(item.note)}</div>` : ''}</td><td class="r">${amount(Number(item.unitPrice) * item.quantity)}</td></tr>`)
+    .join('');
+  const body =
+    `<h1>Oda ${escapeHtml(room)}</h1>` +
+    `<p class="center big">${escapeHtml(order.guestName)}</p>` +
+    `<p>${escapeHtml(order.number)} · ${escapeHtml(order.outletName ?? '')} · ${order.covers} kişi</p>` +
+    `<p class="muted">${escapeHtml(ROOM_SERVICE_SOURCE_LABELS[order.source] ?? '')} · sipariş ${hotelClock(order.createdAt, timeZone)}</p>` +
+    `<p class="big">${order.deliverAt ? `Teslim ${hotelClock(order.deliverAt, timeZone)}` : `Hedef ${hotelClock(order.dueAt, timeZone)}`}</p>` +
+    (order.movedTo ? `<p>Not: misafir ${escapeHtml(order.roomNumber)} numaralı odadan taşındı.</p>` : '') +
+    '<div class="rule"></div>' +
+    `<table>${items}</table>` +
+    (order.note ? `<div class="rule"></div><p class="note">${escapeHtml(order.note)}</p>` : '') +
+    '<div class="rule"></div>' +
+    `<table><tr><td>Hesap</td><td class="r big">${amount(order.check?.grandTotal ?? order.itemsTotal)}</td></tr></table>` +
+    `<p class="muted">${order.trayExpected ? 'Tepsi bırakılacak — toplanınca işaretleyin.' : 'Tepsisiz teslim.'}</p>`;
+  return documentOf(`Oda servisi ${order.number}`, body);
+}
+
+/**
+ * Hazırlık listesi (kahvaltı kartı): günün üretim toplamı ve teslim saati aralıkları — her aralıkta ürün toplamı ve
+ * odalar (kalemleri, notlarıyla).
+ * @param {any} prep `GET /pos/room-service/prep` yanıtı
+ */
+export function prepListHtml(prep) {
+  const totals = (items) => items.map((item) => `<tr><td>${escapeHtml(item.name)}${item.note ? ` <span class="muted">(${escapeHtml(item.note)})</span>` : ''}</td><td class="r big">${item.quantity}</td></tr>`).join('');
+  const slots = prep.slots
+    .map(
+      (slot) =>
+        `<h2>${escapeHtml(slot.time)} · ${slot.orders.length} oda</h2><table>${totals(slot.items)}</table>` +
+        slot.orders
+          .map(
+            (order) =>
+              `<p><strong>Oda ${escapeHtml(order.movedTo ?? order.roomNumber)}</strong> · ${escapeHtml(utcToZonedWallTime(order.deliverAt, prep.timezone).slice(11, 16))} · ${order.covers} kişi</p>` +
+              order.items.map((item) => `<p class="note">${item.quantity} × ${escapeHtml(item.name)}${item.note ? ` — ${escapeHtml(item.note)}` : ''}</p>`).join('') +
+              (order.note ? `<p class="note muted">${escapeHtml(order.note)}</p>` : ''),
+          )
+          .join(''),
+    )
+    .join('');
+  const body =
+    `<h1>Hazırlık listesi</h1><p class="center">${escapeHtml(prep.date)} · ${prep.total} sipariş</p>` +
+    `<h2>Günün toplamı</h2><table>${totals(prep.items)}</table>` +
+    slots +
+    (prep.truncated ? '<p class="big">Liste kesildi: bu günün siparişleri sınırı aştı.</p>' : '');
+  return documentOf(`Hazırlık ${prep.date}`, body);
 }
 
 /**

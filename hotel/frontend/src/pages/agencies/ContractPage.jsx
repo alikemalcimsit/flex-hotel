@@ -11,7 +11,7 @@ import { CONTRACT_STATUS_TONES, agencyKeys, useAgencyLive, useContract } from '.
 import { rateSignature, ratesToBlocks, validateBlocks } from '../../lib/rateBlocks.js';
 import { formatDate } from '../../lib/format.js';
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
-import { useHotelSettings } from '../../lib/useHotel.js';
+import { useHotelContext } from '../../lib/useHotel.js';
 import { validateWith } from '../../lib/validate.js';
 import { toastError, toastSuccess } from '../../store/toast.js';
 import { useRoomTypes } from '../rooms/useRoomTypes.js';
@@ -42,7 +42,7 @@ function ContractView({ contract }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { roomTypes } = useRoomTypes();
-  const defaultBoard = useHotelSettings().data?.defaultBoardType ?? 'BB';
+  const defaultBoard = useHotelContext().data?.defaultBoardType ?? 'BB';
   const [dialog, setDialog] = useState(null);
   const [removing, setRemoving] = useState(null);
   const editable = can(PERMISSIONS.AGENCIES_MANAGE) && contract.status !== 'ENDED';

@@ -5,7 +5,7 @@ import { Badge, Icon } from '@hotelos/ui';
 import { api } from '../lib/api.js';
 import { PERMISSIONS, useCan } from '../lib/permissions.js';
 import { socket } from '../lib/socket.js';
-import { useHotelSettings } from '../lib/useHotel.js';
+import { useHotelContext } from '../lib/useHotel.js';
 import { visibleSections } from '../layout/navigation.js';
 import { useAuthStore } from '../store/auth.js';
 import { DashboardOverview } from './dashboard/DashboardOverview.jsx';
@@ -47,7 +47,7 @@ export function HomePage() {
     retry: false,
     refetchInterval: HEALTH_POLL_MS,
   });
-  const hotelQuery = useHotelSettings();
+  const hotelQuery = useHotelContext();
   const [socketConnected, setSocketConnected] = useState(socket.connected);
 
   useEffect(() => {

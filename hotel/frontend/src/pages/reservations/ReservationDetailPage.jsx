@@ -18,6 +18,7 @@ import { FolioSummaryCard } from '../folios/FolioSummaryCard.jsx';
 import { CancelReservationDialog } from './CancelReservationDialog.jsx';
 import { EditReservationDialog } from './EditReservationDialog.jsx';
 import { NoShowDialog } from './NoShowDialog.jsx';
+import { RoomServiceLinkDialog } from '../pos/RoomServiceLinkDialog.jsx';
 import { RESERVATION_STATUS_TONES, boardLong, errorHint, partyLabel, sourceLabel, statusLabel } from './reservationTheme.js';
 
 /** Denetim izindeki alan adlarının ekrandaki karşılığı. */
@@ -167,6 +168,10 @@ export function ReservationDetailPage() {
           {actions.has('noShow') && <Button variant="outline" icon="alertCircle" onClick={() => setDialog('noShow')}>Gelmedi</Button>}
           {actions.has('cancel') && <Button variant="dangerSoft" icon="close" onClick={() => setDialog('cancel')}>İptal et</Button>}
           {actions.has('reinstate') && <Button variant="outline" icon="rotateCcw" onClick={() => setDialog('reinstate')}>Geri al</Button>}
+          {/* Oda servisi (modül 41): misafirin QR sipariş bağlantısı girişte verilir. */}
+          {detail.status === 'CHECKED_IN' && (can(PERMISSIONS.POS_OPERATE) || can(PERMISSIONS.REQUESTS_MANAGE)) && (
+            <Button variant="outline" icon="link" onClick={() => setDialog('roomServiceLink')}>Oda servisi bağlantısı</Button>
+          )}
         </div>
       </div>
 
@@ -433,6 +438,7 @@ export function ReservationDetailPage() {
           onError={onActionError}
         />
       )}
+      {dialog === 'roomServiceLink' && <RoomServiceLinkDialog reservationId={reservationId} onClose={() => setDialog(null)} />}
       <ConfirmDialog
         open={dialog === 'confirm'}
         title="Rezervasyonu onayla"

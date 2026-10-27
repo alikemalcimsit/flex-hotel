@@ -24,6 +24,7 @@ import {
 import { groupByOrder } from '../../lib/posCart.js';
 import { billSlipHtml, kitchenSlipHtml, printHtml } from '../../lib/posPrint.js';
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
+import { orderPath } from '../../lib/roomService.js';
 import { useNow } from '../../lib/useNow.js';
 import { toastError, toastSuccess } from '../../store/toast.js';
 import { AdjustmentDialog, EditCheckDialog, PaymentDialog, PaymentVoidDialog, ReopenDialog, RoomChargeDialog } from './CheckDialogs.jsx';
@@ -67,7 +68,10 @@ function CheckScreen({ check, terminal }) {
   const balance = Number(check.balance);
   const hasLines = check.lines.length > 0;
   const waiting = check.pending.adjustments + check.pending.payments + check.pending.voids;
-  const floorPath = `/pos/masalar?nokta=${check.outletId}`;
+  // Oda servisi adisyonu (modül 41): siparişle bire bir; bölünmez / taşınmaz / birleşmez, hesabı teslimde kapanır.
+  const roomService = check.roomService;
+  const settleHere = !roomService || roomService.status === 'DELIVERED';
+  const floorPath = roomService ? orderPath(roomService.id) : `/pos/masalar?nokta=${check.outletId}`;
 
   const replace = (updated) => {
     queryClient.setQueryData(posKeys.check(updated.id), updated);
@@ -97,9 +101,9 @@ function CheckScreen({ check, terminal }) {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
         <Link to={floorPath} className="flex items-center gap-1 text-sm font-semibold text-ink-soft hover:text-ink">
-          <Icon name="arrowLeft" className="size-4" /> Masa planı
+          <Icon name="arrowLeft" className="size-4" /> {roomService ? `Oda servisi ${roomService.number}` : 'Masa planı'}
         </Link>
-        <h1 className="text-2xl font-bold text-ink">{check.table ? `Masa ${check.table.name}` : 'Masasız'}</h1>
+        <h1 className="text-2xl font-bold text-ink">{roomService ? `Oda ${roomService.roomNumber}` : check.table ? `Masa ${check.table.name}` : 'Masasız'}</h1>
         <span className="font-mono text-sm text-ink-soft">{check.number}</span>
         <Badge tone={CHECK_STATUS_TONES[check.status]}>{POS_CHECK_STATUS_LABELS[check.status]}</Badge>
         {check.billRequestedAt && open && <Badge tone="warning">Hesap istiyor</Badge>}
@@ -113,6 +117,11 @@ function CheckScreen({ check, terminal }) {
         )}
       </div>
       {check.note && <p className="text-sm italic text-ink-soft">Not: {check.note}</p>}
+      {roomService && !settleHere && (
+        <Alert tone="info" title={`Oda servisi siparişi · ${roomService.guestName}`}>
+          Hesap teslimde kapanır (kapıda ödeme ve kalanın odaya yazılması oda servisi ekranından). Misafir bir şey daha isterse buradan tur ekleyin; hazır sipariş mutfağa döner, yoldaki siparişe eklenmez.
+        </Alert>
+      )}
       {check.splitFrom && (
         <p className="text-sm text-ink-soft">
           <Link to={checkPath(check.splitFrom.id)} className="text-info-ink underline-offset-2 hover:underline">
@@ -148,17 +157,17 @@ function CheckScreen({ check, terminal }) {
           {operate && (
             <Card title="İşlemler">
               <div className="flex flex-wrap gap-2">
-                {open && balance > 0 && (
+                {open && settleHere && balance > 0 && (
                   <Button type="button" icon="banknote" onClick={() => setDialog({ kind: 'pay' })} disabled={busy || check.pending.adjustments > 0}>
                     Ödeme al
                   </Button>
                 )}
-                {open && balance > 0 && check.outlet.allowRoomCharge && (
+                {open && settleHere && balance > 0 && check.outlet.allowRoomCharge && (
                   <Button type="button" variant="outline" icon="bed" onClick={() => setDialog({ kind: 'room' })} disabled={busy || waiting > 0}>
                     Odaya yaz
                   </Button>
                 )}
-                {open && balance > 0 && (
+                {open && !roomService && balance > 0 && (
                   <Button type="button" variant="outline" icon="bell" onClick={() => run('bill', { requested: !check.billRequestedAt }, check.billRequestedAt ? 'Hesap isteği geri alındı' : 'Masa “hesap istiyor”')} disabled={busy}>
                     {check.billRequestedAt ? 'Hesap isteğini geri al' : 'Hesap istendi'}
                   </Button>
@@ -168,17 +177,17 @@ function CheckScreen({ check, terminal }) {
                     Hesap fişi
                   </Button>
                 )}
-                {open && hasLines && (
+                {open && !roomService && hasLines && (
                   <Button type="button" variant="outline" icon="layers" onClick={() => setDialog({ kind: 'split' })} disabled={busy}>
                     Böl
                   </Button>
                 )}
-                {open && terminal && (
+                {open && !roomService && terminal && (
                   <Button type="button" variant="outline" icon="arrowRight" onClick={() => setDialog({ kind: 'move' })} disabled={busy}>
                     Masa değiştir
                   </Button>
                 )}
-                {open && (
+                {open && !roomService && (
                   <Button type="button" variant="outline" icon="link" onClick={() => setDialog({ kind: 'merge' })} disabled={busy}>
                     Birleştir
                   </Button>
@@ -193,7 +202,7 @@ function CheckScreen({ check, terminal }) {
                     İndirim
                   </Button>
                 )}
-                {open && hasLines && balance === 0 && waiting === 0 && (
+                {open && settleHere && hasLines && balance === 0 && waiting === 0 && (
                   <Button type="button" icon="checkCheck" onClick={() => run('close', { expectedUpdatedAt: check.updatedAt }, null)} disabled={busy}>
                     Kapat
                   </Button>
@@ -330,7 +339,7 @@ function LinesCard({ check, canSupervise, onAdjust }) {
 function TotalsCard({ check }) {
   const { totals, currency } = check;
   const row = (label, value, tone = '') => (
-    <div className={`flex justify-between gap-3 ${tone}`}>
+    <div key={label} className={`flex justify-between gap-3 ${tone}`}>
       <dt>{label}</dt>
       <dd className="tabular-nums">{value}</dd>
     </div>

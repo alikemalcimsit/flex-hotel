@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { billSlipHtml, escapeHtml, kitchenSlipHtml, shiftSlipHtml } from './posPrint.js';
+import { billSlipHtml, escapeHtml, kitchenSlipHtml, prepListHtml, roomServiceSlipHtml, shiftSlipHtml } from './posPrint.js';
 
 /**
  * POS fişleri: kullanıcı girdisi (ürün adı, not) kaçışlanır; hesap fişi faturalanan adedi,
@@ -78,5 +78,49 @@ describe('fişler', () => {
     assert.ok(html.includes('-150,00'));
     assert.ok(html.includes('Kredi kartı'));
     assert.ok(html.includes('3 × Köfte &lt;x&gt;'));
+  });
+
+  it('oda servisi teslim fişi: oda (taşındıysa yenisi), misafir, otelin saatiyle teslim, notlar kaçışlanır', () => {
+    const html = roomServiceSlipHtml(
+      {
+        number: 'OS-2026-000007',
+        roomNumber: '101',
+        movedTo: '305',
+        guestName: 'Ayşe <b>Kaya</b>',
+        outletName: 'Oda Servisi',
+        covers: 2,
+        source: 'GUEST',
+        createdAt: '2026-10-25T20:00:00.000Z',
+        deliverAt: '2026-10-26T04:30:00.000Z',
+        dueAt: '2026-10-26T04:30:00.000Z',
+        items: [{ name: 'Omlet', quantity: 2, unitPrice: '180.00', note: 'az <tuz>' }],
+        note: 'Kapıyı çalmayın',
+        trayExpected: true,
+        check: { grandTotal: '410.00' },
+        itemsTotal: '360.00',
+      },
+      'Europe/Istanbul',
+    );
+    assert.ok(html.includes('<h1>Oda 305</h1>'));
+    assert.ok(html.includes('Ayşe &lt;b&gt;Kaya&lt;/b&gt;'));
+    assert.ok(html.includes('Teslim 26.10 07:30'));
+    assert.ok(html.includes('az &lt;tuz&gt;'));
+    assert.ok(html.includes('410,00'));
+    assert.ok(html.includes('101 numaralı odadan taşındı'));
+  });
+
+  it('hazırlık listesi: gün toplamı, aralıklar, oda kalemleri; kesilme notu', () => {
+    const html = prepListHtml({
+      date: '2026-10-26',
+      timezone: 'Europe/Istanbul',
+      total: 1,
+      truncated: true,
+      items: [{ name: 'Omlet', note: null, quantity: 3 }],
+      slots: [{ time: '07:30', items: [{ name: 'Omlet', note: null, quantity: 3 }], orders: [{ roomNumber: '412', movedTo: null, deliverAt: '2026-10-26T04:40:00.000Z', covers: 2, items: [{ name: 'Omlet', quantity: 3, note: 'acı <yok>' }], note: null }] }],
+    });
+    assert.ok(html.includes('07:30 · 1 oda'));
+    assert.ok(html.includes('Oda 412</strong> · 07:40'));
+    assert.ok(html.includes('acı &lt;yok&gt;'));
+    assert.ok(html.includes('Liste kesildi'));
   });
 });

@@ -21,6 +21,8 @@ import { requestApproval } from '../approvals/service.js';
 import { chargePostingStatus } from '../extras/posting-status.js';
 import { raiseStaffAlert } from '../notifications/staff-alerts.js';
 import { getActiveTaxes, getHotelSettings } from '../settings/service.js';
+import { assertNotRoomService, assertRoomServiceSettlable, onRoomServiceRound } from './room-service-guards.js';
+import { menuLineErrors } from './room-service-rules.js';
 import { adjustmentNeedsApproval, adjustmentValue, checkBalance, checkTotals, lineFreeQuantity, splitPlan } from './rules.js';
 import { dateOnly, day, hotelContext, iso, loadPosSettings, money, nextCheckNumber, prisma, recomputeCheckTotals, requireOpenShift } from './shared.js';
 
@@ -47,6 +49,19 @@ import { dateOnly, day, hotelContext, iso, loadPosSettings, money, nextCheckNumb
 const DETAIL_LIMIT = 200;
 /** Numara aramasında en kısa parça (trigram index'i üç karakterle çalışır). */
 const MIN_NUMBER_SEARCH = 3;
+
+/** Siparişe giren ürünün denetim ve kopya alanları. */
+const MENU_LINE_SELECT = Object.freeze({
+  id: true,
+  name: true,
+  price: true,
+  taxCategory: true,
+  station: true,
+  isActive: true,
+  soldOut: true,
+  system: true,
+  category: { select: { isActive: true, outletIds: true } },
+});
 
 const CHECK_SUMMARY_SELECT = Object.freeze({
   id: true,
@@ -276,6 +291,7 @@ export async function getCheck(hotelId, checkId) {
       outlet: { select: { id: true, code: true, name: true, allowRoomCharge: true } },
       table: { select: { id: true, name: true } },
       splitFrom: { select: { id: true, number: true } },
+      roomService: { select: { id: true, number: true, status: true, roomNumber: true, guestName: true, deliverAt: true } },
       orders: { orderBy: { seq: 'asc' }, select: { id: true, seq: true, status: true, sentAt: true, sentBy: true } },
       lines: {
         orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
@@ -339,6 +355,7 @@ export async function getCheck(hotelId, checkId) {
     reopenedBy: row.reopenedBy,
     reopenReason: row.reopenReason,
     splitFrom: row.splitFrom,
+    roomService: row.roomService ? { ...row.roomService, deliverAt: iso(row.roomService.deliverAt) } : null,
     totals: {
       subtotal: money(row.subtotal),
       compTotal: money(row.compTotal),
@@ -543,8 +560,9 @@ export async function openCheck(hotelId, input) {
       const existing = await tx.posCheck.findFirst({ where: { hotelId, sourceKey }, select: { id: true } });
       if (existing) return existing.id;
       const shift = await requireOpenShift(tx, hotelId, actor);
-      const outlet = await tx.posOutlet.findFirst({ where: { id: input.outletId, hotelId }, select: { id: true, isActive: true } });
+      const outlet = await tx.posOutlet.findFirst({ where: { id: input.outletId, hotelId }, select: { id: true, isActive: true, kind: true } });
       if (!outlet || !outlet.isActive) throw new ValidationError('Satış noktası bulunamadı ya da kapalı', { field: 'outletId' });
+      if (outlet.kind === 'ROOM_SERVICE') throw new ValidationError('Oda servisi noktasında adisyon oda servisi siparişiyle açılır', { field: 'outletId' });
       if (input.tableId) {
         const table = await tx.posTable.findFirst({ where: { id: input.tableId, hotelId }, select: { outletId: true, isActive: true } });
         if (!table || table.outletId !== outlet.id || !table.isActive) throw new ValidationError('Masa bu satış noktasında değil ya da kapalı', { field: 'tableId' });
@@ -604,7 +622,6 @@ export async function updateCheck(hotelId, checkId, input) {
  * @param {any} input `sendPosOrderSchema`
  */
 export async function sendOrder(hotelId, checkId, input) {
-  const actor = currentActor();
   const sourceKey = `order:${input.requestId}`;
   try {
     await writeWithEvents(async (tx, stage) => {
@@ -618,80 +635,98 @@ export async function sendOrder(hotelId, checkId, input) {
       const check = await lockedCheck(tx, hotelId, checkId);
       // Aynı istek eşzamanlı geldiyse ikincisi kilidi bekledi: ilki turu yazdı.
       if (await sent()) return;
-      const itemIds = [...new Set(input.lines.map((line) => line.menuItemId))];
-      const items = await tx.menuItem.findMany({
-        where: { hotelId, id: { in: itemIds } },
-        select: { id: true, name: true, price: true, taxCategory: true, station: true, isActive: true, soldOut: true, category: { select: { isActive: true, outletIds: true } } },
-      });
-      const byId = new Map(items.map((item) => [item.id, item]));
-      const fields = {};
-      input.lines.forEach((line, index) => {
-        const item = byId.get(line.menuItemId);
-        if (!item) fields[`lines.${index}.menuItemId`] = 'Ürün bulunamadı';
-        else if (!item.isActive || !item.category.isActive) fields[`lines.${index}.menuItemId`] = `${item.name} satıştan kalkmış`;
-        else if (item.soldOut) fields[`lines.${index}.menuItemId`] = `${item.name} tükendi`;
-        else if (item.category.outletIds.length && !item.category.outletIds.includes(check.outletId)) fields[`lines.${index}.menuItemId`] = `${item.name} bu satış noktasında satılmıyor`;
-      });
-      if (Object.keys(fields).length) throw new ValidationError(Object.values(fields)[0], { fields });
-      const [lineCount, last] = await Promise.all([tx.posOrderLine.count({ where: { checkId } }), lastOrderSeq(tx, checkId)]);
-      if (lineCount + input.lines.length > MAX_CHECK_LINES) throw new ConflictError(`Bir adisyonda en fazla ${MAX_CHECK_LINES} kalem olur; yeni adisyon açın.`, 'LIMIT');
-      const orderId = randomUUID();
-      const seq = last + 1;
-      await tx.posOrder.create({ data: { id: orderId, hotelId, checkId, outletId: check.outletId, seq, sourceKey, sentBy: actor } });
-      // Kalem kimlikleri burada üretilir: mutfağa giden iş olayı kalemleri kimliğiyle taşır.
-      const lineIds = input.lines.map(() => randomUUID());
-      await tx.posOrderLine.createMany({
-        data: input.lines.map((line, index) => {
-          const item = byId.get(line.menuItemId);
-          return {
-            id: lineIds[index],
-            hotelId,
-            checkId,
-            orderId,
-            menuItemId: item.id,
-            name: item.name,
-            station: item.station,
-            taxCategory: item.taxCategory,
-            unitPrice: money(item.price),
-            quantity: line.quantity,
-            note: line.note ?? null,
-            sortOrder: lineCount + index,
-          };
-        }),
-      });
-      if (check.billRequestedAt) await tx.posCheck.update({ where: { id: checkId }, data: { billRequestedAt: null } });
-      const totals = await recomputeCheckTotals(tx, hotelId, checkId);
-      await recordAudit(tx, {
-        hotelId,
-        entity: 'PosOrder',
-        entityId: orderId,
-        action: 'CREATE',
-        after: { check: check.number, lines: input.lines.map((line) => `${line.quantity} × ${byId.get(line.menuItemId).name}`).slice(0, 40), grandTotal: totals.grandTotal },
-      });
-      const stations = [...new Set(input.lines.map((line) => byId.get(line.menuItemId).station).filter((station) => station !== 'NONE'))];
-      await stage('pos.order.sent', { hotelId, checkId, orderId, outletId: check.outletId, stations });
-      await stage('fnb.order.placed', {
-        hotelId,
-        checkId,
-        orderId,
-        outletId: check.outletId,
-        outletName: check.outlet.name,
-        number: check.number,
-        seq,
-        tableName: check.table?.name ?? null,
-        covers: check.covers,
-        waiterEmail: check.waiterEmail,
-        lines: input.lines.map((line, index) => {
-          const item = byId.get(line.menuItemId);
-          return { lineId: lineIds[index], menuItemId: item.id, name: item.name, quantity: line.quantity, station: item.station, note: line.note ?? null };
-        }),
-      });
-      await stage('pos.check.changed', { hotelId, checkId, outletId: check.outletId, tableId: check.tableId, change: 'UPDATED' });
+      // Oda servisi adisyonuysa (modül 41) sipariş de güncellenir; mutfak olayı odayı taşır.
+      await addOrderRound(tx, stage, { hotelId, check, lines: input.lines, sourceKey, roomService: (items) => onRoomServiceRound(tx, stage, { hotelId, checkId, items }) });
     });
   } catch (error) {
     rethrowPrismaError(error);
   }
   return getCheck(hotelId, checkId);
+}
+
+/**
+ * Sipariş turunu yazar (adisyon kilitliyken; restoranın "Gönder"i ve oda servisinin mutfağa düşüşü): ürünler
+ * denetlenir (`menuLineErrors`), kalemler ürünün o anki adını, fiyatını, vergi kategorisini ve istasyonunu kopyalar;
+ * sistem kalemleri (tepsi ücreti) fiyatıyla hazır gelir. Toplamlar yeniden yazılır, mutfağa `pos.order.sent` ve
+ * `fnb.order.placed` gider.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {Function} stage
+ * @param {{
+ *   hotelId: string,
+ *   check: any,
+ *   lines: Array<{ menuItemId: string, quantity: number, note?: string | null }>,
+ *   sourceKey: string,
+ *   systemLines?: Array<{ menuItemId: string, name: string, unitPrice: string, quantity: number, taxCategory: string, station: string, note?: string | null }>,
+ *   roomService?: { roomNumber: string, deliverAt: string | null } | ((items: any[]) => Promise<{ roomNumber: string, deliverAt: string | null } | null>) | null,
+ * }} input `check`: `lockedCheck` sonucu; `roomService`: oda servisi turunun odası (ya da turun kalemleriyle çağrılan kanca)
+ * @returns {Promise<{ orderId: string, seq: number, items: Array<{ menuItemId: string, name: string, unitPrice: string, quantity: number, note: string | null, station: string, taxCategory: string }> }>}
+ */
+export async function addOrderRound(tx, stage, { hotelId, check, lines, sourceKey, systemLines = [], roomService = null }) {
+  const actor = currentActor();
+  const checkId = check.id;
+  const itemIds = [...new Set(lines.map((line) => line.menuItemId))];
+  const menu = await tx.menuItem.findMany({ where: { hotelId, id: { in: itemIds } }, select: MENU_LINE_SELECT });
+  const byId = new Map(menu.map((item) => [item.id, item]));
+  const fields = menuLineErrors(lines, byId, check.outletId);
+  if (Object.keys(fields).length) throw new ValidationError(Object.values(fields)[0], { fields });
+  const [lineCount, last] = await Promise.all([tx.posOrderLine.count({ where: { checkId } }), lastOrderSeq(tx, checkId)]);
+  if (lineCount + lines.length + systemLines.length > MAX_CHECK_LINES) throw new ConflictError(`Bir adisyonda en fazla ${MAX_CHECK_LINES} kalem olur; yeni adisyon açın.`, 'LIMIT');
+  const items = lines.map((line) => {
+    const item = byId.get(line.menuItemId);
+    return { menuItemId: item.id, name: item.name, unitPrice: money(item.price), quantity: line.quantity, note: line.note ?? null, station: item.station, taxCategory: item.taxCategory };
+  });
+  const all = [...items, ...systemLines.map((line) => ({ ...line, note: line.note ?? null }))];
+  const orderId = randomUUID();
+  const seq = last + 1;
+  await tx.posOrder.create({ data: { id: orderId, hotelId, checkId, outletId: check.outletId, seq, sourceKey, sentBy: actor } });
+  // Kalem kimlikleri burada üretilir: mutfağa giden iş olayı kalemleri kimliğiyle taşır.
+  const lineIds = all.map(() => randomUUID());
+  await tx.posOrderLine.createMany({
+    data: all.map((line, index) => ({
+      id: lineIds[index],
+      hotelId,
+      checkId,
+      orderId,
+      menuItemId: line.menuItemId,
+      name: line.name,
+      station: line.station,
+      taxCategory: line.taxCategory,
+      unitPrice: line.unitPrice,
+      quantity: line.quantity,
+      note: line.note,
+      sortOrder: lineCount + index,
+    })),
+  });
+  if (check.billRequestedAt) await tx.posCheck.update({ where: { id: checkId }, data: { billRequestedAt: null } });
+  const totals = await recomputeCheckTotals(tx, hotelId, checkId);
+  const room = typeof roomService === 'function' ? await roomService(items) : roomService;
+  await recordAudit(tx, {
+    hotelId,
+    entity: 'PosOrder',
+    entityId: orderId,
+    action: 'CREATE',
+    after: { check: check.number, lines: all.map((line) => `${line.quantity} × ${line.name}`).slice(0, 40), grandTotal: totals.grandTotal, ...(room ? { room: room.roomNumber } : {}) },
+  });
+  const stations = [...new Set(all.map((line) => line.station).filter((station) => station !== 'NONE'))];
+  await stage('pos.order.sent', { hotelId, checkId, orderId, outletId: check.outletId, stations });
+  await stage('fnb.order.placed', {
+    hotelId,
+    checkId,
+    orderId,
+    outletId: check.outletId,
+    outletName: check.outlet.name,
+    number: check.number,
+    seq,
+    tableName: check.table?.name ?? null,
+    roomNumber: room?.roomNumber ?? null,
+    deliverAt: room?.deliverAt ?? null,
+    covers: check.covers,
+    waiterEmail: check.waiterEmail,
+    lines: all.map((line, index) => ({ lineId: lineIds[index], menuItemId: line.menuItemId, name: line.name, quantity: line.quantity, station: line.station, note: line.note })),
+  });
+  await stage('pos.check.changed', { hotelId, checkId, outletId: check.outletId, tableId: check.tableId, change: 'UPDATED' });
+  return { orderId, seq, items };
 }
 
 /**
@@ -929,6 +964,7 @@ export async function splitCheck(hotelId, checkId, input) {
   try {
     targetId = await writeWithEvents(async (tx, stage) => {
       const check = await lockedCheck(tx, hotelId, checkId, { expectedUpdatedAt: input.expectedUpdatedAt });
+      await assertNotRoomService(tx, [checkId], 'bölünmez');
       const [lines, pending] = await Promise.all([
         tx.posOrderLine.findMany({ where: { checkId }, select: { id: true, orderId: true, menuItemId: true, name: true, station: true, taxCategory: true, unitPrice: true, quantity: true, voidedQuantity: true, compedQuantity: true, note: true } }),
         pendingState(tx, checkId),
@@ -989,6 +1025,7 @@ export async function splitCheck(hotelId, checkId, input) {
 export async function moveCheck(hotelId, checkId, input) {
   await writeWithEvents(async (tx, stage) => {
     const check = await lockedCheck(tx, hotelId, checkId, { expectedUpdatedAt: input.expectedUpdatedAt });
+    await assertNotRoomService(tx, [checkId], 'masaya taşınmaz');
     if (input.tableId) {
       const table = await tx.posTable.findFirst({ where: { id: input.tableId, hotelId }, select: { outletId: true, isActive: true, name: true } });
       if (!table || table.outletId !== check.outletId || !table.isActive) throw new ValidationError('Masa bu satış noktasında değil ya da kapalı', { field: 'tableId' });
@@ -1016,6 +1053,7 @@ export async function mergeChecks(hotelId, targetId, input) {
     const target = await lockedCheck(tx, hotelId, targetId, { expectedUpdatedAt: input.expectedUpdatedAt });
     const source = await lockedCheck(tx, hotelId, input.sourceCheckId);
     if (source.outletId !== target.outletId) throw new ValidationError('Yalnızca aynı satış noktasının adisyonları birleştirilir', { field: 'sourceCheckId' });
+    await assertNotRoomService(tx, [target.id, source.id], 'birleştirilmez');
     const [payments, rooms, pending] = await Promise.all([
       tx.posPayment.count({ where: { checkId: source.id, status: { in: ['POSTED', 'PENDING'] } } }),
       tx.posRoomCharge.count({ where: { checkId: source.id } }),
@@ -1080,6 +1118,7 @@ export async function closeCheck(hotelId, checkId, { expectedUpdatedAt }) {
   const { today } = await hotelContext(hotelId);
   await writeWithEvents(async (tx, stage) => {
     const check = await lockedCheck(tx, hotelId, checkId, { expectedUpdatedAt });
+    await assertRoomServiceSettlable(tx, checkId);
     const lines = await tx.posOrderLine.count({ where: { checkId } });
     if (lines === 0) throw new ConflictError('Kalemi olmayan adisyon kapatılmaz; boş adisyonu iptal edin.', 'EMPTY_CHECK');
     const balance = checkBalance({ grandTotal: money(check.grandTotal), paidTotal: money(check.paidTotal), roomChargeTotal: money(check.roomChargeTotal) });

@@ -9,6 +9,8 @@ import { api } from './api.js';
 const HOTEL_STALE_MS = 5 * 60 * 1000;
 
 export const HOTEL_QUERY_KEY = Object.freeze(['settings', 'hotel']);
+/** Otel bağlamı (ad, saat dilimi, para birimi): ayarlar kaydedilince bu anahtar da tazelenir. */
+export const HOTEL_CONTEXT_KEY = Object.freeze(['settings', 'hotel', 'context']);
 
 /** Saat dilimi başına tek biçimlendirici. */
 const dayFormatters = new Map();
@@ -34,23 +36,29 @@ export function todayInTimeZone(timeZone, now = new Date()) {
   return formatter.format(now);
 }
 
-/** Otel bilgileri (ad, saat dilimi, para birimi...). */
-export function useHotelSettings() {
+/**
+ * Ekranların otel bağlamı: ad, kod, para birimi, saat dilimi, varsayılan pansiyon, otelin bugünü. Oturum açmış her
+ * personel okur (`/settings/hotel/context`); tam otel kaydı (`/settings/hotel`, adres / iptal politikası / eşikler)
+ * yalnız ayar yetkilisine açık olduğundan ekranlar bunu kullanır — yoksa oda servisi, kat hizmetleri, ön büro gibi
+ * roller 403 alıp saatleri tarayıcının diliminde görüyordu.
+ */
+export function useHotelContext() {
   return useQuery({
-    queryKey: HOTEL_QUERY_KEY,
-    queryFn: () => api('/settings/hotel'),
+    queryKey: HOTEL_CONTEXT_KEY,
+    queryFn: () => api('/settings/hotel/context'),
     staleTime: HOTEL_STALE_MS,
   });
 }
 
 /**
- * Otelin bugünü. Otel kaydı henüz yüklenmediyse tarayıcının saat dilimi
- * kullanılır — ekran boş beklemesin, kayıt gelince kendiliğinden düzelir.
+ * Otelin bugünü ve saat dilimi (otel bağlamından). Bağlam henüz yüklenmediyse tarayıcının saat dilimi
+ * kullanılır — ekran boş beklemesin, bağlam gelince kendiliğinden düzelir. Gün, saat dilimiyle burada hesaplanır
+ * (önbellekteki bağlam gece yarısından sonra da doğru günü verir).
  *
  * @returns {{ today: string, timeZone: string }}
  */
 export function useHotelToday() {
-  const { data } = useHotelSettings();
+  const { data } = useHotelContext();
   const timeZone = data?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
   return { today: todayInTimeZone(timeZone), timeZone };
 }

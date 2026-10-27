@@ -111,7 +111,7 @@ export function SalesReportPage() {
 }
 
 /** @param {{ title: string, head: string[], rows: Array<Array<string | number>> }} props */
-function ReportTable({ title, head, rows }) {
+export function ReportTable({ title, head, rows }) {
   return (
     <Card title={title}>
       {rows.length === 0 ? (

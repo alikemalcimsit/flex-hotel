@@ -22,7 +22,7 @@ import { formatDate, formatMoney } from '../../lib/format.js';
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 import { couponBlocks, couponStatusText, usePromotionLive } from '../../lib/promotions.js';
 import { addDaysIso, newRequestId, reservationKeys } from '../../lib/reservations.js';
-import { useHotelSettings, useHotelToday } from '../../lib/useHotel.js';
+import { useHotelContext, useHotelToday } from '../../lib/useHotel.js';
 import { validateWith } from '../../lib/validate.js';
 import { toastError, toastSuccess } from '../../store/toast.js';
 import { useRoomTypes } from '../rooms/useRoomTypes.js';
@@ -68,7 +68,7 @@ export function NewReservationTab() {
   const canOverridePrice = can(PERMISSIONS.RESERVATIONS_PRICE_OVERRIDE);
   const canSeeApprovals = can(PERMISSIONS.APPROVALS_VIEW);
   const { today } = useHotelToday();
-  const hotel = useHotelSettings().data;
+  const hotel = useHotelContext().data;
   const defaultBoard = hotel?.defaultBoardType ?? 'BB';
   const { roomTypes } = useRoomTypes();
   const [params] = useSearchParams();

@@ -22,7 +22,7 @@ import { agencyBonusKeys, formatQuantity, formatScore } from '../../lib/agencyBo
 import { addTier, describeTiers, formOf, payloadOf, previewPayloadOf, removeTier, tierErrorsByRow } from '../../lib/agencyBonusForm.js';
 import { apiPatch, apiPost } from '../../lib/api.js';
 import { formatMoney } from '../../lib/format.js';
-import { useHotelSettings } from '../../lib/useHotel.js';
+import { useHotelContext } from '../../lib/useHotel.js';
 import { validateWith } from '../../lib/validate.js';
 import { toastError, toastSuccess } from '../../store/toast.js';
 import { useRoomTypes } from '../rooms/useRoomTypes.js';
@@ -63,7 +63,7 @@ function Section({ title, hint, children }) {
  */
 export function BonusRuleForm({ rule, defaultAgency = null, onSaved, onCancel }) {
   const queryClient = useQueryClient();
-  const hotel = useHotelSettings();
+  const hotel = useHotelContext();
   const currency = hotel.data?.currency ?? '';
   const { roomTypes } = useRoomTypes();
   // Formun dayandığı sürüm: canlı tazeleme yeni sürümü getirse de kayıt bu sürümle gider.

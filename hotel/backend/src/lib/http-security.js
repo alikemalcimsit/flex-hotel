@@ -161,6 +161,31 @@ export function rateLimitKey(request) {
 }
 
 /**
+ * Yolunda sır taşıyan oturumsuz uçlar: misafirin oda servisi bağlantısı (modül 41) ve kanalın okuduğu iCal takvimi
+ * (modül 33). Belirteç bağlantının kendisidir; istek günlüğüne açık yazılırsa günlüğü okuyan misafir adına sipariş
+ * verebilir / takvimi okuyabilirdi.
+ */
+const SECRET_PATHS = Object.freeze([/^(\/public\/room-service\/)[^/?#]+/, /^(\/channel-ical\/)[^/?#]+/]);
+
+/**
+ * İstek adresindeki belirteci maskeler ("/public/room-service/***\/orders").
+ * @param {string | undefined} url
+ */
+export function maskSecretPath(url) {
+  if (!url) return url;
+  for (const pattern of SECRET_PATHS) if (pattern.test(url)) return url.replace(pattern, '$1***');
+  return url;
+}
+
+/**
+ * Fastify'ın istek günlüğü (pino `req` serileştiricisi): varsayılanla aynı alanlar, adres maskeli.
+ * @param {{ method: string, url: string, hostname?: string, ip?: string, socket?: { remotePort?: number } }} request
+ */
+export function requestLogSerializer(request) {
+  return { method: request.method, url: maskSecretPath(request.url), hostname: request.hostname, remoteAddress: request.ip, remotePort: request.socket?.remotePort };
+}
+
+/**
  * Socket bağlantısının istemci IP'si — Fastify'ın `request.ip` hesabıyla
  * birebir aynı kural (`TRUST_PROXY`, aynı kütüphane). Web chat balonu herkese
  * açık; hız sınırı gerçek IP'ye göre işlemeli, nginx'in adresine göre değil.

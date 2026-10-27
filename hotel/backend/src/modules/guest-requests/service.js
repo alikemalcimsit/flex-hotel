@@ -614,67 +614,80 @@ export async function updateRequest(hotelId, requestId, input) {
  * @param {{ status: string, note?: string | null, expectedUpdatedAt: Date }} input
  */
 export async function changeRequestStatus(hotelId, requestId, input) {
-  const updated = await writeWithEvents(async (tx, stage) => {
-    if (!(await lockGuestRequests(tx, hotelId, [requestId])).has(requestId)) {
-      throw new NotFoundError('İstek bulunamadı');
-    }
-    const before = await tx.guestRequest.findFirst({ where: { id: requestId, hotelId } });
-    if (before.updatedAt.getTime() !== input.expectedUpdatedAt.getTime()) throw new StaleWriteError();
-
-    const transitionError = guestRequestTransitionError(before.status, input.status);
-    if (transitionError) throw new ConflictError(transitionError, 'INVALID_TRANSITION');
-    if (before.status === input.status) return tx.guestRequest.findFirst({ where: { id: requestId }, include: REQUEST_INCLUDE });
-
-    const now = new Date();
-    const actor = currentActor();
-    const data = { status: input.status };
-
-    if (input.status === 'IN_PROGRESS') {
-      data.startedAt = before.startedAt ?? now;
-      if (!before.assignedToId) {
-        const staff = await currentStaff(tx, hotelId);
-        if (staff) data.assignedToId = staff.id;
-      }
-    }
-    if (input.status === 'DONE') {
-      Object.assign(data, { completedAt: now, completedBy: actor, resolutionNote: input.note || null });
-    }
-    if (input.status === 'CANCELLED') {
-      data.cancelledReason = input.note;
-    }
-    if (input.status === 'OPEN' && before.status === 'IN_PROGRESS') {
-      // "Başlatmayı geri al": iş hâlâ aynı iş, süre kaldığı yerden akar. Süreyi
-      // sıfırlamak başlat/geri al ile gecikmeyi gizlemeye izin verirdi.
-      data.startedAt = null;
-    } else if (input.status === 'OPEN') {
-      // Kapanmış işin yeniden açılması: misafir yeniden bekliyor, süre baştan.
-      Object.assign(data, {
-        startedAt: null,
-        completedAt: null,
-        completedBy: null,
-        resolutionNote: null,
-        cancelledReason: null,
-        dueAt:
-          before.scheduledFor && before.scheduledFor > now
-            ? before.scheduledFor
-            : guestRequestDueAt({ priority: before.priority, createdAt: now }),
-        overdueAlertedAt: null,
-      });
-    }
-
-    const after = await tx.guestRequest.update({ where: { id: requestId }, data, include: REQUEST_INCLUDE });
-    const changedFields = await recordAudit(tx, {
-      hotelId,
-      entity: 'GuestRequest',
-      entityId: requestId,
-      action: 'UPDATE',
-      before: snapshot(before),
-      after: snapshot(after),
-    });
-    await stage('guest.request.updated', { hotelId, requestId, status: after.status, changedFields });
-    return after;
-  });
+  const updated = await writeWithEvents((tx, stage) => applyRequestStatus(tx, stage, hotelId, requestId, input));
   return toRequestDto(updated, new Date());
+}
+
+/**
+ * İsteğin durumunu açık bir transaction içinde değiştirir (kilit, geçiş kuralı, denetim izi, olay). Ekranın
+ * isteği sürümle gelir; başka modülün akışı (oda servisi siparişi teslim / iptal, modül 41) sürümsüz çağırır —
+ * istek satırı kilitli olduğundan son durum üzerinden karar verilir.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {Function} stage
+ * @param {string} hotelId
+ * @param {string} requestId
+ * @param {{ status: string, note?: string | null, expectedUpdatedAt?: Date | null }} input
+ */
+export async function applyRequestStatus(tx, stage, hotelId, requestId, input) {
+  if (!(await lockGuestRequests(tx, hotelId, [requestId])).has(requestId)) {
+    throw new NotFoundError('İstek bulunamadı');
+  }
+  const before = await tx.guestRequest.findFirst({ where: { id: requestId, hotelId } });
+  if (input.expectedUpdatedAt && before.updatedAt.getTime() !== input.expectedUpdatedAt.getTime()) throw new StaleWriteError();
+
+  const transitionError = guestRequestTransitionError(before.status, input.status);
+  if (transitionError) throw new ConflictError(transitionError, 'INVALID_TRANSITION');
+  if (before.status === input.status) return tx.guestRequest.findFirst({ where: { id: requestId }, include: REQUEST_INCLUDE });
+
+  const now = new Date();
+  const actor = currentActor();
+  const data = { status: input.status };
+
+  if (input.status === 'IN_PROGRESS') {
+    data.startedAt = before.startedAt ?? now;
+    if (!before.assignedToId) {
+      const staff = await currentStaff(tx, hotelId);
+      if (staff) data.assignedToId = staff.id;
+    }
+  }
+  if (input.status === 'DONE') {
+    Object.assign(data, { completedAt: now, completedBy: actor, resolutionNote: input.note || null });
+  }
+  if (input.status === 'CANCELLED') {
+    data.cancelledReason = input.note;
+  }
+  if (input.status === 'OPEN' && before.status === 'IN_PROGRESS') {
+    // "Başlatmayı geri al": iş hâlâ aynı iş, süre kaldığı yerden akar. Süreyi
+    // sıfırlamak başlat/geri al ile gecikmeyi gizlemeye izin verirdi.
+    data.startedAt = null;
+  } else if (input.status === 'OPEN') {
+    // Kapanmış işin yeniden açılması: misafir yeniden bekliyor, süre baştan.
+    Object.assign(data, {
+      startedAt: null,
+      completedAt: null,
+      completedBy: null,
+      resolutionNote: null,
+      cancelledReason: null,
+      dueAt:
+        before.scheduledFor && before.scheduledFor > now
+          ? before.scheduledFor
+          : guestRequestDueAt({ priority: before.priority, createdAt: now }),
+      overdueAlertedAt: null,
+    });
+  }
+
+  const after = await tx.guestRequest.update({ where: { id: requestId }, data, include: REQUEST_INCLUDE });
+  const changedFields = await recordAudit(tx, {
+    hotelId,
+    entity: 'GuestRequest',
+    entityId: requestId,
+    action: 'UPDATE',
+    before: snapshot(before),
+    after: snapshot(after),
+  });
+  await stage('guest.request.updated', { hotelId, requestId, status: after.status, changedFields });
+  return after;
 }
 
 /**

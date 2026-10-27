@@ -10,7 +10,7 @@ import { formatDate } from '../../lib/format.js';
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 import { addDaysIso, reservationKeys } from '../../lib/reservations.js';
 import { RESERVATIONS_CHANNEL } from '../../lib/socket.js';
-import { useHotelSettings, useHotelToday } from '../../lib/useHotel.js';
+import { useHotelContext, useHotelToday } from '../../lib/useHotel.js';
 import { useLiveChannel } from '../../lib/useLiveChannel.js';
 import { validateWith } from '../../lib/validate.js';
 import { toastError, toastSuccess } from '../../store/toast.js';
@@ -197,7 +197,7 @@ export function WaitlistTab() {
 /** @param {{ onClose: () => void, onAdded: (entry: object) => void }} props */
 function AddWaitlistDialog({ onClose, onAdded }) {
   const { today } = useHotelToday();
-  const hotel = useHotelSettings().data;
+  const hotel = useHotelContext().data;
   const { options: roomTypeOptions } = useRoomTypes();
   const [form, setForm] = useState({
     firstName: '',

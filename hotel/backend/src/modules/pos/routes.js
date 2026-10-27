@@ -47,6 +47,7 @@ import { withHotelContext } from '../../lib/tenant.js';
 import * as checks from './checks.js';
 import * as payments from './payments.js';
 import * as reports from './reports.js';
+import { roomServiceRoutes } from './room-service-routes.js';
 import * as setup from './setup.js';
 import * as shifts from './shifts.js';
 
@@ -272,4 +273,8 @@ export async function posRoutes(app) {
   app.put('/settings', { ...configure, schema: { body: updatePosSettingsSchema } }, async (request) =>
     ok(await setup.updateSettings(request.hotelId, request.body)),
   );
+
+  /* ── Oda servisi (modül 41) ── */
+
+  await app.register(roomServiceRoutes, { prefix: '/room-service' });
 }

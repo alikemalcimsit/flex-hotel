@@ -5,6 +5,7 @@ import { Card, Input } from '@hotelos/ui';
 import { FormActions } from '../../components/FormActions.jsx';
 import { QueryFallback } from '../../components/QueryFallback.jsx';
 import { api, apiPut } from '../../lib/api.js';
+import { HOTEL_CONTEXT_KEY, HOTEL_QUERY_KEY } from '../../lib/useHotel.js';
 import { validateWith } from '../../lib/validate.js';
 import { toastError, toastSuccess } from '../../store/toast.js';
 
@@ -25,7 +26,7 @@ export function HotelInfoTab() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [errors, setErrors] = useState({});
 
-  const hotelQuery = useQuery({ queryKey: ['settings', 'hotel'], queryFn: () => api('/settings/hotel') });
+  const hotelQuery = useQuery({ queryKey: HOTEL_QUERY_KEY, queryFn: () => api('/settings/hotel') });
   const hotel = hotelQuery.data;
 
   // Sunucudan veri gelince (veya sürüm çakışması sonrası tazelenince) formu ona eşitle.
@@ -48,7 +49,8 @@ export function HotelInfoTab() {
   const saveMutation = useMutation({
     mutationFn: (values) => apiPut('/settings/hotel', values),
     onSuccess: (updated) => {
-      queryClient.setQueryData(['settings', 'hotel'], updated);
+      queryClient.setQueryData(HOTEL_QUERY_KEY, updated);
+      queryClient.invalidateQueries({ queryKey: HOTEL_CONTEXT_KEY });
       toastSuccess('Otel bilgileri kaydedildi');
     },
     onError: (error) => {
@@ -57,7 +59,7 @@ export function HotelInfoTab() {
       if (error.fields) setErrors(error.fields);
       // İş kuralı tek bir alana bağlıysa (ör. kayıt varken para birimi) o alanın altında da görünsün.
       if (error.details?.field) setErrors((current) => ({ ...current, [error.details.field]: error.message }));
-      if (error.code === 'STALE_WRITE') queryClient.invalidateQueries({ queryKey: ['settings', 'hotel'] });
+      if (error.code === 'STALE_WRITE') queryClient.invalidateQueries({ queryKey: HOTEL_QUERY_KEY });
     },
   });
 

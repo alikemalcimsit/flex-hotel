@@ -37,13 +37,13 @@ const ADJUSTMENT_REASONS = Object.freeze({
 });
 
 /** Sunucu hatasının alanlarını forma işler. @param {(errors: any) => void} setErrors */
-const onFailure = (setErrors) => (error) => {
+export const onFailure = (setErrors) => (error) => {
   if (error.fields) setErrors(error.fields);
   toastError(error.message);
 };
 
 /** @param {{ id: string, title: string, busy: boolean, onClose: () => void, submitLabel: string, icon?: string, variant?: 'primary' | 'danger', children: React.ReactNode, onSubmit: (event: any) => void, size?: 'sm' | 'md' }} props */
-function FormDialog({ id, title, busy, onClose, submitLabel, icon = 'check', variant = 'primary', children, onSubmit, size = 'sm' }) {
+export function FormDialog({ id, title, busy, onClose, submitLabel, icon = 'check', variant = 'primary', children, onSubmit, size = 'sm' }) {
   return (
     <Modal
       open

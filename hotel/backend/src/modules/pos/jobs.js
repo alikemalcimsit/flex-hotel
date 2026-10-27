@@ -4,6 +4,7 @@ import { PERMISSIONS } from '../../lib/permissions.js';
 import { startRecurringJobs } from '../../lib/recurring.js';
 import { writeWithEvents } from '../../lib/write.js';
 import { raiseStaffAlert } from '../notifications/staff-alerts.js';
+import { ROOM_SERVICE_SWEEP_INTERVAL_MS, runRoomServiceSweep } from './room-service-jobs.js';
 import { iso, prisma } from './shared.js';
 
 /**
@@ -113,5 +114,9 @@ export async function runPosSweep(logger) {
  * @returns {() => void}
  */
 export function startPosJobs(logger) {
-  return startRecurringJobs(logger, [{ name: 'pos-sweep', intervalMs: SWEEP_INTERVAL_MS, run: () => runPosSweep(logger) }]);
+  return startRecurringJobs(logger, [
+    { name: 'pos-sweep', intervalMs: SWEEP_INTERVAL_MS, run: () => runPosSweep(logger) },
+    // Oda servisi (modül 41): planlı siparişin mutfağa düşmesi dakika hassasiyetinde.
+    { name: 'room-service-sweep', intervalMs: ROOM_SERVICE_SWEEP_INTERVAL_MS, run: () => runRoomServiceSweep(logger) },
+  ]);
 }

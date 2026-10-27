@@ -2446,12 +2446,106 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 - [ ] Ekran: Kart butonları (Başla / Hazır), istasyon filtresi (sıcak / soğuk / bar)
 - [ ] Ekran: Garson tarafında "hazır" bildirimi
 
+> **📌 Ali için not (41'den, Ahmet):** oda servisi turları da `fnb.order.placed` ile gelir; yükte yeni, isteğe bağlı iki alan var:
+> `roomNumber` (teslim edilecek oda) ve `deliverAt` (istenen teslim anı; hemen ise boş) — kartta "Oda 412 · 07:30" gösterilebilir.
+> Oda servisi siparişinin adımı (`pos/room-service.js` → `advanceOrder`) adisyonun turlarını **yalnızca ileri** taşır
+> (`NEW → PREPARING → READY`, teslimde `SERVED`); KDS de ilerletirse çakışmaz. İptal edilen oda servisi siparişinin kalemleri iptal
+> düzeltmesiyle düşer, tur durumu değişmez — KDS tamamen iptal edilmiş turu göstermemeli. Tepsi ücreti kalemi istasyonu `NONE`
+> (mutfağa gitmez). Planlı (kahvaltı) sipariş zamanı gelene kadar **tur yazılmaz**; mutfak ekranı yalnızca düşmüş turu görür.
+
 ### 41. Oda servisi — arkadaşın
 **Gün sonu:** Odaya sipariş giriliyor, mutfağa düşüyor, teslim edilince folyoya yazılıyor.
-- [ ] Backend: Order'a `roomId` + teslim durumu; `fnb.order.charged` → folyo
-- [ ] Ekran: Oda servisi sipariş formu (oda, ürünler, not, teslim saati)
-- [ ] Ekran: Teslim listesi (hazır siparişler, teslim edildi)
-- [ ] Misafir tarafı: QR menüden sipariş (53 ile birleşir)
+- [x] Backend: Order'a `roomId` + teslim durumu; `fnb.order.charged` → folyo
+- [x] Ekran: Oda servisi sipariş formu (oda, ürünler, not, teslim saati)
+- [x] Ekran: Teslim listesi (hazır siparişler, teslim edildi)
+- [x] Misafir tarafı: QR menüden sipariş (53 ile birleşir) — **kullanıcı kararı:** imzalı bağlantı, QR, misafir uçları ve sözleşme
+  burada; misafirin gördüğü sayfa 53'te
+
+> **📌 Modül 41 tamamlandı (27 Ekim 2026 — Ahmet).**
+>
+> **Kararlar (kullanıcı):** sipariş başına **sabit tepsi ücreti** (politika; 0 = yok; adisyonda ayrı "Oda servisi ücreti" kalemi,
+> vergisi FNB, şef garson ikram edebilir); teslimde varsayılan **odaya yaz**, misafir isterse **kapıda nakit / kart** (götürenin
+> kasasına, bölünebilir); misafir QR: **uç + sözleşme şimdi, sayfa 53'te**; ek kapsam: **tepsi toplama takibi**, **istekten
+> siparişe** (modül 7), **kahvaltı kartı** (ileri saatli toplu sipariş + hazırlık listesi). QR görseli için kütüphane:
+> `qrcode-generator` (MIT, bağımlılıksız; bağımsız çözümleyiciyle — jsQR — gerçek uzunlukta bağlantı okundu).
+>
+> **Veri** (migration `20261025090000_room_service`): `PosOutlet.kind` (salon / **oda servisi** — masasız, odaya yazmaya açık;
+> CHECK), `MenuItem.system` + gizli sistem grubu (tepsi ücreti; tanım ekranında ve terminalde görünmez, düzenlenmez), politika
+> alanları (tepsi ücreti, teslim hedefi, hazırlık payı, tepsi uyarısı, misafir siparişi açık mı), **`RoomServiceOrder`** (OS-yıl-sıra;
+> kaynak personel / misafir QR / misafir isteği; durum REQUESTED → SCHEDULED → RECEIVED → PREPARING → READY → ON_THE_WAY →
+> DELIVERED, CANCELLED / REJECTED; adisyon 1:1; kalem kopyası JSON; teslim hedefi; adım damgaları ve götüren; tepsi; uyarı damgaları;
+> durum izi CHECK'leri), **`RoomServiceLink`** (konaklama + oda, rastgele değer; konaklamada tek geçerli bağlantı — kısmi tekil
+> index). İstek başına aynı anda tek bitmemiş sipariş (kısmi tekil index; teslimden sonra yeniden açılan istek yeniden çevrilir). İndeksler: pano (durum + hedef), planlı (durum + düşme anı), hazırlık
+> (teslim anı), tepsi (kısmi), geçmiş (tarih), oda numarası, numara ve misafir adı (trigram).
+>
+> **Kurallar** (contracts `room-service.js` + `pos/room-service-rules.js`, birim testli): geçişler (mutfak adımları atlanabilir, yoldan
+> hazıra geri), zamanlama (hemen: düşüş + hedef; ileri saatli: teslim − hazırlık payında düşer, o an geçmişse hemen), istenen anın
+> sınırları (≥ 10 dk, ≤ 3 gün, çıkış gününden sonra değil), süreler (mutfak / bekleme / yol / toplam, zamanında mı), **tepsi takibi
+> 24 saatlik pencere** (sonrası oda temizliğiyle toplanmış sayılır; liste sonsuza büyümez), kapı ödemesi planı (fazla / ödenmemiş
+> kalan reddedilir), planlı siparişin düşeceği vardiya (girenin, yoksa oda servisi noktasının en erken açılmış vardiyası), hazırlık
+> listesi (15 dk aralık, ürün toplamı; notlu kalem ayrı). Saatler formda **otelin duvar saati** (tarayıcının dilimi yanlışsa kayma yok).
+>
+> **Akış ve eşzamanlılık:** kilit sırası vardiya → adisyon → sipariş → rezervasyon → istek / bağlantı (`locks.js`). Mutfağa düşüş
+> (hemen sipariş, kabul, planlının zamanı) masasız adisyon + tur + tepsi ücreti kalemi açar; restoranın tur yazımı ortak çekirdeğe
+> alındı (`addOrderRound`), ödeme / odaya yaz da (`takePayment`, `postRoomCharge`). **Teslim tek transaction:** kapı ödemeleri +
+> kalanın odaya yazılması + adisyonun kapanması + turların servis edildisi + isteğin tamamlanması. Teslimden önce adisyon ekranında
+> ödeme / odaya yaz / kapat yok; oda servisi adisyonu bölünmez, taşınmaz, birleşmez (`room-service-guards.js`); tur eklenebilir (hazır
+> sipariş mutfağa döner, yoldakine eklenmez). İptal: mutfak başladıysa şef garson ve zayi; planlı adisyonsuz. Kabulde kalemler
+> değiştirilebilir (tükenen ürün), misafir sipariş verdikten sonra oda değiştirdiyse düşüşte **şimdiki oda** yazılır. Personel
+> işlemleri sürümle; istek kimliğiyle çift dokunuşta tek kayıt (teslim dahil). Dakikalık iş: zamanı gelen planlıyı düşürür (vardiya
+> yoksa bir kez uyarı), konaklaması bitenin mutfağa düşmemişini iptal eder / mutfaktaki için uyarı, 5 dk kabul bekleyen misafir
+> siparişi, gecikme, toplanmayan tepsi — her sipariş her uyarıyı bir kez alır (damga ham SQL'le: ekrandaki sürüm bozulmaz).
+>
+> **Misafir QR:** bağlantı `/misafir/oda-servisi/<kimlik>.<imza>` — imza JWT sırrından türetilen anahtarla HMAC (veritabanı okunsa da
+> üretilemez); yenileme / iptal eskisini öldürür; **oda değişince ve çıkışta kendiliğinden geçersiz**. Uçlar oturumsuz
+> (`/public/room-service/:token` menü, `/orders` durum, `POST /orders` sipariş, `POST /orders/:id/cancel` kabulden önce iptal); IP başına
+> hız sınırı (dakikada menü 60, durum 120, yazma 10), önbelleksiz, yönlendirmede belirteç sızmaz; misafir siparişi politikada açıksa,
+> konaklamada en fazla 3 açık, kabul bekler; kimse kabul etmezse teslim hedefini 30 dk aşınca kendiliğinden reddedilir (misafir
+> "zamanında kabul edilemedi; oda servisini arayın" görür, şef garsona bilgi). İşlem kaydına "misafir · oda …" yazılır. Personelin
+> zili: yeni misafir siparişi.
+>
+> **Olaylar:** ekran `pos.room_service.changed` (`pos.changed` kanalı); mutfak `fnb.order.placed` (+ `roomNumber`, `deliverAt`); folyo
+> `fnb.order.charged` (kalem adı "Oda Servisi · OS-…"); stok `fnb.order.paid` (iptalde zayi). İstek `guest.request.updated`.
+>
+> **API** (`/pos/room-service`): pano, sipariş (liste: durum grubu / kaynak / gün / arama; ekran; aç; kabul; ret; mutfağa gönder; adım;
+> teslim; iptal), hazırlık listesi, tepsiler + toplu toplama, rapor (≤ 31 gün), konaklamanın bağlantısı (oku / ver-yenile / iptal).
+> İzinler: `pos.operate` (sipariş, adım, teslim), `pos.supervise` (mutfaktakini iptal), `pos.report` (rapor), tepsi ve bağlantı için
+> `pos.operate` ya da `requests.manage` (kat hizmetleri, ön büro).
+>
+> **Ekran:** Restoran → **Oda servisi** (pano: onay bekleyen / mutfakta / hazır / yolda, hedefe kalan süre ve gecikme, planlı ve tepsi
+> sayaçları, vardiya çubuğu; hazırlık listesi — yarın varsayılan, yazdırılır; geçmiş; rapor), yeni sipariş (konaklama araması, menü,
+> hemen / ileri saat — yarın sabah kısayolları, tepsi, not; istekten açılınca dolu), sipariş ekranı (zaman izi, hesap, teslim fişi,
+> işlemler, QR), teslim penceresi (kapıda nakit / kart, para üstü, kalan odaya önizlemesi), **Toplanacak tepsiler** (menüde; kat
+> görevlisi de), istek detayında **Siparişe çevir**, rezervasyonda **Oda servisi bağlantısı** (QR + basılı oda kartı), tanımlarda
+> nokta türü ve oda servisi politikası. Adisyon ekranı oda servisi adisyonunu tanır (bant, gizlenen işlemler).
+>
+> **Ölçüm** (`scripts/perf-room-service.mjs`; ≈219.600 sipariş, 110 açık, 400 kahvaltı kartı, 120 tepsi; restoranın 587.000 adisyonu
+> üstünde): pano 25 ms, sipariş ekranı 7 ms, geçmiş 31 ms (derin sayfa 3000: 53 ms), oda / numara / ad araması 12 / 8 / 17 ms,
+> hazırlık listesi (400) 40 ms, tepsi listesi 10 ms, rapor bugün 9 ms / 31 gün 28 ms, dakikalık iş 8 ms, misafir menüsü 18 ms,
+> misafir siparişi 58 ms, sipariş → hazır → yolda → teslim (kapıda + odaya) 384 ms. Ölçümle düzeltilenler: tepsi listesinin sınırsız
+> büyümesi (24 saat penceresi; pano 92 → 25 ms, iş 119 → 8 ms), raporda ciro sorgusunun 1,7 milyon kalem / 587.000 adisyonu taraması
+> (ciro kapanış iş gününe göre, satış raporuyla aynı taban; 480 → 28 ms).
+>
+> **Testler:** contracts oda servisi (geçiş, zamanlama, sınırlar, süreler, tepsi penceresi, şemalar), backend kuralları, ön yüz
+> yardımcıları + QR + fişler; entegrasyon 11 senaryo (tanımlar, hemen sipariş → folyo birebir, kapı ödemesi, planlı + zamanlayıcı +
+> gece oda değişikliği, misafir QR + imza + sınır + hız sınırı + eşzamanlı siparişler, istekten siparişe, iptal / zayi / tur ekleme,
+> uyarılar + tepsi, geçmiş + rapor, izinler + otel kapsamı + eşzamanlı teslim / kabul-ret). Demo: son 7 gün, bugünün panosu, yarının
+> kahvaltı kartları, misafir QR siparişi, siparişe çevrilmiş istek.
+>
+> **Yan düzeltmeler:** (1) Ekranların otel bağlamı yeni uçtan: `GET /settings/hotel/context` (ad, kod, para birimi, saat dilimi,
+> varsayılan pansiyon, bugün) oturum açmış her personele açık; `useHotelToday`, kabuk, ana sayfa ve dokuz ekran buna geçti. Tam otel
+> kaydı yalnız ayar yetkilisine açık olduğundan F&B, kat hizmetleri ve ön büro her sayfada 403 alıyor, saatleri **tarayıcının saat
+> dilimiyle** görüyordu (oda servisinin kahvaltı saatleri için kritik). (2) İstek günlüğünde yoldaki belirteç maskelenir (oda servisi
+> bağlantısı, kanal iCal'i). (3) Adisyon toplam kartında eksik React anahtarı.
+>
+> **53 için (misafir sayfası):** yol `ROOM_SERVICE_GUEST_PATH` (`/misafir/oda-servisi/:token`); veri `GET /public/room-service/:token`
+> (otel, oda, misafirin adı, sipariş açık mı, tepsi ücreti, teslim hedefi, oda servisi noktalarının menüsü, son 24 saatin
+> siparişleri), durum için `GET …/orders` (sık tazeleme), sipariş `POST …/orders` (`publicRoomServiceOrderSchema`; teslim saati otelin
+> duvar saati), iptal `POST …/orders/:id/cancel`. Hata kodları: `LINK_EXPIRED` (yenilenmiş / oda değişmiş / çıkış), `GUEST_ORDERING_CLOSED`,
+> `GUEST_ORDER_LIMIT`, 404 (bağlantı yok), 429 (hız). QR üretimi `lib/qr.js` (`qrSvg`).
+>
+> **44 için (stok, Ali):** `fnb.order.paid` kalemlerinde tepsi ücreti (`MenuItem.system = TRAY_CHARGE`) de satılmış görünür; reçetesi
+> yoktur, stok düşümünde sistem ürünleri atlanmalı.
 
 ### 42. Online paket sipariş — Ali Kemal
 **Gün sonu:** Dışarıdan gelen paket siparişler aynı POS zincirinden geçiyor; kurye ataması ve teslim takibi var.
@@ -2570,7 +2664,8 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 **Gün sonu:** Misafir gelmeden telefonundan check-in yapıyor, QR ile menüden sipariş veriyor, portalda folyosunu görüyor.
 - [ ] Backend: OnlineCheckin, GuestPortalSession tabloları; token'lı public linkler
 - [ ] Misafir portalı (ayrı küçük React app): rezervasyonum, online check-in formu (kimlik, imza, kart), folyom, istek gönder, chat (8)
-- [ ] QR menü sayfası (38'deki menü JSON'u; sipariş → 41)
+- [ ] QR menü sayfası (38'deki menü JSON'u; sipariş → 41) — **41'den hazır:** imzalı bağlantı + QR, misafir uçları ve sözleşme
+  (bkz. 41 notu "53 için"); burada yalnızca misafirin gördüğü sayfa yapılır
 - [ ] Ekran (personel): online check-in yapanlar listesi, onayla → 6'daki check-in
 - [ ] Dijital anahtar butonu (62 tamamlanınca aktif)
 

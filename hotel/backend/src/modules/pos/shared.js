@@ -21,7 +21,16 @@ export const optionalMoney = (value) => (value === null || value === undefined ?
 export const dateOnly = (text) => new Date(`${text}T00:00:00.000Z`);
 
 /** Politika satırı yokken geçerli değerler (migration'daki varsayılanlarla aynı). */
-export const DEFAULT_POS_SETTINGS = Object.freeze({ adjustmentApprovalAmount: '1000.00', cashVarianceAlert: '100.00', updatedAt: null });
+export const DEFAULT_POS_SETTINGS = Object.freeze({
+  adjustmentApprovalAmount: '1000.00',
+  cashVarianceAlert: '100.00',
+  trayCharge: '0.00',
+  deliveryTargetMinutes: 30,
+  prepLeadMinutes: 30,
+  trayAlertMinutes: 90,
+  guestOrderingEnabled: false,
+  updatedAt: null,
+});
 
 /**
  * Otelin para birimi, saat dilimi ve iş günü.
@@ -40,7 +49,16 @@ export async function hotelContext(hotelId) {
 export async function loadPosSettings(client, hotelId) {
   const row = await client.posSettings.findFirst({ where: { hotelId } });
   if (!row) return { ...DEFAULT_POS_SETTINGS };
-  return { adjustmentApprovalAmount: money(row.adjustmentApprovalAmount), cashVarianceAlert: money(row.cashVarianceAlert), updatedAt: iso(row.updatedAt) };
+  return {
+    adjustmentApprovalAmount: money(row.adjustmentApprovalAmount),
+    cashVarianceAlert: money(row.cashVarianceAlert),
+    trayCharge: money(row.trayCharge),
+    deliveryTargetMinutes: row.deliveryTargetMinutes,
+    prepLeadMinutes: row.prepLeadMinutes,
+    trayAlertMinutes: row.trayAlertMinutes,
+    guestOrderingEnabled: row.guestOrderingEnabled,
+    updatedAt: iso(row.updatedAt),
+  };
 }
 
 /**

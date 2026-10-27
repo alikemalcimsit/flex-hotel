@@ -3,7 +3,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useManualTaskBadge } from '../lib/actors.js';
 import { useApprovalBadge } from '../lib/approvals.js';
 import { useFrontOfficeBadges } from '../lib/frontOffice.js';
-import { useHotelSettings } from '../lib/useHotel.js';
+import { useHotelContext } from '../lib/useHotel.js';
 import { useAuthStore } from '../store/auth.js';
 import { useUiStore } from '../store/ui.js';
 import { ROLE_LABELS } from './navigation.js';
@@ -38,7 +38,7 @@ export function AppLayout() {
   const menuButtonRef = useRef(null);
   const drawerFirstLinkRef = useRef(null);
 
-  const hotelQuery = useHotelSettings();
+  const hotelQuery = useHotelContext();
   const frontOfficeBadges = useFrontOfficeBadges();
   const approvals = useApprovalBadge();
   const tasks = useManualTaskBadge();
