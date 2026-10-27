@@ -448,6 +448,8 @@ function PolicySection() {
         requireSignedContract: settings.data.requireSignedContract,
         cancellationTiers: settings.data.cancellationTiers.map((tier) => ({ daysBefore: String(tier.daysBefore), feePct: tier.feePct })),
         contractTerms: settings.data.contractTerms ?? '',
+        overproductionPct: settings.data.overproductionPct,
+        menuFinalizeDays: String(settings.data.menuFinalizeDays),
       });
     }
   }, [settings.data, values]);
@@ -527,6 +529,18 @@ function PolicySection() {
             ))}
           </ul>
         )}
+      </Card>
+      <Card title="Banket mutfağı" description="Menü porsiyonu, malzeme ihtiyacı ve üretim planı bu ayarlarla hesaplanır.">
+        <fieldset disabled={!canSetup || busy} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="flex flex-col gap-1">
+            <Input label="Fazla hazırlık payı (%)" name="policy-overproduction" inputMode="decimal" value={values.overproductionPct} onChange={set('overproductionPct')} error={errors.overproductionPct} />
+            <p className="text-xs text-ink-muted">Mutfak garanti kişinin üstüne bu kadar fazla hazırlar (sektörde %3–5); faturaya girmez.</p>
+          </div>
+          <div className="flex flex-col gap-1">
+            <Input label="Menü kesinleştirme (etkinlikten kaç gün önce)" name="policy-menu-final" type="number" min={0} value={values.menuFinalizeDays} onChange={set('menuFinalizeDays')} error={errors.menuFinalizeDays} />
+            <p className="text-xs text-ink-muted">Bu süre kala kesinleşmemiş menü sorumluya hatırlatılır; 0 = hatırlatma yok.</p>
+          </div>
+        </fieldset>
       </Card>
       <Card title="Sözleşme şartları" description="Sözleşme PDF'inin sonunda basılır.">
         <Textarea label="Şartlar" name="policy-terms" rows={8} maxLength={MAX_CONTRACT_TERMS_LENGTH} value={values.contractTerms} onChange={set('contractTerms')} error={errors.contractTerms} disabled={!canSetup || busy} />

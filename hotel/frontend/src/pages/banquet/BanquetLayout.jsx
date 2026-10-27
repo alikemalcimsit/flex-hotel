@@ -74,6 +74,9 @@ export function BanquetLayout() {
         tabs={[
           { to: '/etkinlikler', label: 'Dosyalar', icon: 'list', end: true },
           { to: '/etkinlikler/takvim', label: 'Salon takvimi', icon: 'calendar' },
+          { to: '/etkinlikler/menuler', label: 'Set menüler', icon: 'utensils' },
+          { to: '/etkinlikler/malzeme', label: 'Malzeme ihtiyacı', icon: 'package' },
+          { to: '/etkinlikler/mutfak-plani', label: 'Mutfak planı', icon: 'clock' },
           { to: '/etkinlikler/tanimlar', label: 'Salon ve tanımlar', icon: 'settings' },
         ]}
       />

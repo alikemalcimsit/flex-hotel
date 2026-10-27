@@ -408,6 +408,54 @@ enum EventItemUnit {
   PACKAGE
 }
 
+/// Mutfak birimi (modül 43): kütle (kg / g), hacim (L / ml), adet, porsiyon (yalnız yemek reçetesinin verimi).
+enum KitchenUnit {
+  KG
+  G
+  L
+  ML
+  PIECE
+  PORTION
+}
+
+/// Malzeme grubu: satın alma listesi bu gruplarla bölünür (kasap, manav, kuru gıda…).
+enum StockItemGroup {
+  MEAT
+  POULTRY
+  SEAFOOD
+  DAIRY
+  PRODUCE
+  DRY_GOODS
+  PANTRY
+  BAKERY
+  BEVERAGE
+  FROZEN
+  OTHER
+}
+
+/// Reçete: yemek (porsiyon verir) ya da ara ürün (sos, fond, hamur — kg / L / adet).
+enum RecipeKind {
+  DISH
+  PREP
+}
+
+/// Menü kursu: hepsi servis edilir (meze, büfe) ya da misafir birini seçer (et / balık / vejetaryen).
+enum MenuCourseMode {
+  ALL
+  CHOICE
+}
+
+/// Satın alma talebi (modül 43'te kuruldu; onay / sipariş durumlarını 45 ekler).
+enum PurchaseRequestStatus {
+  OPEN
+  CANCELLED
+}
+
+/// Talebin kaynağı (elle talep ve stoktan öneriyi 45 ekler).
+enum PurchaseRequestSource {
+  BANQUET
+}
+
 enum EventDocumentKind {
   OFFER
   CONTRACT
@@ -723,6 +771,10 @@ model Hotel {
   roomServiceLinks      RoomServiceLink[]
   posChecks             PosCheck[]
   posPayments           PosPayment[]
+  stockItems            StockItem[]
+  recipes               Recipe[]
+  banquetMenus          BanquetMenu[]
+  purchaseRequests      PurchaseRequest[]
 }
 
 model User {
@@ -3473,6 +3525,10 @@ model EventSettings {
   /// [{ daysBefore, feePct }]: etkinliğe en az N gün kala iptalde bedel yüzdesi.
   cancellationTiers     Json     @default("[]")
   contractTerms         String?
+  /// Banket F&B (modül 43): mutfağın garanti üstüne hazırladığı pay (%) ve menünün etkinlikten kaç gün önce
+  /// mutfağa kesinleşmesi gerektiği (0 = hatırlatma yok).
+  overproductionPct     Decimal  @default(5) @db.Decimal(5, 2)
+  menuFinalizeDays      Int      @default(7)
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
@@ -3537,14 +3593,16 @@ model Event {
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
 
-  hotel        Hotel              @relation(fields: [hotelId], references: [id])
-  client       EventClient        @relation(fields: [clientId], references: [id], onDelete: Restrict)
-  sessions     EventSession[]
-  holds        EventVenueHold[]
-  items        EventItem[]
-  installments EventInstallment[]
-  payments     EventPayment[]
-  documents    EventDocument[]
+  hotel                Hotel                 @relation(fields: [hotelId], references: [id])
+  client               EventClient           @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  sessions             EventSession[]
+  holds                EventVenueHold[]
+  items                EventItem[]
+  installments         EventInstallment[]
+  payments             EventPayment[]
+  documents            EventDocument[]
+  menus                EventMenu[]
+  purchaseRequestLines PurchaseRequestLine[]
 
   @@unique([hotelId, code])
   // Liste: duruma göre / tarihe göre (imleç: id); müşterinin ve sorumlunun etkinlikleri.
@@ -3578,6 +3636,7 @@ model EventSession {
   venue Venue            @relation(fields: [venueId], references: [id], onDelete: Restrict)
   holds EventVenueHold[]
   items EventItem[]
+  menus EventMenu[]
 
   @@index([eventId, startAt])
   @@index([hotelId, venueId, startAt])
@@ -3632,12 +3691,15 @@ model EventItem {
   total          Decimal           @db.Decimal(14, 2)
   taxLines       Json              @default("[]")
   sortOrder      Int
+  /// Menüden gelen kişi başı kalem (modül 43): menü sekmesinde düzenlenir, kalem tablosunda salt okunur.
+  eventMenuId    String?           @unique
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
   event     Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
   session   EventSession?   @relation(fields: [sessionId], references: [id], onDelete: Restrict)
   equipment EventEquipment? @relation(fields: [equipmentId], references: [id], onDelete: Restrict)
+  eventMenu EventMenu?      @relation(fields: [eventMenuId], references: [id], onDelete: Cascade)
 
   @@index([eventId, sortOrder])
   // Ekipman stoku: aynı ekipmanın oturumlardaki ayrımları.
@@ -3915,6 +3977,7 @@ model MenuItem {
   hotel    Hotel          @relation(fields: [hotelId], references: [id])
   category MenuCategory   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   lines    PosOrderLine[]
+  recipe   Recipe?
 
   @@unique([hotelId, code])
   @@unique([categoryId, name])
@@ -4338,4 +4401,285 @@ model RoomServiceLink {
   orders      RoomServiceOrder[]
 
   @@index([reservationId, revokedAt])
+}
+
+/**
+ * ══════════════════ Reçete ve malzeme kartı (modül 38'in reçete kısmı — modül 43) ══════════════════
+ */
+
+/// Malzeme kartı (44'ün stok kartının yalın hâli): stok birimi, güncel birim maliyet (KDV hariç), alerjenler.
+/// Depo / hareket / hareketli ortalama maliyet 44'te bu tabloya eklenir. Silinmez, pasife alınır.
+model StockItem {
+  id            String         @id @default(uuid())
+  hotelId       String
+  code          String?
+  name          String
+  group         StockItemGroup
+  unit          KitchenUnit
+  /// Stok birimi başına, KDV hariç (44 gelince hareketli ortalama maliyet bunu günceller).
+  unitCost      Decimal        @default(0) @db.Decimal(14, 4)
+  costUpdatedAt DateTime?
+  allergens     String[]       @default([])
+  isActive      Boolean        @default(true)
+  createdBy     String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  hotel                Hotel                 @relation(fields: [hotelId], references: [id])
+  recipeLines          RecipeLine[]
+  purchaseRequestLines PurchaseRequestLine[]
+
+  @@unique([hotelId, code])
+  @@index([hotelId, group, name])
+  @@index([hotelId, isActive, name])
+  @@index([name(ops: raw("gin_trgm_ops"))], map: "StockItem_name_trgm_idx", type: Gin)
+}
+
+/// Reçete: verim (porsiyon ya da kg / L / adet), istasyon, servisten önce hazırlık süresi; satırları malzeme
+/// ya da ara reçete. Maliyet saklanmaz, malzemenin güncel birim maliyetinden hesaplanır.
+model Recipe {
+  id            String      @id @default(uuid())
+  hotelId       String
+  code          String?
+  name          String
+  kind          RecipeKind
+  station       PosStation  @default(HOT)
+  /// Restoran menüsündeki ürünü (maliyet / kâr marjı); bir ürünün tek reçetesi olur.
+  menuItemId    String?     @unique
+  yieldQuantity Decimal     @db.Decimal(12, 3)
+  yieldUnit     KitchenUnit
+  /// Servisten (ara üründe: onu kullanan reçetenin başlangıcından) kaç dakika önce hazırlığa başlanır.
+  leadMinutes   Int         @default(0)
+  method        String?
+  isActive      Boolean     @default(true)
+  createdBy     String
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  hotel           Hotel             @relation(fields: [hotelId], references: [id])
+  menuItem        MenuItem?         @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
+  lines           RecipeLine[]      @relation("RecipeLines")
+  usedIn          RecipeLine[]      @relation("RecipeSubRecipe")
+  banquetDishes   BanquetMenuDish[]
+  eventMenuDishes EventMenuDish[]
+
+  @@unique([hotelId, code])
+  @@index([hotelId, kind, isActive, name])
+  @@index([name(ops: raw("gin_trgm_ops"))], map: "Recipe_name_trgm_idx", type: Gin)
+}
+
+/// Reçete satırı: malzeme ya da ara reçete (tam biri); net miktar satırın biriminde, fire yüzdesiyle brüte çıkar.
+model RecipeLine {
+  id          String      @id @default(uuid())
+  hotelId     String
+  recipeId    String
+  sortOrder   Int
+  stockItemId String?
+  subRecipeId String?
+  quantity    Decimal     @db.Decimal(12, 4)
+  unit        KitchenUnit
+  wastePct    Decimal     @default(0) @db.Decimal(5, 2)
+  note        String?
+
+  recipe    Recipe     @relation("RecipeLines", fields: [recipeId], references: [id], onDelete: Cascade)
+  stockItem StockItem? @relation(fields: [stockItemId], references: [id], onDelete: Restrict)
+  subRecipe Recipe?    @relation("RecipeSubRecipe", fields: [subRecipeId], references: [id], onDelete: Restrict)
+
+  @@index([recipeId, sortOrder])
+  @@index([stockItemId])
+  @@index([subRecipeId])
+}
+
+/**
+ * ══════════════════ Banket F&B planlaması (modül 43) ══════════════════
+ */
+
+/// Set menü kataloğu: kurslar ve yemekler, kişi başı fiyat (vergi dahil). Etkinliğe kopyası alınır.
+model BanquetMenu {
+  id             String   @id @default(uuid())
+  hotelId        String
+  code           String?
+  name           String
+  description    String?
+  pricePerPerson Decimal  @db.Decimal(12, 2)
+  taxCategory    String   @default("FNB")
+  /// En az kişi şartı (altında uyarı).
+  minGuests      Int?
+  isActive       Boolean  @default(true)
+  createdBy      String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  hotel      Hotel               @relation(fields: [hotelId], references: [id])
+  courses    BanquetMenuCourse[]
+  eventMenus EventMenu[]
+
+  @@unique([hotelId, code])
+  @@index([hotelId, isActive, name])
+}
+
+model BanquetMenuCourse {
+  id        String         @id @default(uuid())
+  hotelId   String
+  menuId    String
+  name      String
+  mode      MenuCourseMode
+  sortOrder Int
+
+  menu   BanquetMenu       @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  dishes BanquetMenuDish[]
+
+  @@index([menuId, sortOrder])
+}
+
+model BanquetMenuDish {
+  id               String  @id @default(uuid())
+  hotelId          String
+  courseId         String
+  recipeId         String
+  label            String?
+  portionsPerGuest Decimal @default(1) @db.Decimal(6, 3)
+  sortOrder        Int
+
+  course BanquetMenuCourse @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  recipe Recipe            @relation(fields: [recipeId], references: [id], onDelete: Restrict)
+
+  @@index([courseId, sortOrder])
+  @@index([recipeId])
+}
+
+/// Etkinlik menüsü: bir oturumun öğünü (servis anı oturumun içinde). Dosyanın kişi başı fiyat kalemini üretir
+/// (`EventItem.eventMenuId`). Mutfağa kesinleşince değişmez; gerekçeyle yeniden açılır.
+model EventMenu {
+  id             String    @id @default(uuid())
+  hotelId        String
+  eventId        String
+  sessionId      String
+  sourceMenuId   String?
+  name           String
+  serveAt        DateTime
+  /// Boş = etkinliğin faturalanacak kişisi; dolu = bu öğünün kendi kişisi.
+  guests         Int?
+  pricePerPerson Decimal   @db.Decimal(12, 2)
+  discountPct    Decimal   @default(0) @db.Decimal(5, 2)
+  taxCategory    String    @default("FNB")
+  notes          String?
+  sortOrder      Int
+  finalizedAt    DateTime?
+  finalizedBy    String?
+  createdBy      String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  event      Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  session    EventSession      @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  sourceMenu BanquetMenu?      @relation(fields: [sourceMenuId], references: [id], onDelete: SetNull)
+  courses    EventMenuCourse[]
+  dishes     EventMenuDish[]
+  item       EventItem?
+
+  @@index([eventId, serveAt])
+  // İhtiyaç ve üretim planı: otelin servis aralığındaki menüleri.
+  @@index([hotelId, serveAt])
+  @@index([sessionId])
+  @@index([sourceMenuId])
+}
+
+model EventMenuCourse {
+  id          String         @id @default(uuid())
+  hotelId     String
+  eventMenuId String
+  name        String
+  mode        MenuCourseMode
+  sortOrder   Int
+
+  eventMenu EventMenu       @relation(fields: [eventMenuId], references: [id], onDelete: Cascade)
+  dishes    EventMenuDish[]
+
+  @@index([eventMenuId, sortOrder])
+}
+
+/// Etkinlik menüsünün yemeği. Seçmeli kursta `guestCount` sabit kişi; boşsa "kalan".
+model EventMenuDish {
+  id               String  @id @default(uuid())
+  hotelId          String
+  eventMenuId      String
+  courseId         String
+  recipeId         String
+  label            String?
+  portionsPerGuest Decimal @default(1) @db.Decimal(6, 3)
+  guestCount       Int?
+  sortOrder        Int
+
+  eventMenu EventMenu       @relation(fields: [eventMenuId], references: [id], onDelete: Cascade)
+  course    EventMenuCourse @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  recipe    Recipe          @relation(fields: [recipeId], references: [id], onDelete: Restrict)
+
+  @@index([courseId, sortOrder])
+  @@index([eventMenuId])
+  @@index([recipeId])
+}
+
+/**
+ * ══════════════════ Satın alma talebi (modül 45'in talep kısmı — modül 43) ══════════════════
+ */
+
+/// Satın alma talebi: STR-yıl-sıra. Satırları malzeme × etkinlik (banket ihtiyacının eksiği).
+model PurchaseRequest {
+  id           String                @id @default(uuid())
+  hotelId      String
+  number       String
+  status       PurchaseRequestStatus @default(OPEN)
+  source       PurchaseRequestSource
+  /// Satırların en erken ihtiyaç günü.
+  neededBy     DateTime              @db.Date
+  note         String?
+  requestedBy  String
+  cancelledAt  DateTime?
+  cancelledBy  String?
+  cancelReason String?
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+
+  hotel Hotel                 @relation(fields: [hotelId], references: [id])
+  lines PurchaseRequestLine[]
+
+  @@unique([hotelId, number])
+  @@index([hotelId, createdAt, id])
+  @@index([hotelId, status, createdAt, id])
+  @@index([hotelId, neededBy])
+}
+
+model PurchaseRequestLine {
+  id                String      @id @default(uuid())
+  hotelId           String
+  requestId         String
+  stockItemId       String
+  /// Stok biriminde (kopya: birim sonradan değişse de talep okunur kalır).
+  quantity          Decimal     @db.Decimal(14, 3)
+  unit              KitchenUnit
+  neededBy          DateTime    @db.Date
+  eventId           String?
+  /// Talep anındaki birim maliyet (45'te teklif karşılaştırmasının dayanağı).
+  estimatedUnitCost Decimal     @db.Decimal(14, 4)
+  sortOrder         Int
+
+  request   PurchaseRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  stockItem StockItem       @relation(fields: [stockItemId], references: [id], onDelete: Restrict)
+  event     Event?          @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
+  @@index([requestId, sortOrder])
+  // Etkinliğin talep edilmiş miktarı (ihtiyaç ekranının "talep edildi" sütunu).
+  @@index([eventId, stockItemId])
+  @@index([hotelId, stockItemId])
+}
+
+/// Satın alma numara serisi (otel × tür × yıl): talep (STR); 45 sipariş serisini ekler.
+model PurchaseSequence {
+  hotelId String
+  kind    String
+  year    Int
+  last    Int
+
+  @@id([hotelId, kind, year])
 }

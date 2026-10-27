@@ -31,6 +31,17 @@ export const banquetKeys = Object.freeze({
   /** @param {object} filters */
   clients: (filters) => ['banquet', 'clients', filters],
   settings: ['banquet', 'settings'],
+  /* Banket F&B (modül 43): set menü kataloğu, etkinliğin menü sekmesi, ihtiyaç, üretim planı. */
+  /** @param {object} filters */
+  menus: (filters) => ['banquet', 'menus', filters],
+  /** @param {string} id */
+  menu: (id) => ['banquet', 'menu', id],
+  /** @param {string} eventId */
+  fnb: (eventId) => ['banquet', 'fnb', eventId],
+  /** @param {object} filters */
+  needs: (filters) => ['banquet', 'needs', filters],
+  /** @param {object} filters */
+  production: (filters) => ['banquet', 'production', filters],
 });
 
 /** Canlı tazelemede en kısa aralık (yoğun satış saatinde her kayıt bütün ekranları yormasın). */

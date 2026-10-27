@@ -29,6 +29,8 @@ export const DEFAULT_EVENT_SETTINGS = Object.freeze({
   requireSignedContract: true,
   cancellationTiers: Object.freeze([]),
   contractTerms: null,
+  overproductionPct: '5.00',
+  menuFinalizeDays: 7,
   updatedAt: null,
 });
 
@@ -62,6 +64,8 @@ export async function loadEventSettings(client, hotelId) {
     requireSignedContract: row.requireSignedContract,
     cancellationTiers: tiersOf(row.cancellationTiers),
     contractTerms: row.contractTerms,
+    overproductionPct: money(row.overproductionPct),
+    menuFinalizeDays: row.menuFinalizeDays,
     updatedAt: iso(row.updatedAt),
   };
 }

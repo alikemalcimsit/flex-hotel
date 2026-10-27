@@ -140,6 +140,16 @@ export const PERMISSIONS = Object.freeze({
   /** Vardiya raporları, kapanmış adisyonlar, garson performansı. */
   POS_REPORT: 'pos.report',
 
+  /** Reçete ve malzeme kartı (modül 38'in reçete kısmı, 43'te kuruldu): reçeteleri, malzemeleri, maliyet ve kâr marjını görmek. */
+  RECIPES_VIEW: 'recipes.view',
+  /** Reçete ve malzeme kartı düzenlemek: satırlar, fire, birim maliyet, alerjen. */
+  RECIPES_MANAGE: 'recipes.manage',
+
+  /** Satın alma (modül 45'in talep kısmı, 43'te kuruldu): talepleri görmek. */
+  PURCHASING_VIEW: 'purchasing.view',
+  /** Satın alma talebi açmak (banket ihtiyacından) ve iptal etmek. */
+  PURCHASING_REQUEST: 'purchasing.request',
+
   /** Kanal yönetimi (modül 33): kanallar, eşleştirme, senkron logu, kanal rezervasyonları. */
   CHANNEL_MANAGER_VIEW: 'channel_manager.view',
   /** Kanal bağlamak / düzenlemek / senkrona almak, eşleştirme, stop-sale, elle senkron. */
@@ -216,6 +226,10 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.POS_SUPERVISE]: 'POS: ikram, indirim, gönderilmiş kalemi iptal et, adisyonu devret / yeniden aç, ürünü tükendi yap',
   [PERMISSIONS.POS_SETUP]: 'POS: satış noktası, masa, menü ve politikayı düzenle',
   [PERMISSIONS.POS_REPORT]: 'POS: vardiya raporlarını ve kapanmış adisyonları görüntüle',
+  [PERMISSIONS.RECIPES_VIEW]: 'Reçeteleri, malzeme kartlarını, maliyet ve kâr marjını görüntüle',
+  [PERMISSIONS.RECIPES_MANAGE]: 'Reçete ve malzeme kartı düzenle (satır, fire, birim maliyet, alerjen)',
+  [PERMISSIONS.PURCHASING_VIEW]: 'Satın alma taleplerini görüntüle',
+  [PERMISSIONS.PURCHASING_REQUEST]: 'Satın alma talebi aç (banket ihtiyacından) ve iptal et',
   [PERMISSIONS.CHANNEL_MANAGER_VIEW]: 'Kanalları, senkron logunu ve kanal rezervasyonlarını görüntüle',
   [PERMISSIONS.CHANNEL_MANAGER_MANAGE]: 'Kanal bağla, eşleştir, stop-sale koy, elle senkronla',
   [PERMISSIONS.ACTORS_VIEW]: 'Aktör panelini görüntüle',
@@ -299,6 +313,8 @@ export const PERMISSION_GROUPS = Object.freeze([
     label: 'Restoran POS ve menü',
     permissions: [PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_SUPERVISE, PERMISSIONS.POS_SETUP, PERMISSIONS.POS_REPORT],
   },
+  { key: 'recipes', label: 'Reçete ve maliyet', permissions: [PERMISSIONS.RECIPES_VIEW, PERMISSIONS.RECIPES_MANAGE] },
+  { key: 'purchasing', label: 'Satın alma', permissions: [PERMISSIONS.PURCHASING_VIEW, PERMISSIONS.PURCHASING_REQUEST] },
   {
     key: 'agency_bonus',
     label: 'Acente primi',
@@ -405,6 +421,12 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.POS_SUPERVISE,
     PERMISSIONS.POS_SETUP,
     PERMISSIONS.POS_REPORT,
+    // Reçete ve maliyet F&B müdürlüğünün (şef reçeteyi yazar; matristen F&B'ye açılabilir).
+    PERMISSIONS.RECIPES_VIEW,
+    PERMISSIONS.RECIPES_MANAGE,
+    // Banket malzemesini talebe çevirmek; sipariş / onay 45'te.
+    PERMISSIONS.PURCHASING_VIEW,
+    PERMISSIONS.PURCHASING_REQUEST,
   ]),
   FRONT_DESK: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,
@@ -489,6 +511,10 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.BANQUET_PAYMENT,
     // Restoran vardiya kasası ve adisyonları muhasebe izler; servis yapmaz.
     PERMISSIONS.POS_REPORT,
+    // Maliyet kontrolü: reçete maliyeti ve gıda maliyeti yüzdesini izler; reçeteyi düzenlemez.
+    PERMISSIONS.RECIPES_VIEW,
+    // Satın alma taleplerini izler (ödeme / cari 45 ve 47'de).
+    PERMISSIONS.PURCHASING_VIEW,
   ]),
   FNB: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,
@@ -502,6 +528,11 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     // Garson: vardiya, adisyon, sipariş, ödeme, odaya yaz. İkram / indirim / iptal şef garson
     // yetkisidir (`pos.supervise`); otel rol matrisinden F&B'ye açabilir.
     PERMISSIONS.POS_OPERATE,
+    // Mutfak reçeteyi okuyarak pişirir, banket malzemesini talep eder. Reçete düzenlemek
+    // (`recipes.manage`) müdürde; otel şef için matristen açar.
+    PERMISSIONS.RECIPES_VIEW,
+    PERMISSIONS.PURCHASING_VIEW,
+    PERMISSIONS.PURCHASING_REQUEST,
   ]),
 });
 

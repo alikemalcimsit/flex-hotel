@@ -1,5 +1,15 @@
 import {
   banquetCalendarQuerySchema,
+  banquetMenuListQuerySchema,
+  banquetMenuParamSchema,
+  createBanquetMenuSchema,
+  eventMenuParamSchema,
+  eventMenuVersionSchema,
+  fnbNeedsQuerySchema,
+  productionPlanQuerySchema,
+  reopenEventMenuSchema,
+  saveEventMenuSchema,
+  updateBanquetMenuSchema,
   cancelEventSchema,
   completeEventSchema,
   confirmEventSchema,
@@ -41,7 +51,10 @@ import {
 import { PERMISSIONS, requirePermission } from '../../lib/permissions.js';
 import { withHotelContext } from '../../lib/tenant.js';
 import * as documents from './documents.js';
+import * as eventMenus from './event-menus.js';
 import * as events from './events.js';
+import * as fnb from './fnb-read.js';
+import * as menus from './menus.js';
 import * as payments from './payments.js';
 import * as setup from './setup.js';
 
@@ -57,8 +70,12 @@ import * as setup from './setup.js';
  * - Tahsilat, iade ve iptal istemek: `banquet.payment` (ön büro / muhasebe). Büyük
  *   tahsilat, iade ve iptal onay kuyruğundan verilir (`approvals.decide`, dört göz).
  *
+ * Banket F&B (modül 43): set menü kataloğu (görmek `banquet.view`, yazmak `banquet.setup`),
+ * etkinlik menüsü (`banquet.manage`), menü sekmesi / malzeme ihtiyacı / üretim planı
+ * (`banquet.view`). Maliyet alanları yalnızca `recipes.view` olana döner.
+ *
  * Liste uçları sayfalıdır (salon listesi `MAX_VENUES` ile sınırlı); takvim en fazla
- * 31 gün; ödemeler imleçli.
+ * 31 gün; ödemeler imleçli; ihtiyaç en fazla 31, üretim planı 7 gün.
  *
  * @param {import('fastify').FastifyInstance} app
  */
@@ -68,6 +85,7 @@ export async function banquetRoutes(app) {
   const manage = guard(PERMISSIONS.BANQUET_MANAGE);
   const configure = guard(PERMISSIONS.BANQUET_SETUP);
   const collect = guard(PERMISSIONS.BANQUET_PAYMENT);
+  const costView = (request) => ({ withCost: Boolean(request.auth?.permissions?.includes(PERMISSIONS.RECIPES_VIEW)) });
   const ok = (data) => ({ success: true, data });
 
   /* ── Özet, takvim, uygunluk ── */
@@ -180,6 +198,54 @@ export async function banquetRoutes(app) {
   app.put('/events/:eventId/installments', { ...manage, schema: { params: eventParamSchema, body: saveInstallmentsSchema } }, async (request) =>
     ok(await events.saveInstallments(request.hotelId, request.params.eventId, request.body)),
   );
+
+  /* ── Set menü kataloğu (modül 43) ── */
+
+  app.get('/menus', { ...view, schema: { querystring: banquetMenuListQuerySchema } }, async (request) =>
+    ok(await menus.listMenus(request.hotelId, request.query, costView(request))),
+  );
+
+  app.get('/menus/:menuId', { ...view, schema: { params: banquetMenuParamSchema } }, async (request) =>
+    ok(await menus.getMenu(request.hotelId, request.params.menuId, costView(request))),
+  );
+
+  app.post('/menus', { ...configure, schema: { body: createBanquetMenuSchema } }, async (request, reply) =>
+    reply.status(201).send(ok(await menus.createMenu(request.hotelId, request.body, costView(request)))),
+  );
+
+  app.put('/menus/:menuId', { ...configure, schema: { params: banquetMenuParamSchema, body: updateBanquetMenuSchema } }, async (request) =>
+    ok(await menus.updateMenu(request.hotelId, request.params.menuId, request.body, costView(request))),
+  );
+
+  /* ── Etkinlik menüsü, malzeme ihtiyacı, üretim planı (modül 43) ── */
+
+  app.get('/events/:eventId/fnb', { ...view, schema: { params: eventParamSchema } }, async (request) =>
+    ok(await fnb.getEventFnb(request.hotelId, request.params.eventId, costView(request))),
+  );
+
+  app.post('/events/:eventId/menus', { ...manage, schema: { params: eventParamSchema, body: saveEventMenuSchema } }, async (request, reply) =>
+    reply.status(201).send(ok(await eventMenus.saveEventMenu(request.hotelId, request.params.eventId, null, request.body, costView(request)))),
+  );
+
+  app.put('/events/:eventId/menus/:menuId', { ...manage, schema: { params: eventMenuParamSchema, body: saveEventMenuSchema } }, async (request) =>
+    ok(await eventMenus.saveEventMenu(request.hotelId, request.params.eventId, request.params.menuId, request.body, costView(request))),
+  );
+
+  app.delete('/events/:eventId/menus/:menuId', { ...manage, schema: { params: eventMenuParamSchema, body: eventMenuVersionSchema } }, async (request) =>
+    ok(await eventMenus.deleteEventMenu(request.hotelId, request.params.eventId, request.params.menuId, request.body, costView(request))),
+  );
+
+  app.post('/events/:eventId/menus/:menuId/finalize', { ...manage, schema: { params: eventMenuParamSchema, body: eventMenuVersionSchema } }, async (request) =>
+    ok(await eventMenus.finalizeEventMenu(request.hotelId, request.params.eventId, request.params.menuId, request.body, costView(request))),
+  );
+
+  app.post('/events/:eventId/menus/:menuId/reopen', { ...manage, schema: { params: eventMenuParamSchema, body: reopenEventMenuSchema } }, async (request) =>
+    ok(await eventMenus.reopenEventMenu(request.hotelId, request.params.eventId, request.params.menuId, request.body, costView(request))),
+  );
+
+  app.get('/fnb/needs', { ...view, schema: { querystring: fnbNeedsQuerySchema } }, async (request) => ok(await fnb.getNeeds(request.hotelId, request.query, costView(request))));
+
+  app.get('/fnb/production', { ...view, schema: { querystring: productionPlanQuerySchema } }, async (request) => ok(await fnb.getProductionPlan(request.hotelId, request.query)));
 
   /* ── Durum ── */
 

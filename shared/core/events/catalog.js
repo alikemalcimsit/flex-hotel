@@ -695,8 +695,12 @@ export const EVENT_CATALOG = Object.freeze({
       'COMPLETED',
       'CANCELLED',
       'LOST',
+      // Modül 43: etkinlik menüsü eklendi / değişti / kaldırıldı / mutfağa kesinleşti / yeniden açıldı.
+      'MENUS',
     ]),
   }),
+  /** Set menü kataloğu (modül 43). */
+  'banquet.menu.changed': hotelScoped.extend({ menuId: z.string().uuid(), change: z.enum(['CREATED', 'UPDATED']) }),
   'banquet.document.changed': hotelScoped.extend({
     eventId: z.string().uuid(),
     documentId: z.string().uuid(),
@@ -707,6 +711,21 @@ export const EVENT_CATALOG = Object.freeze({
     eventId: z.string().uuid(),
     paymentId: z.string().uuid(),
     change: z.enum(['RECEIVED', 'PENDING', 'POSTED', 'DECLINED', 'VOID_REQUESTED', 'VOIDED', 'VOID_DECLINED']),
+  }),
+
+  /* ── Reçete ve malzeme kartı (modül 38'in reçete kısmı, 43'te kuruldu) ──
+     Reçete / malzeme ekranları ve banket F&B ekranları (maliyet) bunlarla tazelenir. */
+
+  'recipe.stock_item.changed': hotelScoped.extend({ stockItemId: z.string().uuid(), change: z.enum(['CREATED', 'UPDATED']) }),
+  'recipe.changed': hotelScoped.extend({ recipeId: z.string().uuid(), change: z.enum(['CREATED', 'UPDATED']) }),
+
+  /* ── Satın alma talebi (modül 45'in talep kısmı, 43'te kuruldu) ──
+     Talep listesi ve banket ihtiyaç ekranı ("talep edildi" sütunu) bunlarla tazelenir. */
+
+  'purchase.request.changed': hotelScoped.extend({
+    requestId: z.string().uuid(),
+    change: z.enum(['CREATED', 'CANCELLED']),
+    source: z.enum(['BANQUET']),
   }),
 
   /* ── Restoran POS (modül 39) ──
@@ -1150,9 +1169,16 @@ export const BANQUET_EVENTS = Object.freeze([
   'banquet.client.changed',
   'banquet.settings.changed',
   'banquet.event.changed',
+  'banquet.menu.changed',
   'banquet.document.changed',
   'banquet.payment.changed',
 ]);
+
+/** Reçete ve malzeme kartı (modül 43): ekranlar bunlarla tazelenir (`recipes.changed` kanalı). */
+export const RECIPE_EVENTS = Object.freeze(['recipe.stock_item.changed', 'recipe.changed']);
+
+/** Satın alma talebi (modül 43 / 45): ekranlar bunlarla tazelenir (`purchasing.changed` kanalı). */
+export const PURCHASE_EVENTS = Object.freeze(['purchase.request.changed']);
 
 /** Acente bonusu (modül 35): ekranlar bunlarla tazelenir (`agency-bonus.changed` kanalı). */
 export const AGENCY_BONUS_EVENTS = Object.freeze([

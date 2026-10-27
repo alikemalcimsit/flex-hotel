@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { runWithContext } from '@hotelos/core';
+import { zonedWallTimeToUtc } from '@hotelos/hotel-contracts';
 import { startRecurringJobs } from '../../lib/recurring.js';
 import { writeWithEvents } from '../../lib/write.js';
 import { alertOwner, overdueInstallments, releaseOption } from './events.js';
-import { dateOnly, day, hotelContext, money, prisma } from './shared.js';
+import { dateOnly, day, hotelContext, loadEventSettings, money, prisma } from './shared.js';
 
 /**
  * Banketin zamanlanmış işi (modül 37, yalnızca sunucu sürecinde). Her tur, açık
@@ -15,6 +16,7 @@ import { dateOnly, day, hotelContext, money, prisma } from './shared.js';
  * | Opsiyonun son günü         | Sorumluya "bugün kesinleştirin ya da uzatın" (günde bir) |
  * | Gecikmiş taksit            | Vadesi geçip ödenmemiş tutar: sorumluya (günde bir) |
  * | Kapatılmamış etkinlik      | Son oturumu bitmiş kesin etkinlik: "gerçekleşen kişiyi girip kapatın" (bir kez) |
+ * | Menü kesinleşmedi (43)     | İlk gününe politikadaki gün kadar kalan kesin etkinliğin mutfağa kesinleşmemiş menüsü: sorumluya (bir kez) |
  *
  * Hatırlatmalar `dedupeKey` ile **bir kez** yazılır (her tur yeniden "okunmadı"
  * yapmasın diye var olan anahtar atlanır).
@@ -46,8 +48,8 @@ async function alertOnce(input) {
  * @param {{ warn: Function }} logger
  */
 export async function sweepHotel(hotelId, logger) {
-  const { today } = await hotelContext(hotelId);
-  const result = { expired: 0, lastDay: 0, overdue: 0, toComplete: 0 };
+  const [{ today, timezone }, settings] = await Promise.all([hotelContext(hotelId), loadEventSettings(prisma, hotelId)]);
+  const result = { expired: 0, lastDay: 0, overdue: 0, toComplete: 0, menuFinalize: 0 };
 
   const expired = await prisma.event.findMany({
     where: { hotelId, status: 'TENTATIVE', optionUntil: { lt: dateOnly(today) } },
@@ -116,6 +118,28 @@ export async function sweepHotel(hotelId, logger) {
       dedupeKey: `banquet-complete:${event.id}`,
     });
     if (sent) result.toComplete += 1;
+  }
+
+  // Modül 43: mutfak üretim planı ve satın alma kesin menüyle yapılır; son güne kadar kesinleşmeyen menü hatırlatılır.
+  if (settings.menuFinalizeDays > 0) {
+    const horizonDay = new Date(Date.parse(`${today}T00:00:00.000Z`) + (settings.menuFinalizeDays + 1) * 86_400_000).toISOString().slice(0, 10);
+    const pending = await prisma.event.findMany({
+      where: { hotelId, status: 'DEFINITE', firstStartAt: { gte: new Date(), lt: zonedWallTimeToUtc(`${horizonDay}T00:00`, timezone) }, menus: { some: { finalizedAt: null } } },
+      orderBy: [{ firstStartAt: 'asc' }, { id: 'asc' }],
+      take: BATCH,
+      select: { id: true, code: true, name: true, ownerEmail: true, firstStartAt: true, _count: { select: { menus: { where: { finalizedAt: null } } } } },
+    });
+    for (const event of pending) {
+      const sent = await alertOnce({
+        hotelId,
+        event,
+        severity: 'WARNING',
+        title: `Menüyü mutfağa kesinleştirin: ${event.name}`,
+        body: `${event.code} ${day(event.firstStartAt)} tarihinde başlıyor; ${event._count.menus} menü kesin değil. Üretim planı ve satın alma kesin menüyle yapılır (Menü sekmesi).`,
+        dedupeKey: `banquet-menu-final-due:${event.id}`,
+      });
+      if (sent) result.menuFinalize += 1;
+    }
   }
   return result;
 }

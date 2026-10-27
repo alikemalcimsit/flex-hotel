@@ -115,6 +115,15 @@ const RoomServiceReportPage = lazy(() => import('./pages/pos/RoomServiceReportPa
 const RoomServiceOrderForm = lazy(() => import('./pages/pos/RoomServiceOrderForm.jsx').then((m) => ({ default: m.RoomServiceOrderForm })));
 const RoomServiceOrderPage = lazy(() => import('./pages/pos/RoomServiceOrderPage.jsx').then((m) => ({ default: m.RoomServiceOrderPage })));
 const RoomServiceTraysPage = lazy(() => import('./pages/pos/RoomServiceTraysPage.jsx').then((m) => ({ default: m.RoomServiceTraysPage })));
+const BanquetMenusTab = lazy(() => import('./pages/banquet/MenusTab.jsx').then((m) => ({ default: m.MenusTab })));
+const BanquetNeedsTab = lazy(() => import('./pages/banquet/FnbNeedsTab.jsx').then((m) => ({ default: m.FnbNeedsTab })));
+const BanquetProductionTab = lazy(() => import('./pages/banquet/ProductionTab.jsx').then((m) => ({ default: m.ProductionTab })));
+const KitchenLayout = lazy(() => import('./pages/kitchen/KitchenLayout.jsx').then((m) => ({ default: m.KitchenLayout })));
+const RecipesPage = lazy(() => import('./pages/kitchen/RecipesPage.jsx').then((m) => ({ default: m.RecipesPage })));
+const StockItemsPage = lazy(() => import('./pages/kitchen/StockItemsPage.jsx').then((m) => ({ default: m.StockItemsPage })));
+const RecipeEditorPage = lazy(() => import('./pages/kitchen/RecipeEditorPage.jsx').then((m) => ({ default: m.RecipeEditorPage })));
+const PurchaseRequestsPage = lazy(() => import('./pages/purchasing/PurchaseRequestsPage.jsx').then((m) => ({ default: m.PurchaseRequestsPage })));
+const PurchaseRequestPage = lazy(() => import('./pages/purchasing/PurchaseRequestPage.jsx').then((m) => ({ default: m.PurchaseRequestPage })));
 const PromotionsLayout = lazy(() => import('./pages/promotions/PromotionsLayout.jsx').then((m) => ({ default: m.PromotionsLayout })));
 const PromotionListTab = lazy(() => import('./pages/promotions/PromotionListTab.jsx').then((m) => ({ default: m.PromotionListTab })));
 const PromotionReportTab = lazy(() => import('./pages/promotions/PromotionReportTab.jsx').then((m) => ({ default: m.PromotionReportTab })));
@@ -494,6 +503,10 @@ export default function App() {
               <Route index element={<BanquetEventsTab />} />
               <Route path="takvim" element={<BanquetCalendarTab />} />
               <Route path="tanimlar" element={<BanquetSetupTab />} />
+              {/* Banket F&B (modül 43): set menüler, malzeme ihtiyacı, mutfak üretim planı. */}
+              <Route path="menuler" element={<BanquetMenusTab />} />
+              <Route path="malzeme" element={<BanquetNeedsTab />} />
+              <Route path="mutfak-plani" element={<BanquetProductionTab />} />
             </Route>
             <Route
               path="etkinlikler/yeni"
@@ -626,6 +639,51 @@ export default function App() {
                 <RequireAnyPermission permissions={[PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT]}>
                   <RoomServiceOrderPage />
                 </RequireAnyPermission>
+              }
+            />
+            {/* Mutfak (38'in reçete kısmı — modül 43): reçeteler ve malzeme kartları; reçete ekranı kabuğun dışında. */}
+            <Route
+              path="mutfak"
+              element={
+                <RequirePermission permission={PERMISSIONS.RECIPES_VIEW}>
+                  <KitchenLayout />
+                </RequirePermission>
+              }
+            >
+              <Route index element={<RecipesPage />} />
+              <Route path="malzemeler" element={<StockItemsPage />} />
+            </Route>
+            <Route
+              path="mutfak/receteler/yeni"
+              element={
+                <RequirePermission permission={PERMISSIONS.RECIPES_MANAGE}>
+                  <RecipeEditorPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="mutfak/receteler/:recipeId"
+              element={
+                <RequirePermission permission={PERMISSIONS.RECIPES_VIEW}>
+                  <RecipeEditorPage />
+                </RequirePermission>
+              }
+            />
+            {/* Satın alma talebi (45'in talep kısmı — modül 43). */}
+            <Route
+              path="satin-alma/talepler"
+              element={
+                <RequirePermission permission={PERMISSIONS.PURCHASING_VIEW}>
+                  <PurchaseRequestsPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="satin-alma/talepler/:requestId"
+              element={
+                <RequirePermission permission={PERMISSIONS.PURCHASING_VIEW}>
+                  <PurchaseRequestPage />
+                </RequirePermission>
               }
             />
             <Route

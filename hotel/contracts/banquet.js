@@ -181,6 +181,10 @@ export const MAX_EVENT_REASON_LENGTH = 500;
 export const MAX_CALENDAR_DAYS = 31;
 /** Etkinliğin en uzak ileri tarihi (gün; üç yıl). */
 export const MAX_EVENT_LEAD_DAYS = 1100;
+/** Mutfağın garanti üstüne hazırladığı pay (%; modül 43). Sektörde %3–5; %30 üstü yazım hatasıdır. */
+export const MAX_OVERPRODUCTION_PCT = 30;
+/** Menünün mutfağa kesinleştirilmesi için etkinlikten en çok kaç gün önce hatırlatılır (0 = hatırlatma yok). */
+export const MAX_MENU_FINALIZE_DAYS = 60;
 
 /* ─────────────── Saf kurallar ─────────────── */
 
@@ -431,6 +435,11 @@ export const updateEventSettingsSchema = z
     requireSignedContract: z.boolean(),
     cancellationTiers: z.array(tierRow).max(MAX_POLICY_TIERS, `En fazla ${MAX_POLICY_TIERS} kademe`),
     contractTerms: optionalText(MAX_CONTRACT_TERMS_LENGTH, 'Sözleşme şartları'),
+    /** Banket F&B (modül 43): gönderilmezse kayıtlı değer korunur (eski istemci politikayı sıfırlamasın). */
+    overproductionPct: percentField('Fazla hazırlık payı')
+      .refine((value) => Number(value) <= MAX_OVERPRODUCTION_PCT, { message: `Fazla hazırlık payı en fazla %${MAX_OVERPRODUCTION_PCT}` })
+      .optional(),
+    menuFinalizeDays: intField('Menü kesinleştirme süresi', 0, MAX_MENU_FINALIZE_DAYS).optional(),
   })
   .superRefine((value, ctx) => {
     for (const issue of policyTierIssues(value.cancellationTiers)) {

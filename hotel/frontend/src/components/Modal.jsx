@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef } from 'react';
 import { Icon } from '@hotelos/ui';
 
-const WIDTHS = { sm: 'max-w-md', md: 'max-w-xl', lg: 'max-w-3xl' };
+const WIDTHS = { sm: 'max-w-md', md: 'max-w-xl', lg: 'max-w-3xl', xl: 'max-w-5xl' };
 
 /**
  * Form ve onay diyaloglarının kabuğu — Spark Admin'in `.modal-content`'i.
@@ -13,7 +13,7 @@ const WIDTHS = { sm: 'max-w-md', md: 'max-w-xl', lg: 'max-w-3xl' };
  * `onClose` bir ref'te tutulur: ebeveyn her çizimde yeni fonksiyon verse de
  * etki yeniden çalışıp odağı ilk alana geri atmaz (yazarken imleç kaçmasın).
  *
- * @param {{ open: boolean, title: string, onClose: () => void, children: React.ReactNode, footer?: React.ReactNode, size?: 'sm' | 'md' | 'lg' }} props
+ * @param {{ open: boolean, title: string, onClose: () => void, children: React.ReactNode, footer?: React.ReactNode, size?: 'sm' | 'md' | 'lg' | 'xl' }} props
  */
 export function Modal({ open, title, onClose, children, footer, size = 'md' }) {
   const panelRef = useRef(null);

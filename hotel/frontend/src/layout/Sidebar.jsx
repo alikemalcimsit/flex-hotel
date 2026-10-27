@@ -211,6 +211,7 @@ function NavGroup({ item, onNavigate }) {
           <li key={child.to}>
             <NavLink
               to={child.to}
+              end={child.end}
               onClick={onNavigate}
               className={({ isActive }) =>
                 `${LINK_BASE} rounded-item px-3 py-2 text-[0.85rem] ${isActive ? LINK_ACTIVE : LINK_IDLE}`

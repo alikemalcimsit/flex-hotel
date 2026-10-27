@@ -431,8 +431,8 @@ export async function updateSettings(hotelId, input) {
       entity: 'EventSettings',
       entityId: hotelId,
       action: before ? 'UPDATE' : 'CREATE',
-      before: before ? { ...before, depositPct: money(before.depositPct), cancellationTiers: tiersOf(before.cancellationTiers) } : null,
-      after: { ...after, depositPct: money(after.depositPct), cancellationTiers: tiersOf(after.cancellationTiers) },
+      before: before ? { ...before, depositPct: money(before.depositPct), overproductionPct: money(before.overproductionPct), cancellationTiers: tiersOf(before.cancellationTiers) } : null,
+      after: { ...after, depositPct: money(after.depositPct), overproductionPct: money(after.overproductionPct), cancellationTiers: tiersOf(after.cancellationTiers) },
     });
     await stage('banquet.settings.changed', { hotelId });
   });

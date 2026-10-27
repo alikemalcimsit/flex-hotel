@@ -1,5 +1,6 @@
 import { createRequire } from 'node:module';
 import {
+  ALLERGEN_LABELS,
   EVENT_CLIENT_TYPE_LABELS,
   EVENT_DOCUMENT_KIND_LABELS,
   EVENT_ITEM_UNIT_LABELS,
@@ -313,6 +314,22 @@ function draw(w, s, title) {
       s.sessions.map((session) => [session.title, session.venueName, VENUE_LAYOUT_LABELS[session.layout], sessionRange(session.startLocal, session.endLocal), String(session.pax)]),
     );
     w.gap(10);
+  }
+
+  // Modül 43: menünün içeriği (eski anlık görüntülerde alan yok).
+  if (s.menus?.length) {
+    w.heading('Menü');
+    for (const menu of s.menus) {
+      w.paragraph(`${menu.name} · ${menu.sessionTitle} · ${wallText(menu.serveLocal)} · ${menu.guests} kişi`, { bold: true });
+      for (const course of menu.courses) {
+        const dishes = course.dishes.map((dish) => (course.mode === 'CHOICE' && dish.guestCount ? `${dish.name} (${dish.guestCount} kişi)` : dish.name));
+        w.paragraph(`• ${course.name}${course.mode === 'CHOICE' ? ' (seçmeli)' : ''}: ${dishes.join(course.mode === 'CHOICE' ? ' / ' : ', ')}`);
+      }
+      const allergens = [...new Set(menu.courses.flatMap((course) => course.dishes.flatMap((dish) => dish.allergens)))];
+      if (allergens.length) w.paragraph(`Alerjen içerir: ${allergens.map((allergen) => ALLERGEN_LABELS[allergen] ?? allergen).join(', ')}`, { size: SIZE.small, color: COLOR.muted });
+      w.gap(4);
+    }
+    w.gap(6);
   }
 
   w.heading(s.kind === 'PROFORMA' && s.cancellation ? 'İptal bedeli' : 'Fiyat kalemleri');
