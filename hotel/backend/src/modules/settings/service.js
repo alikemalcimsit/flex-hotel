@@ -772,6 +772,27 @@ export async function getHotelSettings(hotelId) {
 }
 
 /**
+ * Personel ekranlarının otel bağlamı — oturum açmış her personele (ayar yetkisi gerekmez): ad, kod, para birimi, saat
+ * dilimi, varsayılan pansiyon ve otelin bugünü. Ekranlar saatleri ve "bugün"ü otelin diliminden gösterir; tam otel kaydı
+ * yalnızca ayar yetkilisine açık olduğu için oda servisi, kat hizmetleri, ön büro gibi roller eskiden tarayıcının
+ * dilimine düşüyordu. Adres, iletişim, iptal politikası, eşikler gibi yönetim verisi burada yoktur.
+ *
+ * @param {string} hotelId
+ * @param {{ now?: Date }} [options]
+ */
+export async function getHotelContext(hotelId, { now = new Date() } = {}) {
+  const hotel = await getHotelSettings(hotelId);
+  return {
+    name: hotel.name,
+    code: hotel.code,
+    currency: hotel.currency,
+    timezone: hotel.timezone,
+    defaultBoardType: hotel.defaultBoardType,
+    today: toIsoDay(calendarDateInTimeZone(hotel.timezone, now)),
+  };
+}
+
+/**
  * Satılabilir oda tipleri (müsaitlik ve fiyat hesabının girdisi).
  * @param {string} hotelId
  */

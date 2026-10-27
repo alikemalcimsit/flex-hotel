@@ -108,6 +108,8 @@ export const AUDIT_ENTITY_LABELS = Object.freeze({
   PosAdjustment: 'Adisyon düzeltmesi (ikram / iptal / indirim)',
   PosPayment: 'Restoran ödemesi',
   PosRoomCharge: 'Odaya yazılan adisyon',
+  RoomServiceOrder: 'Oda servisi siparişi',
+  RoomServiceLink: 'Oda servisi QR bağlantısı',
   AgencyBonus: 'Acente prim hak edişi',
   Promotion: 'Promosyon',
   Coupon: 'Kupon',

@@ -2,8 +2,11 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  POS_OUTLET_KINDS,
+  POS_OUTLET_KIND_LABELS,
   POS_STATIONS,
   POS_STATION_LABELS,
+  ROOM_SERVICE_POLICY_LIMITS,
   TAX_APPLIES_TO,
   TAX_APPLIES_TO_LABELS,
   bulkPosTablesSchema,
@@ -477,7 +480,7 @@ function OutletsSection() {
   return (
     <Card
       title="Satış noktaları"
-      description="Restoran, lobi bar, havuz bar… Odaya yaz kapalı noktada ödeme yalnızca nakit / kart."
+      description="Restoran, lobi bar, havuz bar (masa planı) ve oda servisi (teslim panosu; odaya yazmaya açık). Odaya yaz kapalı noktada ödeme yalnızca nakit / kart."
       actions={
         <Button type="button" size="sm" icon="plus" onClick={() => setEditing({})}>
           Satış noktası ekle
@@ -494,6 +497,7 @@ function OutletsSection() {
               <span className="font-mono text-xs text-ink-muted">{outlet.code}</span>
               <span className="font-semibold text-ink">{outlet.name}</span>
               {!outlet.isActive && <Badge tone="neutral">Pasif</Badge>}
+              {outlet.kind === 'ROOM_SERVICE' && <Badge tone="violet" dot={false}>{POS_OUTLET_KIND_LABELS.ROOM_SERVICE}</Badge>}
               <Badge tone={outlet.allowRoomCharge ? 'info' : 'neutral'} dot={false}>
                 {outlet.allowRoomCharge ? 'Odaya yaz açık' : 'Odaya yaz kapalı'}
               </Badge>
@@ -512,7 +516,7 @@ function OutletsSection() {
 /** @param {{ outlet: any, onClose: () => void }} props */
 function OutletDialog({ outlet, onClose }) {
   const isNew = !outlet.id;
-  const [values, setValues] = useState({ code: outlet.code ?? '', name: outlet.name ?? '', allowRoomCharge: outlet.allowRoomCharge ?? true, isActive: outlet.isActive ?? true, sortOrder: String(outlet.sortOrder ?? 0) });
+  const [values, setValues] = useState({ code: outlet.code ?? '', name: outlet.name ?? '', kind: outlet.kind ?? 'DINING', allowRoomCharge: outlet.allowRoomCharge ?? true, isActive: outlet.isActive ?? true, sortOrder: String(outlet.sortOrder ?? 0) });
   const [errors, setErrors] = useState({});
   const save = useSave(onClose, setErrors);
   const set = (key) => (event) => setValues((current) => ({ ...current, [key]: event.target.value }));
@@ -521,6 +525,7 @@ function OutletDialog({ outlet, onClose }) {
     event.preventDefault();
     const checked = validateWith(createPosOutletSchema, values);
     if (!checked.ok) return setErrors(checked.errors);
+    if (values.kind === 'ROOM_SERVICE' && !values.allowRoomCharge) return setErrors({ allowRoomCharge: 'Oda servisi noktası odaya yazmaya açık olmalı' });
     setErrors({});
     save.mutate(
       isNew
@@ -536,7 +541,23 @@ function OutletDialog({ outlet, onClose }) {
         <Input label="Kod" name="pos-outlet-code" value={values.code} onChange={set('code')} error={errors.code} required disabled={busy} />
         <Input label="Ad" name="pos-outlet-name" value={values.name} onChange={set('name')} error={errors.name} required disabled={busy} />
       </div>
-      <Checkbox label="Odaya yaz açık" hint="İçerideki misafirin folyosuna yazılabilir." checked={values.allowRoomCharge} onChange={(event) => setValues((current) => ({ ...current, allowRoomCharge: event.target.checked }))} disabled={busy} />
+      <ChoiceChips
+        label="Tür"
+        required
+        options={POS_OUTLET_KINDS.map((value) => ({ value, label: POS_OUTLET_KIND_LABELS[value] }))}
+        value={values.kind}
+        onChange={(kind) => setValues((current) => ({ ...current, kind, allowRoomCharge: kind === 'ROOM_SERVICE' ? true : current.allowRoomCharge }))}
+        disabled={busy}
+      />
+      {values.kind === 'ROOM_SERVICE' && <p className="text-xs text-ink-muted">Oda servisi noktasının masası yoktur; siparişleri teslim panosundadır. Menü grubunu yalnızca bu noktaya açarak kahvaltı kartı gibi oda servisine özel ürünler tanımlanır.</p>}
+      <Checkbox
+        label="Odaya yaz açık"
+        hint={values.kind === 'ROOM_SERVICE' ? 'Oda servisinde zorunlu: teslimde kalan folyoya yazılır.' : 'İçerideki misafirin folyosuna yazılabilir.'}
+        checked={values.allowRoomCharge}
+        onChange={(event) => setValues((current) => ({ ...current, allowRoomCharge: event.target.checked }))}
+        disabled={busy || values.kind === 'ROOM_SERVICE'}
+      />
+      {errors.allowRoomCharge && <p className="text-xs font-semibold text-danger-ink">{errors.allowRoomCharge}</p>}
       <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2">
         <Input label="Sıra" name="pos-outlet-sort" type="number" min={0} value={values.sortOrder} onChange={set('sortOrder')} error={errors.sortOrder} disabled={busy} />
         <Checkbox label="Aktif" checked={values.isActive} onChange={(event) => setValues((current) => ({ ...current, isActive: event.target.checked }))} disabled={busy} />
@@ -553,7 +574,10 @@ function SettingsSection() {
   const [errors, setErrors] = useState({});
   const save = useSave(() => {}, setErrors);
   useEffect(() => {
-    if (settings.data) setValues({ adjustmentApprovalAmount: settings.data.adjustmentApprovalAmount, cashVarianceAlert: settings.data.cashVarianceAlert });
+    if (settings.data) {
+      const { adjustmentApprovalAmount, cashVarianceAlert, trayCharge, deliveryTargetMinutes, prepLeadMinutes, trayAlertMinutes, guestOrderingEnabled } = settings.data;
+      setValues({ adjustmentApprovalAmount, cashVarianceAlert, trayCharge, deliveryTargetMinutes: String(deliveryTargetMinutes), prepLeadMinutes: String(prepLeadMinutes), trayAlertMinutes: String(trayAlertMinutes), guestOrderingEnabled });
+    }
   }, [settings.data]);
   if (settings.isPending || !values) return <Spinner className="py-6" />;
   if (settings.isError) return <Alert tone="danger" title="Politika yüklenemedi">{settings.error.message}</Alert>;
@@ -569,7 +593,7 @@ function SettingsSection() {
 
   const busy = save.isPending;
   return (
-    <Card title="Restoran politikası" description="Dört göz eşiği ve kasa farkı uyarısı. Tutarlar otelin para biriminde.">
+    <Card title="Restoran ve oda servisi politikası" description="Dört göz eşiği, kasa farkı uyarısı ve oda servisi kuralları. Tutarlar otelin para biriminde.">
       <form onSubmit={submit} noValidate className="grid max-w-2xl grid-cols-1 gap-4 sm:grid-cols-2">
         <Input
           label="Onay eşiği (ikram / iptal / indirim)"
@@ -592,6 +616,56 @@ function SettingsSection() {
         <p className="text-xs text-ink-muted sm:col-span-2">
           Eşiğe eşit ya da üstündeki düzeltme başka bir yetkili onaylayınca uygulanır (0: onay istenmez). Vardiya kapanışında bu tutarı aşan kasa farkı şef garson / müdüre bildirilir.
         </p>
+        <h3 className="mt-2 text-sm font-bold text-ink sm:col-span-2">Oda servisi</h3>
+        <Input
+          label="Oda servisi ücreti (sipariş başına, 0 = yok)"
+          name="pos-tray-charge"
+          inputMode="decimal"
+          value={values.trayCharge}
+          onChange={(event) => setValues((current) => ({ ...current, trayCharge: event.target.value }))}
+          error={errors.trayCharge}
+          disabled={busy}
+        />
+        <Input
+          label="Teslim hedefi (dakika)"
+          name="pos-delivery-target"
+          type="number"
+          inputMode="numeric"
+          min={ROOM_SERVICE_POLICY_LIMITS.deliveryTargetMinutes.min}
+          max={ROOM_SERVICE_POLICY_LIMITS.deliveryTargetMinutes.max}
+          value={values.deliveryTargetMinutes}
+          onChange={(event) => setValues((current) => ({ ...current, deliveryTargetMinutes: event.target.value }))}
+          error={errors.deliveryTargetMinutes}
+          disabled={busy}
+        />
+        <Input
+          label="Hazırlık payı (ileri saatli sipariş teslimden kaç dakika önce mutfağa düşer)"
+          name="pos-prep-lead"
+          type="number"
+          inputMode="numeric"
+          min={ROOM_SERVICE_POLICY_LIMITS.prepLeadMinutes.min}
+          max={ROOM_SERVICE_POLICY_LIMITS.prepLeadMinutes.max}
+          value={values.prepLeadMinutes}
+          onChange={(event) => setValues((current) => ({ ...current, prepLeadMinutes: event.target.value }))}
+          error={errors.prepLeadMinutes}
+          disabled={busy}
+        />
+        <Input
+          label="Toplanmayan tepsi uyarısı (teslimden sonra, dakika)"
+          name="pos-tray-alert"
+          type="number"
+          inputMode="numeric"
+          min={ROOM_SERVICE_POLICY_LIMITS.trayAlertMinutes.min}
+          max={ROOM_SERVICE_POLICY_LIMITS.trayAlertMinutes.max}
+          value={values.trayAlertMinutes}
+          onChange={(event) => setValues((current) => ({ ...current, trayAlertMinutes: event.target.value }))}
+          error={errors.trayAlertMinutes}
+          disabled={busy}
+        />
+        <div className="sm:col-span-2">
+          <Switch label="Misafir QR bağlantısıyla sipariş verebilir" showLabel checked={values.guestOrderingEnabled} onChange={(guestOrderingEnabled) => setValues((current) => ({ ...current, guestOrderingEnabled }))} disabled={busy} />
+          <p className="mt-1 text-xs text-ink-muted">Misafirin siparişi panoda kabul bekler; aynı anda en fazla 3 açık siparişi olur. Oda servisi ücreti adisyonda ayrı kalem olarak görünür; şef garson ikram edebilir.</p>
+        </div>
         <div className="sm:col-span-2">
           <Button type="submit" icon="check" disabled={busy}>
             {busy ? 'Kaydediliyor…' : 'Kaydet'}

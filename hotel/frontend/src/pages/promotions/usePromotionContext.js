@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { BOARD_TYPE_LABELS } from '@hotelos/hotel-contracts';
-import { useHotelSettings } from '../../lib/useHotel.js';
+import { useHotelContext } from '../../lib/useHotel.js';
 import { useRoomTypes } from '../rooms/useRoomTypes.js';
 
 /**
@@ -9,7 +9,7 @@ import { useRoomTypes } from '../rooms/useRoomTypes.js';
  */
 export function usePromotionContext() {
   const { roomTypes } = useRoomTypes();
-  const hotel = useHotelSettings();
+  const hotel = useHotelContext();
   return useMemo(() => {
     const names = new Map(roomTypes.map((type) => [type.id, type.name]));
     return {

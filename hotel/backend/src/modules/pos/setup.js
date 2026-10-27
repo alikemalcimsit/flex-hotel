@@ -1,5 +1,5 @@
-import { currentActor } from '@hotelos/core';
-import { MAX_MENU_CATEGORIES, MAX_MENU_ITEMS, MAX_POS_OUTLETS, MAX_POS_TABLES_PER_OUTLET } from '@hotelos/hotel-contracts';
+import { currentActor, toDecimal } from '@hotelos/core';
+import { MAX_MENU_CATEGORIES, MAX_MENU_ITEMS, MAX_POS_OUTLETS, MAX_POS_TABLES_PER_OUTLET, ROOM_SERVICE_ACTIVE_STATUSES } from '@hotelos/hotel-contracts';
 import { recordAudit } from '../../lib/audit.js';
 import { ConflictError, NotFoundError, StaleWriteError, ValidationError, rethrowPrismaError } from '../../lib/errors.js';
 import { buildPage, toSkipTake } from '../../lib/pagination.js';
@@ -14,9 +14,21 @@ import { iso, loadPosSettings, money, prisma } from './shared.js';
  *
  * Silme yok: satış geçmişi olan kayıt silinmez, pasife alınır (adisyon kalemleri ürünün
  * gönderildiği anki adını / fiyatını kopyalar; ürünün sonraki değişikliği geçmişi bozmaz).
+ *
+ * Oda servisi (modül 41): satış noktasının türü (salon / oda servisi) ve politikanın oda servisi alanları. Tepsi
+ * ücreti menüde görünmeyen bir **sistem ürünüdür** (gizli sistem grubunda; satış raporunda adıyla görünür): ücret
+ * 0'dan büyük yapılınca açılır, fiyatı politikayla güncellenir. Sistem grubu / ürünü tanım ekranında ve terminalde
+ * listelenmez, düzenlenemez.
  */
 
-const OUTLET_SELECT = Object.freeze({ id: true, code: true, name: true, allowRoomCharge: true, isActive: true, sortOrder: true, updatedAt: true });
+/** Gizli sistem grubunun adı (aynı adlı bir grup varsa ek alır). */
+const SYSTEM_CATEGORY_NAME = 'Sistem kalemleri';
+/** Tepsi ücretinin adisyonda / folyoda görünen adı. */
+export const TRAY_CHARGE_ITEM_NAME = 'Oda servisi ücreti';
+/** Tepsi ücretinin vergi kategorisi (yiyecek-içecek hizmeti). */
+const TRAY_CHARGE_TAX_CATEGORY = 'FNB';
+
+const OUTLET_SELECT = Object.freeze({ id: true, code: true, name: true, kind: true, allowRoomCharge: true, isActive: true, sortOrder: true, updatedAt: true });
 const TABLE_SELECT = Object.freeze({ id: true, outletId: true, name: true, seats: true, zone: true, isActive: true, sortOrder: true, updatedAt: true });
 const CATEGORY_SELECT = Object.freeze({ id: true, name: true, sortOrder: true, isActive: true, outletIds: true, updatedAt: true, _count: { select: { items: true } } });
 const ITEM_SELECT = Object.freeze({
@@ -101,6 +113,7 @@ export function createOutlet(hotelId, input) {
     'OUTLET',
     async (tx) => {
       if ((await tx.posOutlet.count({ where: { hotelId } })) >= MAX_POS_OUTLETS) throw new ConflictError(`En fazla ${MAX_POS_OUTLETS} satış noktası tanımlanabilir`, 'LIMIT');
+      assertRoomServiceCharges(input.kind, input.allowRoomCharge);
       const row = await tx.posOutlet.create({ data: { hotelId, ...input, createdBy: actor }, select: OUTLET_SELECT });
       return { id: row.id, audit: { entity: 'PosOutlet', action: 'CREATE', after: outletDto(row) }, result: outletDto(row) };
     },
@@ -124,11 +137,30 @@ export function updateOutlet(hotelId, outletId, input) {
       if (before.isActive && !data.isActive && (await tx.posCheck.count({ where: { hotelId, outletId, status: 'OPEN' } })) > 0) {
         throw new ConflictError('Bu satış noktasında açık adisyon var; önce kapatın ya da taşıyın.', 'OUTLET_IN_USE');
       }
+      const kind = data.kind ?? before.kind;
+      assertRoomServiceCharges(kind, data.allowRoomCharge);
+      // Tür değişirken ya da oda servisi noktası kapanırken yarıda iş kalmasın (sipariş panosu / masa planı).
+      if (kind !== before.kind || (before.kind === 'ROOM_SERVICE' && before.isActive && !data.isActive)) {
+        const [openChecks, activeOrders] = await Promise.all([
+          kind !== before.kind ? tx.posCheck.count({ where: { hotelId, outletId, status: 'OPEN' } }) : 0,
+          tx.roomServiceOrder.count({ where: { hotelId, outletId, status: { in: [...ROOM_SERVICE_ACTIVE_STATUSES] } } }),
+        ]);
+        if (openChecks) throw new ConflictError('Bu satış noktasında açık adisyon var; tür değiştirmeden önce kapatın.', 'OUTLET_IN_USE');
+        if (activeOrders) throw new ConflictError(`Bu noktada ${activeOrders} açık oda servisi siparişi var; önce teslim edin ya da iptal edin.`, 'OUTLET_IN_USE');
+      }
       const row = await tx.posOutlet.update({ where: { id: outletId }, data, select: OUTLET_SELECT });
       return { id: outletId, audit: { entity: 'PosOutlet', action: 'UPDATE', before: outletDto(before), after: outletDto(row) }, result: outletDto(row) };
     },
     'Bu kodlu bir satış noktası zaten var',
   );
+}
+
+/**
+ * Oda servisi noktası odaya yazmaya açık olmalı (teslimde kalan folyoya yazılır).
+ * @param {string | undefined} kind @param {boolean} allowRoomCharge
+ */
+function assertRoomServiceCharges(kind, allowRoomCharge) {
+  if (kind === 'ROOM_SERVICE' && allowRoomCharge === false) throw new ValidationError('Oda servisi noktası odaya yazmaya açık olmalı', { field: 'allowRoomCharge' });
 }
 
 /* ══════════════════ Masa ══════════════════ */
@@ -221,7 +253,7 @@ export function updateTable(hotelId, tableId, input) {
 
 /** @param {string} hotelId */
 export async function listCategories(hotelId) {
-  const rows = await prisma.menuCategory.findMany({ where: { hotelId }, orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }], take: MAX_MENU_CATEGORIES, select: CATEGORY_SELECT });
+  const rows = await prisma.menuCategory.findMany({ where: { hotelId, system: false }, orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }], take: MAX_MENU_CATEGORIES, select: CATEGORY_SELECT });
   return { items: rows.map(categoryDto) };
 }
 
@@ -239,7 +271,7 @@ export function createCategory(hotelId, input) {
     hotelId,
     'CATEGORY',
     async (tx) => {
-      if ((await tx.menuCategory.count({ where: { hotelId } })) >= MAX_MENU_CATEGORIES) throw new ConflictError(`En fazla ${MAX_MENU_CATEGORIES} menü grubu olur`, 'LIMIT');
+      if ((await tx.menuCategory.count({ where: { hotelId, system: false } })) >= MAX_MENU_CATEGORIES) throw new ConflictError(`En fazla ${MAX_MENU_CATEGORIES} menü grubu olur`, 'LIMIT');
       await assertOutlets(tx, hotelId, input.outletIds);
       const row = await tx.menuCategory.create({ data: { hotelId, ...input, outletIds: [...new Set(input.outletIds)], createdBy: actor }, select: CATEGORY_SELECT });
       return { id: row.id, audit: { entity: 'MenuCategory', action: 'CREATE', after: categoryDto(row) }, result: categoryDto(row) };
@@ -255,7 +287,7 @@ export function updateCategory(hotelId, categoryId, input) {
     hotelId,
     'CATEGORY',
     async (tx) => {
-      const before = await tx.menuCategory.findFirst({ where: { id: categoryId, hotelId }, select: CATEGORY_SELECT });
+      const before = await tx.menuCategory.findFirst({ where: { id: categoryId, hotelId, system: false }, select: CATEGORY_SELECT });
       if (!before) throw new NotFoundError('Menü grubu bulunamadı');
       assertVersion(before, expectedUpdatedAt);
       await assertOutlets(tx, hotelId, data.outletIds);
@@ -273,7 +305,7 @@ export function updateCategory(hotelId, categoryId, input) {
  * @param {string} hotelId @param {any} query `menuItemListQuerySchema`
  */
 export async function listItems(hotelId, query) {
-  const where = /** @type {Record<string, any>} */ ({ hotelId });
+  const where = /** @type {Record<string, any>} */ ({ hotelId, system: null });
   if (query.categoryId) where.categoryId = query.categoryId;
   if (query.active) where.isActive = query.active === 'true';
   const search = query.search?.trim();
@@ -287,7 +319,7 @@ export async function listItems(hotelId, query) {
 
 /** @param {any} tx @param {string} hotelId @param {string} categoryId */
 async function assertCategory(tx, hotelId, categoryId) {
-  const category = await tx.menuCategory.findFirst({ where: { id: categoryId, hotelId }, select: { id: true } });
+  const category = await tx.menuCategory.findFirst({ where: { id: categoryId, hotelId, system: false }, select: { id: true } });
   if (!category) throw new ValidationError('Menü grubu bulunamadı', { field: 'categoryId' });
 }
 
@@ -300,7 +332,7 @@ export function createItem(hotelId, input) {
     hotelId,
     'ITEM',
     async (tx) => {
-      if ((await tx.menuItem.count({ where: { hotelId } })) >= MAX_MENU_ITEMS) throw new ConflictError(`En fazla ${MAX_MENU_ITEMS} ürün tanımlanabilir`, 'LIMIT');
+      if ((await tx.menuItem.count({ where: { hotelId, system: null } })) >= MAX_MENU_ITEMS) throw new ConflictError(`En fazla ${MAX_MENU_ITEMS} ürün tanımlanabilir`, 'LIMIT');
       await assertCategory(tx, hotelId, input.categoryId);
       const row = await tx.menuItem.create({ data: { hotelId, ...input, createdBy: actor }, select: ITEM_SELECT });
       return { id: row.id, audit: { entity: 'MenuItem', action: 'CREATE', after: itemDto(row) }, result: itemDto(row) };
@@ -320,7 +352,7 @@ export function updateItem(hotelId, itemId, input) {
     hotelId,
     'ITEM',
     async (tx) => {
-      const before = await tx.menuItem.findFirst({ where: { id: itemId, hotelId }, select: ITEM_SELECT });
+      const before = await tx.menuItem.findFirst({ where: { id: itemId, hotelId, system: null }, select: ITEM_SELECT });
       if (!before) throw new NotFoundError('Ürün bulunamadı');
       assertVersion(before, expectedUpdatedAt);
       await assertCategory(tx, hotelId, data.categoryId);
@@ -338,7 +370,7 @@ export function updateItem(hotelId, itemId, input) {
  */
 export function setSoldOut(hotelId, itemId, { soldOut }) {
   return writeSetup(hotelId, 'ITEM', async (tx) => {
-    const before = await tx.menuItem.findFirst({ where: { id: itemId, hotelId }, select: ITEM_SELECT });
+    const before = await tx.menuItem.findFirst({ where: { id: itemId, hotelId, system: null }, select: ITEM_SELECT });
     if (!before) throw new NotFoundError('Ürün bulunamadı');
     const row = await tx.menuItem.update({ where: { id: itemId }, data: { soldOut }, select: ITEM_SELECT });
     return { id: itemId, audit: { entity: 'MenuItem', action: 'UPDATE', before: { soldOut: before.soldOut }, after: { soldOut } }, result: itemDto(row) };
@@ -362,10 +394,60 @@ export async function updateSettings(hotelId, input) {
     if (before && (!expectedUpdatedAt || before.updatedAt.getTime() !== expectedUpdatedAt.getTime())) throw new StaleWriteError();
     if (!before && expectedUpdatedAt) throw new StaleWriteError();
     const after = before ? await tx.posSettings.update({ where: { hotelId }, data }) : await tx.posSettings.create({ data: { hotelId, ...data } });
-    const snapshot = (row) => (row ? { adjustmentApprovalAmount: money(row.adjustmentApprovalAmount), cashVarianceAlert: money(row.cashVarianceAlert) } : null);
+    // Tepsi ücreti açıldı / değişti: sistem ürünü (otel satırı kilitli; ilk açılış iki kez yapılmaz).
+    if (toDecimal(String(after.trayCharge)).greaterThan(0)) await ensureTrayItem(tx, hotelId, money(after.trayCharge));
+    const snapshot = (row) =>
+      row
+        ? {
+            adjustmentApprovalAmount: money(row.adjustmentApprovalAmount),
+            cashVarianceAlert: money(row.cashVarianceAlert),
+            trayCharge: money(row.trayCharge),
+            deliveryTargetMinutes: row.deliveryTargetMinutes,
+            prepLeadMinutes: row.prepLeadMinutes,
+            trayAlertMinutes: row.trayAlertMinutes,
+            guestOrderingEnabled: row.guestOrderingEnabled,
+          }
+        : null;
     return { id: hotelId, audit: { entity: 'PosSettings', action: before ? 'UPDATE' : 'CREATE', before: snapshot(before), after: snapshot(after) }, result: null };
   });
   return getSettings(hotelId);
+}
+
+/**
+ * Tepsi ücreti sistem ürünü (yoksa gizli sistem grubuyla açılır; fiyatı politikadaki ücrete eşitlenir). Çağıran otel
+ * satırını kilitlemiş olmalı (politika kaydı) ya da ürün yokken kilitler (oda servisi siparişi): eşzamanlı ilk
+ * açılış tekil index'e çarpıp işlemi düşürmesin.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string} price 0'dan büyük
+ * @param {{ lockHotel?: boolean }} [options]
+ * @returns {Promise<{ id: string, name: string, taxCategory: string }>}
+ */
+export async function ensureTrayItem(tx, hotelId, price, { lockHotel = false } = {}) {
+  const select = { id: true, name: true, price: true, taxCategory: true };
+  let item = await tx.menuItem.findFirst({ where: { hotelId, system: 'TRAY_CHARGE' }, select });
+  if (!item && lockHotel) {
+    await tx.$executeRaw`SELECT 1 FROM "Hotel" WHERE "id" = ${hotelId} FOR UPDATE`;
+    item = await tx.menuItem.findFirst({ where: { hotelId, system: 'TRAY_CHARGE' }, select });
+  }
+  if (item) {
+    if (money(item.price) !== money(price)) await tx.menuItem.update({ where: { id: item.id }, data: { price } });
+    return item;
+  }
+  const actor = currentActor();
+  let category = await tx.menuCategory.findFirst({ where: { hotelId, system: true }, select: { id: true } });
+  if (!category) {
+    const taken = await tx.menuCategory.findFirst({ where: { hotelId, name: SYSTEM_CATEGORY_NAME }, select: { id: true } });
+    category = await tx.menuCategory.create({
+      data: { hotelId, name: taken ? `${SYSTEM_CATEGORY_NAME} (oda servisi)` : SYSTEM_CATEGORY_NAME, system: true, sortOrder: 999, createdBy: actor },
+      select: { id: true },
+    });
+  }
+  return tx.menuItem.create({
+    data: { hotelId, categoryId: category.id, name: TRAY_CHARGE_ITEM_NAME, price, taxCategory: TRAY_CHARGE_TAX_CATEGORY, station: 'NONE', system: 'TRAY_CHARGE', createdBy: actor },
+    select,
+  });
 }
 
 /* ══════════════════ Terminal ══════════════════ */
@@ -381,9 +463,9 @@ export async function getTerminal(hotelId) {
   const [outlets, tables, categories, items, settings, hotel] = await Promise.all([
     prisma.posOutlet.findMany({ where: { hotelId, isActive: true }, orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }], take: MAX_POS_OUTLETS, select: OUTLET_SELECT }),
     prisma.posTable.findMany({ where: { hotelId, isActive: true }, orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }], take: MAX_POS_OUTLETS * MAX_POS_TABLES_PER_OUTLET, select: TABLE_SELECT }),
-    prisma.menuCategory.findMany({ where: { hotelId, isActive: true }, orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }], take: MAX_MENU_CATEGORIES, select: CATEGORY_SELECT }),
+    prisma.menuCategory.findMany({ where: { hotelId, isActive: true, system: false }, orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }], take: MAX_MENU_CATEGORIES, select: CATEGORY_SELECT }),
     prisma.menuItem.findMany({
-      where: { hotelId, isActive: true, category: { isActive: true } },
+      where: { hotelId, isActive: true, system: null, category: { isActive: true } },
       // Menü sırası: önce grubun sırası, sonra ürünün.
       orderBy: [{ category: { sortOrder: 'asc' } }, { sortOrder: 'asc' }, { name: 'asc' }],
       take: MAX_MENU_ITEMS,

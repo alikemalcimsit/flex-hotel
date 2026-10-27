@@ -33,6 +33,9 @@ import { randomUUID } from 'node:crypto';
  * - Restoran POS (modül 39, `demo-pos.mjs`): üç satış noktası, masalar, menü, son 7 günün
  *   vardiya ve adisyonları (biri eşik üstü kasa farkı), bugün açık vardiya / masalar, onay
  *   bekleyen iptal, odaya yazılıp folyoya işlenen adisyon, tükenen ürün. `--reset` siler.
+ * - Oda servisi (modül 41, `demo-room-service.mjs`): son 7 günün teslim edilmiş / iptal siparişleri
+ *   (süreleriyle), bugünün panosu (misafir QR siparişi kabul bekliyor, mutfakta, hazır, yolda),
+ *   yarının kahvaltı kartları, toplanmamış tepsiler, siparişe çevrilmiş misafir isteği, QR bağlantısı.
  */
 
 if (process.env.DEMO_CONFIRM !== 'DEMO') {
@@ -47,6 +50,7 @@ const budget = await import('../src/modules/budget/service.js');
 const { removeFiles } = await import('../src/lib/file-storage.js');
 const { resetBanquetDemo, seedBanquetDemo } = await import('./demo-banquet.mjs');
 const { resetPosDemo, seedPosDemo } = await import('./demo-pos.mjs');
+const { resetRoomServiceDemo, seedRoomServiceDemo } = await import('./demo-room-service.mjs');
 
 const HISTORY_DAYS = 400;
 const FUTURE_DAYS = 75;
@@ -84,6 +88,8 @@ if (process.argv.includes('--reset')) {
     async (tx) => {
       // Demo banket (modül 37): etkinlikler ödemeleri, onayları, belgeleriyle; salon, ekipman, müşteri.
       banquetFiles = await resetBanquetDemo(tx, hotelId, ACTOR);
+      // Demo oda servisi (modül 41): siparişler adisyona, bağlantılar konaklamaya bağlı; restorandan önce.
+      await resetRoomServiceDemo(tx, hotelId, ACTOR, CODE_PREFIX);
       // Demo restoran (modül 39): odaya yazılanlar rezervasyona bağlı; rezervasyonlardan önce.
       await resetPosDemo(tx, hotelId, ACTOR);
       // Demo prim kuralları (modül 35): demo acentelere bağlı bütün kurallar (personelin demo acenteye
@@ -847,6 +853,14 @@ try {
   console.error(`Restoran adımı tamamlanamadı: ${error.message}`);
 }
 
+// ── Oda servisi (modül 41): son 7 günün siparişleri, açık pano, yarının kahvaltı kartları, misafir QR ──
+let roomServiceSummary = null;
+try {
+  if (posSummary) roomServiceSummary = await seedRoomServiceDemo({ prisma, core, contracts, hotelId, outletId: posSummary.roomServiceOutletId, actor: ACTOR });
+} catch (error) {
+  console.error(`Oda servisi adımı tamamlanamadı: ${error.message}`);
+}
+
 // Odaların anlık durumu: içeride kimse varsa dolu, boşların bir kısmı kirli.
 const inHouse = new Set(reservations.filter((entry) => entry.row.status === 'CHECKED_IN').map((entry) => entry.row.roomId));
 await prisma.room.updateMany({ where: { hotelId, id: { in: [...inHouse] } }, data: { occupancy: 'OCCUPIED' } });
@@ -904,6 +918,7 @@ console.log(
     (banquetSummary
       ? `, ${banquetSummary.venues} salon, ${banquetSummary.events} etkinlik (${banquetSummary.documents} belge, ${banquetSummary.payments} ödeme)`
       : '') +
-    (posSummary ? `, ${posSummary.outlets} satış noktası, ${posSummary.items} menü ürünü, ${posSummary.checks} adisyon, ${posSummary.shifts} vardiya.` : '.'),
+    (posSummary ? `, ${posSummary.outlets} satış noktası, ${posSummary.items} menü ürünü, ${posSummary.checks} adisyon, ${posSummary.shifts} vardiya` : '') +
+    (roomServiceSummary ? `, ${roomServiceSummary.orders} oda servisi siparişi (${roomServiceSummary.open} açık, ${roomServiceSummary.scheduled} yarın kahvaltı).` : '.'),
 );
 await prisma.$disconnect();

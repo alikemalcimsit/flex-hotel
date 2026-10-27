@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   CONVERSATION_CHANNEL_LABELS,
@@ -20,6 +20,8 @@ import { Modal } from '../../components/Modal.jsx';
 import { RoomPicker } from '../../components/RoomPicker.jsx';
 import { api } from '../../lib/api.js';
 import { requestKeys, useAssignees } from '../../lib/frontOffice.js';
+import { PERMISSIONS, useCan } from '../../lib/permissions.js';
+import { NEW_ORDER_PATH } from '../../lib/roomService.js';
 import { formatDateTime } from '../../lib/timeFormat.js';
 import { useHotelToday } from '../../lib/useHotel.js';
 import { RequestTimingBadge } from './RequestRow.jsx';
@@ -49,6 +51,8 @@ const FORM_ID = 'edit-request-form';
  */
 export function RequestDetailDialog({ requestId, canManage, actions, onStatus, onClose }) {
   const { timeZone } = useHotelToday();
+  const navigate = useNavigate();
+  const canOrder = useCan()(PERMISSIONS.POS_OPERATE);
   const query = useQuery({
     queryKey: requestKeys.detail(requestId),
     queryFn: () => api(`/guest-requests/${requestId}`),
@@ -105,6 +109,12 @@ export function RequestDetailDialog({ requestId, canManage, actions, onStatus, o
                 {!active && statusButton('OPEN', 'Yeniden aç', { variant: 'outline', icon: 'rotateCcw' })}
                 {statusButton('IN_PROGRESS', 'Başlat', { variant: 'outline', icon: 'play' })}
                 {statusButton('DONE', 'Tamamla', { icon: 'check' })}
+                {/* Oda servisi (modül 41): istek siparişe çevrilir; sipariş teslim edilince istek tamamlanır. */}
+                {active && request.category === 'ROOM_SERVICE' && canOrder && (
+                  <Button icon="utensils" onClick={() => navigate(`${NEW_ORDER_PATH}?istek=${request.id}`)}>
+                    Siparişe çevir
+                  </Button>
+                )}
               </>
             )}
           </>

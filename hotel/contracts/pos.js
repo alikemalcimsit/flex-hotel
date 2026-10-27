@@ -31,6 +31,17 @@ import { moneyInputField } from './reservations.js';
 export const POS_STATIONS = Object.freeze(['HOT', 'COLD', 'BAR', 'PASTRY', 'NONE']);
 export const POS_STATION_LABELS = Object.freeze({ HOT: 'Sıcak mutfak', COLD: 'Soğuk mutfak', BAR: 'Bar', PASTRY: 'Pastane', NONE: 'Mutfağa gitmez' });
 
+/** Prisma `PosOutletKind` ile birebir: salon (masa planı) ya da oda servisi (teslim panosu, modül 41). */
+export const POS_OUTLET_KINDS = Object.freeze(['DINING', 'ROOM_SERVICE']);
+export const POS_OUTLET_KIND_LABELS = Object.freeze({ DINING: 'Salon (masa planı)', ROOM_SERVICE: 'Oda servisi' });
+
+/** Oda servisi politikasının sınırları (veritabanı kuralıyla aynı; modül 41). */
+export const ROOM_SERVICE_POLICY_LIMITS = Object.freeze({
+  deliveryTargetMinutes: Object.freeze({ min: 5, max: 240 }),
+  prepLeadMinutes: Object.freeze({ min: 5, max: 240 }),
+  trayAlertMinutes: Object.freeze({ min: 15, max: 1440 }),
+});
+
 /** Prisma `PosCheckStatus` ile birebir. */
 export const POS_CHECK_STATUSES = Object.freeze(['OPEN', 'CLOSED', 'VOID']);
 export const POS_CHECK_STATUS_LABELS = Object.freeze({ OPEN: 'Açık', CLOSED: 'Kapandı', VOID: 'İptal (boş)' });
@@ -180,8 +191,10 @@ const outletShape = {
   isActive: z.boolean().default(true),
   sortOrder: intField('Sıra', 0, 999).default(0),
 };
-export const createPosOutletSchema = z.object(outletShape);
-export const updatePosOutletSchema = z.object({ expectedUpdatedAt, ...outletShape });
+const outletKind = z.enum(POS_OUTLET_KINDS, { error: 'Satış noktası türünü seçin' });
+export const createPosOutletSchema = z.object({ ...outletShape, kind: outletKind.default('DINING') });
+/** Tür verilmezse değişmez (eski ekran türü bilmeden kaydederse oda servisi noktası salona dönmesin). */
+export const updatePosOutletSchema = z.object({ expectedUpdatedAt, ...outletShape, kind: outletKind.optional() });
 export const posOutletParamSchema = z.object({ outletId: uuid('Geçersiz satış noktası') });
 
 const tableShape = {
@@ -261,6 +274,15 @@ export const updatePosSettingsSchema = z.object({
   adjustmentApprovalAmount: cashField('Onay eşiği'),
   /** Vardiya kapanışında bu tutarı aşan nakit farkı yöneticiye uyarı düşürür. */
   cashVarianceAlert: cashField('Kasa farkı uyarısı'),
+  /*
+   * Oda servisi (modül 41); verilmeyen alan değişmez. Tepsi ücreti sipariş başına (0 = yok); teslim hedefi ve
+   * ileri saatli siparişin mutfağa düşme payı dakika; tepsi uyarısı teslimden sonra dakika.
+   */
+  trayCharge: cashField('Tepsi ücreti').optional(),
+  deliveryTargetMinutes: intField('Teslim hedefi', ROOM_SERVICE_POLICY_LIMITS.deliveryTargetMinutes.min, ROOM_SERVICE_POLICY_LIMITS.deliveryTargetMinutes.max).optional(),
+  prepLeadMinutes: intField('Hazırlık payı', ROOM_SERVICE_POLICY_LIMITS.prepLeadMinutes.min, ROOM_SERVICE_POLICY_LIMITS.prepLeadMinutes.max).optional(),
+  trayAlertMinutes: intField('Tepsi uyarısı', ROOM_SERVICE_POLICY_LIMITS.trayAlertMinutes.min, ROOM_SERVICE_POLICY_LIMITS.trayAlertMinutes.max).optional(),
+  guestOrderingEnabled: z.boolean().optional(),
 });
 
 /* ─────────────── Vardiya ─────────────── */

@@ -11,6 +11,7 @@ import { requestApproval } from '../approvals/service.js';
 import { needsLargePaymentApproval } from '../payments/rules.js';
 import { guestFullName } from '../reservations/guests.js';
 import { alertRequester, closeIfSettled, getCheck, lockedCheck, pendingState } from './checks.js';
+import { assertRoomServiceSettlable } from './room-service-guards.js';
 import { checkBalance, roomChargeItems } from './rules.js';
 import { computeCheckTotals, dateOnly, day, hotelContext, iso, money, prisma, recomputeCheckPayments, recomputeCheckTotals, requireOpenShift } from './shared.js';
 
@@ -150,73 +151,8 @@ export async function receivePayment(hotelId, checkId, input) {
       const check = await lockedCheck(tx, hotelId, checkId);
       const again = await replay();
       if (again) return again;
-
-      const pending = await pendingState(tx, checkId);
-      if (pending.adjustments) throw new ConflictError('Onay bekleyen düzeltme (ikram / iptal / indirim) var; karar gelmeden ödeme alınmaz.', 'PENDING_ADJUSTMENT');
-      const balance = toDecimal(checkBalance({ grandTotal: money(check.grandTotal), paidTotal: money(check.paidTotal), roomChargeTotal: money(check.roomChargeTotal) })).minus(
-        toDecimal(pending.pendingPaid),
-      );
-      if (!balance.greaterThan(0)) throw new ConflictError(pending.payments ? 'Kalan tutar onay bekleyen ödemeyle karşılanıyor.' : 'Adisyonun ödenecek bakiyesi yok.', 'NO_BALANCE');
-      if (toDecimal(input.amount).greaterThan(balance)) {
-        throw new ValidationError(`En fazla ${priced(toMoneyString(balance), hotel.currency)} alınır (kalan); para üstünü ekranda verin.`, { field: 'amount', limit: toMoneyString(balance) });
-      }
-
-      const approval = needsLargePaymentApproval(input.amount, String(hotel.largePaymentThreshold ?? 0));
-      const paymentId = randomUUID();
-      let approvalId = null;
-      if (approval) {
-        ({ approvalId } = await requestApproval(tx, stage, {
-          hotelId,
-          type: POS_PAYMENT_APPROVAL_TYPE,
-          summary: `Büyük restoran ödemesi: ${checkLabel(check)} — ${priced(input.amount, hotel.currency)} ${PAYMENT_METHOD_LABELS[input.method]}`.slice(0, 200),
-          reason: `Tutar büyük ödeme eşiğine (${priced(money(hotel.largePaymentThreshold), hotel.currency)}) eşit ya da üstünde`,
-          amount: toMoneyString(input.amount),
-          currency: hotel.currency,
-          data: {
-            Adisyon: checkLabel(check),
-            Yöntem: PAYMENT_METHOD_LABELS[input.method],
-            Tutar: priced(input.amount, hotel.currency),
-            ...(input.reference ? { Referans: input.reference } : {}),
-            'Adisyon toplamı': priced(money(check.grandTotal), hotel.currency),
-            'Şu an alınan': priced(money(check.paidTotal), hotel.currency),
-            Garson: check.waiterEmail,
-            Alan: actor,
-          },
-          entityType: 'PosPayment',
-          entityId: paymentId,
-          requestedBy: actor,
-        }));
-      }
-
-      const now = new Date();
-      const created = await tx.posPayment.create({
-        data: {
-          id: paymentId,
-          hotelId,
-          checkId,
-          shiftId: shift.id,
-          kind: 'PAYMENT',
-          status: approval ? 'PENDING' : 'POSTED',
-          method: input.method,
-          amount: toMoneyString(input.amount),
-          currency: hotel.currency,
-          businessDate: dateOnly(today),
-          reference: input.reference ?? null,
-          sourceKey,
-          receivedBy: actor,
-          receivedAt: now,
-          postedAt: approval ? null : now,
-          approvalId,
-        },
-        select: POS_PAYMENT_SELECT,
-      });
-      await recordAudit(tx, { hotelId, entity: 'PosPayment', entityId: paymentId, action: 'CREATE', after: { check: check.number, ...paymentAudit(created) } });
-      await stage('pos.payment.changed', { hotelId, checkId, paymentId, change: approval ? 'PENDING' : 'RECEIVED' });
-      if (!approval) {
-        await recomputeCheckPayments(tx, checkId);
-        await closeIfSettled(tx, stage, { hotelId, checkId, today });
-      }
-      await stage('pos.check.changed', { hotelId, checkId, outletId: check.outletId, tableId: check.tableId, change: 'UPDATED' });
+      await assertRoomServiceSettlable(tx, checkId);
+      const { paymentId } = await takePayment(tx, stage, { hotelId, hotel, today, shift, check, input, sourceKey });
       return { paymentId, created: true };
     });
   } catch (error) {
@@ -224,6 +160,91 @@ export async function receivePayment(hotelId, checkId, input) {
   }
   const [check, payment] = await Promise.all([getCheck(hotelId, checkId), readPayment(hotelId, outcome.paymentId)]);
   return { check, payment, created: outcome.created };
+}
+
+/**
+ * Tahsilatı yazar (vardiya paylaşımlı, adisyon özel kilitliyken; restoranın ödemesi ve oda servisinin kapı ödemesi):
+ * kalan bakiye **güncel** toplamlardan okunur (aynı transaction'da önceki ödeme düşülmüş), onay bekleyen düzeltme
+ * varken alınmaz, eşik üstü onaya gider; işlenen ödeme toplamı yeniden yazar ve bakiye sıfırsa adisyonu kapatır.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {Function} stage
+ * @param {{ hotelId: string, hotel: any, today: string, shift: { id: string }, check: any, input: { method: 'CASH' | 'CARD', amount: string, reference?: string | null }, sourceKey: string }} context
+ * @returns {Promise<{ paymentId: string, pending: boolean }>}
+ */
+export async function takePayment(tx, stage, { hotelId, hotel, today, shift, check, input, sourceKey }) {
+  const actor = currentActor();
+  const checkId = check.id;
+  const [pending, current] = await Promise.all([
+    pendingState(tx, checkId),
+    tx.posCheck.findFirst({ where: { id: checkId }, select: { grandTotal: true, paidTotal: true, roomChargeTotal: true } }),
+  ]);
+  if (pending.adjustments) throw new ConflictError('Onay bekleyen düzeltme (ikram / iptal / indirim) var; karar gelmeden ödeme alınmaz.', 'PENDING_ADJUSTMENT');
+  const balance = toDecimal(checkBalance({ grandTotal: money(current.grandTotal), paidTotal: money(current.paidTotal), roomChargeTotal: money(current.roomChargeTotal) })).minus(
+    toDecimal(pending.pendingPaid),
+  );
+  if (!balance.greaterThan(0)) throw new ConflictError(pending.payments ? 'Kalan tutar onay bekleyen ödemeyle karşılanıyor.' : 'Adisyonun ödenecek bakiyesi yok.', 'NO_BALANCE');
+  if (toDecimal(input.amount).greaterThan(balance)) {
+    throw new ValidationError(`En fazla ${priced(toMoneyString(balance), hotel.currency)} alınır (kalan); para üstünü ekranda verin.`, { field: 'amount', limit: toMoneyString(balance) });
+  }
+
+  const approval = needsLargePaymentApproval(input.amount, String(hotel.largePaymentThreshold ?? 0));
+  const paymentId = randomUUID();
+  let approvalId = null;
+  if (approval) {
+    ({ approvalId } = await requestApproval(tx, stage, {
+      hotelId,
+      type: POS_PAYMENT_APPROVAL_TYPE,
+      summary: `Büyük restoran ödemesi: ${checkLabel(check)} — ${priced(input.amount, hotel.currency)} ${PAYMENT_METHOD_LABELS[input.method]}`.slice(0, 200),
+      reason: `Tutar büyük ödeme eşiğine (${priced(money(hotel.largePaymentThreshold), hotel.currency)}) eşit ya da üstünde`,
+      amount: toMoneyString(input.amount),
+      currency: hotel.currency,
+      data: {
+        Adisyon: checkLabel(check),
+        Yöntem: PAYMENT_METHOD_LABELS[input.method],
+        Tutar: priced(input.amount, hotel.currency),
+        ...(input.reference ? { Referans: input.reference } : {}),
+        'Adisyon toplamı': priced(money(current.grandTotal), hotel.currency),
+        'Şu an alınan': priced(money(current.paidTotal), hotel.currency),
+        Garson: check.waiterEmail,
+        Alan: actor,
+      },
+      entityType: 'PosPayment',
+      entityId: paymentId,
+      requestedBy: actor,
+    }));
+  }
+
+  const now = new Date();
+  const created = await tx.posPayment.create({
+    data: {
+      id: paymentId,
+      hotelId,
+      checkId,
+      shiftId: shift.id,
+      kind: 'PAYMENT',
+      status: approval ? 'PENDING' : 'POSTED',
+      method: input.method,
+      amount: toMoneyString(input.amount),
+      currency: hotel.currency,
+      businessDate: dateOnly(today),
+      reference: input.reference ?? null,
+      sourceKey,
+      receivedBy: actor,
+      receivedAt: now,
+      postedAt: approval ? null : now,
+      approvalId,
+    },
+    select: POS_PAYMENT_SELECT,
+  });
+  await recordAudit(tx, { hotelId, entity: 'PosPayment', entityId: paymentId, action: 'CREATE', after: { check: check.number, ...paymentAudit(created) } });
+  await stage('pos.payment.changed', { hotelId, checkId, paymentId, change: approval ? 'PENDING' : 'RECEIVED' });
+  if (!approval) {
+    await recomputeCheckPayments(tx, checkId);
+    await closeIfSettled(tx, stage, { hotelId, checkId, today });
+  }
+  await stage('pos.check.changed', { hotelId, checkId, outletId: check.outletId, tableId: check.tableId, change: 'UPDATED' });
+  return { paymentId, pending: Boolean(approval) };
 }
 
 /** @param {string} hotelId @param {string} paymentId */
@@ -357,7 +378,6 @@ export async function inHouseStays(hotelId, { search }) {
  */
 export async function chargeToRoom(hotelId, checkId, input) {
   const { hotel, today } = await hotelContext(hotelId);
-  const actor = currentActor();
   const sourceKey = `room:${input.requestId}`;
   try {
     await writeWithEvents(async (tx, stage) => {
@@ -369,80 +389,100 @@ export async function chargeToRoom(hotelId, checkId, input) {
       if (await replay()) return;
       const check = await lockedCheck(tx, hotelId, checkId);
       if (await replay()) return;
-      if (!check.outlet.allowRoomCharge) throw new ConflictError(`${check.outlet.name} odaya yazmaya kapalı; ödemeyi nakit / kartla alın.`, 'ROOM_CHARGE_DISABLED');
-      const pending = await pendingState(tx, checkId);
-      if (pending.adjustments || pending.payments || pending.voids) throw new ConflictError('Onay bekleyen düzeltme ya da ödeme var; karar gelmeden odaya yazılmaz.', 'PENDING_APPROVAL');
-
-      await lockReservations(tx, hotelId, [input.reservationId]);
-      const stay = await tx.reservation.findFirst({
-        where: { id: input.reservationId, hotelId },
-        select: { id: true, status: true, confirmationCode: true, room: { select: { number: true } }, guest: { select: { firstName: true, lastName: true } } },
-      });
-      if (!stay) throw new ValidationError('Konaklama bulunamadı', { field: 'reservationId' });
-      if (stay.status !== 'CHECKED_IN' || !stay.room) throw new ValidationError('Misafir içeride değil (giriş yapılmamış ya da çıkış yapmış); odaya yazılamaz.', { field: 'reservationId' });
-
-      // Toplamlar kalemlerden yeniden hesaplanır (vergi ayarı bu arada değiştiyse adisyon güncellenir).
-      let totals = await computeCheckTotals(tx, hotelId, checkId);
-      let grandTotal = money(check.grandTotal);
-      if (totals.grandTotal !== grandTotal) {
-        totals = { ...(await recomputeCheckTotals(tx, hotelId, checkId)), appliedTaxes: totals.appliedTaxes };
-        grandTotal = totals.grandTotal;
-      }
-      const balance = toDecimal(checkBalance({ grandTotal, paidTotal: money(check.paidTotal), roomChargeTotal: money(check.roomChargeTotal) }));
-      if (!balance.greaterThan(0)) throw new ConflictError('Adisyonun ödenecek bakiyesi yok.', 'NO_BALANCE');
-      if (toDecimal(input.amount).greaterThan(balance)) {
-        throw new ValidationError(`En fazla ${priced(toMoneyString(balance), hotel.currency)} yazılır (kalan).`, { field: 'amount', limit: toMoneyString(balance) });
-      }
-      const plan = roomChargeItems({ categories: totals.categories, amount: toMoneyString(input.amount), taxes: totals.appliedTaxes });
-      if (plan.error) {
-        const options = plan.nearest.map((value) => priced(value, hotel.currency)).join(' ya da ');
-        throw new ValidationError(options ? `${plan.error}; ${options} yazın.` : plan.error, { field: 'amount', nearest: plan.nearest });
-      }
-
-      const place = `${check.outlet.name}${check.table ? ` masa ${check.table.name}` : ''}`;
-      const event = await stage('fnb.order.charged', {
-        hotelId,
-        reservationId: stay.id,
-        roomId: null,
-        reference: check.number,
-        items: plan.items.map((item) => ({
-          description: (plan.items.length > 1 ? `${place} · ${TAX_APPLIES_TO_LABELS[item.taxCategory] ?? item.taxCategory}` : place).slice(0, 200),
-          unitPrice: item.gross,
-          quantity: 1,
-          taxCategory: item.taxCategory,
-        })),
-      });
-      const guestName = guestFullName(stay.guest);
-      const charge = await tx.posRoomCharge.create({
-        data: {
-          hotelId,
-          checkId,
-          reservationId: stay.id,
-          roomNumber: stay.room.number,
-          guestName,
-          amount: toMoneyString(input.amount),
-          eventId: event.id,
-          sourceKey,
-          chargedBy: actor,
-          businessDate: dateOnly(today),
-        },
-        select: { id: true },
-      });
-      await recordAudit(tx, {
-        hotelId,
-        entity: 'PosRoomCharge',
-        entityId: charge.id,
-        action: 'CREATE',
-        after: { check: check.number, room: stay.room.number, guest: guestName, reservation: stay.confirmationCode, amount: toMoneyString(input.amount), items: plan.items, eventId: event.id },
-      });
-      await recomputeCheckPayments(tx, checkId);
-      await closeIfSettled(tx, stage, { hotelId, checkId, today });
-      await stage('pos.check.changed', { hotelId, checkId, outletId: check.outletId, tableId: check.tableId, change: 'UPDATED' });
+      await assertRoomServiceSettlable(tx, checkId);
+      await postRoomCharge(tx, stage, { hotelId, hotel, today, check, reservationId: input.reservationId, amount: input.amount, sourceKey });
     });
   } catch (error) {
     rethrowPrismaError(error, { uniqueMessage: 'Bu işlem az önce kaydedildi; ekranı yenileyin.' });
   }
   return getCheck(hotelId, checkId);
+}
+
+/**
+ * Tutarı içerideki misafirin folyosuna yazar (adisyon kilitliyken; restoranın "odaya yaz"ı ve oda servisi
+ * teslimde kalanın yazılması): satış noktası odaya yazmaya açık, onay bekleyen iş yok, konaklama içeride ve odalı.
+ * Toplamlar kalemlerden yeniden hesaplanır; folyo kalemleri vergi kategorisi başına ve toplamı tutara birebir
+ * (yazılamayan tutara en yakın iki öneri). Rezervasyon adisyondan sonra kilitlenir.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {Function} stage
+ * @param {{ hotelId: string, hotel: any, today: string, check: any, reservationId: string, amount: string, sourceKey: string, label?: string, field?: string }} context
+ *   `label`: folyoda kalemin adı (verilmezse satış noktası ve masa); `field`: hata alanı (ekranın girdisi)
+ */
+export async function postRoomCharge(tx, stage, { hotelId, hotel, today, check, reservationId, amount, sourceKey, label = null, field = 'amount' }) {
+  const actor = currentActor();
+  const checkId = check.id;
+  if (!check.outlet.allowRoomCharge) throw new ConflictError(`${check.outlet.name} odaya yazmaya kapalı; ödemeyi nakit / kartla alın.`, 'ROOM_CHARGE_DISABLED');
+  const pending = await pendingState(tx, checkId);
+  if (pending.adjustments || pending.payments || pending.voids) throw new ConflictError('Onay bekleyen düzeltme ya da ödeme var; karar gelmeden odaya yazılmaz.', 'PENDING_APPROVAL');
+
+  await lockReservations(tx, hotelId, [reservationId]);
+  const stay = await tx.reservation.findFirst({
+    where: { id: reservationId, hotelId },
+    select: { id: true, status: true, confirmationCode: true, room: { select: { number: true } }, guest: { select: { firstName: true, lastName: true } } },
+  });
+  if (!stay) throw new ValidationError('Konaklama bulunamadı', { field: 'reservationId' });
+  if (stay.status !== 'CHECKED_IN' || !stay.room) throw new ValidationError('Misafir içeride değil (giriş yapılmamış ya da çıkış yapmış); odaya yazılamaz.', { field: field === 'amount' ? 'reservationId' : field });
+
+  // Toplamlar kalemlerden yeniden hesaplanır (vergi ayarı bu arada değiştiyse adisyon güncellenir); ödeme toplamı güncel satırdan.
+  const current = await tx.posCheck.findFirst({ where: { id: checkId }, select: { grandTotal: true, paidTotal: true, roomChargeTotal: true } });
+  let totals = await computeCheckTotals(tx, hotelId, checkId);
+  let grandTotal = money(current.grandTotal);
+  if (totals.grandTotal !== grandTotal) {
+    totals = { ...(await recomputeCheckTotals(tx, hotelId, checkId)), appliedTaxes: totals.appliedTaxes };
+    grandTotal = totals.grandTotal;
+  }
+  const balance = toDecimal(checkBalance({ grandTotal, paidTotal: money(current.paidTotal), roomChargeTotal: money(current.roomChargeTotal) }));
+  if (!balance.greaterThan(0)) throw new ConflictError('Adisyonun ödenecek bakiyesi yok.', 'NO_BALANCE');
+  if (toDecimal(amount).greaterThan(balance)) {
+    throw new ValidationError(`En fazla ${priced(toMoneyString(balance), hotel.currency)} yazılır (kalan).`, { field, limit: toMoneyString(balance) });
+  }
+  const plan = roomChargeItems({ categories: totals.categories, amount: toMoneyString(amount), taxes: totals.appliedTaxes });
+  if (plan.error) {
+    const options = plan.nearest.map((value) => priced(value, hotel.currency)).join(' ya da ');
+    throw new ValidationError(options ? `${plan.error}; ${options} yazın.` : plan.error, { field, nearest: plan.nearest });
+  }
+
+  const place = label ?? `${check.outlet.name}${check.table ? ` masa ${check.table.name}` : ''}`;
+  const event = await stage('fnb.order.charged', {
+    hotelId,
+    reservationId: stay.id,
+    roomId: null,
+    reference: check.number,
+    items: plan.items.map((item) => ({
+      description: (plan.items.length > 1 ? `${place} · ${TAX_APPLIES_TO_LABELS[item.taxCategory] ?? item.taxCategory}` : place).slice(0, 200),
+      unitPrice: item.gross,
+      quantity: 1,
+      taxCategory: item.taxCategory,
+    })),
+  });
+  const guestName = guestFullName(stay.guest);
+  const charge = await tx.posRoomCharge.create({
+    data: {
+      hotelId,
+      checkId,
+      reservationId: stay.id,
+      roomNumber: stay.room.number,
+      guestName,
+      amount: toMoneyString(amount),
+      eventId: event.id,
+      sourceKey,
+      chargedBy: actor,
+      businessDate: dateOnly(today),
+    },
+    select: { id: true },
+  });
+  await recordAudit(tx, {
+    hotelId,
+    entity: 'PosRoomCharge',
+    entityId: charge.id,
+    action: 'CREATE',
+    after: { check: check.number, room: stay.room.number, guest: guestName, reservation: stay.confirmationCode, amount: toMoneyString(amount), items: plan.items, eventId: event.id },
+  });
+  await recomputeCheckPayments(tx, checkId);
+  await closeIfSettled(tx, stage, { hotelId, checkId, today });
+  await stage('pos.check.changed', { hotelId, checkId, outletId: check.outletId, tableId: check.tableId, change: 'UPDATED' });
+  return { chargeId: charge.id, eventId: event.id };
 }
 
 /* ══════════════════ Onay sonucu ══════════════════ */

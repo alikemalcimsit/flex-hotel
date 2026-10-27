@@ -108,6 +108,13 @@ const PosSetupPage = lazy(() => import('./pages/pos/SetupPage.jsx').then((m) => 
 const PosCheckPage = lazy(() => import('./pages/pos/CheckPage.jsx').then((m) => ({ default: m.CheckPage })));
 const PosPaymentRedirect = lazy(() => import('./pages/pos/PosRedirects.jsx').then((m) => ({ default: m.PosPaymentRedirect })));
 const PosAdjustmentRedirect = lazy(() => import('./pages/pos/PosRedirects.jsx').then((m) => ({ default: m.PosAdjustmentRedirect })));
+const RoomServiceBoardPage = lazy(() => import('./pages/pos/RoomServiceBoardPage.jsx').then((m) => ({ default: m.RoomServiceBoardPage })));
+const RoomServicePrepPage = lazy(() => import('./pages/pos/RoomServicePrepPage.jsx').then((m) => ({ default: m.RoomServicePrepPage })));
+const RoomServiceHistoryPage = lazy(() => import('./pages/pos/RoomServiceHistoryPage.jsx').then((m) => ({ default: m.RoomServiceHistoryPage })));
+const RoomServiceReportPage = lazy(() => import('./pages/pos/RoomServiceReportPage.jsx').then((m) => ({ default: m.RoomServiceReportPage })));
+const RoomServiceOrderForm = lazy(() => import('./pages/pos/RoomServiceOrderForm.jsx').then((m) => ({ default: m.RoomServiceOrderForm })));
+const RoomServiceOrderPage = lazy(() => import('./pages/pos/RoomServiceOrderPage.jsx').then((m) => ({ default: m.RoomServiceOrderPage })));
+const RoomServiceTraysPage = lazy(() => import('./pages/pos/RoomServiceTraysPage.jsx').then((m) => ({ default: m.RoomServiceTraysPage })));
 const PromotionsLayout = lazy(() => import('./pages/promotions/PromotionsLayout.jsx').then((m) => ({ default: m.PromotionsLayout })));
 const PromotionListTab = lazy(() => import('./pages/promotions/PromotionListTab.jsx').then((m) => ({ default: m.PromotionListTab })));
 const PromotionReportTab = lazy(() => import('./pages/promotions/PromotionReportTab.jsx').then((m) => ({ default: m.PromotionReportTab })));
@@ -530,6 +537,39 @@ export default function App() {
                   </RequirePermission>
                 }
               />
+              {/* Oda servisi (modül 41): pano, hazırlık listesi, geçmiş, rapor kabuğun içinde. */}
+              <Route
+                path="oda-servisi"
+                element={
+                  <RequireAnyPermission permissions={[PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT]}>
+                    <RoomServiceBoardPage />
+                  </RequireAnyPermission>
+                }
+              />
+              <Route
+                path="oda-servisi/hazirlik"
+                element={
+                  <RequireAnyPermission permissions={[PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT]}>
+                    <RoomServicePrepPage />
+                  </RequireAnyPermission>
+                }
+              />
+              <Route
+                path="oda-servisi/gecmis"
+                element={
+                  <RequireAnyPermission permissions={[PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT]}>
+                    <RoomServiceHistoryPage />
+                  </RequireAnyPermission>
+                }
+              />
+              <Route
+                path="oda-servisi/rapor"
+                element={
+                  <RequirePermission permission={PERMISSIONS.POS_REPORT}>
+                    <RoomServiceReportPage />
+                  </RequirePermission>
+                }
+              />
               <Route
                 path="adisyonlar"
                 element={
@@ -571,6 +611,31 @@ export default function App() {
                 }
               />
             </Route>
+            {/* Oda servisi siparişi ve formu tam genişlik; tepsi listesi POS dışında (kat hizmetleri de toplar). */}
+            <Route
+              path="pos/oda-servisi/yeni"
+              element={
+                <RequirePermission permission={PERMISSIONS.POS_OPERATE}>
+                  <RoomServiceOrderForm />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="pos/oda-servisi/siparis/:orderId"
+              element={
+                <RequireAnyPermission permissions={[PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT]}>
+                  <RoomServiceOrderPage />
+                </RequireAnyPermission>
+              }
+            />
+            <Route
+              path="oda-servisi/tepsiler"
+              element={
+                <RequireAnyPermission permissions={[PERMISSIONS.POS_OPERATE, PERMISSIONS.REQUESTS_MANAGE]}>
+                  <RoomServiceTraysPage />
+                </RequireAnyPermission>
+              }
+            />
             <Route
               path="pos/adisyon/:checkId"
               element={

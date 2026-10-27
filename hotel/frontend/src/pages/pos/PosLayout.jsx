@@ -6,7 +6,7 @@ import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 
 /**
  * Restoran sayfasının kabuğu (modül 39): başlık ve yetkiye göre sekmeler — terminal (masa
- * planı), adisyonlar, vardiyalar, satış raporu, tanımlar. Kanal burada dinlenir: alt
+ * planı), oda servisi (modül 41), adisyonlar, vardiyalar, satış raporu, tanımlar. Kanal burada dinlenir: alt
  * sekmelerin hepsi `['pos', ...]` anahtarındadır.
  */
 export function PosLayout() {
@@ -16,6 +16,7 @@ export function PosLayout() {
   const report = can(PERMISSIONS.POS_REPORT);
   const tabs = [
     operate && { to: '/pos/masalar', label: 'Masa planı', icon: 'utensils' },
+    (operate || report) && { to: '/pos/oda-servisi', label: 'Oda servisi', icon: 'bed' },
     (operate || report) && { to: '/pos/adisyonlar', label: 'Adisyonlar', icon: 'list' },
     (operate || report) && { to: '/pos/vardiyalar', label: 'Vardiyalar', icon: 'clock' },
     report && { to: '/pos/rapor', label: 'Satış raporu', icon: 'chart' },
@@ -26,7 +27,7 @@ export function PosLayout() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Restoran"
-        description="Masa planı, adisyon, sipariş, ödeme / odaya yaz ve garson vardiyası. İkram, iptal ve indirim şef garsonun; eşik üstü dört göz onaylı."
+        description="Masa planı, oda servisi, adisyon, sipariş, ödeme / odaya yaz ve garson vardiyası. İkram, iptal ve indirim şef garsonun; eşik üstü dört göz onaylı."
       />
       <TabNav label="Restoran sayfaları" tabs={tabs} />
       <Outlet context={{ isLive }} />

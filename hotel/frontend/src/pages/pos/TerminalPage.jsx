@@ -33,15 +33,23 @@ export function TerminalPage() {
   const can = useCan();
   const [params, setParams] = useSearchParams();
   if (terminal.isPending || terminal.isError) return <QueryFallback query={terminal} errorTitle="Masa planı yüklenemedi" />;
-  const { outlets, currency } = terminal.data;
+  const { outlets: allOutlets, currency } = terminal.data;
+  // Oda servisi noktasının masası yok: teslim panosundadır (modül 41). Vardiya çubuğu bütün noktaları seçtirir.
+  const outlets = allOutlets.filter((outlet) => outlet.kind !== 'ROOM_SERVICE');
   if (outlets.length === 0) {
     return (
       <Card>
         <EmptyState
           icon="utensils"
-          title="Satış noktası yok"
-          description="Restoran, lobi bar gibi satış noktalarını ve masalarını tanımlayın; menüyü ekleyin."
-          action={can(PERMISSIONS.POS_SETUP) && <Link to="/pos/tanimlar"><Button icon="settings">Tanımlara git</Button></Link>}
+          title={allOutlets.length ? 'Masa planlı satış noktası yok' : 'Satış noktası yok'}
+          description={allOutlets.length ? 'Yalnızca oda servisi noktası tanımlı; siparişler oda servisi panosunda.' : 'Restoran, lobi bar gibi satış noktalarını ve masalarını tanımlayın; menüyü ekleyin.'}
+          action={
+            allOutlets.length ? (
+              <Link to="/pos/oda-servisi"><Button icon="bed">Oda servisi panosu</Button></Link>
+            ) : (
+              can(PERMISSIONS.POS_SETUP) && <Link to="/pos/tanimlar"><Button icon="settings">Tanımlara git</Button></Link>
+            )
+          }
         />
       </Card>
     );
@@ -49,7 +57,7 @@ export function TerminalPage() {
   const outletId = outlets.some((outlet) => outlet.id === params.get('nokta')) ? params.get('nokta') : outlets[0].id;
   return (
     <div className="flex flex-col gap-4">
-      <ShiftBar outlets={outlets} currency={currency} />
+      <ShiftBar outlets={allOutlets} currency={currency} />
       {outlets.length > 1 && (
         <ChoiceChips
           label="Satış noktası"

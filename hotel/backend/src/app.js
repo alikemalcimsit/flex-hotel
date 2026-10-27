@@ -17,6 +17,7 @@ import {
   correlationIdFrom,
   originChecker,
   rateLimitKey,
+  requestLogSerializer,
   resolveJwtSecret,
   resolveTrustProxy,
 } from './lib/http-security.js';
@@ -31,6 +32,7 @@ import { registerAgencyBonusSubscribers } from './modules/agency-bonus/subscribe
 import { banquetRoutes } from './modules/banquet/routes.js';
 import { registerBanquetSubscribers } from './modules/banquet/subscribers.js';
 import { posRoutes } from './modules/pos/routes.js';
+import { publicRoomServiceRoutes } from './modules/pos/room-service-routes.js';
 import { registerPosSubscribers } from './modules/pos/subscribers.js';
 import { promotionRoutes } from './modules/promotions/routes.js';
 import { channelManagerRoutes, channexWebhookRoutes, icalExportRoutes } from './modules/channel-manager/routes.js';
@@ -135,7 +137,8 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   const maxRequests = rateLimitMax ?? Number(process.env.RATE_LIMIT_MAX ?? DEFAULT_RATE_LIMIT_MAX);
 
   const app = Fastify({
-    logger,
+    // İstek günlüğünde yolundaki belirteç maskeli (misafir oda servisi bağlantısı, iCal).
+    logger: logger === true ? { serializers: { req: requestLogSerializer } } : logger,
     genReqId: (request) => correlationIdFrom(request.headers['x-correlation-id']),
     trustProxy: resolveTrustProxy(),
   });
@@ -339,6 +342,8 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   await app.register(channexWebhookRoutes, { prefix: '/webhooks/channex' });
   await app.register(icalExportRoutes, { prefix: '/channel-ical' });
   await app.register(webchatWidgetRoutes, { prefix: '/webchat' });
+  // Oda servisi (modül 41): misafirin QR sipariş uçları (oturumsuz, imzalı bağlantıyla; sayfası modül 53).
+  await app.register(publicRoomServiceRoutes, { prefix: '/public/room-service' });
 
   app.addHook('onClose', async () => {
     await disconnectDb();

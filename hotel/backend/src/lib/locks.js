@@ -30,6 +30,9 @@
  * tablolarına dokunmaz).
  * Modül 39: vardiya → adisyon (birden fazlası kimlik sırasıyla) → rezervasyon (odaya
  * yaz yalnızca okur; folyoya kalem aktör yazar).
+ * Modül 41: vardiya → adisyon → oda servisi siparişi → rezervasyon → misafir isteği / QR
+ * bağlantısı (sipariş adisyonundan sonra kilitlenir: adisyona tur ekleyen işlem siparişin
+ * durumunu da günceller).
  *
  * Soft-delete edilmiş satırlar kilitlenmez ve "bulunamadı" sayılır.
  */
@@ -237,6 +240,31 @@ export function lockPosShifts(tx, hotelId, shiftIds, { shared = false } = {}) {
  */
 export function lockPosChecks(tx, hotelId, checkIds) {
   return lockPlainRows(tx, 'PosCheck', hotelId, checkIds, false);
+}
+
+/**
+ * Oda servisi siparişi (modül 41): kabul / ret, mutfağa gönderme, adım, teslim, iptal ve tepsi aynı siparişte
+ * sıraya girer (iki kişi aynı siparişi teslim edemez; zamanlanmış gönderim personelin iptaliyle yarışmaz).
+ * Adisyondan sonra, rezervasyondan önce alınır.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} orderIds
+ */
+export function lockRoomServiceOrders(tx, hotelId, orderIds) {
+  return lockPlainRows(tx, 'RoomServiceOrder', hotelId, orderIds, false);
+}
+
+/**
+ * Oda servisi QR bağlantısı (modül 41): yenileme / iptal ve misafirin sipariş sınırı (konaklamanın açık misafir
+ * siparişi sayısı) bağlantı kilitliyken denetlenir; aynı anda gelen iki sipariş sınırı aşamaz.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} linkIds
+ */
+export function lockRoomServiceLinks(tx, hotelId, linkIds) {
+  return lockPlainRows(tx, 'RoomServiceLink', hotelId, linkIds, false);
 }
 
 /**

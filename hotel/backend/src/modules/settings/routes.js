@@ -32,6 +32,12 @@ export async function settingsRoutes(app) {
 
   /* ── Otel bilgileri ── */
 
+  /** Ekranların otel bağlamı (ad, saat dilimi, para birimi, bugün): oturum açmış her personele. */
+  app.get('/hotel/context', { preHandler: [withHotelContext] }, async (request) => ({
+    success: true,
+    data: await service.getHotelContext(request.hotelId),
+  }));
+
   app.get('/hotel', view, async (request) => ({
     success: true,
     data: await service.getHotel(request.hotelId),

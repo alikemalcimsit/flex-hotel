@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
 /**
- * Restoran POS demo verisi (modül 39): `demo-data.mjs` çağırır.
+ * Restoran POS demo verisi (modül 39): `demo-data.mjs` çağırır. Oda servisi noktası, kahvaltı grubu ve oda servisi
+ * politikası da burada tanımlanır (modül 41); siparişleri `demo-room-service.mjs`.
  *
  * Kayıtlar **servislerle** üretilir (toplamlar, vergi, vardiya kasası, onaylar gerçek):
  * üç satış noktası (ana restoran + teras, lobi bar, odaya yazmaya kapalı havuz bar), masalar,
@@ -14,14 +15,31 @@ import { randomUUID } from 'node:crypto';
  * o güne taşınır (iş günü, açılış / kapanış, ödeme anı).
  */
 
-const SETTINGS = Object.freeze({ adjustmentApprovalAmount: '1500', cashVarianceAlert: '200' });
+const SETTINGS = Object.freeze({
+  adjustmentApprovalAmount: '1500',
+  cashVarianceAlert: '200',
+  // Oda servisi (modül 41): sipariş başına 75 TL, 30 dk teslim hedefi, misafir QR siparişi açık.
+  trayCharge: '75',
+  deliveryTargetMinutes: 30,
+  prepLeadMinutes: 30,
+  trayAlertMinutes: 90,
+  guestOrderingEnabled: true,
+});
 
-const WAITERS = Object.freeze({ ali: 'garson.ali@hotel.local', ayse: 'garson.ayse@hotel.local', can: 'barmen.can@hotel.local' });
+/** Garsonlar; oda servisi personeli `demo-room-service.mjs`'in (vardiyaları burada silinir). */
+const WAITERS = Object.freeze({
+  ali: 'garson.ali@hotel.local',
+  ayse: 'garson.ayse@hotel.local',
+  can: 'barmen.can@hotel.local',
+  odaSiparis: 'oda.siparis@hotel.local',
+  odaServis: 'oda.servis@hotel.local',
+});
 
 const OUTLETS = Object.freeze([
   { code: 'ANA', name: 'Ana Restoran', allowRoomCharge: true, sortOrder: 1 },
   { code: 'LOBI', name: 'Lobi Bar', allowRoomCharge: true, sortOrder: 2 },
   { code: 'HAVUZ', name: 'Havuz Bar', allowRoomCharge: false, sortOrder: 3 },
+  { code: 'ODA', name: 'Oda Servisi', kind: 'ROOM_SERVICE', allowRoomCharge: true, sortOrder: 4 },
 ]);
 
 const TABLES = Object.freeze([
@@ -33,6 +51,17 @@ const TABLES = Object.freeze([
 
 /** Grup → satış noktaları (boş: her yer) ve ürünler [kod, ad, fiyat, istasyon, vergi]. */
 const MENU = Object.freeze([
+  {
+    name: 'Kahvaltı',
+    outlets: ['ODA'],
+    items: [
+      ['SERPME', 'Serpme kahvaltı (kişi)', '650', 'COLD'],
+      ['OMLET', 'Peynirli omlet', '240', 'HOT'],
+      ['MENEMEN', 'Menemen', '230', 'HOT'],
+      ['SIMIT', 'Simit tabağı', '170', 'COLD'],
+      ['PORTAKAL', 'Taze portakal suyu', '160', 'BAR'],
+    ],
+  },
   {
     name: 'Başlangıçlar',
     outlets: ['ANA'],
@@ -46,7 +75,7 @@ const MENU = Object.freeze([
   },
   {
     name: 'Ana yemekler',
-    outlets: ['ANA'],
+    outlets: ['ANA', 'ODA'],
     items: [
       ['KOFTE', 'Izgara köfte', '480', 'HOT'],
       ['ADANA', 'Adana kebap', '560', 'HOT'],
@@ -67,7 +96,7 @@ const MENU = Object.freeze([
   },
   {
     name: 'Tatlılar',
-    outlets: ['ANA', 'LOBI'],
+    outlets: ['ANA', 'LOBI', 'ODA'],
     items: [
       ['KUNEFE', 'Künefe', '320', 'PASTRY'],
       ['SUTLAC', 'Fırın sütlaç', '210', 'PASTRY'],
@@ -76,7 +105,7 @@ const MENU = Object.freeze([
   },
   {
     name: 'Sıcak içecekler',
-    outlets: ['ANA', 'LOBI'],
+    outlets: ['ANA', 'LOBI', 'ODA'],
     items: [
       ['CAY', 'Çay', '60', 'BAR'],
       ['TKAHVE', 'Türk kahvesi', '110', 'BAR'],
@@ -377,6 +406,7 @@ export async function seedPosDemo({ prisma, core, contracts, hotelId, today, act
   }
 
   return {
+    roomServiceOutletId: outlets.ODA.id,
     outlets: OUTLETS.length,
     items: items.length,
     checks: created,

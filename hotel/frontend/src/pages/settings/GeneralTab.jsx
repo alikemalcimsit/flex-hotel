@@ -14,6 +14,7 @@ import { Alert, Card, Input, Select } from '@hotelos/ui';
 import { FormActions } from '../../components/FormActions.jsx';
 import { QueryFallback } from '../../components/QueryFallback.jsx';
 import { api, apiPut } from '../../lib/api.js';
+import { HOTEL_CONTEXT_KEY, HOTEL_QUERY_KEY } from '../../lib/useHotel.js';
 import { BOARD_TYPE_LABELS } from '../../lib/format.js';
 import { validateWith } from '../../lib/validate.js';
 import { toastError, toastSuccess } from '../../store/toast.js';
@@ -49,7 +50,7 @@ export function GeneralTab() {
   });
   const [errors, setErrors] = useState({});
 
-  const hotelQuery = useQuery({ queryKey: ['settings', 'hotel'], queryFn: () => api('/settings/hotel') });
+  const hotelQuery = useQuery({ queryKey: HOTEL_QUERY_KEY, queryFn: () => api('/settings/hotel') });
   const hotel = hotelQuery.data;
 
   useEffect(() => {
@@ -73,13 +74,14 @@ export function GeneralTab() {
   const saveMutation = useMutation({
     mutationFn: (values) => apiPut('/settings/general', values),
     onSuccess: (updated) => {
-      queryClient.setQueryData(['settings', 'hotel'], updated);
+      queryClient.setQueryData(HOTEL_QUERY_KEY, updated);
+      queryClient.invalidateQueries({ queryKey: HOTEL_CONTEXT_KEY });
       toastSuccess('Genel parametreler kaydedildi');
     },
     onError: (error) => {
       toastError(error.message);
       if (error.fields) setErrors(error.fields);
-      if (error.code === 'STALE_WRITE') queryClient.invalidateQueries({ queryKey: ['settings', 'hotel'] });
+      if (error.code === 'STALE_WRITE') queryClient.invalidateQueries({ queryKey: HOTEL_QUERY_KEY });
     },
   });
 
