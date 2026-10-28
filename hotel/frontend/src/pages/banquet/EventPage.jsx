@@ -13,6 +13,7 @@ import { toastError, toastSuccess } from '../../store/toast.js';
 import { EventDocumentsTab } from './EventDocumentsTab.jsx';
 import { EventHeaderDialog } from './EventFormPage.jsx';
 import { EventItemsTab } from './EventItemsTab.jsx';
+import { EventMenuTab } from './EventMenuTab.jsx';
 import { EventPaymentsTab } from './EventPaymentsTab.jsx';
 import { EventProgramTab } from './EventProgramTab.jsx';
 import { CompleteDialog, ConfirmEventDialog, EventReasonDialog, TentativeDialog } from './EventStatusDialogs.jsx';
@@ -20,6 +21,7 @@ import { CompleteDialog, ConfirmEventDialog, EventReasonDialog, TentativeDialog 
 const TABS = Object.freeze([
   { key: 'genel', label: 'Genel', icon: 'info' },
   { key: 'program', label: 'Program', icon: 'calendar' },
+  { key: 'menu', label: 'Menü', icon: 'utensils' },
   { key: 'kalemler', label: 'Fiyat kalemleri', icon: 'list' },
   { key: 'odemeler', label: 'Ödemeler', icon: 'wallet' },
   { key: 'belgeler', label: 'Belgeler', icon: 'fileText' },
@@ -167,6 +169,7 @@ export function EventPage() {
 
       {tab === 'genel' && <OverviewTab event={event} canManage={canManage} onEdit={() => setDialog('header')} />}
       {tab === 'program' && <EventProgramTab event={event} canManage={canManage} />}
+      {tab === 'menu' && <EventMenuTab event={event} />}
       {tab === 'kalemler' && <EventItemsTab event={event} canManage={canManage} />}
       {tab === 'odemeler' && <EventPaymentsTab event={event} />}
       {tab === 'belgeler' && <EventDocumentsTab event={event} canManage={canManage} />}

@@ -33,6 +33,9 @@
  * Modül 41: vardiya → adisyon → oda servisi siparişi → rezervasyon → misafir isteği / QR
  * bağlantısı (sipariş adisyonundan sonra kilitlenir: adisyona tur ekleyen işlem siparişin
  * durumunu da günceller).
+ * Modül 43: reçete grafiği (otel başına danışma kilidi) → reçete → malzeme kartı; set menü;
+ * etkinlik → (etkinlik menüsü etkinlik kilidi altında yazılır) → satın alma talebi. Talep açan
+ * işlem ilgili etkinlikleri kimlik sırasıyla kilitler: aynı eksiği iki kişi aynı anda talep edemez.
  *
  * Soft-delete edilmiş satırlar kilitlenmez ve "bulunamadı" sayılır.
  */
@@ -265,6 +268,64 @@ export function lockRoomServiceOrders(tx, hotelId, orderIds) {
  */
 export function lockRoomServiceLinks(tx, hotelId, linkIds) {
   return lockPlainRows(tx, 'RoomServiceLink', hotelId, linkIds, false);
+}
+
+/**
+ * Reçete grafiği (modül 43): ara reçete bağlayan / verim birimini değiştiren yazımlar otel başına
+ * tek sırada yürür. Satır kilidi yetmez: A'ya B'yi, aynı anda B'ye A'yı ekleyen iki kayıt
+ * birbirinin satırını görmeden döngü kurardı (her biri kendi okumasında döngü yok görür).
+ * Transaction sonunda kendiliğinden bırakılır.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ */
+export async function lockRecipeGraph(tx, hotelId) {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`recipe-graph:${hotelId}`}, 0))`;
+}
+
+/**
+ * Reçete (modül 43): düzenleme sürüm damgasıyla (kilit altında) denetlenir. Sıra: reçete grafiği → reçete.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} recipeIds
+ */
+export function lockRecipes(tx, hotelId, recipeIds) {
+  return lockPlainRows(tx, 'Recipe', hotelId, recipeIds, false);
+}
+
+/**
+ * Malzeme kartı (modül 43; 44'te stok hareketleri de bu kilitle): düzenleme sürüm damgasıyla.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} stockItemIds
+ */
+export function lockStockItems(tx, hotelId, stockItemIds) {
+  return lockPlainRows(tx, 'StockItem', hotelId, stockItemIds, false);
+}
+
+/**
+ * Set menü (modül 43): katalog düzenlemesi sürüm damgasıyla.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} menuIds
+ */
+export function lockBanquetMenus(tx, hotelId, menuIds) {
+  return lockPlainRows(tx, 'BanquetMenu', hotelId, menuIds, false);
+}
+
+/**
+ * Satın alma talebi (modül 43 / 45): iptal (ve 45'te onay / siparişe çevirme) kilit altında.
+ * Sıra: etkinlik → satın alma talebi.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} requestIds
+ */
+export function lockPurchaseRequests(tx, hotelId, requestIds) {
+  return lockPlainRows(tx, 'PurchaseRequest', hotelId, requestIds, false);
 }
 
 /**

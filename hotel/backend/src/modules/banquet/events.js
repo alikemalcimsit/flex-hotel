@@ -19,10 +19,12 @@ import { findActiveStaffByEmail } from '../../lib/staff.js';
 import { writeWithEvents } from '../../lib/write.js';
 import { raiseStaffAlert } from '../notifications/staff-alerts.js';
 import { eventPaymentTotals } from './payments.js';
+import { alertCancelledRequests, alertPaxChange, shiftSessionMenus } from './fnb-hooks.js';
 import {
   allocateInstallments,
   atomicVenueIds,
   amountDue,
+  billablePax,
   cancellationFee,
   eventRefundLimit,
   holdRank,
@@ -148,7 +150,7 @@ function eventSummary(row, timezone) {
  * @param {string} eventId
  * @param {Date | null} expectedUpdatedAt
  */
-async function lockedEvent(tx, hotelId, eventId, expectedUpdatedAt) {
+export async function lockedEvent(tx, hotelId, eventId, expectedUpdatedAt) {
   await lockEvents(tx, hotelId, [eventId]);
   const event = await tx.event.findFirst({
     where: { id: eventId, hotelId },
@@ -180,12 +182,12 @@ async function lockedEvent(tx, hotelId, eventId, expectedUpdatedAt) {
 }
 
 /** @param {{ status: string }} event @param {string} action */
-function assertEditable(event, action) {
+export function assertEditable(event, action) {
   if (event.status === 'CANCELLED' || event.status === 'LOST') throw new ConflictError(`Kapanmış etkinlikte ${action} yapılamaz`, 'EVENT_CLOSED');
 }
 
 /** @param {{ status: string }} event @param {string} action */
-function assertProgramEditable(event, action) {
+export function assertProgramEditable(event, action) {
   assertEditable(event, action);
   if (event.status === 'COMPLETED') throw new ConflictError(`Gerçekleşmiş etkinlikte ${action} yapılamaz`, 'EVENT_COMPLETED');
 }
@@ -611,6 +613,7 @@ export async function getEvent(hotelId, eventId) {
           taxAmount: true,
           total: true,
           taxLines: true,
+          eventMenuId: true,
           equipment: { select: { code: true, name: true, isActive: true } },
         },
       },
@@ -703,6 +706,8 @@ export async function getEvent(hotelId, eventId) {
       taxAmount: money(item.taxAmount),
       total: money(item.total),
       taxLines: item.taxLines,
+      // Menüden gelen kalem (modül 43): kalem tablosunda salt okunur, menü sekmesinde düzenlenir.
+      eventMenuId: item.eventMenuId,
     })),
     installments: allocateInstallments(
       row.installments.map((entry) => ({ id: entry.id, label: entry.label, dueDate: day(entry.dueDate), amount: money(entry.amount) })),
@@ -935,7 +940,8 @@ export async function updateEvent(hotelId, eventId, input) {
         notes: input.notes ?? null,
       };
       await tx.event.update({ where: { id: eventId }, data });
-      await recomputeEventTotals(tx, hotelId, eventId);
+      const totals = await recomputeEventTotals(tx, hotelId, eventId);
+      await alertPaxChange(tx, stage, { hotelId, event: full, beforePax: billablePax(full), afterPax: totals.billablePax });
       await recordAudit(tx, { hotelId, entity: 'Event', entityId: eventId, action: 'UPDATE', before: eventSnapshot(full), after: eventSnapshot({ ...full, ...data }) });
       await stage('banquet.event.changed', { hotelId, eventId, change: 'UPDATED' });
     });
@@ -982,6 +988,7 @@ export async function saveSession(hotelId, eventId, sessionId, input) {
       if (event.status === 'TENTATIVE' || event.status === 'DEFINITE') {
         await writeSessionHolds(tx, { hotelId, eventId, session, venues, status: event.status, now: new Date() });
       }
+      if (before) await shiftSessionMenus(tx, stage, { hotelId, event, before, after: session, timezone: context.timezone });
       await refreshEventSpan(tx, eventId);
       if (event.status === 'DEFINITE') await equipmentShortages(tx, hotelId, eventId, { strict: true });
       if (event.status === 'TENTATIVE' && event.optionUntil) {
@@ -1037,6 +1044,8 @@ export async function deleteSession(hotelId, eventId, sessionId, { expectedUpdat
     assertProgramEditable(event, 'program değişikliği');
     const session = await tx.eventSession.findFirst({ where: { id: sessionId, eventId } });
     if (!session) throw new NotFoundError('Oturum bulunamadı');
+    const menus = await tx.eventMenu.count({ where: { sessionId } });
+    if (menus > 0) throw new ConflictError(`Bu oturumda ${menus} menü var; önce menüyü kaldırın ya da başka oturuma taşıyın (Menü sekmesi).`, 'SESSION_IN_USE');
     const linked = await tx.eventItem.count({ where: { sessionId } });
     if (linked > 0) throw new ConflictError(`Bu oturuma bağlı ${linked} kalem var; önce kalemleri başka oturuma bağlayın ya da kaldırın.`, 'SESSION_IN_USE');
     const remaining = await tx.eventSession.count({ where: { eventId } });
@@ -1062,11 +1071,13 @@ export async function deleteSession(hotelId, eventId, sessionId, { expectedUpdat
  * @param {{ expectedUpdatedAt: Date, items: any[] }} input `saveEventItemsSchema`
  */
 export async function saveItems(hotelId, eventId, { expectedUpdatedAt, items }) {
-  if (items.length > MAX_EVENT_ITEMS) throw new ValidationError(`En fazla ${MAX_EVENT_ITEMS} kalem`);
   try {
     await writeWithEvents(async (tx, stage) => {
       const event = await lockedEvent(tx, hotelId, eventId, expectedUpdatedAt);
       assertEditable(event, 'kalem değişikliği');
+      // Menüden gelen kalemler (modül 43) tabloda yok: menü sekmesi yönetir; sınır ikisinin toplamına.
+      const menuItems = await tx.eventItem.count({ where: { eventId, eventMenuId: { not: null } } });
+      if (items.length + menuItems > MAX_EVENT_ITEMS) throw new ValidationError(`En fazla ${MAX_EVENT_ITEMS} kalem (menülerden gelen ${menuItems} kalem dahil)`);
       const sessionIds = new Set((await tx.eventSession.findMany({ where: { eventId }, select: { id: true } })).map((row) => row.id));
       const equipmentIds = [...new Set(items.map((item) => item.equipmentId).filter(Boolean))];
       const equipment = equipmentIds.length ? await tx.eventEquipment.findMany({ where: { hotelId, id: { in: equipmentIds } }, select: { id: true, isActive: true } }) : [];
@@ -1082,7 +1093,7 @@ export async function saveItems(hotelId, eventId, { expectedUpdatedAt, items }) 
       if (Object.keys(fields).length) throw new ValidationError('Kalemlerde düzeltilmesi gereken alanlar var', { fields });
 
       const before = await tx.event.findFirst({ where: { id: eventId }, select: { grandTotal: true, _count: { select: { items: true } } } });
-      await tx.eventItem.deleteMany({ where: { eventId } });
+      await tx.eventItem.deleteMany({ where: { eventId, eventMenuId: null } });
       if (items.length) {
         await tx.eventItem.createMany({
           data: items.map((item, index) => ({
@@ -1413,6 +1424,7 @@ export async function cancelEvent(hotelId, eventId, { expectedUpdatedAt, reason 
       });
     }
     await alertPromoted(tx, stage, hotelId, promotions, `"${event.name}" iptal edildi.`);
+    await alertCancelledRequests(tx, stage, { hotelId, event });
     await stage('banquet.event.changed', { hotelId, eventId, change: 'CANCELLED' });
   });
   return getEvent(hotelId, eventId);

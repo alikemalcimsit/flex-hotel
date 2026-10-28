@@ -96,6 +96,23 @@ export async function matchRoomIdsByNumber(client, hotelId, token) {
 }
 
 /**
+ * Adı ya da kodu kelimeyi içeren malzeme kartları (modül 43: satın alma talebinde malzeme araması).
+ * @param {import('@prisma/client').PrismaClient} client
+ * @param {string} hotelId
+ * @param {string} token
+ * @returns {Promise<string[]>}
+ */
+export async function matchStockItemIds(client, hotelId, token) {
+  const rows = await client.stockItem.findMany({
+    where: { hotelId, OR: [{ name: containsText(token) }, { code: containsText(token) }] },
+    select: { id: true },
+    orderBy: { name: 'asc' },
+    take: RELATED_MATCH_LIMIT,
+  });
+  return rows.map((row) => row.id);
+}
+
+/**
  * Hiçbir kayda uymayan koşul: kelimenin arandığı alan kalmadıysa liste boş döner.
  */
 export const MATCH_NOTHING = Object.freeze({ id: { in: [] } });

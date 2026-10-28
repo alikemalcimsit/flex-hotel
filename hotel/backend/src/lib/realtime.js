@@ -6,6 +6,8 @@ import {
   AGENCY_BONUS_EVENTS,
   BANQUET_EVENTS,
   POS_EVENTS,
+  PURCHASE_EVENTS,
+  RECIPE_EVENTS,
   PROMOTION_EVENTS,
   CHANNEL_EVENTS as CHANNEL_MANAGER_EVENTS,
   EXTRAS_EVENTS,
@@ -111,6 +113,12 @@ export const BANQUET_CHANNEL = 'banquet.changed';
 /** Restoran POS (modül 39): masa planı, adisyon, sipariş turu, ödeme, vardiya, tanımlar. */
 export const POS_CHANNEL = 'pos.changed';
 
+/** Reçete ve malzeme kartı (modül 43): reçete, malzeme, birim maliyet — banket F&B ekranlarının maliyeti de. */
+export const RECIPES_CHANNEL = 'recipes.changed';
+
+/** Satın alma talebi (modül 43 / 45): talep listesi, banket ihtiyacının "talep edildi" sütunu. */
+export const PURCHASING_CHANNEL = 'purchasing.changed';
+
 /** Promosyon ve kupon (modül 31): promosyon, kupon üretimi / kapatma. */
 export const PROMOTION_CHANNEL = 'promotions.changed';
 
@@ -147,6 +155,8 @@ const CHANNEL_EVENTS = Object.freeze({
   [AGENCY_BONUS_CHANNEL]: AGENCY_BONUS_EVENTS,
   [BANQUET_CHANNEL]: BANQUET_EVENTS,
   [POS_CHANNEL]: POS_EVENTS,
+  [RECIPES_CHANNEL]: RECIPE_EVENTS,
+  [PURCHASING_CHANNEL]: PURCHASE_EVENTS,
   [PROMOTION_CHANNEL]: PROMOTION_EVENTS,
   [CHANNEL_MANAGER_CHANNEL]: CHANNEL_MANAGER_EVENTS,
 });

@@ -2347,11 +2347,11 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 38. Menü & reçete — Ali Kemal
 **Gün sonu:** Restoran menüsü ve her ürünün reçetesi tanımlı; ürün maliyeti otomatik hesaplanıyor.
-- [ ] Backend: MenuCategory, MenuItem, Recipe, RecipeLine tabloları + API — **MenuCategory / MenuItem + API modül 39'da yapıldı** (aşağıdaki not); Recipe / RecipeLine Ali'de
-- [ ] Backend: maliyet hesabı (reçete satırları × stok birim maliyeti)
+- [ ] Backend: MenuCategory, MenuItem, Recipe, RecipeLine tabloları + API — **MenuCategory / MenuItem + API modül 39'da yapıldı** (aşağıdaki not); **Recipe / RecipeLine + API modül 43'te yapıldı** (aşağıdaki not)
+- [ ] Backend: maliyet hesabı (reçete satırları × stok birim maliyeti) — **modül 43'te yapıldı** (malzeme kartının birim maliyetiyle; 44 hareketli ortalamayı yazar)
 - [ ] Ekran: Menü grupları ve ürünler (ad, fiyat, KDV, görsel, aktif) — **görsel dışında modül 39'da yapıldı** (`/pos/tanimlar`)
-- [ ] Ekran: Reçete editörü (ürün → malzeme + miktar + birim)
-- [ ] Ekran: Maliyet / kâr marjı tablosu
+- [ ] Ekran: Reçete editörü (ürün → malzeme + miktar + birim) — **modül 43'te yapıldı** (`/mutfak`)
+- [ ] Ekran: Maliyet / kâr marjı tablosu — **modül 43'te yapıldı** (reçete listesi, "yalnız menü ürünleri")
 - [ ] Ekran: QR menü için public JSON çıktısı (53 kullanır)
 
 > **📌 Ali'ye not (modül 39, 20 Ekim 2026 — Ahmet):** kullanıcı kararıyla 38'in **menü kısmı** POS'la birlikte yapıldı:
@@ -2360,6 +2360,12 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 > `/pos/menu/items` (+ `/sold-out`), tanım ekranı `/pos/tanimlar`, izin `pos.setup`. Silme yok (satılan ürün pasife alınır; adisyon
 > kalemi gönderildiği anki ad / fiyat / vergi / istasyonu kopyalar). **Sende kalan:** Recipe / RecipeLine, maliyet ve kâr marjı,
 > ürün görseli, QR menü JSON'u — `MenuItem`'a bağlanabilir. Stok düşümü için POS `fnb.order.paid` yayınlıyor (modül 39 notu).
+>
+> **📌 Ali'ye not (modül 43, 27 Ekim 2026 — Ahmet):** kullanıcı kararıyla 38'in **reçete kısmı** (Recipe / RecipeLine, maliyet, reçete
+> editörü, maliyet / kâr marjı tablosu) ve 44'ün **yalın stok kartı** (`StockItem`: kod, ad, grup, stok birimi, birim maliyet, alerjen)
+> banket F&B ile birlikte yapıldı (modül 43 notu). Reçete satırı malzeme ya da ara reçete, fire yüzdeli; reçete restoran ürününe
+> (`Recipe.menuItemId`) bağlanır. **Sende kalan:** ürün görseli, QR menü JSON'u; 44'te depo / hareket / sayım ve hareketli ortalama
+> maliyetin `StockItem.unitCost`'u güncellemesi, `fnb.order.paid` ile reçeteden stok düşümü.
 
 ### 39. Restoran POS — arkadaşın
 **Gün sonu:** Garson masayı açıp sipariş giriyor, adisyon kapatıyor, ödeme alıyor veya odaya yazıyor.
@@ -2557,10 +2563,98 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 43. Banket F&B planlaması — arkadaşın
 **Gün sonu:** Etkinliğin menüsü seçiliyor; kişi sayısına göre malzeme ihtiyacı ve maliyet çıkıyor.
-- [ ] Backend: EventMenu tablosu; reçeteden kişi sayısına göre malzeme hesaplama
-- [ ] Ekran: Etkinlik menüsü seçimi (set menü, kişi başı fiyat)
-- [ ] Ekran: Malzeme ihtiyaç listesi (satın alma talebine çevir → 45)
-- [ ] Ekran: Mutfak üretim planı (gün / saat)
+- [x] Backend: EventMenu tablosu; reçeteden kişi sayısına göre malzeme hesaplama
+- [x] Ekran: Etkinlik menüsü seçimi (set menü, kişi başı fiyat)
+- [x] Ekran: Malzeme ihtiyaç listesi (satın alma talebine çevir → 45) — talep tablosu 45'in şekliyle burada kuruldu (aşağıda)
+- [x] Ekran: Mutfak üretim planı (gün / saat)
+
+> **📌 Modül 43 tamamlandı (27 Ekim 2026 — Ahmet).**
+>
+> **Kararlar (kullanıcı, 27 Ekim 2026):** 38'in **reçete kısmı** ve 44'ün **yalın stok kartı** (`StockItem`) burada kuruldu (39'daki menü
+> emsali); set menü **katalog + etkinlikte uyarlama** (katalog kopyalanır, etkinlikte değişir, katalog sonradan değişse de dosya
+> bozulmaz); **satın alma talebi tablosu 45'in şekliyle şimdi** (talep + satır + numara serisi; teklif / sipariş / mal kabul 45'te).
+>
+> **Veri** (migration `20261028090000_banquet_fnb`): `StockItem` (kod, ad — harf duyarsız tekil, grup, stok birimi, KDV hariç birim
+> maliyet + maliyet damgası, alerjenler — 14 grup CHECK'li), `Recipe` (yemek: porsiyon / ara ürün: kg-L-adet — CHECK; istasyon; **servisten
+> önce hazırlık süresi** 0–3 gün; restoran ürününe tek bağ), `RecipeLine` (malzeme **ya da** ara reçete — tam biri CHECK, kendini
+> içeremez; net miktar + birim + **fire %**), `BanquetMenu` / `…Course` / `…Dish` (kurs türü **hepsi / seçmeli**, kişi başı porsiyon),
+> `EventMenu` (oturumun öğünü, servis anı, kendi kişisi ya da etkinliğinki, fiyat / indirim / vergi, mutfak notu, **mutfağa kesinleşme**
+> izi CHECK'li) / `…Course` / `…Dish` (seçmelide sabit kişi; boş = kalan), `EventItem.eventMenuId` (menünün fiyat kalemi, tekil),
+> `EventSettings.overproductionPct` (%0–30) ve `menuFinalizeDays` (0–60), `PurchaseRequest` (STR-yıl-sıra, açık / iptal, iptal izi CHECK)
+> / `PurchaseRequestLine` (malzeme × etkinlik, stok birimi kopyası, ihtiyaç günü, talep anındaki birim maliyet), `PurchaseSequence`.
+>
+> **Kurallar** (contracts `recipes.js` / `banquet-fnb.js` + `recipes/rules.js` / `banquet/fnb-rules.js`, birim testli): birim aileleri ve
+> çevrim (kg↔g, L↔ml; aileler arası yok), brüt = net ÷ (1 − fire), reçetenin malzemeye açılması (ara ürünler dahil, her malzemenin
+> **servisten kaç dakika önce** gerektiği), maliyet (önbellekli) ve alerjen, döngü / derinlik (≤ 4 seviye), **hazırlanacak porsiyon** =
+> servis edilen kişi × kişi başı porsiyon × (1 + fazla hazırlık), yukarı — **tam sayı aritmetiği** (0,3 × 350 = 105, 106 değil),
+> seçmeli kurs dağılımı (sabitler + bir "kalan"; aşım / tutmama sorunu), satın alma yuvarlaması (kg / L binde bir, g / ml / adet tam),
+> etkinlik × malzeme ihtiyacı (etkinlik düzeyinde yuvarlanır; **eksik etkinlik başına** — bir etkinliğe fazla istenen başka etkinliğin
+> eksiğini kapatmaz, teslim günü farklı olabilir), talebin etkinliklere dağıtımı (erken ihtiyaç önce; fazlası en erken ihtiyaca),
+> üretim görevleri (yemek servisten süresi kadar önce, ara ürün onu kullananın başlangıcından önce; aynı ara ürün birleşir).
+>
+> **Akış ve eşzamanlılık:** reçete kaydı **otel başına danışma kilidiyle** (A'ya B, aynı anda B'ye A eklenemez — testli), kullanılan
+> reçetenin verim ailesi değişemez, banket menüsündeki yemek ara ürüne çevrilemez, kullanılan malzemenin birim ailesi değişemez.
+> Etkinlik menüsü yazımları **etkinlik kilidi + dosya sürümüyle**; menü kaydı fiyat kalemini yazar ve toplamları aynı transaction'da
+> yeniden hesaplar; kalem tablosu menü kalemine dokunmaz. Kesinleştirme yalnız kesin dosyada ve sorunsuz menüde; kesin menü değişmez /
+> kalkmaz, **gerekçeyle yeniden açılır**. Satın alma talebi kapsamdaki etkinlikleri **kimlik sırasıyla kilitler**, eksiği kilit altında
+> yeniden hesaplar; ekranın gördüğü eksik tutmazsa açılmaz (`NEEDS_CHANGED` — aynı eksik iki kez talep edilemez, testli). Kilit sırası:
+> reçete grafiği → reçete → malzeme; etkinlik → satın alma talebi.
+>
+> **Mutfağa haber** (talep açabilenlere, zil): menü kesinleşti; kesin menü yeniden açıldı (talep edilmiş satır varsa söylenir);
+> oturum kayınca kesin menünün servisi kaydı (menüler aynı farkla kayar, oturum dışına taşan sınıra çekilir); faturalanacak kişi
+> değişti (kişiyi izleyen kesin menü varsa); kesin etkinlik iptal edildi ve açık talebi var. **İş** (banket turu, 15 dk): ilk gününe
+> politikadaki gün kalan kesin etkinliğin kesinleşmemiş menüsü sorumluya bir kez.
+>
+> **Belge:** teklif / sözleşmede menünün içeriği (kurs, yemek — menüdeki adıyla, seçmelide kişiler, **alerjenler**); proformada fiyat
+> kalemi yeter. Eski anlık görüntüler bozulmaz.
+>
+> **API:** `/recipes` (liste — maliyet / kâr marjı, ekran — satır brütü ve maliyeti, kullanıldığı yerler; yaz; **kaydetmeden maliyet
+> önizlemesi**; seçici; menü ürünü seçici; `/stock-items`), `/banquet/menus` (katalog), `/banquet/events/:id/fnb` (menü sekmesi),
+> `/banquet/events/:id/menus` (+ `/finalize`, `/reopen`), `/banquet/fnb/needs` (≤ 31 gün, olası dahil, malzeme dökümü),
+> `/banquet/fnb/production` (≤ 7 gün, istasyon), `/purchasing/requests` (liste — numara / malzeme araması, etkinlik, ihtiyaç günü;
+> ekran; banket ihtiyacından aç; iptal). İzinler yeni: `recipes.view` (müdür, F&B, muhasebe), `recipes.manage` (müdür; şef için
+> matristen), `purchasing.view` (müdür, F&B, muhasebe), `purchasing.request` (müdür, F&B). **Maliyet alanları yalnız
+> `recipes.view` olana döner** (sunucuda; ön büro menüyü görür, maliyeti görmez — testli). Canlı kanallar `recipes.changed`,
+> `purchasing.changed`; banket kanalına `banquet.menu.changed` ve `MENUS` değişikliği.
+>
+> **Ekran:** Mutfak (`/mutfak`): reçeteler (maliyet, KDV hariç satış, **gıda maliyeti %** — %30 / %38 eşikleri, alerjen, yalnız menü
+> ürünleri süzgeci), reçete ekranı (satırlar, birim seçici aileyle sınırlı, canlı maliyet önizlemesi, kâr marjı, kullanıldığı
+> yerler; görme yetkisinde salt okunur), malzeme kartları. Etkinlikler: **Set menüler** (katalog, kişi başı maliyet — seçmelide en pahalı
+> seçenekle), **Malzeme ihtiyacı** (gruba göre — kasap / manav…, kesin / olası / talep / eksik / mutfakta olmalı günü, etkinlik dökümü,
+> grup süzgeciyle talebe çevir, A4 çıktı), **Mutfak planı** (gün → saat → istasyon görevleri, taslak menü işareti, A4 çıktı — işaret
+> kutulu). Dosyada **Menü** sekmesi (katalogdan başla, seçmelide canlı "kalan", porsiyon planı, maliyet / gıda maliyeti, kesinleştir /
+> yeniden aç, malzeme ihtiyacı ve talebe çevir, açılmış talepler); kalem tablosunda menü kalemleri salt okunur; politikada fazla
+> hazırlık payı ve menü kesinleştirme süresi. Satın alma (`/satin-alma/talepler`): liste, talep ekranı (malzeme × etkinlik dökümü),
+> gerekçeli iptal, A4 çıktı.
+>
+> **Ölçüm** (`scripts/perf-banquet-fnb.mjs`; 1.500 malzeme, 3.000 reçete, 60 set menü, banket ölçüm etkinliklerinde 44.681 menü, 20.000
+> talep — 200.290 satır): reçete listesi / ekranı / önizleme / seçici 13–21 ms, malzeme
+> listesi 5 ms, set menü listesi (maliyetli) 55 ms, etkinliğin menü sekmesi 67 ms, **ihtiyaç 7 gün 151 ms**, 31 gün (473 etkinlik, 725
+> menü, 1.500 malzeme, olası dahil) 1,1 sn, **üretim planı 1 gün 165 ms** / 7 gün (2.531 görev) 0,5 sn, talepler 4–20 ms (numara / malzeme
+> adı araması ~100 ms, derin sayfa 700 19 ms), talep ekranı 8 ms, menü kaydet → kesinleştir → yeniden aç → kaldır 0,42 sn, yarının et
+> grubunu talebe çevirme 134 ms. Ölçümle düzeltilen: 31 günlük ihtiyaç 2,6 sn → 1,1 sn, 7 gün 0,6 → 0,15 sn, 1 günlük plan 0,69 → 0,17
+> sn — reçete grafiği ve planlama menüleri düz SQL'le (Prisma'nın iç içe kurulumu yerine), reçete başına önbellekli "birim ihtiyaç"
+> (yemek başına yeniden açılmaz), ihtiyaç günü aynı an için bir kez biçimlenir (90 bin `Intl` çağrısı ~0,5 sn'ydi), üretim planı
+> penceresi sabit 12 gün yerine otelin en uzun hazırlık süresinden; talep listesinde malzeme araması önce malzemeyi trigram index'iyle
+> bulur. Sorgu planları index'te (aralığın menüleri 2,8 ms, talep edilmiş miktarlar 8,6 ms, talep listesi 0,06 ms). Not: ölçüm
+> verisi kötümser — 725 menü 2.400 yemekten rastgele 2.800 reçeteyi açıyor; gerçek banket yemeği sayısı yüzlerle.
+>
+> **Test:** kurallar 19 (önbellekli birim ihtiyacı = açılım, yuvarlama gürültüsü dahil) + F&B kuralları 7 + sözleşme 13 + ön yüz 8 birim; entegrasyon 14 (malzeme adı / birim ailesi, reçete maliyet / fire /
+> ara ürün / önizleme = kayıt, birim uyumu, döngü / derinlik / **eşzamanlı döngü**, pasif malzeme, menü ürünü bağı ve kâr marjı, set menü
+> maliyeti, etkinlik menüsü — elle hesaplanmış porsiyon / malzeme / 86.334,11 maliyet / %18,7, kalem tablosunun menü kalemini koruması,
+> servis saati / oturum / otel kapsamı / sürüm, kesinleştirme kilidi ve mutfak haberleri — saat kayması, kişi değişimi, yeniden açma,
+> teklif belgesinde menü, aralık ihtiyacı kesin / olası, satın alma dağıtımı / numara / eksik değişti / **eşzamanlı aynı eksik** / iptal /
+> iptal edilen etkinlik haberi, üretim planı saatleri, hatırlatma işi, izinler ve maliyet gizliliği).
+>
+> **Yan düzeltmeler:** sözleşme dizininde `export *` çakışması adı sessizce düşürüyordu (yeni `MAX_LINE_QUANTITY` rezervasyonunkini
+> görünmez yaptı, talep notu istek notunun sınırına düştü) — adlar ayrıldı, **dizin denetimi testi** eklendi (her yıldızlı modülün her
+> adı index'ten aynı değerle gelmeli; bilinen tek zararsız tekrar gerekçeli istisna); kenar çubuğunda alt bağlantı `end` bayrağını yok sayıyordu (üst sayfa alt sayfada da seçili görünürdü);
+> diyalog kabuğuna geniş boy (`xl`).
+>
+> **Devir:** 44 — `StockItem` hazır: depo / hareket / sayım ve **hareketli ortalama maliyet** (birim maliyeti günceller) eklenir; reçete
+> satırları stoktan düşüm için hazır. 45 — talep tablosu hazır: durumları (onay / siparişe döndü) ve kaynakları (elle, stoktan öneri)
+> genişletir; teklif / sipariş / mal kabul; banket talepleri satır başına etkinliğiyle gelir (siparişte malzeme başına birleştirilir).
+> 53 — QR menü JSON'u (38'in kalanı) reçeteden alerjeni alabilir.
 
 ---
 
@@ -2578,9 +2672,14 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 - [ ] Ekran: Maliyet raporu (ürün / reçete bazlı)
 - [ ] Aktör: inventory-worker paketi (`order.paid` → reçete satırlarını düş; stok < min → `purchase.request.suggested`)
 
+> **📌 Ali'ye not (modül 43, 27 Ekim 2026 — Ahmet):** `StockItem` tablosu ve API'si (`/recipes/stock-items`, izin `recipes.manage`)
+> modül 43'te kuruldu; depo / hareket / sayım ve hareketli ortalama maliyet bunun **üstüne** eklenir (birim maliyeti siz yazarsınız;
+> `costUpdatedAt` damgası var). Malzemenin birim ailesi reçetede kullanılırken değişemez (kg ↔ L). Satın alma talebi (45) satırları
+> `StockItem`'a bağlı.
+
 ### 45. Satın alma — arkadaşın
 **Gün sonu:** Talep → teklif karşılaştırma → sipariş → mal kabul zinciri kayıtlı; mal kabulde stok otomatik giriyor.
-- [ ] Backend: Supplier, PurchaseRequest, PurchaseQuote, PurchaseOrder, GoodsReceipt tabloları + API
+- [ ] Backend: Supplier, PurchaseRequest, PurchaseQuote, PurchaseOrder, GoodsReceipt tabloları + API — **PurchaseRequest (+ satır, numara serisi) modül 43'te kuruldu** (banket ihtiyacından talep, liste, ekran, iptal); durumlar / kaynaklar burada genişler
 - [ ] Backend: sipariş tutarı eşik üstü → `approval.requested`; mal kabul → stok girişi + tedarikçi borcu event'i
 - [ ] Ekran: Tedarikçi kartları
 - [ ] Ekran: Talep formu (talep eden, ürün, miktar, ihtiyaç tarihi) + otomatik önerilen talepler listesi

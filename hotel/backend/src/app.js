@@ -32,6 +32,8 @@ import { registerAgencyBonusSubscribers } from './modules/agency-bonus/subscribe
 import { banquetRoutes } from './modules/banquet/routes.js';
 import { registerBanquetSubscribers } from './modules/banquet/subscribers.js';
 import { posRoutes } from './modules/pos/routes.js';
+import { purchasingRoutes } from './modules/purchasing/routes.js';
+import { recipeRoutes } from './modules/recipes/routes.js';
 import { publicRoomServiceRoutes } from './modules/pos/room-service-routes.js';
 import { registerPosSubscribers } from './modules/pos/subscribers.js';
 import { promotionRoutes } from './modules/promotions/routes.js';
@@ -332,6 +334,8 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   await app.register(agencyBonusRoutes, { prefix: '/agency-bonus' });
   await app.register(banquetRoutes, { prefix: '/banquet' });
   await app.register(posRoutes, { prefix: '/pos' });
+  await app.register(recipeRoutes, { prefix: '/recipes' });
+  await app.register(purchasingRoutes, { prefix: '/purchasing' });
   await app.register(promotionRoutes, { prefix: '/promotions' });
   await app.register(channelManagerRoutes, { prefix: '/channel-manager' });
   await app.register(manualTaskRoutes, { prefix: '/manual-tasks' });

@@ -6,6 +6,8 @@ import { ConflictError, NotFoundError, StaleWriteError, ValidationError, rethrow
 import { openFile, removeFiles, saveFile } from '../../lib/file-storage.js';
 import { lockEvents } from '../../lib/locks.js';
 import { writeWithEvents } from '../../lib/write.js';
+import { loadRecipeGraph } from '../recipes/graph.js';
+import { allergenCalculator } from '../recipes/rules.js';
 import { getActiveTaxes } from '../settings/service.js';
 import { renderEventDocument } from './pdf.js';
 import { documentDecisionError, documentIssueError, documentNumber, eventTotals, itemLine, offerValidUntil } from './rules.js';
@@ -89,10 +91,26 @@ async function buildSnapshot(tx, { hotelId, eventId, kind, hotel, timezone, toda
           },
         },
         installments: { orderBy: [{ dueDate: 'asc' }, { sortOrder: 'asc' }], select: { label: true, dueDate: true, amount: true } },
+        // Modül 43: menünün içeriği teklif / sözleşmede yazar (proformada fiyat kalemi yeter).
+        menus: {
+          orderBy: [{ serveAt: 'asc' }, { id: 'asc' }],
+          select: {
+            name: true,
+            serveAt: true,
+            guests: true,
+            session: { select: { title: true } },
+            courses: {
+              orderBy: { sortOrder: 'asc' },
+              select: { name: true, mode: true, dishes: { orderBy: { sortOrder: 'asc' }, select: { recipeId: true, label: true, guestCount: true, recipe: { select: { name: true } } } } },
+            },
+          },
+        },
       },
     }),
     loadEventSettings(tx, hotelId),
   ]);
+  const menuRecipeIds = event.menus.flatMap((menu) => menu.courses.flatMap((course) => course.dishes.map((dish) => dish.recipeId)));
+  const allergensOf = allergenCalculator(await loadRecipeGraph(tx, hotelId, menuRecipeIds));
   const sessionTitles = new Map(event.sessions.map((session) => [session.id, session.title]));
   const firstDay = event.firstStartAt ? utcToZonedWallTime(event.firstStartAt, timezone).slice(0, 10) : null;
 
@@ -154,6 +172,20 @@ async function buildSnapshot(tx, { hotelId, eventId, kind, hotel, timezone, toda
       endLocal: utcToZonedWallTime(session.endAt, timezone),
     })),
     items: items.map(({ taxLines, ...rest }) => rest),
+    menus:
+      kind === 'PROFORMA'
+        ? []
+        : event.menus.map((menu) => ({
+            name: menu.name,
+            sessionTitle: menu.session.title,
+            serveLocal: utcToZonedWallTime(menu.serveAt, timezone),
+            guests: menu.guests ?? event.billablePax,
+            courses: menu.courses.map((course) => ({
+              name: course.name,
+              mode: course.mode,
+              dishes: course.dishes.map((dish) => ({ name: dish.label ?? dish.recipe.name, guestCount: dish.guestCount, allergens: allergensOf(dish.recipeId) })),
+            })),
+          })),
     totals,
     installments: kind === 'PROFORMA' ? [] : event.installments.map((entry) => ({ label: entry.label, dueDate: day(entry.dueDate), amount: money(entry.amount) })),
     cancellationTiers: kind === 'CONTRACT' ? tiers : [],

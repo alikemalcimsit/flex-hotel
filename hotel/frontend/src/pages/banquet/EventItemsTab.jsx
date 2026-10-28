@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   EVENT_ITEM_CATEGORIES,
@@ -28,14 +29,16 @@ const cellClass = (error) => `${CELL} ${error ? 'border-sec-strong' : 'border-li
  * birim, birim fiyat (vergi dahil), indirim ve vergi kategorisi. Tablo bütün olarak
  * kaydedilir (sürümlü). Satırın tutarı ekranda kuruş hassasiyetiyle önizlenir; kesin
  * tutar ve vergi kayıtta sunucuda hesaplanır. Kesin etkinlikte ekipman stoğu
- * kayıtta denetlenir.
+ * kayıtta denetlenir. Menüden gelen kalemler (modül 43) tabloda yok: üstte salt okunur
+ * durur, Menü sekmesinde düzenlenir (kalem kaydı onlara dokunmaz).
  *
  * @param {{ event: any, canManage: boolean }} props
  */
 export function EventItemsTab({ event, canManage }) {
   const queryClient = useQueryClient();
   const editable = canManage && !['CANCELLED', 'LOST'].includes(event.status);
-  const saved = useMemo(() => event.items.map(itemRowOf), [event.items]);
+  const saved = useMemo(() => event.items.filter((item) => !item.eventMenuId).map(itemRowOf), [event.items]);
+  const menuItems = useMemo(() => event.items.filter((item) => item.eventMenuId), [event.items]);
   const [rows, setRows] = useState(saved);
   const [dirty, setDirty] = useState(false);
   const [errors, setErrors] = useState({});
@@ -114,6 +117,7 @@ export function EventItemsTab({ event, canManage }) {
             {Object.values(errors._).join(' · ')}
           </Alert>
         )}
+        {menuItems.length > 0 && <MenuItems items={menuItems} event={event} />}
         {rows.length === 0 ? (
           <EmptyState icon="list" title="Kalem yok" description="Menü, salon kirası, ekipman, dekor gibi kalemleri ekleyin; kesinleştirme kalem ister." />
         ) : (
@@ -236,7 +240,7 @@ export function EventItemsTab({ event, canManage }) {
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <span className="text-xs font-bold uppercase tracking-[0.06em] text-ink-muted">Kalem ekle:</span>
           {EVENT_ITEM_CATEGORIES.map((category) => (
-            <Button key={category} type="button" size="sm" variant="outline" icon="plus" onClick={() => add(category)} disabled={busy || rows.length >= MAX_EVENT_ITEMS}>
+            <Button key={category} type="button" size="sm" variant="outline" icon="plus" onClick={() => add(category)} disabled={busy || rows.length + menuItems.length >= MAX_EVENT_ITEMS}>
               {EVENT_ITEM_CATEGORY_LABELS[category]}
             </Button>
           ))}
@@ -246,7 +250,7 @@ export function EventItemsTab({ event, canManage }) {
         <p className="text-sm text-ink-soft">
           {dirty ? (
             <>
-              Önizleme: <strong className="tabular-nums">{formatMoney(previewTotal(previews), event.currency)}</strong> · kaydedilince vergiyle kesinleşir
+              Önizleme: <strong className="tabular-nums">{formatMoney(previewTotal([...previews, ...menuItems.map((item) => item.total)]), event.currency)}</strong> · kaydedilince vergiyle kesinleşir
             </>
           ) : (
             <>
@@ -264,6 +268,31 @@ export function EventItemsTab({ event, canManage }) {
         </div>
       </div>
     </form>
+  );
+}
+
+/** Menüden gelen kalemler (salt okunur; Menü sekmesinde düzenlenir). @param {{ items: any[], event: any }} props */
+function MenuItems({ items, event }) {
+  return (
+    <div className="mb-4 rounded-panel border border-line bg-surface-muted px-4 py-3">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <span className="text-xs font-bold uppercase tracking-[0.06em] text-ink-muted">Menüden gelen kalemler</span>
+        <Link to={`/etkinlikler/${event.id}?sekme=menu`} className="text-xs font-semibold text-ink hover:underline">
+          Menü sekmesinde düzenlenir
+        </Link>
+      </div>
+      <ul className="flex flex-col gap-1 text-sm">
+        {items.map((item) => (
+          <li key={item.id} className="flex flex-wrap items-center justify-between gap-2">
+            <span className="font-semibold text-ink">{item.description}</span>
+            <span className="tabular-nums text-ink-soft">
+              {Number(item.billedQuantity).toLocaleString('tr-TR')} {EVENT_ITEM_UNIT_LABELS[item.unit]} × {formatMoney(item.unitPrice, event.currency)}
+              {Number(item.discountPct) > 0 ? ` (%${item.discountPct} indirim)` : ''} = <strong className="text-ink">{formatMoney(item.total, event.currency)}</strong>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -295,6 +324,7 @@ function ReadOnlyItems({ event }) {
                       {EVENT_ITEM_CATEGORY_LABELS[item.category]}
                       {item.equipment ? ` · ${item.equipment.name}` : ''}
                       {Number(item.discountPct) > 0 ? ` · %${item.discountPct} indirim` : ''}
+                      {item.eventMenuId ? ' · menüden' : ''}
                     </span>
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">

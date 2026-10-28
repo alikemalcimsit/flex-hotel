@@ -69,6 +69,10 @@ export const PROMOTION_CHANNEL = 'promotions.changed';
 export const BANQUET_CHANNEL = 'banquet.changed';
 /** Restoran POS (modül 39): masa planı, adisyon, sipariş turu, ödeme, vardiya ve tanımlar. */
 export const POS_CHANNEL = 'pos.changed';
+/** Reçete ve malzeme kartı (modül 43): reçete, malzeme, birim maliyet. */
+export const RECIPES_CHANNEL = 'recipes.changed';
+/** Satın alma talebi (modül 43 / 45): talep açıldı / iptal edildi. */
+export const PURCHASING_CHANNEL = 'purchasing.changed';
 /** Kanal yönetimi (modül 33): kanal ayarı, eşleştirme, stop-sale, senkron logu, kanal rezervasyonları. */
 export const CHANNEL_MANAGER_CHANNEL = 'channel-manager.changed';
 

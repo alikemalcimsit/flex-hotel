@@ -174,6 +174,24 @@ export const NAV_SECTIONS = Object.freeze([
         badge: 'requests',
         permission: PERMISSIONS.REQUESTS_VIEW,
       },
+      // Mutfak (modül 43): şef reçete ve malzeme maliyetini yönetir, muhasebe maliyeti izler.
+      {
+        label: 'Mutfak',
+        to: '/mutfak',
+        icon: 'bookOpen',
+        permission: PERMISSIONS.RECIPES_VIEW,
+        children: [
+          { label: 'Reçeteler', to: '/mutfak', icon: 'bookOpen', end: true },
+          { label: 'Malzeme kartları', to: '/mutfak/malzemeler', icon: 'package' },
+        ],
+      },
+      // Satın alma talebi (modül 43 / 45): banket eksiği talebe çevrilir.
+      {
+        label: 'Satın alma',
+        to: '/satin-alma/talepler',
+        icon: 'truck',
+        permission: PERMISSIONS.PURCHASING_VIEW,
+      },
       // Oda servisi tepsileri (modül 41): kat görevlisi ve oda servisi toplar.
       {
         label: 'Toplanacak tepsiler',
