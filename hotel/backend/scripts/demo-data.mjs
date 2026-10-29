@@ -36,6 +36,10 @@ import { randomUUID } from 'node:crypto';
  * - Banket F&B (modül 43, `demo-banquet-fnb.mjs`): malzeme kartları, reçeteler (restoran ürünlerine bağlı
  *   olanlar), set menüler, etkinlik menüleri (yarınki ödül gecesi, 3 gün sonraki düğün — mutfağa kesin),
  *   kongre / yönetim kurulu / nişan menüleri, açık satın alma talepleri.
+ * - Satın alma ve stok (modül 45, `demo-purchasing.mjs`): politika (onay eşiği), depolar, tedarikçiler,
+ *   ödül gecesinin teklif turu → siparişler (biri onay bekliyor) → mal kabuller (eksik kapatılan, kısmi),
+ *   düğünün kazanan bekleyen karşılaştırma turu, tereyağında hareketli ortalama, açık bar talebi,
+ *   minimum seviyeler (öneriler dolu). `--reset` banket F&B'den önce siler.
  * - Oda servisi (modül 41, `demo-room-service.mjs`): son 7 günün teslim edilmiş / iptal siparişleri
  *   (süreleriyle), bugünün panosu (misafir QR siparişi kabul bekliyor, mutfakta, hazır, yolda),
  *   yarının kahvaltı kartları, toplanmamış tepsiler, siparişe çevrilmiş misafir isteği, QR bağlantısı.
@@ -55,6 +59,7 @@ const { resetBanquetDemo, seedBanquetDemo } = await import('./demo-banquet.mjs')
 const { resetPosDemo, seedPosDemo } = await import('./demo-pos.mjs');
 const { resetRoomServiceDemo, seedRoomServiceDemo } = await import('./demo-room-service.mjs');
 const { resetBanquetFnbDemo, seedBanquetFnbDemo } = await import('./demo-banquet-fnb.mjs');
+const { resetPurchasingDemo, seedPurchasingDemo } = await import('./demo-purchasing.mjs');
 
 const HISTORY_DAYS = 400;
 const FUTURE_DAYS = 75;
@@ -92,6 +97,8 @@ if (process.argv.includes('--reset')) {
     async (tx) => {
       // Demo banket (modül 37): etkinlikler ödemeleri, onayları, belgeleriyle; salon, ekipman, müşteri.
       banquetFiles = await resetBanquetDemo(tx, hotelId, ACTOR);
+      // Demo satın alma ve stok (modül 45): sipariş / mal kabul / hareket malzeme kartına bağlı; F&B'den önce.
+      await resetPurchasingDemo(tx, hotelId, ACTOR);
       // Demo banket F&B (modül 43): etkinlik menüleri etkinlikle gitti; talepler, set menüler, reçeteler, malzemeler.
       await resetBanquetFnbDemo(tx, hotelId, ACTOR);
       // Demo oda servisi (modül 41): siparişler adisyona, bağlantılar konaklamaya bağlı; restorandan önce.
@@ -875,6 +882,14 @@ try {
   console.error(`Banket F&B adımı tamamlanamadı: ${error.message}`);
 }
 
+// ── Satın alma ve stok (modül 45): tedarikçi, depo, teklif turları, siparişler, mal kabul, minimum seviye ──
+let purchasingSummary = null;
+try {
+  if (fnbSummary) purchasingSummary = await seedPurchasingDemo({ prisma, core, contracts, hotelId, today, actor: ACTOR, addDays });
+} catch (error) {
+  console.error(`Satın alma adımı tamamlanamadı: ${error.message}`);
+}
+
 // Odaların anlık durumu: içeride kimse varsa dolu, boşların bir kısmı kirli.
 const inHouse = new Set(reservations.filter((entry) => entry.row.status === 'CHECKED_IN').map((entry) => entry.row.roomId));
 await prisma.room.updateMany({ where: { hotelId, id: { in: [...inHouse] } }, data: { occupancy: 'OCCUPIED' } });
@@ -934,6 +949,9 @@ console.log(
       : '') +
     (posSummary ? `, ${posSummary.outlets} satış noktası, ${posSummary.items} menü ürünü, ${posSummary.checks} adisyon, ${posSummary.shifts} vardiya` : '') +
     (roomServiceSummary ? `, ${roomServiceSummary.orders} oda servisi siparişi (${roomServiceSummary.open} açık, ${roomServiceSummary.scheduled} yarın kahvaltı)` : '') +
-    (fnbSummary ? `, ${fnbSummary.stockItems} malzeme, ${fnbSummary.recipes} reçete, ${fnbSummary.menus} set menü, ${fnbSummary.eventMenus} etkinlik menüsü, ${fnbSummary.requests} satın alma talebi.` : '.'),
+    (fnbSummary ? `, ${fnbSummary.stockItems} malzeme, ${fnbSummary.recipes} reçete, ${fnbSummary.menus} set menü, ${fnbSummary.eventMenus} etkinlik menüsü, ${fnbSummary.requests} satın alma talebi` : '') +
+    (purchasingSummary
+      ? `, ${purchasingSummary.suppliers} tedarikçi, ${purchasingSummary.warehouses} depo, ${purchasingSummary.rounds} teklif turu, ${purchasingSummary.orders} sipariş (${purchasingSummary.pendingApproval} onay bekliyor), ${purchasingSummary.receipts} mal kabul, ${purchasingSummary.belowMin} minimum altı malzeme.`
+      : '.'),
 );
 await prisma.$disconnect();

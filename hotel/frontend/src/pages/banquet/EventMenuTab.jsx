@@ -25,13 +25,13 @@ import { eventMenuFormOf, eventMenuFromCatalog, eventMenuPayloadOf } from '../..
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 import { useHotelToday } from '../../lib/useHotel.js';
 import { validateWith } from '../../lib/validate.js';
+import { REQUEST_STATUS_TONES } from '../../lib/purchasingFormat.js';
 import { toastError, toastSuccess } from '../../store/toast.js';
 import { CoursesEditor } from './CoursesEditor.jsx';
 import { PurchaseRequestDialog } from './PurchaseRequestDialog.jsx';
 
 const STALE_TEXT = 'Dosya bu arada başkası tarafından değiştirildi; ekran yenilendi, tekrar deneyin.';
 const CLOSED_FOR_MENU = Object.freeze(['COMPLETED', 'CANCELLED', 'LOST']);
-const REQUEST_STATUS_TONES = Object.freeze({ OPEN: 'info', CANCELLED: 'neutral' });
 
 /**
  * Kesin olmayan dosyada ihtiyacın neden "olası" sayıldığı (talep yalnız kesin dosyadan açılır).

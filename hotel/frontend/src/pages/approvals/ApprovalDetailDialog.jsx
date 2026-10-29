@@ -54,6 +54,8 @@ const ENTITY_LINKS = Object.freeze({
   // Restoran (modül 39): ödemenin / düzeltmenin adisyonu sorulup adisyon ekranına gidilir.
   PosPayment: { to: (id) => `/pos/odeme/${id}`, permission: PERMISSIONS.POS_OPERATE },
   PosAdjustment: { to: (id) => `/pos/duzeltme/${id}`, permission: PERMISSIONS.POS_OPERATE },
+  // Satın alma (modül 45): eşik üstü sipariş.
+  PurchaseOrder: { to: (id) => `/satin-alma/siparisler/${id}`, permission: PERMISSIONS.PURCHASING_VIEW },
 });
 
 export function ApprovalDetailDialog({ approvalId, canDecide, timeZone, initialMode = 'view', onClose }) {

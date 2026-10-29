@@ -295,7 +295,8 @@ export function lockRecipes(tx, hotelId, recipeIds) {
 }
 
 /**
- * Malzeme kartı (modül 43; 44'te stok hareketleri de bu kilitle): düzenleme sürüm damgasıyla.
+ * Malzeme kartı (modül 43): düzenleme sürüm damgasıyla. Stok girişi (45) ve çıkışı (44) mevcudu ve
+ * hareketli ortalama maliyeti bu kilit altında günceller; kart kimlik sırasıyla kilitlenir.
  *
  * @param {import('@prisma/client').Prisma.TransactionClient} tx
  * @param {string} hotelId
@@ -317,8 +318,9 @@ export function lockBanquetMenus(tx, hotelId, menuIds) {
 }
 
 /**
- * Satın alma talebi (modül 43 / 45): iptal (ve 45'te onay / siparişe çevirme) kilit altında.
- * Sıra: etkinlik → satın alma talebi.
+ * Satın alma talebi (modül 43 / 45): iptal, teklif turuna alma ve durum tazeleme kilit altında.
+ * Durum tazeleyen işlemler talepleri kimlik sırasıyla kilitler (iki tur aynı talepleri ters sırada
+ * güncelleyip kilitlenmesin). Sıra: etkinlik → teklif turu → sipariş → satın alma talebi.
  *
  * @param {import('@prisma/client').Prisma.TransactionClient} tx
  * @param {string} hotelId
@@ -326,6 +328,56 @@ export function lockBanquetMenus(tx, hotelId, menuIds) {
  */
 export function lockPurchaseRequests(tx, hotelId, requestIds) {
   return lockPlainRows(tx, 'PurchaseRequest', hotelId, requestIds, false);
+}
+
+/**
+ * Tedarikçi kartı (modül 45): düzenleme sürüm damgasıyla.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} supplierIds
+ */
+export function lockSuppliers(tx, hotelId, supplierIds) {
+  return lockPlainRows(tx, 'Supplier', hotelId, supplierIds, false);
+}
+
+/**
+ * Teklif turu (modül 45): teklif kaydı, kazanan seçimi, tur kapatma ve turdaki siparişin reddi /
+ * iptali (satırlar tura döner) bu kilit altında; turun sürüm damgası her teklifte ilerler, kazanan
+ * seçimi eski karşılaştırmayla yapılamaz. Sıra: teklif turu → sipariş → satın alma talebi.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} roundIds
+ */
+export function lockPurchaseRounds(tx, hotelId, roundIds) {
+  return lockPlainRows(tx, 'PurchaseRound', hotelId, roundIds, false);
+}
+
+/**
+ * Satın alma siparişi (modül 45): onay kararı, iptal, eksik kapatma ve mal kabul. İki mal kabul aynı
+ * siparişe sırayla girer (kalan miktar ikinciye göre yeniden hesaplanır). Sıra: teklif turu → sipariş →
+ * depo → malzeme kartı.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} orderIds
+ */
+export function lockPurchaseOrders(tx, hotelId, orderIds) {
+  return lockPlainRows(tx, 'PurchaseOrder', hotelId, orderIds, false);
+}
+
+/**
+ * Depo (modül 45 / 44): giriş yapan işlem `shared: true` ile alır (depo bu arada pasife alınamaz);
+ * depo kartını değiştiren işlem özel alır. Sıra: sipariş → depo → malzeme kartı.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} warehouseIds
+ * @param {{ shared?: boolean }} [options]
+ */
+export function lockWarehouses(tx, hotelId, warehouseIds, { shared = false } = {}) {
+  return lockPlainRows(tx, 'Warehouse', hotelId, warehouseIds, shared);
 }
 
 /**

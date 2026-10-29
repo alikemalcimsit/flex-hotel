@@ -71,8 +71,10 @@ export const BANQUET_CHANNEL = 'banquet.changed';
 export const POS_CHANNEL = 'pos.changed';
 /** Reçete ve malzeme kartı (modül 43): reçete, malzeme, birim maliyet. */
 export const RECIPES_CHANNEL = 'recipes.changed';
-/** Satın alma talebi (modül 43 / 45): talep açıldı / iptal edildi. */
+/** Satın alma (modül 43 / 45): talep, tedarikçi, teklif turu, sipariş, mal kabul. */
 export const PURCHASING_CHANNEL = 'purchasing.changed';
+/** Stok (modül 45 / 44): depo bazında mevcut, hareketler, minimum seviye, depolar. */
+export const STOCK_CHANNEL = 'stock.changed';
 /** Kanal yönetimi (modül 33): kanal ayarı, eşleştirme, stop-sale, senkron logu, kanal rezervasyonları. */
 export const CHANNEL_MANAGER_CHANNEL = 'channel-manager.changed';
 

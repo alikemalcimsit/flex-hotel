@@ -6,7 +6,7 @@ import { lockStockItems } from '../../lib/locks.js';
 import { buildPage, toSkipTake } from '../../lib/pagination.js';
 import { containsText, searchTokens } from '../../lib/search.js';
 import { writeWithEvents } from '../../lib/write.js';
-import { iso, nameTaken, prisma, unitCostText } from './graph.js';
+import { iso, nameTaken, prisma, quantityText, unitCostText } from './graph.js';
 
 /**
  * Malzeme kartı (modül 43; 44'ün stok kartının yalın hâli): kod, ad, grup, stok birimi,
@@ -25,6 +25,8 @@ const STOCK_SELECT = Object.freeze({
   unit: true,
   unitCost: true,
   costUpdatedAt: true,
+  onHand: true,
+  minLevel: true,
   allergens: true,
   isActive: true,
   createdAt: true,
@@ -42,6 +44,9 @@ export function toStockItemDto(row) {
     unit: row.unit,
     unitCost: unitCostText(row.unitCost),
     costUpdatedAt: iso(row.costUpdatedAt),
+    // Stok çekirdeği (modül 45): toplam mevcut ve minimum seviye; malzeme kartında bilgi olarak.
+    onHand: quantityText(row.onHand),
+    minLevel: row.minLevel === null || row.minLevel === undefined ? null : quantityText(row.minLevel),
     allergens: row.allergens ?? [],
     isActive: row.isActive,
     usedInRecipes: row._count?.recipeLines ?? 0,
@@ -122,7 +127,24 @@ export async function updateStockItem(hotelId, stockItemId, input) {
           'UNIT_IN_USE',
         );
       }
+      if (data.unit !== before.unit) {
+        // Mevcut, hareketler ve açık talep / sipariş miktarları stok biriminde (modül 45): birim değişirse anlamları kayar.
+        const [moves, openRequests, openOrders] = await Promise.all([
+          tx.stockMovement.count({ where: { hotelId, stockItemId } }),
+          tx.purchaseRequestLine.count({ where: { hotelId, stockItemId, request: { status: { in: ['OPEN', 'IN_PROGRESS'] } } } }),
+          tx.purchaseOrderLine.count({ where: { hotelId, stockItemId, order: { status: { in: ['PENDING_APPROVAL', 'APPROVED', 'PARTIALLY_RECEIVED'] } } } }),
+        ]);
+        if (moves > 0 || openRequests > 0 || openOrders > 0) {
+          throw new ConflictError(
+            `Malzemenin ${[moves ? 'stok hareketi' : null, openRequests ? 'açık talebi' : null, openOrders ? 'açık siparişi' : null].filter(Boolean).join(', ')} var; miktarlar ${KITCHEN_UNIT_LABELS[before.unit]} cinsinden tutulduğu için birim değiştirilemez. Yeni malzeme açın.`,
+            'UNIT_IN_USE',
+          );
+        }
+      }
       const costChanged = !before.unitCost.equals(data.unitCost);
+      if (costChanged && before.onHand.greaterThan(0)) {
+        throw new ConflictError('Elde stok varken birim maliyet elle değiştirilmez; maliyet mal kabulle (hareketli ortalama) güncellenir', 'COST_FROM_STOCK');
+      }
       const after = await tx.stockItem.update({
         where: { id: stockItemId },
         data: { ...data, ...(costChanged ? { costUpdatedAt: new Date() } : {}) },

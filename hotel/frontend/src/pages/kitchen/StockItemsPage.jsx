@@ -159,6 +159,8 @@ function StockItemDialog({ item, currency, onClose }) {
 
   const busy = save.isPending;
   const usedHint = item?.usedInRecipes ? `${item.usedInRecipes} reçete satırında kullanılıyor: birim aynı ailede (kg ↔ g, L ↔ ml) değişebilir.` : 'Satın alınan / sayılan birim.';
+  // Elde stok varken maliyet hareketli ortalamadır (modül 45): sunucu da elle değişikliği reddeder.
+  const stocked = Boolean(item && Number(item.onHand) > 0);
   return (
     <Modal
       open
@@ -193,9 +195,13 @@ function StockItemDialog({ item, currency, onClose }) {
             onChange={set('unitCost')}
             error={errors.unitCost}
             required
-            disabled={busy}
+            disabled={busy || stocked}
           />
-          <p className="text-xs text-ink-muted">Son alış fiyatı; stok modülü gelince hareketli ortalama maliyet buraya yazılır.</p>
+          <p className="text-xs text-ink-muted">
+            {stocked
+              ? `Elde ${item.onHand} ${KITCHEN_UNIT_LABELS[item.unit]} var: maliyet mal kabulde hareketli ortalamayla güncellenir, elle değişmez.`
+              : 'Tahmini alış fiyatı; ilk mal kabulde gerçek alış fiyatı, sonra hareketli ortalama maliyet yazılır.'}
+          </p>
         </div>
         <div className="sm:col-span-2">
           <MultiChips

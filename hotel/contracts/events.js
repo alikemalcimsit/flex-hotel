@@ -138,7 +138,12 @@ export const EVENT_LABELS = Object.freeze({
   'pos.room_service.changed': 'Oda servisi siparişi değişti',
   'recipe.stock_item.changed': 'Malzeme kartı değişti',
   'recipe.changed': 'Reçete değişti',
-  'purchase.request.changed': 'Satın alma talebi açıldı / iptal edildi',
+  'purchase.request.changed': 'Satın alma talebi açıldı / değişti / iptal edildi',
+  'purchase.supplier.changed': 'Tedarikçi kartı değişti',
+  'purchase.round.changed': 'Teklif turu değişti (teklif, kazanan, iptal)',
+  'purchase.order.changed': 'Satın alma siparişi değişti (onay, iptal, teslim)',
+  'purchase.goods.received': 'Mal kabul edildi: tedarikçi borcu doğdu (iş olayı)',
+  'stock.changed': 'Stok değişti (giriş, depo, minimum seviye)',
   'fnb.order.placed': 'Restoran siparişi mutfağa gitti (iş olayı)',
   'fnb.order.paid': 'Restoran adisyonu kapandı: satılanlar (iş olayı)',
 

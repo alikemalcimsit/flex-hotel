@@ -185,12 +185,31 @@ export const NAV_SECTIONS = Object.freeze([
           { label: 'Malzeme kartları', to: '/mutfak/malzemeler', icon: 'package' },
         ],
       },
-      // Satın alma talebi (modül 43 / 45): banket eksiği talebe çevrilir.
+      // Satın alma (modül 43 / 45): talep → teklif karşılaştırma → sipariş → mal kabul.
       {
         label: 'Satın alma',
-        to: '/satin-alma/talepler',
+        to: '/satin-alma',
         icon: 'truck',
         permission: PERMISSIONS.PURCHASING_VIEW,
+        children: [
+          { label: 'Talepler', to: '/satin-alma/talepler', icon: 'clipboard' },
+          { label: 'Teklif turları', to: '/satin-alma/teklif-turlari', icon: 'layers' },
+          { label: 'Siparişler', to: '/satin-alma/siparisler', icon: 'truck' },
+          { label: 'Mal kabul', to: '/satin-alma/mal-kabul', icon: 'package' },
+          { label: 'Tedarikçiler', to: '/satin-alma/tedarikciler', icon: 'users' },
+        ],
+      },
+      // Stok (modül 45 — 44'ün çekirdeği): depo bazında mevcut, değer, hareketler.
+      {
+        label: 'Stok',
+        to: '/stok',
+        icon: 'package',
+        permission: PERMISSIONS.STOCK_VIEW,
+        children: [
+          { label: 'Mevcut', to: '/stok', icon: 'package', end: true },
+          { label: 'Hareketler', to: '/stok/hareketler', icon: 'list' },
+          { label: 'Depolar', to: '/stok/depolar', icon: 'building' },
+        ],
       },
       // Oda servisi tepsileri (modül 41): kat görevlisi ve oda servisi toplar.
       {

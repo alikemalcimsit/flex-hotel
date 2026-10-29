@@ -2676,16 +2676,81 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 > modül 43'te kuruldu; depo / hareket / sayım ve hareketli ortalama maliyet bunun **üstüne** eklenir (birim maliyeti siz yazarsınız;
 > `costUpdatedAt` damgası var). Malzemenin birim ailesi reçetede kullanılırken değişemez (kg ↔ L). Satın alma talebi (45) satırları
 > `StockItem`'a bağlı.
+>
+> **📌 Ali'ye not (modül 45, 29 Ekim 2026 — Ahmet):** mal kabulde stok gerçekten girsin diye **stok çekirdeği 45'te kuruldu** (Ahmet'in
+> kararı; senin 44'üne zemin): `Warehouse` (otelde tek varsayılan, pasif olamaz; stoklu depo pasife alınamaz), `StockLevel` (depo ×
+> malzeme mevcudu), `StockMovement` (değişmez; işaretli miktar, birim maliyet, hareket sonrası mevcut ve ortalama — şimdilik tek tür
+> `RECEIPT`), `StockItem.onHand` (depoların toplamı) ve `minLevel`. **Hareketli ortalama** `src/modules/stock/rules.js`
+> (`movingAverageCost`, `applyReceipts`; birim testli) ve giriş `src/modules/stock/movements.js` → `postStockIn` (sıra: sipariş →
+> depo → malzeme kartı kilidi; depo satırı tek ifadede upsert). Senin ekleyeceklerin: `StockMovementKind`'a çıkış / transfer / fire /
+> sayım türleri ve `postStockOut` benzeri bir yazıcı (çıkış ortalamayı değiştirmez, yalnız miktarı), `StockCount`, sayım / transfer /
+> fire ekranları, maliyet raporu, reçeteden düşüm (`order.paid`). Hazır ekranlar: `/stok` (mevcut + depo dağılımı + yoldaki +
+> minimum + değer), `/stok/hareketler`, `/stok/depolar`; API `/stock/*`, izinler `stock.view` / `stock.manage`, kanal
+> `stock.changed`. **Minimum altı önerisi** satın almada (`/purchasing/suggestions`): senin `purchase.request.suggested` aktörün
+> buradan ya da `createRequest` (kaynak `STOCK`) ile talep açabilir. Kural: elde stok varken malzemenin maliyeti elle değişmez;
+> stok hareketi / açık talep / açık siparişi olan malzemenin birimi değişmez.
 
 ### 45. Satın alma — arkadaşın
 **Gün sonu:** Talep → teklif karşılaştırma → sipariş → mal kabul zinciri kayıtlı; mal kabulde stok otomatik giriyor.
-- [ ] Backend: Supplier, PurchaseRequest, PurchaseQuote, PurchaseOrder, GoodsReceipt tabloları + API — **PurchaseRequest (+ satır, numara serisi) modül 43'te kuruldu** (banket ihtiyacından talep, liste, ekran, iptal); durumlar / kaynaklar burada genişler
-- [ ] Backend: sipariş tutarı eşik üstü → `approval.requested`; mal kabul → stok girişi + tedarikçi borcu event'i
-- [ ] Ekran: Tedarikçi kartları
-- [ ] Ekran: Talep formu (talep eden, ürün, miktar, ihtiyaç tarihi) + otomatik önerilen talepler listesi
-- [ ] Ekran: Teklif karşılaştırma (tedarikçi × fiyat × termin)
-- [ ] Ekran: Sipariş (onaylı) + PDF
-- [ ] Ekran: Mal kabul / irsaliye (gelen miktar, fark, depo)
+- [x] Backend: Supplier, PurchaseRequest, PurchaseQuote, PurchaseOrder, GoodsReceipt tabloları + API — **PurchaseRequest (+ satır, numara serisi) modül 43'te kuruldu** (banket ihtiyacından talep, liste, ekran, iptal); durumlar / kaynaklar burada genişler
+- [x] Backend: sipariş tutarı eşik üstü → `approval.requested`; mal kabul → stok girişi + tedarikçi borcu event'i
+- [x] Ekran: Tedarikçi kartları
+- [x] Ekran: Talep formu (talep eden, ürün, miktar, ihtiyaç tarihi) + otomatik önerilen talepler listesi
+- [x] Ekran: Teklif karşılaştırma (tedarikçi × fiyat × termin)
+- [x] Ekran: Sipariş (onaylı) + PDF
+- [x] Ekran: Mal kabul / irsaliye (gelen miktar, fark, depo)
+
+> **✅ Modül 45 tamamlandı (29 Ekim 2026 — Ahmet).** Kararlar (kullanıcı): **satır bazında kazanan** (her malzeme kendi en uygun
+> teklifinden; tedarikçi başına ayrı sipariş); **stok çekirdeği burada** (44'ün zemini — yukarıdaki Ali notu).
+>
+> **Zincir:** talep (banket 43 / elle / minimum stok önerisi) → **açık satırlar** malzeme başına birleşir → **teklif turu** (TKT-yıl-sıra;
+> ekran gördüğü toplamı gönderir, sunucu talepleri kilitleyip yeniden toplar — tutmazsa `LINES_CHANGED`) → tedarikçi **teklifleri**
+> (turda tedarikçi başına tek; termin, geçerlilik, KDV hariç fiyat + KDV %0/1/10/20; her kayıt turun sürüm damgasını ilerletir) →
+> **kazanan** (en uygun = ihtiyaca yetişen → fiyat → termin → önce girilen; ucuz ama geç teklif önerilmez; en uygun dışı seçim gerekçe
+> ister; süresi dolmuş teklif / pasif tedarikçi seçilmez) → **sipariş** (SAS; KDV satırda yuvarlı; KDV dahil tutar politika eşiğinde /
+> üstündeyse `PURCHASE_ORDER` onayına — dört göz, 3 gün içinde karar yoksa reddedilmiş sayılır; red / iptal satırları tura döndürür) →
+> **mal kabul** (MKB; irsaliye no tedarikçi başına tek; kalan kadar — tartılan malzemede +%5; eksik kapatma) → **stok girer** (depo satırı,
+> toplam mevcut, hareketli ortalama, hareket kaydı) + `purchase.goods.received` (vade = kabul günü + tedarikçi vadesi; 47 dinler).
+> Talep durumu satırlarından türer (açık → teklif / siparişte → siparişe döndü); tur kapatılınca siparişe dönmemiş satırlar talebe döner.
+>
+> **Eşzamanlılık:** kilit sırası tur → sipariş → talep (kimlik sıralı) → depo → malzeme kartı; aynı satırlara iki tur, aynı tura iki
+> kazanan, aynı siparişe iki mal kabul testli (biri geçer, diğeri `LINES_CHANGED` / `STALE_WRITE`). Veritabanı kısıtları: tek varsayılan
+> depo, tedarikçi adı / vergi no tekil, teslim alınan ≤ sipariş (+%5), siparişli tur satırı bırakılamaz, onay bekleyen siparişin onayı var…
+>
+> **API:** `/purchasing` (talepler + elle talep, `/suggestions`, `/open-lines`, `/rounds` (+ teklif kaydet / çıkar, tedarikçi önerisi,
+> kazanan, kapat), `/orders` (+ PDF, iptal, eksik kapat, `/receipts`), `/receipts`, `/suppliers`, `/settings`), `/stock` (özet, mevcut,
+> minimum, hareketler, depolar). İzinler yeni: `purchasing.manage` (müdür), `purchasing.receive` (müdür, F&B), `stock.view` (müdür,
+> muhasebe, F&B), `stock.manage` (müdür). Onay türü `PURCHASE_ORDER` (isteyen kendi siparişini onaylayamaz). Kanal `stock.changed`.
+>
+> **Ekran:** `/satin-alma` sekmeli: talepler (+ yeni talep), min. stok önerileri (seçip talep aç), açık satırlar (sayfalar arası seçim →
+> teklif turu), teklif turları ve **karşılaştırma matrisi** (tedarikçi × fiyat × termin; en uygun yeşil, geç uyarısı, satır bazında seçim,
+> gerekçe, tedarikçi başına toplam ve "onaya gider" işareti), siparişler (gecikti işareti) ve sipariş ekranı (PDF, mal kabul penceresi —
+> depo, irsaliye, gelen / fark, eksik kapat, canlı tutar; iptal; eksik kapat), mal kabuller, tedarikçiler + satın alma politikası;
+> `/stok` (özet kutuları, depo dağılımı, yoldaki, minimum düzenleme), hareketler, depolar. Onay ekranından siparişe bağlantı.
+>
+> **Ölçüm** (`scripts/perf-purchasing.mjs`; 43'ün 1.500 malzeme / 20.000 talep (~200.000 satır, ~170.000'i açık) verisine ek 200 tedarikçi,
+> 2.000 tur, 320.000 teklif satırı, 5.000 sipariş, 8.000 mal kabul, 64.000 hareket): listeler / ekranlar 2–40 ms (karşılaştırma 40 satır × 4
+> teklif 21 ms, sipariş ekranı 11 ms, hareketler derin sayfa 15 ms, stok özeti 3 ms), min. stok önerisi 26 ms, açık satırlar 14–78 ms
+> (filtreli) / 0,47 sn (filtresiz ilk sayfa, 170.000 açık satır — uç senaryo), tur aç (40 malzeme, ~3.000 talep satırı) 0,63 sn, teklif
+> kaydet ~0,1 sn, kazanan → sipariş 0,25 sn, mal kabul (25 satır, stok + ortalama) 0,11 sn. Ölçümle düzeltilen: **tur açma 13,3 sn → 0,6 sn**
+> (talep durumu talep başına güncelleme + olay yerine tek ifade), **öneriler 1,7 sn → 26 ms** (önce talep süzülüp malzeme başına bir kez
+> toplanır), açık satırlar sayım + sayfa tek toplamada (0,63 → 0,47 sn). Planlar index'te.
+>
+> **Test:** satın alma + stok kuralları 38 birim (tutar / KDV yuvarlama, birleştirme, kazanan planı — geç teklif, gerekçe, süresi dolmuş,
+> pasif; mal kabul sınırı, durumlar, öneri, hareketli ortalama — elle hesaplı); entegrasyon 5 (zincirin tamamı elle hesaplanmış sayılarla
+> — 10.491,38 / 4.280,48 / vade / 409,6225 ortalama / 12.370,60 değer; dört göz ve red → tura dönüş → yeniden seçim → onay; iptal ve tur
+> kapatma; eşzamanlı tur / kazanan / mal kabul; öneri, depo kuralları, birim / maliyet koruması; izinler, otel kapsamı, PDF). 43 ve POS
+> entegrasyon testleri yeniden geçti.
+>
+> **Yan düzeltmeler:** banket PDF çizimi ortak `lib/pdf-writer.js`'e taşındı (sipariş PDF'i de kullanır); malzeme kartında elde stok
+> varken maliyet alanı kilitli; demo sıfırlaması demo kayıtlarına dayanan (personelin sunumda açtığı) satın alma belgelerini de siler.
+>
+> **Demo** (`scripts/demo-purchasing.mjs`, `demo-data.mjs` çağırır): politika (25.000 TRY eşik), 4 depo, 8 tedarikçi (biri pasif),
+> ödül gecesinin turu → 6 sipariş (biri onay bekliyor, biri eksik kapatıldı, biri kısmen teslim), düğünün kazanan bekleyen turu
+> (canlı seçim için; ucuz ama geç teklif dahil), tereyağında hareketli ortalama, açık bar talebi, karışık minimum seviyeler.
+>
+> **Devir:** 44 — stok çekirdeği hazır (yukarıdaki not). 47 — `purchase.goods.received` (tutarlar, vade, tedarikçi) cariye işlenir;
+> `Supplier` kartı (vergi no / daire, vade) cari kartın temeli.
 
 ### 46. Demirbaş & amortisman — Ali Kemal
 **Gün sonu:** Otelin sabit kıymetleri barkodlu kayıtlı; konumları, garanti bitişleri ve amortisman tablosu görünüyor.

@@ -30,6 +30,7 @@ export const APPROVAL_TYPES = Object.freeze([
   'EVENT_PAYMENT',
   'POS_ADJUSTMENT',
   'POS_PAYMENT',
+  'PURCHASE_ORDER',
   'OTHER',
 ]);
 
@@ -44,6 +45,7 @@ export const APPROVAL_TYPE_LABELS = Object.freeze({
   EVENT_PAYMENT: 'Etkinlik ödemesi (büyük ödeme, iade, iptal)',
   POS_ADJUSTMENT: 'Adisyon düzeltmesi (ikram, iptal, indirim)',
   POS_PAYMENT: 'Restoran ödemesi (büyük ödeme, hatalı giriş iptali)',
+  PURCHASE_ORDER: 'Satın alma siparişi (eşik üstü tutar)',
   OTHER: 'Diğer',
 });
 
@@ -64,6 +66,7 @@ export const APPROVAL_SELF_DECISION_FORBIDDEN_TYPES = Object.freeze([
   'EVENT_PAYMENT',
   'POS_ADJUSTMENT',
   'POS_PAYMENT',
+  'PURCHASE_ORDER',
 ]);
 
 /**
