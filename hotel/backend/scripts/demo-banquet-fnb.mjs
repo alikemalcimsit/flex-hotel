@@ -193,7 +193,11 @@ export async function resetBanquetFnbDemo(tx, hotelId, actor) {
   await tx.$executeRawUnsafe(
     `DELETE FROM "StockItem" s WHERE s."hotelId" = $1 AND s."createdBy" = $2
        AND NOT EXISTS (SELECT 1 FROM "RecipeLine" l WHERE l."stockItemId" = s."id")
-       AND NOT EXISTS (SELECT 1 FROM "PurchaseRequestLine" l WHERE l."stockItemId" = s."id")`,
+       AND NOT EXISTS (SELECT 1 FROM "PurchaseRequestLine" l WHERE l."stockItemId" = s."id")
+       AND NOT EXISTS (SELECT 1 FROM "PurchaseRoundLine" l WHERE l."stockItemId" = s."id")
+       AND NOT EXISTS (SELECT 1 FROM "PurchaseOrderLine" l WHERE l."stockItemId" = s."id")
+       AND NOT EXISTS (SELECT 1 FROM "StockMovement" m WHERE m."stockItemId" = s."id")
+       AND NOT EXISTS (SELECT 1 FROM "StockLevel" v WHERE v."stockItemId" = s."id")`,
     hotelId,
     actor,
   );

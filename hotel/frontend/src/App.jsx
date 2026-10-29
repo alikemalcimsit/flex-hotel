@@ -124,6 +124,20 @@ const StockItemsPage = lazy(() => import('./pages/kitchen/StockItemsPage.jsx').t
 const RecipeEditorPage = lazy(() => import('./pages/kitchen/RecipeEditorPage.jsx').then((m) => ({ default: m.RecipeEditorPage })));
 const PurchaseRequestsPage = lazy(() => import('./pages/purchasing/PurchaseRequestsPage.jsx').then((m) => ({ default: m.PurchaseRequestsPage })));
 const PurchaseRequestPage = lazy(() => import('./pages/purchasing/PurchaseRequestPage.jsx').then((m) => ({ default: m.PurchaseRequestPage })));
+const PurchasingLayout = lazy(() => import('./pages/purchasing/PurchasingLayout.jsx').then((m) => ({ default: m.PurchasingLayout })));
+const SuggestionsPage = lazy(() => import('./pages/purchasing/SuggestionsPage.jsx').then((m) => ({ default: m.SuggestionsPage })));
+const OpenLinesPage = lazy(() => import('./pages/purchasing/OpenLinesPage.jsx').then((m) => ({ default: m.OpenLinesPage })));
+const RoundsPage = lazy(() => import('./pages/purchasing/RoundsPage.jsx').then((m) => ({ default: m.RoundsPage })));
+const RoundPage = lazy(() => import('./pages/purchasing/RoundPage.jsx').then((m) => ({ default: m.RoundPage })));
+const OrdersPage = lazy(() => import('./pages/purchasing/OrdersPage.jsx').then((m) => ({ default: m.OrdersPage })));
+const OrderPage = lazy(() => import('./pages/purchasing/OrderPage.jsx').then((m) => ({ default: m.OrderPage })));
+const ReceiptsPage = lazy(() => import('./pages/purchasing/ReceiptsPage.jsx').then((m) => ({ default: m.ReceiptsPage })));
+const ReceiptPage = lazy(() => import('./pages/purchasing/ReceiptsPage.jsx').then((m) => ({ default: m.ReceiptPage })));
+const SuppliersPage = lazy(() => import('./pages/purchasing/SuppliersPage.jsx').then((m) => ({ default: m.SuppliersPage })));
+const StockLayout = lazy(() => import('./pages/stock/StockLayout.jsx').then((m) => ({ default: m.StockLayout })));
+const StockLevelsPage = lazy(() => import('./pages/stock/StockLevelsPage.jsx').then((m) => ({ default: m.StockLevelsPage })));
+const StockMovementsPage = lazy(() => import('./pages/stock/StockMovementsPage.jsx').then((m) => ({ default: m.StockMovementsPage })));
+const WarehousesPage = lazy(() => import('./pages/stock/WarehousesPage.jsx').then((m) => ({ default: m.WarehousesPage })));
 const PromotionsLayout = lazy(() => import('./pages/promotions/PromotionsLayout.jsx').then((m) => ({ default: m.PromotionsLayout })));
 const PromotionListTab = lazy(() => import('./pages/promotions/PromotionListTab.jsx').then((m) => ({ default: m.PromotionListTab })));
 const PromotionReportTab = lazy(() => import('./pages/promotions/PromotionReportTab.jsx').then((m) => ({ default: m.PromotionReportTab })));
@@ -669,15 +683,68 @@ export default function App() {
                 </RequirePermission>
               }
             />
-            {/* Satın alma talebi (45'in talep kısmı — modül 43). */}
+            {/* Satın alma (modül 43 / 45): talep → teklif karşılaştırma → sipariş → mal kabul. */}
             <Route
-              path="satin-alma/talepler"
+              path="satin-alma"
               element={
                 <RequirePermission permission={PERMISSIONS.PURCHASING_VIEW}>
-                  <PurchaseRequestsPage />
+                  <PurchasingLayout />
+                </RequirePermission>
+              }
+            >
+              <Route index element={<Navigate to="talepler" replace />} />
+              <Route path="talepler" element={<PurchaseRequestsPage />} />
+              <Route
+                path="oneriler"
+                element={
+                  <RequireAnyPermission permissions={[PERMISSIONS.PURCHASING_REQUEST, PERMISSIONS.PURCHASING_MANAGE]}>
+                    <SuggestionsPage />
+                  </RequireAnyPermission>
+                }
+              />
+              <Route path="acik-satirlar" element={<OpenLinesPage />} />
+              <Route path="teklif-turlari" element={<RoundsPage />} />
+              <Route path="siparisler" element={<OrdersPage />} />
+              <Route path="mal-kabul" element={<ReceiptsPage />} />
+              <Route path="tedarikciler" element={<SuppliersPage />} />
+            </Route>
+            <Route
+              path="satin-alma/teklif-turlari/:roundId"
+              element={
+                <RequirePermission permission={PERMISSIONS.PURCHASING_VIEW}>
+                  <RoundPage />
                 </RequirePermission>
               }
             />
+            <Route
+              path="satin-alma/siparisler/:orderId"
+              element={
+                <RequirePermission permission={PERMISSIONS.PURCHASING_VIEW}>
+                  <OrderPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="satin-alma/mal-kabul/:receiptId"
+              element={
+                <RequirePermission permission={PERMISSIONS.PURCHASING_VIEW}>
+                  <ReceiptPage />
+                </RequirePermission>
+              }
+            />
+            {/* Stok (modül 45 — 44'ün çekirdeği): mevcut, hareketler, depolar. */}
+            <Route
+              path="stok"
+              element={
+                <RequirePermission permission={PERMISSIONS.STOCK_VIEW}>
+                  <StockLayout />
+                </RequirePermission>
+              }
+            >
+              <Route index element={<StockLevelsPage />} />
+              <Route path="hareketler" element={<StockMovementsPage />} />
+              <Route path="depolar" element={<WarehousesPage />} />
+            </Route>
             <Route
               path="satin-alma/talepler/:requestId"
               element={

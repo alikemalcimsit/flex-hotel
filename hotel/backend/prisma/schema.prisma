@@ -448,12 +448,39 @@ enum MenuCourseMode {
 /// Satın alma talebi (modül 43'te kuruldu; onay / sipariş durumlarını 45 ekler).
 enum PurchaseRequestStatus {
   OPEN
+  IN_PROGRESS
+  ORDERED
   CANCELLED
 }
 
 /// Talebin kaynağı (elle talep ve stoktan öneriyi 45 ekler).
 enum PurchaseRequestSource {
   BANQUET
+  MANUAL
+  STOCK
+}
+
+/// Teklif turu: teklif toplanıyor → bütün satırlar siparişe döndü; iptal.
+enum PurchaseRoundStatus {
+  OPEN
+  AWARDED
+  CANCELLED
+}
+
+/// Satın alma siparişi durumu.
+enum PurchaseOrderStatus {
+  PENDING_APPROVAL
+  APPROVED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CLOSED
+  REJECTED
+  CANCELLED
+}
+
+/// Stok hareketi türü (44 çıkış, transfer, fire, sayım ekler).
+enum StockMovementKind {
+  RECEIPT
 }
 
 enum EventDocumentKind {
@@ -775,6 +802,12 @@ model Hotel {
   recipes               Recipe[]
   banquetMenus          BanquetMenu[]
   purchaseRequests      PurchaseRequest[]
+  suppliers             Supplier[]
+  purchaseSettings      PurchaseSettings?
+  purchaseRounds        PurchaseRound[]
+  purchaseOrders        PurchaseOrder[]
+  goodsReceipts         GoodsReceipt[]
+  warehouses            Warehouse[]
 }
 
 model User {
@@ -4420,6 +4453,9 @@ model StockItem {
   unitCost      Decimal        @default(0) @db.Decimal(14, 4)
   costUpdatedAt DateTime?
   allergens     String[]       @default([])
+  /// Toplam mevcut (depoların toplamı, stok biriminde) ve minimum seviye (altında talep önerisi; boş = izlenmez).
+  onHand        Decimal        @default(0) @db.Decimal(14, 3)
+  minLevel      Decimal?       @db.Decimal(14, 3)
   isActive      Boolean        @default(true)
   createdBy     String
   createdAt     DateTime       @default(now())
@@ -4428,6 +4464,10 @@ model StockItem {
   hotel                Hotel                 @relation(fields: [hotelId], references: [id])
   recipeLines          RecipeLine[]
   purchaseRequestLines PurchaseRequestLine[]
+  roundLines           PurchaseRoundLine[]
+  orderLines           PurchaseOrderLine[]
+  stockLevels          StockLevel[]
+  stockMovements       StockMovement[]
 
   @@unique([hotelId, code])
   @@index([hotelId, group, name])
@@ -4663,15 +4703,20 @@ model PurchaseRequestLine {
   /// Talep anındaki birim maliyet (45'te teklif karşılaştırmasının dayanağı).
   estimatedUnitCost Decimal     @db.Decimal(14, 4)
   sortOrder         Int
+  /// Teklif turundaki satırı (malzeme başına birleşmiş); tur iptal edilince boşalır.
+  roundLineId       String?
 
-  request   PurchaseRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  stockItem StockItem       @relation(fields: [stockItemId], references: [id], onDelete: Restrict)
-  event     Event?          @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  request   PurchaseRequest    @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  stockItem StockItem          @relation(fields: [stockItemId], references: [id], onDelete: Restrict)
+  event     Event?             @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  roundLine PurchaseRoundLine? @relation(fields: [roundLineId], references: [id], onDelete: SetNull)
 
   @@index([requestId, sortOrder])
   // Etkinliğin talep edilmiş miktarı (ihtiyaç ekranının "talep edildi" sütunu).
   @@index([eventId, stockItemId])
   @@index([hotelId, stockItemId])
+  @@index([roundLineId])
+  @@index([hotelId, roundLineId, neededBy])
 }
 
 /// Satın alma numara serisi (otel × tür × yıl): talep (STR); 45 sipariş serisini ekler.
@@ -4682,4 +4727,337 @@ model PurchaseSequence {
   last    Int
 
   @@id([hotelId, kind, year])
+}
+
+/**
+ * ══════════════════ Satın alma (modül 45) ══════════════════
+ */
+
+/// Tedarikçi kartı: vergi bilgisi, ödeme vadesi (mal kabulden itibaren), olağan termin, tedarik ettiği gruplar.
+model Supplier {
+  id              String   @id @default(uuid())
+  hotelId         String
+  code            String?
+  name            String
+  contactName     String?
+  phone           String?
+  email           String?
+  taxOffice       String?
+  taxNumber       String?
+  address         String?
+  paymentTermDays Int      @default(30)
+  leadTimeDays    Int      @default(1)
+  groups          String[] @default([])
+  notes           String?
+  isActive        Boolean  @default(true)
+  createdBy       String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  hotel    Hotel           @relation(fields: [hotelId], references: [id])
+  quotes   PurchaseQuote[]
+  orders   PurchaseOrder[]
+  receipts GoodsReceipt[]
+
+  @@unique([hotelId, code])
+  @@index([hotelId, isActive, name])
+  @@index([name(ops: raw("gin_trgm_ops"))], map: "Supplier_name_trgm_idx", type: Gin)
+  @@index([groups], type: Gin)
+}
+
+/// Satın alma politikası (otel başına tek satır).
+model PurchaseSettings {
+  hotelId             String   @id
+  /// Bu tutar (KDV dahil) ve üstündeki sipariş onay kuyruğuna gider (0 = onay yok).
+  orderApprovalAmount Decimal  @default(50000) @db.Decimal(14, 2)
+  defaultTaxRatePct   Decimal  @default(10) @db.Decimal(5, 2)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+}
+
+/// Teklif turu (TKT-yıl-sıra): açık talep satırları malzeme başına birleşir; tedarikçiler teklif verir.
+model PurchaseRound {
+  id           String              @id @default(uuid())
+  hotelId      String
+  number       String
+  status       PurchaseRoundStatus @default(OPEN)
+  /// Satırların en erken ihtiyaç günü.
+  neededBy     DateTime            @db.Date
+  note         String?
+  createdBy    String
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  awardedAt    DateTime?
+  cancelledAt  DateTime?
+  cancelledBy  String?
+  cancelReason String?
+
+  hotel  Hotel               @relation(fields: [hotelId], references: [id])
+  lines  PurchaseRoundLine[]
+  quotes PurchaseQuote[]
+  orders PurchaseOrder[]
+
+  @@unique([hotelId, number])
+  @@index([hotelId, status, createdAt, id])
+  @@index([hotelId, createdAt, id])
+}
+
+/// Tur satırı (malzeme): toplam miktar, en erken ihtiyaç; seçilen teklif satırı ve oluşan sipariş satırı.
+model PurchaseRoundLine {
+  id                 String      @id @default(uuid())
+  hotelId            String
+  roundId            String
+  stockItemId        String
+  quantity           Decimal     @db.Decimal(14, 3)
+  unit               KitchenUnit
+  neededBy           DateTime    @db.Date
+  sortOrder          Int
+  awardedQuoteLineId String?     @unique
+  /// En ucuz dışı seçimin gerekçesi.
+  awardReason        String?
+  orderLineId        String?     @unique
+  /// Tur kapatıldı, satır siparişe dönmeden talebe geri bırakıldı.
+  releasedAt         DateTime?
+
+  round        PurchaseRound         @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  stockItem    StockItem             @relation(fields: [stockItemId], references: [id], onDelete: Restrict)
+  awardedQuote PurchaseQuoteLine?    @relation("AwardedQuoteLine", fields: [awardedQuoteLineId], references: [id], onDelete: SetNull)
+  orderLine    PurchaseOrderLine?    @relation(fields: [orderLineId], references: [id], onDelete: SetNull)
+  quoteLines   PurchaseQuoteLine[]   @relation("QuoteLineRoundLine")
+  requestLines PurchaseRequestLine[]
+
+  @@index([roundId, sortOrder])
+  @@index([stockItemId])
+}
+
+/// Tedarikçinin teklifi (turda tedarikçi başına tek): termin ve geçerlilik.
+model PurchaseQuote {
+  id           String    @id @default(uuid())
+  hotelId      String
+  roundId      String
+  supplierId   String
+  deliveryDays Int
+  validUntil   DateTime? @db.Date
+  note         String?
+  createdBy    String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  round    PurchaseRound       @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  supplier Supplier            @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  lines    PurchaseQuoteLine[]
+
+  @@unique([roundId, supplierId])
+  @@index([supplierId])
+}
+
+/// Teklif satırı: KDV hariç birim fiyat (stok biriminde; boş = vermiyor) ve KDV oranı.
+model PurchaseQuoteLine {
+  id          String   @id @default(uuid())
+  hotelId     String
+  quoteId     String
+  roundLineId String
+  unitPrice   Decimal? @db.Decimal(14, 4)
+  taxRatePct  Decimal  @db.Decimal(5, 2)
+
+  quote     PurchaseQuote      @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  roundLine PurchaseRoundLine  @relation("QuoteLineRoundLine", fields: [roundLineId], references: [id], onDelete: Cascade)
+  awardedTo PurchaseRoundLine? @relation("AwardedQuoteLine")
+
+  @@unique([quoteId, roundLineId])
+  @@index([roundLineId])
+}
+
+/// Satın alma siparişi (SAS-yıl-sıra): tedarikçi başına; eşik üstü onay kuyruğundan; mal kabulle kapanır.
+model PurchaseOrder {
+  id              String              @id @default(uuid())
+  hotelId         String
+  number          String
+  supplierId      String
+  roundId         String?
+  status          PurchaseOrderStatus
+  /// Beklenen teslim günü (talep + termin).
+  expectedOn      DateTime            @db.Date
+  paymentTermDays Int
+  currency        String
+  netTotal        Decimal             @db.Decimal(14, 2)
+  taxTotal        Decimal             @db.Decimal(14, 2)
+  grandTotal      Decimal             @db.Decimal(14, 2)
+  /// Teslim alınanın KDV dahil tutarı.
+  receivedTotal   Decimal             @default(0) @db.Decimal(14, 2)
+  note            String?
+  approvalId      String?
+  createdBy       String
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  approvedAt      DateTime?
+  approvedBy      String?
+  rejectedAt      DateTime?
+  cancelledAt     DateTime?
+  cancelledBy     String?
+  cancelReason    String?
+  /// Kalan miktar gelmeyecek: eksik kapatan ve gerekçesi (mal kabulle kapatılırsa gerekçe boş olabilir).
+  closedAt        DateTime?
+  closedBy        String?
+  closeReason     String?
+
+  hotel    Hotel               @relation(fields: [hotelId], references: [id])
+  supplier Supplier            @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  round    PurchaseRound?      @relation(fields: [roundId], references: [id], onDelete: SetNull)
+  lines    PurchaseOrderLine[]
+  receipts GoodsReceipt[]
+
+  @@unique([hotelId, number])
+  @@index([hotelId, status, createdAt, id])
+  @@index([hotelId, createdAt, id])
+  @@index([hotelId, supplierId, createdAt])
+  @@index([hotelId, expectedOn])
+  @@index([roundId])
+}
+
+model PurchaseOrderLine {
+  id               String      @id @default(uuid())
+  hotelId          String
+  orderId          String
+  stockItemId      String
+  quantity         Decimal     @db.Decimal(14, 3)
+  unit             KitchenUnit
+  unitPrice        Decimal     @db.Decimal(14, 4)
+  taxRatePct       Decimal     @db.Decimal(5, 2)
+  netAmount        Decimal     @db.Decimal(14, 2)
+  taxAmount        Decimal     @db.Decimal(14, 2)
+  total            Decimal     @db.Decimal(14, 2)
+  receivedQuantity Decimal     @default(0) @db.Decimal(14, 3)
+  sortOrder        Int
+
+  order        PurchaseOrder      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  stockItem    StockItem          @relation(fields: [stockItemId], references: [id], onDelete: Restrict)
+  roundLine    PurchaseRoundLine?
+  receiptLines GoodsReceiptLine[]
+
+  @@index([orderId, sortOrder])
+  @@index([hotelId, stockItemId])
+}
+
+/// Mal kabul / irsaliye (MKB-yıl-sıra): siparişten gelen miktar depoya girer; tedarikçinin aynı irsaliyesi iki kez girilmez.
+model GoodsReceipt {
+  id            String   @id @default(uuid())
+  hotelId       String
+  number        String
+  orderId       String
+  supplierId    String
+  warehouseId   String
+  waybillNumber String
+  receivedOn    DateTime @db.Date
+  note          String?
+  netTotal      Decimal  @db.Decimal(14, 2)
+  taxTotal      Decimal  @db.Decimal(14, 2)
+  grandTotal    Decimal  @db.Decimal(14, 2)
+  /// Bu kabulle sipariş eksik kapatıldı (kalan gelmeyecek).
+  closedShort   Boolean  @default(false)
+  receivedBy    String
+  createdAt     DateTime @default(now())
+
+  hotel     Hotel              @relation(fields: [hotelId], references: [id])
+  order     PurchaseOrder      @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  supplier  Supplier           @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  warehouse Warehouse          @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  lines     GoodsReceiptLine[]
+
+  @@unique([hotelId, number])
+  @@unique([hotelId, supplierId, waybillNumber])
+  @@index([hotelId, receivedOn, id])
+  @@index([orderId])
+  @@index([hotelId, warehouseId, receivedOn])
+}
+
+model GoodsReceiptLine {
+  id          String  @id @default(uuid())
+  hotelId     String
+  receiptId   String
+  orderLineId String
+  stockItemId String
+  quantity    Decimal @db.Decimal(14, 3)
+  unitPrice   Decimal @db.Decimal(14, 4)
+  taxRatePct  Decimal @db.Decimal(5, 2)
+  netAmount   Decimal @db.Decimal(14, 2)
+  taxAmount   Decimal @db.Decimal(14, 2)
+  total       Decimal @db.Decimal(14, 2)
+
+  receipt   GoodsReceipt      @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  orderLine PurchaseOrderLine @relation(fields: [orderLineId], references: [id], onDelete: Restrict)
+
+  @@index([receiptId])
+  @@index([orderLineId])
+}
+
+/**
+ * ══════════════════ Stok çekirdeği (44'ün çekirdeği — modül 45) ══════════════════
+ */
+
+/// Depo (ana depo, soğuk oda, bar deposu…). Otelde tek varsayılan depo (mal kabulde önce seçili).
+model Warehouse {
+  id        String   @id @default(uuid())
+  hotelId   String
+  code      String
+  name      String
+  isDefault Boolean  @default(false)
+  isActive  Boolean  @default(true)
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  hotel     Hotel           @relation(fields: [hotelId], references: [id])
+  levels    StockLevel[]
+  movements StockMovement[]
+  receipts  GoodsReceipt[]
+
+  @@unique([hotelId, code])
+  @@index([hotelId, isActive, name])
+}
+
+/// Depo × malzeme mevcudu (stok biriminde).
+model StockLevel {
+  id          String   @id @default(uuid())
+  hotelId     String
+  warehouseId String
+  stockItemId String
+  quantity    Decimal  @default(0) @db.Decimal(14, 3)
+  updatedAt   DateTime @updatedAt
+
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  stockItem StockItem @relation(fields: [stockItemId], references: [id], onDelete: Restrict)
+
+  @@unique([warehouseId, stockItemId])
+  @@index([hotelId, stockItemId])
+}
+
+/// Stok hareketi (değişmez kayıt): işaretli miktar, birim maliyet, hareket sonrası kartın mevcudu ve ortalama maliyeti, kaynağı.
+model StockMovement {
+  id           String            @id @default(uuid())
+  hotelId      String
+  kind         StockMovementKind
+  stockItemId  String
+  warehouseId  String
+  quantity     Decimal           @db.Decimal(14, 3)
+  unitCost     Decimal           @db.Decimal(14, 4)
+  totalCost    Decimal           @db.Decimal(14, 2)
+  onHandAfter  Decimal           @db.Decimal(14, 3)
+  avgCostAfter Decimal           @db.Decimal(14, 4)
+  sourceType   String
+  sourceId     String
+  note         String?
+  occurredAt   DateTime
+  createdBy    String
+  createdAt    DateTime          @default(now())
+
+  stockItem StockItem @relation(fields: [stockItemId], references: [id], onDelete: Restrict)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+
+  @@index([hotelId, stockItemId, occurredAt, id])
+  @@index([hotelId, occurredAt, id])
+  @@index([hotelId, warehouseId, occurredAt])
+  @@index([sourceType, sourceId])
 }

@@ -1,5 +1,6 @@
 import { currentActor, toDecimal } from '@hotelos/core';
-import { FNB_PLANNED_STATUSES, MAX_NEEDS_MENUS, MAX_REQUEST_LINES, PURCHASE_REQUEST_PREFIX, zonedWallTimeToUtc } from '@hotelos/hotel-contracts';
+import { FNB_PLANNED_STATUSES, KITCHEN_UNIT_LABELS, MAX_NEEDS_MENUS, MAX_REQUEST_LINES, PURCHASE_REQUEST_PREFIX, zonedWallTimeToUtc } from '@hotelos/hotel-contracts';
+import { Prisma } from '@prisma/client';
 import { recordAudit } from '../../lib/audit.js';
 import { ConflictError, NotFoundError, StaleWriteError, ValidationError, rethrowPrismaError } from '../../lib/errors.js';
 import { lockEvents, lockPurchaseRequests } from '../../lib/locks.js';
@@ -11,9 +12,14 @@ import { aggregateNeeds } from '../banquet/fnb-rules.js';
 import { hotelContext, loadEventSettings, prisma } from '../banquet/shared.js';
 import { iso, moneyText, quantityText, unitCostText } from '../recipes/graph.js';
 import { allocateRequest } from '../recipes/rules.js';
+import { stockSuggestion } from './rules.js';
 
 /**
- * Satın alma talebi (modül 45'in talep kısmı — modül 43'te kuruldu).
+ * Satın alma talebi (modül 43'te kuruldu, 45'te tamamlandı).
+ *
+ * Kaynaklar: banket ihtiyacı (43), elle talep ve minimum stok önerisi (45). Talep satırları teklif
+ * turunda malzeme başına birleşir; talebin durumu satırlarından türer (açık → teklif / siparişte →
+ * siparişe döndü). Yalnız açık talep iptal edilir.
  *
  * ### Banket ihtiyacından talep
  *
@@ -26,8 +32,15 @@ import { allocateRequest } from '../recipes/rules.js';
  * 3. Miktarı etkinliklerin eksiğine ihtiyaç gününe göre dağıtır (fazlası en erken ihtiyaca);
  *    satır = malzeme × etkinlik, birim maliyet talep anının kopyası.
  *
- * Talep iptal edilir (gerekçeyle); onay, teklif, sipariş ve mal kabul 45'te.
+ * ### Minimum stok önerisi
+ *
+ * Minimum seviyesi tanımlı malzemede öneri = minimum − (eldeki + yoldaki siparişler + henüz siparişe
+ * dönmemiş elle / stok talepleri). Banket talepleri etkinlik tüketimi içindir, öneriden düşülmez;
+ * banket siparişleri ise yoldaki mal sayılır (eksik kapanırsa öneri yeniden çıkar).
  */
+
+/** Tam sayı birimler (adet, gram, mililitre): talep miktarı küsuratlı olamaz. */
+const WHOLE_UNITS = Object.freeze(['PIECE', 'G', 'ML']);
 
 const LIST_SELECT = Object.freeze({
   id: true,
@@ -89,6 +102,7 @@ export async function listRequests(hotelId, query) {
   /** @type {Record<string, any>} */
   const where = { hotelId };
   if (query.status) where.status = query.status;
+  if (query.source) where.source = query.source;
   if (query.eventId) where.lines = { some: { eventId: query.eventId } };
   if (query.from || query.to) where.neededBy = { ...(query.from ? { gte: dateOnly(query.from) } : {}), ...(query.to ? { lte: dateOnly(query.to) } : {}) };
   // Malzeme önce kendi trigram index'iyle bulunur, talep kimlikle süzülür (talep başına satır taranmaz).
@@ -137,6 +151,7 @@ export async function getRequest(hotelId, requestId) {
           eventId: true,
           stockItem: { select: { code: true, name: true, group: true } },
           event: { select: { code: true, name: true, status: true } },
+          roundLine: { select: { round: { select: { id: true, number: true, status: true } }, orderLine: { select: { order: { select: { id: true, number: true, status: true } } } } } },
         },
       },
     },
@@ -151,9 +166,14 @@ export async function getRequest(hotelId, requestId) {
     total = total.plus(cost);
     let item = items.get(line.stockItemId);
     if (!item) {
-      item = { stockItemId: line.stockItemId, code: line.stockItem.code, name: line.stockItem.name, group: line.stockItem.group, unit: line.unit, unitCost: unitCostText(line.estimatedUnitCost), quantity: toDecimal(0), cost: toDecimal(0), neededBy: dayText(line.neededBy), events: [] };
+      item = { stockItemId: line.stockItemId, code: line.stockItem.code, name: line.stockItem.name, group: line.stockItem.group, unit: line.unit, unitCost: unitCostText(line.estimatedUnitCost), quantity: toDecimal(0), cost: toDecimal(0), neededBy: dayText(line.neededBy), events: [], rounds: new Map(), orders: new Map() };
       items.set(line.stockItemId, item);
     }
+    // Zincir: satırın teklif turu ve (varsa) siparişi.
+    const round = line.roundLine?.round;
+    if (round) item.rounds.set(round.id, round);
+    const order = line.roundLine?.orderLine?.order;
+    if (order) item.orders.set(order.id, order);
     item.quantity = item.quantity.plus(quantity);
     item.cost = item.cost.plus(cost);
     if (dayText(line.neededBy) < item.neededBy) item.neededBy = dayText(line.neededBy);
@@ -161,8 +181,148 @@ export async function getRequest(hotelId, requestId) {
   }
   return {
     ...toListDto(row, { lines: row.lines.length, items: items.size, events: new Set(row.lines.map((line) => line.eventId).filter(Boolean)).size, estimatedTotal: total.toString() }),
-    items: [...items.values()].map((item) => ({ ...item, quantity: item.quantity.toString(), cost: moneyText(item.cost) })),
+    items: [...items.values()].map((item) => ({ ...item, quantity: item.quantity.toString(), cost: moneyText(item.cost), rounds: [...item.rounds.values()], orders: [...item.orders.values()] })),
   };
+}
+
+/**
+ * Elle talep ya da minimum stok önerisinden talep: malzeme, miktar (stok biriminde), ihtiyaç günü.
+ * @param {string} hotelId
+ * @param {{ source: 'MANUAL' | 'STOCK', neededBy: string, note?: string | null, lines: Array<{ stockItemId: string, quantity: string, neededBy?: string | null }> }} input
+ */
+export async function createRequest(hotelId, input) {
+  const actor = currentActor();
+  const { today } = await hotelContext(hotelId);
+  /** @type {Record<string, string>} */
+  const dayFields = {};
+  if (input.neededBy < today) dayFields.neededBy = 'İhtiyaç günü bugünden önce olamaz';
+  input.lines.forEach((line, index) => {
+    if (line.neededBy && line.neededBy < today) dayFields[`lines.${index}.neededBy`] = 'İhtiyaç günü bugünden önce olamaz';
+  });
+  if (Object.keys(dayFields).length) throw new ValidationError(`Talepte düzeltilmesi gereken alanlar var: ${Object.values(dayFields)[0]}`, { fields: dayFields });
+  try {
+    const id = await writeWithEvents(async (tx, stage) => {
+      const stockItems = await tx.stockItem.findMany({
+        where: { hotelId, id: { in: input.lines.map((line) => line.stockItemId) } },
+        select: { id: true, name: true, unit: true, unitCost: true, isActive: true },
+      });
+      const byId = new Map(stockItems.map((item) => [item.id, item]));
+      /** @type {Record<string, string>} */
+      const fields = {};
+      input.lines.forEach((line, index) => {
+        const item = byId.get(line.stockItemId);
+        if (!item) fields[`lines.${index}.stockItemId`] = 'Malzeme bulunamadı';
+        else if (!item.isActive) fields[`lines.${index}.stockItemId`] = `${item.name} pasif`;
+        else if (WHOLE_UNITS.includes(item.unit) && !toDecimal(line.quantity).isInteger()) fields[`lines.${index}.quantity`] = `${item.name}: ${KITCHEN_UNIT_LABELS[item.unit]} tam sayı olmalı`;
+      });
+      const messages = Object.values(fields);
+      if (messages.length) throw new ValidationError(`Talepte düzeltilmesi gereken satırlar var: ${messages[0]}${messages.length > 1 ? ` (+${messages.length - 1})` : ''}`, { fields });
+
+      const lines = input.lines.map((line) => ({ ...line, neededBy: line.neededBy ?? input.neededBy, item: byId.get(line.stockItemId) }));
+      const neededBy = lines.reduce((min, line) => (line.neededBy < min ? line.neededBy : min), lines[0].neededBy);
+      const number = await nextRequestNumber(tx, hotelId, Number(today.slice(0, 4)));
+      const request = await tx.purchaseRequest.create({
+        data: { hotelId, number, status: 'OPEN', source: input.source, neededBy: dateOnly(neededBy), note: input.note ?? null, requestedBy: actor },
+        select: { id: true },
+      });
+      await tx.purchaseRequestLine.createMany({
+        data: lines.map((line, index) => ({
+          hotelId,
+          requestId: request.id,
+          stockItemId: line.item.id,
+          quantity: line.quantity,
+          unit: line.item.unit,
+          neededBy: dateOnly(line.neededBy),
+          eventId: null,
+          estimatedUnitCost: line.item.unitCost,
+          sortOrder: index,
+        })),
+      });
+      await recordAudit(tx, {
+        hotelId,
+        entity: 'PurchaseRequest',
+        entityId: request.id,
+        action: 'CREATE',
+        after: { number, source: input.source, neededBy, lines: lines.slice(0, 40).map((line) => `${line.item.name} ${quantityText(line.quantity)}`) },
+      });
+      await stage('purchase.request.changed', { hotelId, requestId: request.id, change: 'CREATED', source: input.source });
+      return request.id;
+    });
+    return getRequest(hotelId, id);
+  } catch (error) {
+    rethrowPrismaError(error);
+  }
+}
+
+/**
+ * Minimum seviyenin altına düşen (yoldaki ve talep edilen düşüldükten sonra) malzemeler; en kritik önce
+ * (eldeki ÷ minimum küçükten büyüğe).
+ * @param {string} hotelId
+ * @param {{ page: number, pageSize: number, group?: string, search?: string }} query
+ */
+export async function listSuggestions(hotelId, query) {
+  const filters = [Prisma.sql`s."hotelId" = ${hotelId}`, Prisma.sql`s."isActive"`, Prisma.sql`s."minLevel" IS NOT NULL`];
+  if (query.group) filters.push(Prisma.sql`s."group"::text = ${query.group}`);
+  const tokens = searchTokens(query.search);
+  if (tokens.length) {
+    const lists = await Promise.all(tokens.map((token) => matchStockItemIds(prisma, hotelId, token)));
+    const ids = lists[0].filter((id) => lists.every((list) => list.includes(id)));
+    if (ids.length === 0) return buildPage([], 0, query);
+    filters.push(Prisma.sql`s."id" = ANY(${ids}::text[])`);
+  }
+  // Malzeme başına bir kez toplanır: yoldaki = açık siparişlerin kalanı (açık sipariş durum index'inden),
+  // talep edilen = siparişe dönmemiş elle / stok talepleri (önce talep süzülür; banket satırları taranmaz).
+  const gaps = Prisma.sql`
+    WITH "tracked" AS MATERIALIZED (
+      SELECT s."id", s."code", s."name", s."group"::text AS "group", s."unit"::text AS "unit", s."onHand", s."minLevel", s."unitCost"
+      FROM "StockItem" s WHERE ${Prisma.join(filters, ' AND ')}
+    ), "ordered" AS (
+      SELECT ol."stockItemId", SUM(GREATEST(ol."quantity" - ol."receivedQuantity", 0)) AS "quantity"
+      FROM "PurchaseOrder" o JOIN "PurchaseOrderLine" ol ON ol."orderId" = o."id"
+      WHERE o."hotelId" = ${hotelId} AND o."status"::text IN ('PENDING_APPROVAL', 'APPROVED', 'PARTIALLY_RECEIVED') AND ol."stockItemId" IN (SELECT "id" FROM "tracked")
+      GROUP BY ol."stockItemId"
+    ), "requested" AS (
+      SELECT rl."stockItemId", SUM(rl."quantity") AS "quantity"
+      FROM "PurchaseRequest" r JOIN "PurchaseRequestLine" rl ON rl."requestId" = r."id"
+      LEFT JOIN "PurchaseRoundLine" pl ON pl."id" = rl."roundLineId"
+      WHERE r."hotelId" = ${hotelId} AND r."status"::text IN ('OPEN', 'IN_PROGRESS') AND r."source"::text IN ('MANUAL', 'STOCK')
+        AND pl."orderLineId" IS NULL AND rl."stockItemId" IN (SELECT "id" FROM "tracked")
+      GROUP BY rl."stockItemId"
+    )
+    SELECT t.*, COALESCE(o."quantity", 0) AS "onOrder", COALESCE(q."quantity", 0) AS "requested"
+    FROM "tracked" t LEFT JOIN "ordered" o ON o."stockItemId" = t."id" LEFT JOIN "requested" q ON q."stockItemId" = t."id"
+    WHERE t."minLevel" - t."onHand" - COALESCE(o."quantity", 0) - COALESCE(q."quantity", 0) > 0`;
+  const { skip, take } = toSkipTake(query);
+  const rows = await prisma.$queryRaw`
+    SELECT "id", "code", "name", "group", "unit", "onHand"::text AS "onHand", "minLevel"::text AS "minLevel", "unitCost"::text AS "unitCost",
+           "onOrder"::text AS "onOrder", "requested"::text AS "requested", COUNT(*) OVER ()::int AS "total"
+    FROM (${gaps}) g
+    ORDER BY ("onHand" / NULLIF("minLevel", 0)) ASC NULLS FIRST, "name", "id"
+    LIMIT ${take} OFFSET ${skip}`;
+  // Son sayfanın ötesi istenirse pencere sayımı gelmez: toplam ayrıca sayılır.
+  const total = rows.length ? rows[0].total : skip > 0 ? (await prisma.$queryRaw`SELECT COUNT(*)::int AS "total" FROM (${gaps}) g`)[0].total : 0;
+  return buildPage(
+    rows.map((row) => {
+      const suggested = stockSuggestion({ minLevel: row.minLevel, onHand: row.onHand, onOrder: row.onOrder, requested: row.requested, unit: row.unit });
+      return {
+        id: row.id,
+        stockItemId: row.id,
+        code: row.code,
+        name: row.name,
+        group: row.group,
+        unit: row.unit,
+        onHand: quantityText(row.onHand),
+        minLevel: quantityText(row.minLevel),
+        onOrder: quantityText(row.onOrder),
+        requested: quantityText(row.requested),
+        suggested: suggested.toString(),
+        unitCost: unitCostText(row.unitCost),
+        estimatedTotal: moneyText(suggested.times(toDecimal(row.unitCost))),
+      };
+    }),
+    total,
+    query,
+  );
 }
 
 /**

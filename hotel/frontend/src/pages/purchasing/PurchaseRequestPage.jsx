@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { MAX_REQUEST_REASON_LENGTH, PURCHASE_REQUEST_SOURCE_LABELS, PURCHASE_REQUEST_STATUS_LABELS, STOCK_ITEM_GROUP_LABELS, cancelPurchaseRequestSchema } from '@hotelos/hotel-contracts';
+import { MAX_REQUEST_REASON_LENGTH, PURCHASE_ORDER_STATUS_LABELS, PURCHASE_REQUEST_SOURCE_LABELS, PURCHASE_REQUEST_STATUS_LABELS, STOCK_ITEM_GROUP_LABELS, cancelPurchaseRequestSchema } from '@hotelos/hotel-contracts';
 import { Alert, Badge, Button, Card, Icon, Textarea } from '@hotelos/ui';
 import { Modal } from '../../components/Modal.jsx';
 import { PageHeader } from '../../components/PageHeader.jsx';
@@ -13,15 +13,15 @@ import { purchasingKeys, usePurchasingLive } from '../../lib/kitchen.js';
 import { quantityText } from '../../lib/kitchenFormat.js';
 import { printDocument, purchaseRequestHtml } from '../../lib/kitchenPrint.js';
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
+import { ORDER_STATUS_TONES, REQUEST_STATUS_TONES } from '../../lib/purchasingFormat.js';
 import { useHotelContext } from '../../lib/useHotel.js';
 import { validateWith } from '../../lib/validate.js';
 import { toastError, toastSuccess } from '../../store/toast.js';
-import { REQUEST_STATUS_TONES } from './PurchaseRequestsPage.jsx';
 
 /**
  * Satın alma talebi ekranı: malzeme başına toplam miktar, talep anındaki tahmini birim maliyet ve
- * tutar, etkinlik dökümü (hangi etkinliğin hangi gün ihtiyacı). Açık talep gerekçeyle iptal edilir
- * (`purchasing.request`); A4 çıktı.
+ * tutar, etkinlik dökümü (hangi etkinliğin hangi gün ihtiyacı) ve zincir (teklif turu, sipariş).
+ * Açık talep gerekçeyle iptal edilir (`purchasing.request`); A4 çıktı.
  */
 export function PurchaseRequestPage() {
   const { requestId } = useParams();
@@ -39,7 +39,7 @@ export function PurchaseRequestPage() {
       queryClient.invalidateQueries({ queryKey: purchasingKeys.all });
       queryClient.invalidateQueries({ queryKey: banquetKeys.all });
       setCancelling(false);
-      toastSuccess(`${result.number} iptal edildi; eksikler banket ihtiyacına geri döndü`);
+      toastSuccess(result.source === 'BANQUET' ? `${result.number} iptal edildi; eksikler banket ihtiyacına geri döndü` : `${result.number} iptal edildi`);
     },
     onError: (error) => {
       if (error.code === 'STALE_WRITE') queryClient.invalidateQueries({ queryKey: purchasingKeys.detail(requestId) });
@@ -93,9 +93,9 @@ export function PurchaseRequestPage() {
         </Alert>
       )}
       {request.note && <Alert tone="info">Not: {request.note}</Alert>}
-      <Card title={`${request.items.length} malzeme · ${request.events} etkinlik`} description="Birim maliyet talep anındaki malzeme kartından (KDV hariç); teklif ve sipariş satın alma modülünde.">
+      <Card title={request.events ? `${request.items.length} malzeme · ${request.events} etkinlik` : `${request.items.length} malzeme`} description="Tahmini birim maliyet talep anındaki malzeme kartından (KDV hariç); gerçek fiyat teklif turunda belli olur.">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-sm">
+          <table className="w-full min-w-[900px] text-sm">
             <thead className="border-b border-line text-left text-[0.7rem] uppercase tracking-[0.08em] text-ink-muted">
               <tr>
                 <th className="py-2 pr-2">Malzeme</th>
@@ -103,7 +103,8 @@ export function PurchaseRequestPage() {
                 <th className="py-2 pr-2 text-right">Tahmini birim</th>
                 <th className="py-2 pr-2 text-right">Tahmini tutar</th>
                 <th className="py-2 pr-2">İhtiyaç</th>
-                <th className="py-2">Etkinlik dökümü</th>
+                <th className="py-2 pr-2">Etkinlik dökümü</th>
+                <th className="py-2">Tur / sipariş</th>
               </tr>
             </thead>
             <tbody>
@@ -133,6 +134,29 @@ export function PurchaseRequestPage() {
                       ))}
                     </ul>
                   </td>
+                  <td className="py-2 text-xs">
+                    {item.rounds.length === 0 && item.orders.length === 0 ? (
+                      <span className="text-ink-muted">Henüz teklif turunda değil</span>
+                    ) : (
+                      <ul className="flex flex-col gap-1">
+                        {item.rounds.map((round) => (
+                          <li key={round.id}>
+                            <Link to={`/satin-alma/teklif-turlari/${round.id}`} className="font-mono font-semibold text-ink hover:underline">
+                              {round.number}
+                            </Link>
+                          </li>
+                        ))}
+                        {item.orders.map((order) => (
+                          <li key={order.id} className="flex items-center gap-1.5">
+                            <Link to={`/satin-alma/siparisler/${order.id}`} className="font-mono font-semibold text-ink hover:underline">
+                              {order.number}
+                            </Link>
+                            <Badge tone={ORDER_STATUS_TONES[order.status]}>{PURCHASE_ORDER_STATUS_LABELS[order.status]}</Badge>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -142,13 +166,13 @@ export function PurchaseRequestPage() {
           Tahmini toplam <strong className="tabular-nums">{formatMoney(request.estimatedTotal, currency)}</strong>
         </p>
       </Card>
-      {cancelling && <CancelDialog busy={cancel.isPending} onConfirm={(reason) => cancel.mutate({ expectedUpdatedAt: request.updatedAt, reason })} onClose={() => setCancelling(false)} />}
+      {cancelling && <CancelDialog source={request.source} busy={cancel.isPending} onConfirm={(reason) => cancel.mutate({ expectedUpdatedAt: request.updatedAt, reason })} onClose={() => setCancelling(false)} />}
     </div>
   );
 }
 
-/** @param {{ busy: boolean, onConfirm: (reason: string) => void, onClose: () => void }} props */
-function CancelDialog({ busy, onConfirm, onClose }) {
+/** @param {{ source: string, busy: boolean, onConfirm: (reason: string) => void, onClose: () => void }} props */
+function CancelDialog({ source, busy, onConfirm, onClose }) {
   const [reason, setReason] = useState('');
   const [error, setError] = useState(null);
   function submit(event) {
@@ -176,7 +200,7 @@ function CancelDialog({ busy, onConfirm, onClose }) {
       }
     >
       <form id="request-cancel-form" onSubmit={submit} noValidate className="flex flex-col gap-4">
-        <p className="text-sm text-ink-soft">İptal edilen talebin miktarları banket ihtiyacında yeniden "eksik" görünür.</p>
+        <p className="text-sm text-ink-soft">{source === 'BANQUET' ? 'İptal edilen talebin miktarları banket ihtiyacında yeniden "eksik" görünür.' : 'İptal edilen talep teklif turuna alınamaz; minimum stok önerisi yeniden hesaplanır.'}</p>
         <Textarea label="Gerekçe" name="request-cancel-reason" rows={3} maxLength={MAX_REQUEST_REASON_LENGTH} value={reason} onChange={(event) => setReason(event.target.value)} error={error ?? undefined} required disabled={busy} />
       </form>
     </Modal>

@@ -724,9 +724,35 @@ export const EVENT_CATALOG = Object.freeze({
 
   'purchase.request.changed': hotelScoped.extend({
     requestId: z.string().uuid(),
-    change: z.enum(['CREATED', 'CANCELLED']),
-    source: z.enum(['BANQUET']),
+    change: z.enum(['CREATED', 'CANCELLED', 'UPDATED']),
+    source: z.enum(['BANQUET', 'MANUAL', 'STOCK']),
   }),
+
+  /* ── Satın alma (modül 45) ──
+     Tedarikçi, teklif turu, sipariş ve mal kabul ekranları (`purchasing.changed`), stok ekranları (`stock.changed`). */
+
+  'purchase.supplier.changed': hotelScoped.extend({ supplierId: z.string().uuid(), change: z.enum(['CREATED', 'UPDATED']) }),
+  'purchase.round.changed': hotelScoped.extend({ roundId: z.string().uuid(), change: z.enum(['CREATED', 'QUOTED', 'AWARDED', 'REOPENED', 'CANCELLED']) }),
+  'purchase.order.changed': hotelScoped.extend({
+    orderId: z.string().uuid(),
+    change: z.enum(['CREATED', 'APPROVED', 'REJECTED', 'CANCELLED', 'RECEIVED', 'CLOSED']),
+  }),
+  /**
+   * İş olayı: mal kabul edildi — tedarikçi borcu doğdu (ön muhasebe / cari, modül 47 dinler). Tutarlar kabul
+   * edilen miktarın sipariş fiyatıyla (KDV hariç / KDV / dahil); vade = kabul günü + tedarikçinin vadesi.
+   */
+  'purchase.goods.received': hotelScoped.extend({
+    receiptId: z.string().uuid(),
+    orderId: z.string().uuid(),
+    supplierId: z.string().uuid(),
+    netTotal: z.string(),
+    taxTotal: z.string(),
+    grandTotal: z.string(),
+    currency: z.string(),
+    dueDate: z.string(),
+  }),
+  /** Stok değişti (mal kabul girişi, depo tanımı, minimum seviye); 44 çıkış / transfer / sayımı ekler. */
+  'stock.changed': hotelScoped.extend({ change: z.enum(['RECEIPT', 'WAREHOUSE', 'MIN_LEVEL']), stockItemIds: z.array(z.string().uuid()).max(500).default([]) }),
 
   /* ── Restoran POS (modül 39) ──
      Masa planı, adisyon ekranı ve mutfak ekranı (modül 40) bunlarla canlı tazelenir
@@ -1178,7 +1204,10 @@ export const BANQUET_EVENTS = Object.freeze([
 export const RECIPE_EVENTS = Object.freeze(['recipe.stock_item.changed', 'recipe.changed']);
 
 /** Satın alma talebi (modül 43 / 45): ekranlar bunlarla tazelenir (`purchasing.changed` kanalı). */
-export const PURCHASE_EVENTS = Object.freeze(['purchase.request.changed']);
+export const PURCHASE_EVENTS = Object.freeze(['purchase.request.changed', 'purchase.supplier.changed', 'purchase.round.changed', 'purchase.order.changed', 'purchase.goods.received']);
+
+/** Stok (modül 45 / 44): stok ekranları bunlarla tazelenir (`stock.changed` kanalı). */
+export const STOCK_EVENTS = Object.freeze(['stock.changed']);
 
 /** Acente bonusu (modül 35): ekranlar bunlarla tazelenir (`agency-bonus.changed` kanalı). */
 export const AGENCY_BONUS_EVENTS = Object.freeze([

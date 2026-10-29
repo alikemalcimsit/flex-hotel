@@ -147,8 +147,17 @@ export const PERMISSIONS = Object.freeze({
 
   /** Satın alma (modül 45'in talep kısmı, 43'te kuruldu): talepleri görmek. */
   PURCHASING_VIEW: 'purchasing.view',
-  /** Satın alma talebi açmak (banket ihtiyacından) ve iptal etmek. */
+  /** Satın alma talebi açmak (banket ihtiyacından, elle, minimum stoktan) ve iptal etmek. */
   PURCHASING_REQUEST: 'purchasing.request',
+  /** Satın alma (modül 45): tedarikçi kartı, teklif turu ve teklifler, kazanan seçimi (sipariş), sipariş iptali, satın alma politikası. */
+  PURCHASING_MANAGE: 'purchasing.manage',
+  /** Mal kabul / irsaliye: gelen miktarı depoya almak (stok girer). */
+  PURCHASING_RECEIVE: 'purchasing.receive',
+
+  /** Stok (44'ün çekirdeği, 45'te kuruldu): depo bazında mevcut, hareketler, stok değeri. */
+  STOCK_VIEW: 'stock.view',
+  /** Depo tanımları ve malzemenin minimum seviyesi. */
+  STOCK_MANAGE: 'stock.manage',
 
   /** Kanal yönetimi (modül 33): kanallar, eşleştirme, senkron logu, kanal rezervasyonları. */
   CHANNEL_MANAGER_VIEW: 'channel_manager.view',
@@ -229,7 +238,11 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.RECIPES_VIEW]: 'Reçeteleri, malzeme kartlarını, maliyet ve kâr marjını görüntüle',
   [PERMISSIONS.RECIPES_MANAGE]: 'Reçete ve malzeme kartı düzenle (satır, fire, birim maliyet, alerjen)',
   [PERMISSIONS.PURCHASING_VIEW]: 'Satın alma taleplerini görüntüle',
-  [PERMISSIONS.PURCHASING_REQUEST]: 'Satın alma talebi aç (banket ihtiyacından) ve iptal et',
+  [PERMISSIONS.PURCHASING_REQUEST]: 'Satın alma talebi aç (banket, elle, minimum stok) ve iptal et',
+  [PERMISSIONS.PURCHASING_MANAGE]: 'Tedarikçi, teklif turu, kazanan seçimi / sipariş, sipariş iptali, satın alma politikası',
+  [PERMISSIONS.PURCHASING_RECEIVE]: 'Mal kabul / irsaliye gir (stok girer)',
+  [PERMISSIONS.STOCK_VIEW]: 'Stok mevcudu, hareketleri ve stok değerini görüntüle',
+  [PERMISSIONS.STOCK_MANAGE]: 'Depo tanımları ve minimum stok seviyesi',
   [PERMISSIONS.CHANNEL_MANAGER_VIEW]: 'Kanalları, senkron logunu ve kanal rezervasyonlarını görüntüle',
   [PERMISSIONS.CHANNEL_MANAGER_MANAGE]: 'Kanal bağla, eşleştir, stop-sale koy, elle senkronla',
   [PERMISSIONS.ACTORS_VIEW]: 'Aktör panelini görüntüle',
@@ -314,7 +327,12 @@ export const PERMISSION_GROUPS = Object.freeze([
     permissions: [PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_SUPERVISE, PERMISSIONS.POS_SETUP, PERMISSIONS.POS_REPORT],
   },
   { key: 'recipes', label: 'Reçete ve maliyet', permissions: [PERMISSIONS.RECIPES_VIEW, PERMISSIONS.RECIPES_MANAGE] },
-  { key: 'purchasing', label: 'Satın alma', permissions: [PERMISSIONS.PURCHASING_VIEW, PERMISSIONS.PURCHASING_REQUEST] },
+  {
+    key: 'purchasing',
+    label: 'Satın alma',
+    permissions: [PERMISSIONS.PURCHASING_VIEW, PERMISSIONS.PURCHASING_REQUEST, PERMISSIONS.PURCHASING_MANAGE, PERMISSIONS.PURCHASING_RECEIVE],
+  },
+  { key: 'stock', label: 'Stok ve depo', permissions: [PERMISSIONS.STOCK_VIEW, PERMISSIONS.STOCK_MANAGE] },
   {
     key: 'agency_bonus',
     label: 'Acente primi',
@@ -424,9 +442,13 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     // Reçete ve maliyet F&B müdürlüğünün (şef reçeteyi yazar; matristen F&B'ye açılabilir).
     PERMISSIONS.RECIPES_VIEW,
     PERMISSIONS.RECIPES_MANAGE,
-    // Banket malzemesini talebe çevirmek; sipariş / onay 45'te.
+    // Satın alma müdürün: talep, teklif turu, kazanan seçimi, mal kabul; eşik üstü siparişi başka yetkili onaylar.
     PERMISSIONS.PURCHASING_VIEW,
     PERMISSIONS.PURCHASING_REQUEST,
+    PERMISSIONS.PURCHASING_MANAGE,
+    PERMISSIONS.PURCHASING_RECEIVE,
+    PERMISSIONS.STOCK_VIEW,
+    PERMISSIONS.STOCK_MANAGE,
   ]),
   FRONT_DESK: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,
@@ -513,8 +535,9 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.POS_REPORT,
     // Maliyet kontrolü: reçete maliyeti ve gıda maliyeti yüzdesini izler; reçeteyi düzenlemez.
     PERMISSIONS.RECIPES_VIEW,
-    // Satın alma taleplerini izler (ödeme / cari 45 ve 47'de).
+    // Satın alma taleplerini ve siparişleri izler (tedarikçi borcu 47'de); stok değeri muhasebenin işi.
     PERMISSIONS.PURCHASING_VIEW,
+    PERMISSIONS.STOCK_VIEW,
   ]),
   FNB: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,
@@ -533,6 +556,9 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.RECIPES_VIEW,
     PERMISSIONS.PURCHASING_VIEW,
     PERMISSIONS.PURCHASING_REQUEST,
+    // Mutfak / ambar malı teslim alır ve stoğu görür; tedarikçi seçimi ve sipariş müdürde.
+    PERMISSIONS.PURCHASING_RECEIVE,
+    PERMISSIONS.STOCK_VIEW,
   ]),
 });
 
