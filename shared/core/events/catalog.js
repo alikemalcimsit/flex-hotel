@@ -754,6 +754,41 @@ export const EVENT_CATALOG = Object.freeze({
   /** Stok değişti (mal kabul girişi, depo tanımı, minimum seviye); 44 çıkış / transfer / sayımı ekler. */
   'stock.changed': hotelScoped.extend({ change: z.enum(['RECEIPT', 'WAREHOUSE', 'MIN_LEVEL']), stockItemIds: z.array(z.string().uuid()).max(500).default([]) }),
 
+  /* ── Ön muhasebe (modül 47) ──
+     Cari, kasa / banka, çek / senet ve fiş ekranları (`accounting.changed`); yükte yalnız kimlikler. Otomatik
+     kayıtları muhasebe aktörü (`accounting-worker`) ödeme, mal kabul, prim ve etkinlik olaylarından yazar. */
+
+  'accounting.account.changed': hotelScoped.extend({ accountId: z.string().uuid(), change: z.enum(['CREATED', 'UPDATED']) }),
+  'accounting.treasury.changed': hotelScoped.extend({ treasuryAccountId: z.string().uuid(), change: z.enum(['CREATED', 'UPDATED']) }),
+  /** Cari ve / veya kasa-banka hareketi yazıldı (otomatik kayıt, fiş, çek / senet işlemi): ekstre ve bakiyeler tazelenir. */
+  'accounting.posted': hotelScoped.extend({
+    source: z.string().min(1).max(40),
+    ledgerAccountIds: z.array(z.string().uuid()).max(50).default([]),
+    treasuryAccountIds: z.array(z.string().uuid()).max(50).default([]),
+  }),
+  'accounting.voucher.changed': hotelScoped.extend({
+    voucherId: z.string().uuid(),
+    change: z.enum(['POSTED', 'PENDING', 'APPROVED', 'DECLINED', 'VOIDED']),
+  }),
+  'accounting.instrument.changed': hotelScoped.extend({ instrumentId: z.string().uuid(), action: z.string().min(1).max(20) }),
+  'accounting.settings.changed': hotelScoped,
+  /**
+   * İş olayı (sözleşme; üreticisi fatura modülü 16): fatura kesildi. Ön muhasebe faturayı **ikinci alacak
+   * olarak yazmaz** — alacak operasyondan doğar (folyo cariye aktarıldığında, etkinlik gerçekleştiğinde);
+   * fatura numarası o cari harekete bağlanır (`ledgerSourceKey`: alacağı doğuran kaydın anahtarı).
+   */
+  'invoice.issued': hotelScoped.extend({
+    invoiceId: z.string().uuid(),
+    number: z.string().min(1).max(40),
+    folioId: z.string().uuid().nullable().default(null),
+    eventId: z.string().uuid().nullable().default(null),
+    ledgerSourceKey: z.string().max(120).nullable().default(null),
+    total: z.string(),
+    taxTotal: z.string(),
+    currency: z.string().length(3),
+    issuedOn: z.string(),
+  }),
+
   /* ── Restoran POS (modül 39) ──
      Masa planı, adisyon ekranı ve mutfak ekranı (modül 40) bunlarla canlı tazelenir
      (`POS_EVENTS`); yükte yalnızca kimlik ve süzgeç alanları. */
@@ -1208,6 +1243,9 @@ export const PURCHASE_EVENTS = Object.freeze(['purchase.request.changed', 'purch
 
 /** Stok (modül 45 / 44): stok ekranları bunlarla tazelenir (`stock.changed` kanalı). */
 export const STOCK_EVENTS = Object.freeze(['stock.changed']);
+
+/** Ön muhasebe (modül 47): cari, kasa / banka, çek / senet ve fiş ekranları (`accounting.changed` kanalı). */
+export const ACCOUNTING_EVENTS = Object.freeze(['accounting.account.changed', 'accounting.treasury.changed', 'accounting.posted', 'accounting.voucher.changed', 'accounting.instrument.changed', 'accounting.settings.changed']);
 
 /** Acente bonusu (modül 35): ekranlar bunlarla tazelenir (`agency-bonus.changed` kanalı). */
 export const AGENCY_BONUS_EVENTS = Object.freeze([

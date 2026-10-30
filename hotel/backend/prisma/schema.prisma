@@ -808,6 +808,14 @@ model Hotel {
   purchaseOrders        PurchaseOrder[]
   goodsReceipts         GoodsReceipt[]
   warehouses            Warehouse[]
+  accountingSettings    AccountingSettings?
+  ledgerAccounts        LedgerAccount[]
+  ledgerEntries         LedgerEntry[]
+  treasuryAccounts      TreasuryAccount[]
+  treasuryMovements     TreasuryMovement[]
+  treasuryMappings      TreasuryMapping[]
+  accountingVouchers    AccountingVoucher[]
+  instruments           Instrument[]
 }
 
 model User {
@@ -1011,13 +1019,14 @@ model Approval {
   updatedAt   DateTime       @updatedAt
   deletedAt   DateTime?
 
-  hotel          Hotel           @relation(fields: [hotelId], references: [id])
-  pendingActions PendingAction[]
-  payments       Payment[]
-  agencyBonuses  AgencyBonus[]
-  eventPayments  EventPayment[]
-  posPayments    PosPayment[]
-  posAdjustments PosAdjustment[]
+  hotel              Hotel               @relation(fields: [hotelId], references: [id])
+  pendingActions     PendingAction[]
+  payments           Payment[]
+  agencyBonuses      AgencyBonus[]
+  eventPayments      EventPayment[]
+  posPayments        PosPayment[]
+  posAdjustments     PosAdjustment[]
+  accountingVouchers AccountingVoucher[]
 
   // Bekleyenler (eskiden yeniye) ve geçmiş (yeni karar önce), imleçli.
   @@index([hotelId, status, createdAt, id])
@@ -2135,6 +2144,8 @@ model Payment {
   postedAt        DateTime?
   /// Bu satırı onaya bağlayan onay (eşik üstü ödeme ya da iade).
   approvalId      String?
+  /// "Acente / cari" ve voucher'da borcun yazıldığı cari (modül 47).
+  ledgerAccountId String?
   declinedAt      DateTime?
   /// İptal kaydıysa asıl satır (tekil: bir satır bir kez iptal edilir).
   reversalOfId    String?       @unique
@@ -2149,12 +2160,13 @@ model Payment {
   updatedAt       DateTime      @updatedAt
   deletedAt       DateTime?
 
-  hotel       Hotel       @relation(fields: [hotelId], references: [id])
-  folio       Folio       @relation(fields: [folioId], references: [id])
-  reservation Reservation @relation(fields: [reservationId], references: [id])
-  approval    Approval?   @relation(fields: [approvalId], references: [id])
-  reversalOf  Payment?    @relation("PaymentReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
-  reversal    Payment?    @relation("PaymentReversal")
+  hotel         Hotel          @relation(fields: [hotelId], references: [id])
+  folio         Folio          @relation(fields: [folioId], references: [id])
+  reservation   Reservation    @relation(fields: [reservationId], references: [id])
+  approval      Approval?      @relation(fields: [approvalId], references: [id])
+  reversalOf    Payment?       @relation("PaymentReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversal      Payment?       @relation("PaymentReversal")
+  ledgerAccount LedgerAccount? @relation(fields: [ledgerAccountId], references: [id], onDelete: Restrict)
 
   @@unique([hotelId, sourceKey])
   // Folyonun ödemeleri (girildiği sırayla, imleçli).
@@ -2166,6 +2178,7 @@ model Payment {
   // Konaklamanın giriş teminatı (giriş geri alınınca düşer).
   @@index([reservationId, source])
   @@index([approvalId])
+  @@index([ledgerAccountId])
 }
 
 /// Günlük döviz kuru (modül 17): 1 birim döviz = `rate` × otel para birimi.
@@ -2816,11 +2829,12 @@ model Agency {
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
-  hotel        Hotel             @relation(fields: [hotelId], references: [id])
-  contracts    Contract[]
-  reservations Reservation[]
-  bonusRules   AgencyBonusRule[]
-  bonuses      AgencyBonus[]
+  hotel         Hotel             @relation(fields: [hotelId], references: [id])
+  contracts     Contract[]
+  reservations  Reservation[]
+  bonusRules    AgencyBonusRule[]
+  bonuses       AgencyBonus[]
+  ledgerAccount LedgerAccount?
 
   // Kod otel içinde tekil. Ad tekilliği (büyük / küçük harf duyarsız) ve arama (trigram): migration.
   @@unique([hotelId, code])
@@ -3541,8 +3555,9 @@ model EventClient {
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
-  hotel  Hotel   @relation(fields: [hotelId], references: [id])
-  events Event[]
+  hotel         Hotel          @relation(fields: [hotelId], references: [id])
+  events        Event[]
+  ledgerAccount LedgerAccount?
 
   @@index([hotelId, name])
   @@index([name(ops: raw("gin_trgm_ops"))], map: "EventClient_name_trgm_idx", type: Gin)
@@ -4754,10 +4769,11 @@ model Supplier {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  hotel    Hotel           @relation(fields: [hotelId], references: [id])
-  quotes   PurchaseQuote[]
-  orders   PurchaseOrder[]
-  receipts GoodsReceipt[]
+  hotel         Hotel           @relation(fields: [hotelId], references: [id])
+  quotes        PurchaseQuote[]
+  orders        PurchaseOrder[]
+  receipts      GoodsReceipt[]
+  ledgerAccount LedgerAccount?
 
   @@unique([hotelId, code])
   @@index([hotelId, isActive, name])
@@ -5060,4 +5076,453 @@ model StockMovement {
   @@index([hotelId, occurredAt, id])
   @@index([hotelId, warehouseId, occurredAt])
   @@index([sourceType, sourceId])
+}
+
+// ═══════════════════════ Ön muhasebe (modül 47) ═══════════════════════
+
+/// Cari hesabın türü: acente ve tedarikçi kartına, etkinlik müşterisine bağlı ya da elle açılmış.
+enum LedgerAccountType {
+  AGENCY
+  SUPPLIER
+  COMPANY
+  PERSON
+  OTHER
+}
+
+/// Cari hareketin kaynağı (otomatik kayıt ya da fiş).
+enum LedgerSource {
+  OPENING
+  FOLIO_TRANSFER
+  EVENT_CHARGE
+  EVENT_PAYMENT
+  GOODS_RECEIPT
+  AGENCY_BONUS
+  VOUCHER
+  INSTRUMENT
+  INVOICE
+}
+
+enum TreasuryKind {
+  CASH
+  BANK
+}
+
+/// Kasa / banka hareketinin kaynağı.
+enum TreasurySource {
+  OPENING
+  FOLIO_PAYMENT
+  EVENT_PAYMENT
+  POS_PAYMENT
+  VOUCHER
+  INSTRUMENT
+}
+
+/// Otomatik tahsilatın geldiği yer: yöntem → kasa / banka eşlemesi bunun üstüne kurulur.
+enum TreasuryChannel {
+  FRONT_DESK
+  BANQUET
+  POS
+}
+
+enum AccountingVoucherType {
+  COLLECTION
+  PAYMENT
+  TRANSFER
+  TREASURY_IN
+  TREASURY_OUT
+  OPENING
+}
+
+/// İşlendi; eşik üstü ödeme fişi onay bekler; reddedilen / süresi dolan hiç işlenmez; iptal ters kayıtla.
+enum AccountingVoucherStatus {
+  POSTED
+  PENDING_APPROVAL
+  DECLINED
+  VOIDED
+}
+
+enum VoucherLineKind {
+  TREASURY
+  CHEQUE_IN
+  CHEQUE_OUT
+  ENDORSE
+}
+
+enum InstrumentKind {
+  CHEQUE
+  NOTE
+}
+
+enum InstrumentDirection {
+  RECEIVED
+  ISSUED
+}
+
+/// Alınan: portföy → tahsilde → tahsil / karşılıksız / iade, portföy → ciro. Verilen: ödenecek → ödendi / karşılıksız / iade.
+enum InstrumentStatus {
+  PORTFOLIO
+  AT_BANK
+  COLLECTED
+  ENDORSED
+  BOUNCED
+  RETURNED
+  OUTSTANDING
+  PAID
+  CANCELLED
+}
+
+enum InstrumentAction {
+  RECEIVE
+  ISSUE
+  DEPOSIT
+  WITHDRAW
+  COLLECT
+  ENDORSE
+  BOUNCE
+  RETURN
+  PAY
+  CANCEL
+}
+
+/// Ön muhasebe ayarı: otomatik kayıtların başlangıç günü (öncesi açılış bakiyesiyle) ve ödeme fişi onay eşiği.
+model AccountingSettings {
+  hotelId               String   @id
+  /// Bu günden (dahil) sonraki belgeler cari / kasaya otomatik işlenir.
+  startDate             DateTime @db.Date
+  /// Bu tutar ve üstündeki ödeme fişi dört göz onayına gider (0 = onay yok).
+  paymentApprovalAmount Decimal  @default(50000) @db.Decimal(14, 2)
+  updatedBy             String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+}
+
+/// Belge numarası ve cari / kasa kodu sırası (otel × önek × yıl; kodlarda yıl 0).
+model AccountingSequence {
+  hotelId String
+  kind    String
+  year    Int
+  last    Int    @default(0)
+
+  @@id([hotelId, kind, year])
+}
+
+/// Cari hesap: acente, tedarikçi, etkinlik müşterisi (bire bir bağlı) ya da elle açılan şirket / şahıs. Bakiye = borç − alacak.
+model LedgerAccount {
+  id              String            @id @default(uuid())
+  hotelId         String
+  code            String
+  name            String
+  type            LedgerAccountType
+  agencyId        String?           @unique
+  supplierId      String?           @unique
+  eventClientId   String?           @unique
+  taxOffice       String?
+  taxNumber       String?
+  contactName     String?
+  phone           String?
+  email           String?
+  address         String?
+  /// Bu carinin alacak vadesi (gün); bağlı kartta karttan gelir.
+  paymentTermDays Int               @default(0)
+  /// Artı: cari bize borçlu; eksi: biz cariye borçluyuz. Hareketle aynı işlemde, satır kilidi altında.
+  balance         Decimal           @default(0) @db.Decimal(16, 2)
+  debitTotal      Decimal           @default(0) @db.Decimal(16, 2)
+  creditTotal     Decimal           @default(0) @db.Decimal(16, 2)
+  lastEntryOn     DateTime?         @db.Date
+  isActive        Boolean           @default(true)
+  notes           String?
+  createdBy       String
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  hotel             Hotel               @relation(fields: [hotelId], references: [id])
+  agency            Agency?             @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  supplier          Supplier?           @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  eventClient       EventClient?        @relation(fields: [eventClientId], references: [id], onDelete: Restrict)
+  entries           LedgerEntry[]
+  vouchers          AccountingVoucher[]
+  instruments       Instrument[]        @relation("InstrumentAccount")
+  endorsements      Instrument[]        @relation("InstrumentEndorsee")
+  treasuryMovements TreasuryMovement[]
+  payments          Payment[]
+
+  @@unique([hotelId, code])
+  // Cari listesi: türe ve duruma göre ada göre; bakiyeye göre sıralı (en borçlu).
+  @@index([hotelId, type, isActive, name])
+  @@index([hotelId, isActive, balance])
+  @@index([name(ops: raw("gin_trgm_ops"))], map: "LedgerAccount_name_trgm_idx", type: Gin)
+}
+
+/// Cari hareket (ekstre satırı): borç ya da alacak; kaynağı tekil — aynı belge iki kez yazılmaz. Düzeltme ters kayıtla.
+model LedgerEntry {
+  id           String       @id @default(uuid())
+  hotelId      String
+  accountId    String
+  /// Belge günü (ekstre sırası) ve vade (yaşlandırma).
+  date         DateTime     @db.Date
+  dueDate      DateTime?    @db.Date
+  debit        Decimal      @default(0) @db.Decimal(14, 2)
+  credit       Decimal      @default(0) @db.Decimal(14, 2)
+  description  String
+  reference    String?
+  sourceType   LedgerSource
+  sourceId     String
+  /// Tekrar işleme anahtarı (otel başına tekil): "PAYMENT:<id>", "GOODS_RECEIPT:<id>", "EVENT:<id>:<n>"…
+  sourceKey    String
+  voucherId    String?
+  instrumentId String?
+  reversalOfId String?      @unique
+  createdBy    String
+  createdAt    DateTime     @default(now())
+
+  hotel      Hotel              @relation(fields: [hotelId], references: [id])
+  account    LedgerAccount      @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  voucher    AccountingVoucher? @relation(fields: [voucherId], references: [id], onDelete: Restrict)
+  instrument Instrument?        @relation(fields: [instrumentId], references: [id], onDelete: Restrict)
+  reversalOf LedgerEntry?       @relation("LedgerEntryReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversal   LedgerEntry?       @relation("LedgerEntryReversal")
+
+  @@unique([hotelId, sourceKey])
+  // Ekstre (belge günü + kayıt anı + kimlik, imleçli) ve devir toplamı.
+  @@index([accountId, date, createdAt, id])
+  // Kaynağın kayıtları (etkinlik / prim farkı, fiş iptali).
+  @@index([hotelId, sourceType, sourceId])
+  @@index([hotelId, date, id])
+  @@index([voucherId])
+  @@index([instrumentId])
+}
+
+/// Kasa ya da banka hesabı (kendi para biriminde). Bakiye hareketlerle aynı işlemde güncellenir.
+model TreasuryAccount {
+  id             String       @id @default(uuid())
+  hotelId        String
+  kind           TreasuryKind
+  code           String
+  name           String
+  currency       String
+  bankName       String?
+  branch         String?
+  iban           String?
+  accountNumber  String?
+  balance        Decimal      @default(0) @db.Decimal(16, 2)
+  lastMovementOn DateTime?    @db.Date
+  isActive       Boolean      @default(true)
+  notes          String?
+  createdBy      String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  hotel       Hotel                   @relation(fields: [hotelId], references: [id])
+  movements   TreasuryMovement[]
+  mappings    TreasuryMapping[]
+  vouchers    AccountingVoucher[]     @relation("VoucherTreasury")
+  transfersIn AccountingVoucher[]     @relation("VoucherTargetTreasury")
+  lines       AccountingVoucherLine[]
+  instruments Instrument[]
+
+  @@unique([hotelId, code])
+  @@index([hotelId, kind, isActive, name])
+}
+
+/// Kasa / banka hareketi: + giriş, − çıkış (hesabın para biriminde). Kaynağı tekil; düzeltme ters kayıtla.
+model TreasuryMovement {
+  id                String         @id @default(uuid())
+  hotelId           String
+  treasuryAccountId String
+  date              DateTime       @db.Date
+  amount            Decimal        @db.Decimal(14, 2)
+  description       String
+  reference         String?
+  /// Karşı cari (tahsilat / ödeme fişi, etkinlik tahsilatı).
+  ledgerAccountId   String?
+  /// Dövizli tahsilatın kaynak tutarı ve kuru (hesap para birimi farklıysa).
+  originalAmount    Decimal?       @db.Decimal(14, 2)
+  originalCurrency  String?
+  exchangeRate      Decimal?       @db.Decimal(12, 6)
+  sourceType        TreasurySource
+  sourceId          String
+  sourceKey         String
+  voucherId         String?
+  instrumentId      String?
+  reversalOfId      String?        @unique
+  createdBy         String
+  createdAt         DateTime       @default(now())
+
+  hotel         Hotel              @relation(fields: [hotelId], references: [id])
+  account       TreasuryAccount    @relation(fields: [treasuryAccountId], references: [id], onDelete: Restrict)
+  ledgerAccount LedgerAccount?     @relation(fields: [ledgerAccountId], references: [id], onDelete: Restrict)
+  voucher       AccountingVoucher? @relation(fields: [voucherId], references: [id], onDelete: Restrict)
+  instrument    Instrument?        @relation(fields: [instrumentId], references: [id], onDelete: Restrict)
+  reversalOf    TreasuryMovement?  @relation("TreasuryMovementReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversal      TreasuryMovement?  @relation("TreasuryMovementReversal")
+
+  @@unique([hotelId, sourceKey])
+  // Hesap hareketleri (gün + kayıt anı + kimlik, imleçli) ve devir toplamı.
+  @@index([treasuryAccountId, date, createdAt, id])
+  @@index([hotelId, sourceType, sourceId])
+  @@index([hotelId, date, id])
+  @@index([voucherId])
+  @@index([instrumentId])
+  @@index([ledgerAccountId])
+}
+
+/// Yöntem → kasa / banka eşlemesi: ön büro, etkinlik ve restoran tahsilatı hangi hesaba girer (para birimi boş = hepsi).
+model TreasuryMapping {
+  id                String          @id @default(uuid())
+  hotelId           String
+  channel           TreasuryChannel
+  method            PaymentMethod
+  currency          String          @default("")
+  treasuryAccountId String
+  updatedBy         String
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  hotel   Hotel           @relation(fields: [hotelId], references: [id])
+  account TreasuryAccount @relation(fields: [treasuryAccountId], references: [id], onDelete: Restrict)
+
+  @@unique([hotelId, channel, method, currency])
+  @@index([treasuryAccountId])
+}
+
+/// Fiş: tahsilat, ödeme (eşik üstü dört göz), virman, kasa / banka giriş-çıkış, açılış bakiyesi. İptal ters kayıtla.
+model AccountingVoucher {
+  id                      String                  @id @default(uuid())
+  hotelId                 String
+  number                  String
+  type                    AccountingVoucherType
+  status                  AccountingVoucherStatus @default(POSTED)
+  date                    DateTime                @db.Date
+  ledgerAccountId         String?
+  treasuryAccountId       String?
+  targetTreasuryAccountId String?
+  amount                  Decimal                 @db.Decimal(14, 2)
+  /// Açılış bakiyesinde carinin yönü (DEBIT / CREDIT).
+  openingSide             String?
+  dueDate                 DateTime?               @db.Date
+  description             String
+  reference               String?
+  /// Çift gönderim anahtarı (otel başına tekil).
+  requestId               String
+  approvalId              String?
+  createdBy               String
+  createdAt               DateTime                @default(now())
+  updatedAt               DateTime                @updatedAt
+  postedAt                DateTime?
+  approvedBy              String?
+  declinedAt              DateTime?
+  voidedAt                DateTime?
+  voidedBy                String?
+  voidReason              String?
+
+  hotel             Hotel                   @relation(fields: [hotelId], references: [id])
+  ledgerAccount     LedgerAccount?          @relation(fields: [ledgerAccountId], references: [id], onDelete: Restrict)
+  treasuryAccount   TreasuryAccount?        @relation("VoucherTreasury", fields: [treasuryAccountId], references: [id], onDelete: Restrict)
+  targetTreasury    TreasuryAccount?        @relation("VoucherTargetTreasury", fields: [targetTreasuryAccountId], references: [id], onDelete: Restrict)
+  approval          Approval?               @relation(fields: [approvalId], references: [id], onDelete: Restrict)
+  lines             AccountingVoucherLine[]
+  ledgerEntries     LedgerEntry[]
+  treasuryMovements TreasuryMovement[]
+  instruments       Instrument[]
+
+  @@unique([hotelId, number])
+  @@unique([hotelId, requestId])
+  // Fiş listesi (gün + kimlik), duruma göre, cariye göre.
+  @@index([hotelId, date, id])
+  @@index([hotelId, status, createdAt])
+  @@index([ledgerAccountId, date])
+  @@index([approvalId])
+}
+
+/// Fişin para satırı: kasa / banka, alınan ya da verilen çek-senet (bilgisi satırda, işlenince kartı açılır), portföyden ciro.
+model AccountingVoucherLine {
+  id                String          @id @default(uuid())
+  hotelId           String
+  voucherId         String
+  sortOrder         Int
+  kind              VoucherLineKind
+  amount            Decimal         @db.Decimal(14, 2)
+  treasuryAccountId String?
+  instrumentId      String?
+  instrumentKind    InstrumentKind?
+  number            String?
+  bankName          String?
+  branch            String?
+  drawer            String?
+  dueDate           DateTime?       @db.Date
+
+  voucher    AccountingVoucher @relation(fields: [voucherId], references: [id], onDelete: Restrict)
+  treasury   TreasuryAccount?  @relation(fields: [treasuryAccountId], references: [id], onDelete: Restrict)
+  instrument Instrument?       @relation(fields: [instrumentId], references: [id], onDelete: Restrict)
+
+  @@unique([voucherId, sortOrder])
+  @@index([instrumentId])
+  @@index([treasuryAccountId])
+}
+
+/// Çek / senet: alınan (müşteriden, portföy) ya da verilen (bizim). Durum makinesi ve geçmişi; tutar otelin para biriminde.
+model Instrument {
+  id                  String              @id @default(uuid())
+  hotelId             String
+  kind                InstrumentKind
+  direction           InstrumentDirection
+  status              InstrumentStatus
+  number              String
+  bankName            String?
+  branch              String?
+  /// Keşideci / borçlu (alınan çekte müşterinin müşterisi olabilir).
+  drawer              String?
+  issueDate           DateTime            @db.Date
+  dueDate             DateTime            @db.Date
+  amount              Decimal             @db.Decimal(14, 2)
+  currency            String
+  /// Alınan: kimden; verilen: kime.
+  ledgerAccountId     String
+  /// Ciro edildiği cari (tedarikçi).
+  endorsedToAccountId String?
+  /// Tahsile verildiği / tahsil edildiği ya da (verilen çekte) ödeneceği kasa / banka.
+  treasuryAccountId   String?
+  voucherId           String
+  createdBy           String
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  hotel             Hotel                   @relation(fields: [hotelId], references: [id])
+  account           LedgerAccount           @relation("InstrumentAccount", fields: [ledgerAccountId], references: [id], onDelete: Restrict)
+  endorsedTo        LedgerAccount?          @relation("InstrumentEndorsee", fields: [endorsedToAccountId], references: [id], onDelete: Restrict)
+  treasury          TreasuryAccount?        @relation(fields: [treasuryAccountId], references: [id], onDelete: Restrict)
+  voucher           AccountingVoucher       @relation(fields: [voucherId], references: [id], onDelete: Restrict)
+  movements         InstrumentMovement[]
+  voucherLines      AccountingVoucherLine[]
+  ledgerEntries     LedgerEntry[]
+  treasuryMovements TreasuryMovement[]
+
+  // Portföy: duruma göre vade sırası; vade takvimi; carinin çekleri.
+  @@index([hotelId, status, dueDate, id])
+  @@index([hotelId, dueDate])
+  @@index([ledgerAccountId])
+  @@index([number(ops: raw("gin_trgm_ops"))], map: "Instrument_number_trgm_idx", type: Gin)
+}
+
+/// Çek / senet durum geçmişi: kim, ne zaman, hangi işlemle, hangi hesaba.
+model InstrumentMovement {
+  id                String            @id @default(uuid())
+  hotelId           String
+  instrumentId      String
+  action            InstrumentAction
+  fromStatus        InstrumentStatus?
+  toStatus          InstrumentStatus
+  date              DateTime          @db.Date
+  treasuryAccountId String?
+  ledgerAccountId   String?
+  voucherId         String?
+  note              String?
+  createdBy         String
+  createdAt         DateTime          @default(now())
+
+  instrument Instrument @relation(fields: [instrumentId], references: [id], onDelete: Restrict)
+
+  @@index([instrumentId, createdAt])
 }

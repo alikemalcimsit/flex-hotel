@@ -64,8 +64,11 @@ export const REFUND_METHODS = Object.freeze(PAYMENT_METHODS.filter((method) => m
 /** Döviz kabul eden yöntemler: nakit döviz ve döviz havalesi (kart otelin parasıyla çekilir). */
 export const FOREIGN_CURRENCY_METHODS = Object.freeze(['CASH', 'TRANSFER']);
 
-/** Referansı zorunlu yöntemler (mutabakat için: slip, dekont, voucher, cari no). Nakit hariç hepsi. */
-export const PAYMENT_REFERENCE_REQUIRED_METHODS = Object.freeze(PAYMENT_METHODS.filter((method) => method !== 'CASH'));
+/**
+ * Referansı zorunlu yöntemler (mutabakat için: slip, dekont, işlem no, voucher no). Nakit hariç hepsi;
+ * "Acente / cari"de cari hesap seçildiği için (modül 47) referans isteğe bağlı belge no.
+ */
+export const PAYMENT_REFERENCE_REQUIRED_METHODS = Object.freeze(PAYMENT_METHODS.filter((method) => method !== 'CASH' && method !== 'AGENCY'));
 
 /** Yönteme göre referans alanının etiketi. */
 export const PAYMENT_REFERENCE_LABELS = Object.freeze({
@@ -73,7 +76,7 @@ export const PAYMENT_REFERENCE_LABELS = Object.freeze({
   CARD: 'Slip / provizyon no',
   TRANSFER: 'Dekont no',
   VIRTUAL_POS: 'İşlem no',
-  AGENCY: 'Acente / cari hesap',
+  AGENCY: 'Belge no (isteğe bağlı)',
   VOUCHER: 'Voucher no',
 });
 
@@ -211,6 +214,8 @@ const moneyFields = {
   currency: currencyField.nullish(),
   expectedRate: expectedRateField,
   reference: referenceField,
+  /** "Acente / cari" ve voucher'da cari hesap (modül 47); boşsa rezervasyonun acentesinin carisi. */
+  ledgerAccountId: z.string().uuid({ message: 'Geçersiz cari hesap' }).nullish(),
 };
 
 /* ─────────────── Şemalar ─────────────── */

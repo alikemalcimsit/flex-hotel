@@ -1,0 +1,14 @@
+{
+  "name": "@hotelos/accounting-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "description": "Muhasebe aktörü: tahsilatları kasaya / bankaya, folyo aktarımını, mal kabulü, primi ve etkinlik bedelini cariye işler",
+  "scripts": {
+    "test": "node --test \"*.test.js\""
+  },
+  "dependencies": {
+    "@hotelos/actor-kit": "*"
+  }
+}

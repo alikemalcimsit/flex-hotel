@@ -43,11 +43,11 @@ describe('manuel görev kimi ilgilendirir', () => {
     assert.deepEqual([...scope.modules].sort(), ['Folyo', 'Kanal rezervasyonu', 'Misafir mesajları', 'Oda atama', 'Rezervasyon']);
   });
 
-  it('muhasebe yalnızca folyo görevlerini görür', () => {
+  it('muhasebe folyo ve ön muhasebe görevlerini görür (modül 47)', () => {
     const scope = manualTaskScope(DEFAULT_ROLE_PERMISSIONS.ACCOUNTING);
     assert.equal(scope.empty, false);
     assert.equal(scope.others, false);
-    assert.deepEqual([...scope.modules], ['Folyo']);
+    assert.deepEqual([...scope.modules], ['Folyo', 'Ön muhasebe']);
   });
 
   it('yiyecek-içecek hiçbir aktör görevini görmez (boş kapsam)', () => {

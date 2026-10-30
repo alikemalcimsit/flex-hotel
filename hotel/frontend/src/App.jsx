@@ -137,6 +137,15 @@ const SuppliersPage = lazy(() => import('./pages/purchasing/SuppliersPage.jsx').
 const StockLayout = lazy(() => import('./pages/stock/StockLayout.jsx').then((m) => ({ default: m.StockLayout })));
 const StockLevelsPage = lazy(() => import('./pages/stock/StockLevelsPage.jsx').then((m) => ({ default: m.StockLevelsPage })));
 const StockMovementsPage = lazy(() => import('./pages/stock/StockMovementsPage.jsx').then((m) => ({ default: m.StockMovementsPage })));
+const AccountingLayout = lazy(() => import('./pages/accounting/AccountingLayout.jsx').then((m) => ({ default: m.AccountingLayout })));
+const AccountsPage = lazy(() => import('./pages/accounting/AccountsPage.jsx').then((m) => ({ default: m.AccountsPage })));
+const AccountPage = lazy(() => import('./pages/accounting/AccountPage.jsx').then((m) => ({ default: m.AccountPage })));
+const AgingPage = lazy(() => import('./pages/accounting/AgingPage.jsx').then((m) => ({ default: m.AgingPage })));
+const TreasuryPage = lazy(() => import('./pages/accounting/TreasuryPage.jsx').then((m) => ({ default: m.TreasuryPage })));
+const InstrumentsPage = lazy(() => import('./pages/accounting/InstrumentsPage.jsx').then((m) => ({ default: m.InstrumentsPage })));
+const VouchersPage = lazy(() => import('./pages/accounting/VouchersPage.jsx').then((m) => ({ default: m.VouchersPage })));
+const VoucherPage = lazy(() => import('./pages/accounting/VouchersPage.jsx').then((m) => ({ default: m.VoucherPage })));
+const AccountingSettingsPage = lazy(() => import('./pages/accounting/AccountingSettingsPage.jsx').then((m) => ({ default: m.AccountingSettingsPage })));
 const WarehousesPage = lazy(() => import('./pages/stock/WarehousesPage.jsx').then((m) => ({ default: m.WarehousesPage })));
 const PromotionsLayout = lazy(() => import('./pages/promotions/PromotionsLayout.jsx').then((m) => ({ default: m.PromotionsLayout })));
 const PromotionListTab = lazy(() => import('./pages/promotions/PromotionListTab.jsx').then((m) => ({ default: m.PromotionListTab })));
@@ -745,6 +754,39 @@ export default function App() {
               <Route path="hareketler" element={<StockMovementsPage />} />
               <Route path="depolar" element={<WarehousesPage />} />
             </Route>
+            {/* Ön muhasebe (modül 47): cariler, yaşlandırma, kasa / banka, çek / senet, fişler, ayarlar. */}
+            <Route
+              path="muhasebe"
+              element={
+                <RequirePermission permission={PERMISSIONS.ACCOUNTING_VIEW}>
+                  <AccountingLayout />
+                </RequirePermission>
+              }
+            >
+              <Route index element={<Navigate to="cariler" replace />} />
+              <Route path="cariler" element={<AccountsPage />} />
+              <Route path="yaslandirma" element={<AgingPage />} />
+              <Route path="kasa-banka" element={<TreasuryPage />} />
+              <Route path="cek-senet" element={<InstrumentsPage />} />
+              <Route path="fisler" element={<VouchersPage />} />
+              <Route path="ayarlar" element={<AccountingSettingsPage />} />
+            </Route>
+            <Route
+              path="muhasebe/cariler/:accountId"
+              element={
+                <RequirePermission permission={PERMISSIONS.ACCOUNTING_VIEW}>
+                  <AccountPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="muhasebe/fisler/:voucherId"
+              element={
+                <RequirePermission permission={PERMISSIONS.ACCOUNTING_VIEW}>
+                  <VoucherPage />
+                </RequirePermission>
+              }
+            />
             <Route
               path="satin-alma/talepler/:requestId"
               element={

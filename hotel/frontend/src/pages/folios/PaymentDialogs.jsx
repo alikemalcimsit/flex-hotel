@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   FOREIGN_CURRENCY_METHODS,
+  LEDGER_PAYMENT_METHODS,
   PAYMENT_METHODS,
   PAYMENT_NOTE_MAX,
   PAYMENT_REASON_MAX,
@@ -24,6 +25,7 @@ import { PAYMENT_METHOD_ICONS, absolute, cashKeys, formatRate, kindLabel, method
 import { newRequestId } from '../../lib/reservations.js';
 import { validateWith } from '../../lib/validate.js';
 import { toastSuccess } from '../../store/toast.js';
+import { LedgerAccountField } from '../accounting/LedgerAccountField.jsx';
 
 const QUOTE_DEBOUNCE_MS = 350;
 
@@ -55,6 +57,9 @@ export function PaymentDialog({ mode, target, onClose, onDone }) {
   const [currency, setCurrency] = useState(target.currency);
   const [amount, setAmount] = useState(() => suggestedAmount(mode, target) ?? '');
   const [reference, setReference] = useState('');
+  // "Acente / cari" ve voucher: borcun yazılacağı cari (modül 47); boşsa rezervasyonun acentesinin carisi.
+  const [ledgerAccount, setLedgerAccount] = useState(null);
+  const ledgerMethod = LEDGER_PAYMENT_METHODS.includes(method);
   const [note, setNote] = useState('');
   const [reason, setReason] = useState('');
   const [errors, setErrors] = useState({});
@@ -119,6 +124,7 @@ export function PaymentDialog({ mode, target, onClose, onDone }) {
       currency,
       expectedRate: foreign ? shownRate : null,
       reference: reference || null,
+      ledgerAccountId: ledgerMethod ? (ledgerAccount?.id ?? null) : null,
       ...(refund ? { reason } : { note: note || null }),
       ...(!refund && !target.folioId ? { folioId: null } : {}),
     };
@@ -217,6 +223,17 @@ export function PaymentDialog({ mode, target, onClose, onDone }) {
           error={errors.reference}
           disabled={busy}
         />
+
+        {ledgerMethod && (
+          <LedgerAccountField
+            value={ledgerAccount}
+            onChange={setLedgerAccount}
+            currency={target.currency}
+            hint="Boş bırakılırsa rezervasyonun acentesinin carisine yazılır; acentesiz rezervasyonda cari seçin."
+            error={errors.ledgerAccountId}
+            disabled={busy}
+          />
+        )}
 
         {refund ? (
           <>

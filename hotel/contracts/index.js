@@ -156,6 +156,7 @@ export * from './banquet-fnb.js';
 export * from './recipes.js';
 export * from './purchasing.js';
 export * from './stock.js';
+export * from './accounting.js';
 export * from './pos.js';
 export * from './room-service.js';
 export * from './channel-manager.js';

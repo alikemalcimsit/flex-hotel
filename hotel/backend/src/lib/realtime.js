@@ -9,6 +9,7 @@ import {
   PURCHASE_EVENTS,
   RECIPE_EVENTS,
   STOCK_EVENTS,
+  ACCOUNTING_EVENTS,
   PROMOTION_EVENTS,
   CHANNEL_EVENTS as CHANNEL_MANAGER_EVENTS,
   EXTRAS_EVENTS,
@@ -123,6 +124,9 @@ export const PURCHASING_CHANNEL = 'purchasing.changed';
 /** Stok (modül 45 / 44): depo bazında mevcut, hareketler, minimum seviye, depo tanımları. */
 export const STOCK_CHANNEL = 'stock.changed';
 
+/** Ön muhasebe (modül 47): cariler ve ekstre, kasa / banka hareketleri, çek / senet, fişler, ayar ve eşleme. */
+export const ACCOUNTING_CHANNEL = 'accounting.changed';
+
 /** Promosyon ve kupon (modül 31): promosyon, kupon üretimi / kapatma. */
 export const PROMOTION_CHANNEL = 'promotions.changed';
 
@@ -162,6 +166,7 @@ const CHANNEL_EVENTS = Object.freeze({
   [RECIPES_CHANNEL]: RECIPE_EVENTS,
   [PURCHASING_CHANNEL]: PURCHASE_EVENTS,
   [STOCK_CHANNEL]: STOCK_EVENTS,
+  [ACCOUNTING_CHANNEL]: ACCOUNTING_EVENTS,
   [PROMOTION_CHANNEL]: PROMOTION_EVENTS,
   [CHANNEL_MANAGER_CHANNEL]: CHANNEL_MANAGER_EVENTS,
 });

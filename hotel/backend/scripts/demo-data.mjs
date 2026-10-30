@@ -36,6 +36,8 @@ import { randomUUID } from 'node:crypto';
  * - Banket F&B (modül 43, `demo-banquet-fnb.mjs`): malzeme kartları, reçeteler (restoran ürünlerine bağlı
  *   olanlar), set menüler, etkinlik menüleri (yarınki ödül gecesi, 3 gün sonraki düğün — mutfağa kesin),
  *   kongre / yönetim kurulu / nişan menüleri, açık satın alma talepleri.
+ * - Ön muhasebe (modül 47, `demo-accounting.mjs`): kasa / banka ve eşleme, şirket carileri, açılışlar, son 30 günün
+ *   otomatik kayıtları (eşitleme), tahsilat / ödeme / virman fişleri, çek / senet yolculuğu.
  * - Satın alma ve stok (modül 45, `demo-purchasing.mjs`): politika (onay eşiği), depolar, tedarikçiler,
  *   ödül gecesinin teklif turu → siparişler (biri onay bekliyor) → mal kabuller (eksik kapatılan, kısmi),
  *   düğünün kazanan bekleyen karşılaştırma turu, tereyağında hareketli ortalama, açık bar talebi,
@@ -60,6 +62,7 @@ const { resetPosDemo, seedPosDemo } = await import('./demo-pos.mjs');
 const { resetRoomServiceDemo, seedRoomServiceDemo } = await import('./demo-room-service.mjs');
 const { resetBanquetFnbDemo, seedBanquetFnbDemo } = await import('./demo-banquet-fnb.mjs');
 const { resetPurchasingDemo, seedPurchasingDemo } = await import('./demo-purchasing.mjs');
+const { resetAccountingDemo, seedAccountingDemo } = await import('./demo-accounting.mjs');
 
 const HISTORY_DAYS = 400;
 const FUTURE_DAYS = 75;
@@ -95,6 +98,8 @@ if (process.argv.includes('--reset')) {
   let banquetFiles = [];
   await prisma.$transaction(
     async (tx) => {
+      // Demo ön muhasebe (modül 47): cariler acente / tedarikçi / etkinlik müşterisine kısıtlı bağlı, ödemeler cariye — önce.
+      await resetAccountingDemo(tx, hotelId);
       // Demo banket (modül 37): etkinlikler ödemeleri, onayları, belgeleriyle; salon, ekipman, müşteri.
       banquetFiles = await resetBanquetDemo(tx, hotelId, ACTOR);
       // Demo satın alma ve stok (modül 45): sipariş / mal kabul / hareket malzeme kartına bağlı; F&B'den önce.
@@ -131,9 +136,27 @@ if (process.argv.includes('--reset')) {
       await tx.$executeRawUnsafe(`DELETE FROM "AgencyBonusRule" WHERE "id" = ANY($1::text[])`, ruleIds);
 
       const ids = `(SELECT id FROM "Reservation" WHERE "hotelId" = $1 AND "confirmationCode" LIKE '${CODE_PREFIX}%')`;
-      for (const table of ['Payment', 'FolioItem', 'Folio', 'ReservationNight']) {
-        await tx.$executeRawUnsafe(`DELETE FROM "${table}" WHERE "reservationId" IN ${ids}`, hotelId);
-      }
+      const folios = `(SELECT id FROM "Folio" WHERE "reservationId" IN ${ids})`;
+      const purge = (sql) => tx.$executeRawUnsafe(sql, hotelId);
+      // Personelin demo konaklamalarına ekrandan girdiği kayıtlar (seed üretmez; giriş, oda değişimi, çamaşır,
+      // minibar, ek misafir, folyo yönlendirme / birleştirme, iptaller): rezervasyona ve folyoya kısıtlı bağlılar.
+      await purge(`DELETE FROM "LaundryOrderLine" WHERE "orderId" IN (SELECT id FROM "LaundryOrder" WHERE "reservationId" IN ${ids})`);
+      await purge(`DELETE FROM "LaundryOrder" WHERE "reservationId" IN ${ids}`);
+      await purge(`DELETE FROM "MinibarConsumptionLine" WHERE "consumptionId" IN (SELECT id FROM "MinibarConsumption" WHERE "reservationId" IN ${ids})`);
+      await purge(`DELETE FROM "MinibarConsumption" WHERE "reservationId" IN ${ids}`);
+      await purge(`DELETE FROM "RoomStaySegment" WHERE "reservationId" IN ${ids}`);
+      await purge(`DELETE FROM "ReservationGuest" WHERE "reservationId" IN ${ids}`);
+      await purge(`DELETE FROM "FolioRoute" WHERE "reservationId" IN ${ids} OR "folioId" IN ${folios}`);
+      await purge(`DELETE FROM "Invoice" WHERE "folioId" IN ${folios}`);
+      // Ters kayıtlar asıllarına, birleşen folyo hedefine kısıtlı bağlı: önce onlar çözülür.
+      await purge(`DELETE FROM "Payment" WHERE "reservationId" IN ${ids} AND "reversalOfId" IS NOT NULL`);
+      await purge(`DELETE FROM "Payment" WHERE "reservationId" IN ${ids}`);
+      await purge(`UPDATE "FolioItem" SET "transferredFromFolioId" = NULL WHERE "transferredFromFolioId" IN ${folios}`);
+      await purge(`DELETE FROM "FolioItem" WHERE "reservationId" IN ${ids} AND "reversalOfId" IS NOT NULL`);
+      await purge(`DELETE FROM "FolioItem" WHERE "reservationId" IN ${ids}`);
+      await purge(`UPDATE "Folio" SET "mergedIntoId" = NULL WHERE "reservationId" IN ${ids}`);
+      await purge(`DELETE FROM "Folio" WHERE "reservationId" IN ${ids}`);
+      await purge(`DELETE FROM "ReservationNight" WHERE "reservationId" IN ${ids}`);
       await tx.$executeRawUnsafe(`DELETE FROM "Reservation" WHERE "hotelId" = $1 AND "confirmationCode" LIKE '${CODE_PREFIX}%'`, hotelId);
       // Demo kanal (modül 33): kayıtları ve revizyonları, sonra kanal (eşleştirme, durum, log kanalla gider).
       const demoChannels = `(SELECT "id" FROM "Channel" WHERE "hotelId" = $1 AND "createdBy" = $2)`;
@@ -890,6 +913,14 @@ try {
   console.error(`Satın alma adımı tamamlanamadı: ${error.message}`);
 }
 
+// ── Ön muhasebe (modül 47): kasa / banka, eşleme, cariler, açılışlar, otomatik kayıtlar, fişler, çekler ──
+let accountingSummary = null;
+try {
+  accountingSummary = await seedAccountingDemo({ prisma, core, contracts, hotelId, today, actor: ACTOR, addDays });
+} catch (error) {
+  console.error(`Ön muhasebe adımı tamamlanamadı: ${error.message}`);
+}
+
 // Odaların anlık durumu: içeride kimse varsa dolu, boşların bir kısmı kirli.
 const inHouse = new Set(reservations.filter((entry) => entry.row.status === 'CHECKED_IN').map((entry) => entry.row.roomId));
 await prisma.room.updateMany({ where: { hotelId, id: { in: [...inHouse] } }, data: { occupancy: 'OCCUPIED' } });
@@ -951,7 +982,10 @@ console.log(
     (roomServiceSummary ? `, ${roomServiceSummary.orders} oda servisi siparişi (${roomServiceSummary.open} açık, ${roomServiceSummary.scheduled} yarın kahvaltı)` : '') +
     (fnbSummary ? `, ${fnbSummary.stockItems} malzeme, ${fnbSummary.recipes} reçete, ${fnbSummary.menus} set menü, ${fnbSummary.eventMenus} etkinlik menüsü, ${fnbSummary.requests} satın alma talebi` : '') +
     (purchasingSummary
-      ? `, ${purchasingSummary.suppliers} tedarikçi, ${purchasingSummary.warehouses} depo, ${purchasingSummary.rounds} teklif turu, ${purchasingSummary.orders} sipariş (${purchasingSummary.pendingApproval} onay bekliyor), ${purchasingSummary.receipts} mal kabul, ${purchasingSummary.belowMin} minimum altı malzeme.`
+      ? `, ${purchasingSummary.suppliers} tedarikçi, ${purchasingSummary.warehouses} depo, ${purchasingSummary.rounds} teklif turu, ${purchasingSummary.orders} sipariş (${purchasingSummary.pendingApproval} onay bekliyor), ${purchasingSummary.receipts} mal kabul, ${purchasingSummary.belowMin} minimum altı malzeme`
+      : '') +
+    (accountingSummary
+      ? `, ${accountingSummary.accounts} cari, ${accountingSummary.treasury} kasa / banka, ${accountingSummary.vouchers} fiş, ${accountingSummary.instruments} çek / senet, ${accountingSummary.posted} otomatik kayıt (başlangıç ${accountingSummary.startDate}${accountingSummary.failed ? `, ${accountingSummary.failed} işlenemedi` : ''}).`
       : '.'),
 );
 await prisma.$disconnect();

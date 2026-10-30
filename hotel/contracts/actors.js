@@ -103,6 +103,9 @@ export const MANUAL_TASK_MODULE_PERMISSIONS = Object.freeze({
   Folyo: PERMISSIONS.FOLIO_POST,
   // Modül 33: kanal aktörünün işleyemediği OTA / iCal rezervasyonu resepsiyonun önüne düşer.
   'Kanal rezervasyonu': PERMISSIONS.RESERVATIONS_MANAGE,
+  // Modül 47: muhasebe aktörünün işleyemediği kayıt (eşleme eksik, cari seçilmemiş) muhasebecinin önüne düşer;
+  // eşleme / cari düzeltilip Muhasebe → Eşitle çalıştırılır.
+  'Ön muhasebe': PERMISSIONS.ACCOUNTING_MANAGE,
 });
 
 export const MANUAL_TASK_KNOWN_MODULES = Object.freeze(Object.keys(MANUAL_TASK_MODULE_PERMISSIONS));
