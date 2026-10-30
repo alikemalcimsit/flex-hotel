@@ -75,6 +75,8 @@ export const RECIPES_CHANNEL = 'recipes.changed';
 export const PURCHASING_CHANNEL = 'purchasing.changed';
 /** Stok (modül 45 / 44): depo bazında mevcut, hareketler, minimum seviye, depolar. */
 export const STOCK_CHANNEL = 'stock.changed';
+/** Ön muhasebe (modül 47): cari, kasa / banka, çek / senet, fiş ekranları. */
+export const ACCOUNTING_CHANNEL = 'accounting.changed';
 /** Kanal yönetimi (modül 33): kanal ayarı, eşleştirme, stop-sale, senkron logu, kanal rezervasyonları. */
 export const CHANNEL_MANAGER_CHANNEL = 'channel-manager.changed';
 

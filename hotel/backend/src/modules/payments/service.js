@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { currentActor, toDecimal, toIsoDay, toMoneyString } from '@hotelos/core';
 import {
   APPROVAL_TYPE_LABELS,
+  LEDGER_PAYMENT_METHODS,
   PAYMENT_KIND_LABELS,
   PAYMENT_METHODS,
   PAYMENT_METHOD_LABELS,
@@ -28,6 +29,7 @@ import { POS_PAYMENT_SELECT, POS_REF_SELECT, posCheckRef, toPosPaymentDto } from
 import { raiseStaffAlert } from '../notifications/staff-alerts.js';
 import { guestFullName } from '../reservations/guests.js';
 import { getHotelSettings } from '../settings/service.js';
+import { ensurePartnerAccount } from '../accounting/shared.js';
 import {
   needsLargePaymentApproval,
   paymentSourceForStay,
@@ -113,6 +115,7 @@ const STAY_REF_SELECT = Object.freeze({
   id: true,
   confirmationCode: true,
   status: true,
+  agencyId: true,
   room: { select: { number: true } },
   guest: { select: { firstName: true, lastName: true } },
 });
@@ -156,6 +159,8 @@ const PAYMENT_SELECT = Object.freeze({
   voidApprovalId: true,
   voidRequestedAt: true,
   voidRequestedBy: true,
+  ledgerAccountId: true,
+  ledgerAccount: { select: { id: true, code: true, name: true } },
 });
 
 /** @param {any} row */
@@ -190,6 +195,7 @@ function toPaymentDto(row) {
     voidPending: Boolean(row.voidRequestedAt),
     voidApprovalId: row.voidApprovalId ?? null,
     voidRequestedBy: row.voidRequestedBy ?? null,
+    ledgerAccount: row.ledgerAccount ?? null,
   };
 }
 
@@ -449,6 +455,22 @@ async function folioPaymentState(client, hotelId, folioId) {
 }
 
 /**
+ * "Acente / cari" ve voucher'ın carisi (modül 47): seçilen cari (otelin, kullanımda) ya da seçilmediyse
+ * rezervasyonun acentesinin carisi (yoksa açılır). Acentesiz rezervasyonda seçim zorunlu.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx @param {string} hotelId @param {any} folio @param {string | null} ledgerAccountId
+ */
+async function paymentLedgerAccount(tx, hotelId, folio, ledgerAccountId) {
+  if (ledgerAccountId) {
+    const account = await tx.ledgerAccount.findFirst({ where: { id: ledgerAccountId, hotelId }, select: { id: true, name: true, isActive: true } });
+    if (!account?.isActive) throw new ValidationError('Seçilen cari bulunamadı ya da kullanımda değil', { field: 'ledgerAccountId' });
+    return account;
+  }
+  if (folio.reservation?.agencyId) return ensurePartnerAccount(tx, hotelId, { agencyId: folio.reservation.agencyId });
+  throw new ValidationError('Cari hesap seçin: rezervasyonun acentesi yok', { field: 'ledgerAccountId' });
+}
+
+/**
  * Ödeme / iade satırını yazar (folyo kilitli, açık olmalı). Eşik üstü ödeme ve
  * iade onaya gider (`PENDING`); diğerleri işlenir (`POSTED`) ve toplamlar
  * yenilenir. Aynı anahtarla ikinci kez gelen istek yeni satır açmaz.
@@ -460,7 +482,7 @@ async function folioPaymentState(client, hotelId, folioId) {
  *   folio: any,
  *   kind: 'PAYMENT' | 'REFUND',
  *   source: 'DESK' | 'ADVANCE' | 'CHECK_IN_DEPOSIT',
- *   input: { method: string, amount: string, currency?: string | null, expectedRate?: string | null, reference?: string | null, note?: string | null, reason?: string },
+ *   input: { method: string, amount: string, currency?: string | null, expectedRate?: string | null, reference?: string | null, note?: string | null, reason?: string, ledgerAccountId?: string | null },
  *   sourceKey: string,
  *   receivedBy: string,
  *   businessDate: string,
@@ -499,6 +521,7 @@ async function writePayment(tx, stage, { hotelId, folio, kind, source, input, so
     }
   }
 
+  const ledgerAccount = LEDGER_PAYMENT_METHODS.includes(input.method) ? await paymentLedgerAccount(tx, hotelId, folio, input.ledgerAccountId ?? null) : null;
   const pending = kind === 'REFUND' || needsLargePaymentApproval(folioAmount, hotel.largePaymentThreshold);
   const paymentId = randomUUID();
   let approvalId = null;
@@ -520,6 +543,7 @@ async function writePayment(tx, stage, { hotelId, folio, kind, source, input, so
         Tür: `${PAYMENT_KIND_LABELS[kind]} · ${PAYMENT_SOURCE_LABELS[source]}`,
         Yöntem: PAYMENT_METHOD_LABELS[input.method],
         Tutar: rate ? `${priced(signed.replace('-', ''), currency)} × ${rateLabel(rate)} = ${priced(folioAmount.replace('-', ''), folio.currency)}` : priced(signed.replace('-', ''), currency),
+        ...(ledgerAccount ? { Cari: ledgerAccount.name } : {}),
         ...(input.reference ? { Referans: input.reference } : {}),
         ...(input.note ? { Not: input.note } : {}),
         'Şu anki bakiye': priced(money(folio.balance), folio.currency),
@@ -555,6 +579,7 @@ async function writePayment(tx, stage, { hotelId, folio, kind, source, input, so
       receivedAt: now,
       postedAt: pending ? null : now,
       approvalId,
+      ledgerAccountId: ledgerAccount?.id ?? null,
     },
     select: PAYMENT_SELECT,
   });
@@ -1033,6 +1058,7 @@ async function reversePayment(tx, stage, { hotelId, payment, folio, reason, busi
       postedAt: now,
       approvalId,
       reversalOfId: payment.id,
+      ledgerAccountId: payment.ledgerAccountId ?? null,
     },
     select: { id: true },
   });

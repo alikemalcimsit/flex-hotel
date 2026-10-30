@@ -7,6 +7,7 @@ import {
   NOTIFICATION_TRIGGER_EVENTS,
   manualTaskPermission,
 } from '@hotelos/hotel-contracts';
+import { createAccountingWorker } from '@hotelos/accounting-worker';
 import { createBillingWorker } from '@hotelos/billing-worker';
 import { CHANNEL_SYNC_WORKER_NAME, createChannelSyncWorker } from '@hotelos/channel-sync-worker';
 import { parseToolArguments } from '@hotelos/llm';
@@ -25,6 +26,7 @@ import { getAiSettingsCached } from '../modules/concierge/settings.js';
 import { conciergeService, routerService } from '../modules/concierge/service.js';
 import * as folioService from '../modules/folios/service.js';
 import * as paymentService from '../modules/payments/service.js';
+import * as accountingPostings from '../modules/accounting/postings.js';
 import { enqueueTriggerNotifications } from '../modules/notifications/service.js';
 import { raiseStaffAlert } from '../modules/notifications/staff-alerts.js';
 import { requestApprovalStandalone } from '../modules/approvals/service.js';
@@ -252,6 +254,22 @@ export function registerActors() {
           triggers: NOTIFICATION_TRIGGERS,
           enqueue: enqueueTriggerNotifications,
           channelLabels: NOTIFICATION_CHANNEL_LABELS,
+        },
+        deps,
+      ),
+    );
+  }
+  // Muhasebe aktörü (modül 47): tahsilat, folyo aktarımı, mal kabul, prim ve etkinlik bedeli → cari / kasa-banka.
+  if (!actorRegistry.get('accounting-worker')) {
+    actorRegistry.register(
+      createAccountingWorker(
+        {
+          syncFolioPayment: accountingPostings.syncFolioPayment,
+          syncEventPayment: accountingPostings.syncEventPayment,
+          syncPosPayment: accountingPostings.syncPosPayment,
+          syncGoodsReceipt: accountingPostings.syncGoodsReceipt,
+          syncAgencyBonus: accountingPostings.syncAgencyBonus,
+          syncEventCharge: accountingPostings.syncEventCharge,
         },
         deps,
       ),

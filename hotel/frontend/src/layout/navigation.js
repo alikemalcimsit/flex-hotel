@@ -211,6 +211,19 @@ export const NAV_SECTIONS = Object.freeze([
           { label: 'Depolar', to: '/stok/depolar', icon: 'building' },
         ],
       },
+      // Ön muhasebe (modül 47): cariler, kasa / banka, çek / senet, fişler.
+      {
+        label: 'Ön muhasebe',
+        to: '/muhasebe',
+        icon: 'wallet',
+        permission: PERMISSIONS.ACCOUNTING_VIEW,
+        children: [
+          { label: 'Cariler', to: '/muhasebe/cariler', icon: 'users' },
+          { label: 'Kasa / banka', to: '/muhasebe/kasa-banka', icon: 'wallet' },
+          { label: 'Çek / senet', to: '/muhasebe/cek-senet', icon: 'fileText' },
+          { label: 'Fişler', to: '/muhasebe/fisler', icon: 'clipboard' },
+        ],
+      },
       // Oda servisi tepsileri (modül 41): kat görevlisi ve oda servisi toplar.
       {
         label: 'Toplanacak tepsiler',

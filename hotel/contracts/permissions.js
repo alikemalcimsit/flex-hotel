@@ -159,6 +159,13 @@ export const PERMISSIONS = Object.freeze({
   /** Depo tanımları ve malzemenin minimum seviyesi. */
   STOCK_MANAGE: 'stock.manage',
 
+  /** Ön muhasebe (modül 47): cariler ve ekstre, kasa / banka hareketleri, çek / senet portföyü, fişler. */
+  ACCOUNTING_VIEW: 'accounting.view',
+  /** Fiş girmek (tahsilat, ödeme, virman, kasa / banka giriş-çıkış), çek / senet işlemleri, cari kartı, eksik kayıtları eşitlemek. */
+  ACCOUNTING_MANAGE: 'accounting.manage',
+  /** Kasa / banka tanımları, yöntem eşlemesi, başlangıç günü ve onay eşiği, açılış bakiyeleri, fiş iptali. */
+  ACCOUNTING_SETUP: 'accounting.setup',
+
   /** Kanal yönetimi (modül 33): kanallar, eşleştirme, senkron logu, kanal rezervasyonları. */
   CHANNEL_MANAGER_VIEW: 'channel_manager.view',
   /** Kanal bağlamak / düzenlemek / senkrona almak, eşleştirme, stop-sale, elle senkron. */
@@ -243,6 +250,9 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.PURCHASING_RECEIVE]: 'Mal kabul / irsaliye gir (stok girer)',
   [PERMISSIONS.STOCK_VIEW]: 'Stok mevcudu, hareketleri ve stok değerini görüntüle',
   [PERMISSIONS.STOCK_MANAGE]: 'Depo tanımları ve minimum stok seviyesi',
+  [PERMISSIONS.ACCOUNTING_VIEW]: 'Cariler ve ekstre, kasa / banka hareketleri, çek / senet portföyü ve fişleri görüntüle',
+  [PERMISSIONS.ACCOUNTING_MANAGE]: 'Tahsilat / ödeme / virman fişi gir, çek / senet işlemleri, cari kartı aç ve düzenle',
+  [PERMISSIONS.ACCOUNTING_SETUP]: 'Kasa / banka tanımları, yöntem eşlemesi, başlangıç günü ve onay eşiği, açılış bakiyesi, fiş iptali',
   [PERMISSIONS.CHANNEL_MANAGER_VIEW]: 'Kanalları, senkron logunu ve kanal rezervasyonlarını görüntüle',
   [PERMISSIONS.CHANNEL_MANAGER_MANAGE]: 'Kanal bağla, eşleştir, stop-sale koy, elle senkronla',
   [PERMISSIONS.ACTORS_VIEW]: 'Aktör panelini görüntüle',
@@ -333,6 +343,7 @@ export const PERMISSION_GROUPS = Object.freeze([
     permissions: [PERMISSIONS.PURCHASING_VIEW, PERMISSIONS.PURCHASING_REQUEST, PERMISSIONS.PURCHASING_MANAGE, PERMISSIONS.PURCHASING_RECEIVE],
   },
   { key: 'stock', label: 'Stok ve depo', permissions: [PERMISSIONS.STOCK_VIEW, PERMISSIONS.STOCK_MANAGE] },
+  { key: 'accounting', label: 'Ön muhasebe', permissions: [PERMISSIONS.ACCOUNTING_VIEW, PERMISSIONS.ACCOUNTING_MANAGE, PERMISSIONS.ACCOUNTING_SETUP] },
   {
     key: 'agency_bonus',
     label: 'Acente primi',
@@ -449,6 +460,10 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.PURCHASING_RECEIVE,
     PERMISSIONS.STOCK_VIEW,
     PERMISSIONS.STOCK_MANAGE,
+    // Ön muhasebe müdürün de işi (küçük otel); eşik üstü ödeme fişini başka bir yetkili onaylar.
+    PERMISSIONS.ACCOUNTING_VIEW,
+    PERMISSIONS.ACCOUNTING_MANAGE,
+    PERMISSIONS.ACCOUNTING_SETUP,
   ]),
   FRONT_DESK: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,
@@ -538,6 +553,9 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     // Satın alma taleplerini ve siparişleri izler (tedarikçi borcu 47'de); stok değeri muhasebenin işi.
     PERMISSIONS.PURCHASING_VIEW,
     PERMISSIONS.STOCK_VIEW,
+    // Cari, kasa, banka, çek / senet ve fişler muhasebenin işi; kasa / banka tanımı, açılış bakiyesi ve fiş iptali müdürün.
+    PERMISSIONS.ACCOUNTING_VIEW,
+    PERMISSIONS.ACCOUNTING_MANAGE,
   ]),
   FNB: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,

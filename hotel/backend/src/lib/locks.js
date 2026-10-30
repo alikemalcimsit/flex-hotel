@@ -36,6 +36,10 @@
  * Modül 43: reçete grafiği (otel başına danışma kilidi) → reçete → malzeme kartı; set menü;
  * etkinlik → (etkinlik menüsü etkinlik kilidi altında yazılır) → satın alma talebi. Talep açan
  * işlem ilgili etkinlikleri kimlik sırasıyla kilitler: aynı eksiği iki kişi aynı anda talep edemez.
+ * Modül 47: fiş → cari hesap → kasa / banka hesabı → çek / senet (her grup kimlik sırasıyla). Otomatik kayıt
+ * (ödeme, mal kabul, prim, etkinlik) kaynak belgeyi yalnız okur, kendi kilitlerini cari → kasa / banka sırasıyla
+ * alır; bakiye bu kilit altında artırılır. Çek / senet işlemi önce kartı okur, sonra bu sırayla kilitleyip
+ * durumu yeniden doğrular.
  *
  * Soft-delete edilmiş satırlar kilitlenmez ve "bulunamadı" sayılır.
  */
@@ -496,4 +500,51 @@ export function lockLaundryOrders(tx, hotelId, orderIds) {
  */
 export function lockLostItems(tx, hotelId, itemIds) {
   return lockRows(tx, 'LostItem', hotelId, itemIds);
+}
+
+/**
+ * Muhasebe fişi (modül 47): onay kararı ve iptal aynı fişte sıraya girer (bir fiş iki kez işlenmez /
+ * iptal edilmez). Sıra: fiş → cari → kasa / banka → çek / senet.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} voucherIds
+ */
+export function lockAccountingVouchers(tx, hotelId, voucherIds) {
+  return lockPlainRows(tx, 'AccountingVoucher', hotelId, voucherIds, false);
+}
+
+/**
+ * Cari hesap (modül 47): hareket yazan her işlem bakiyeyi bu kilit altında artırır; aynı carinin iki
+ * kaydı sırayla yazılır, kaynağın (etkinlik, prim) farkı eşzamanlı iki işlemde iki kez yazılmaz.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} accountIds
+ */
+export function lockLedgerAccounts(tx, hotelId, accountIds) {
+  return lockPlainRows(tx, 'LedgerAccount', hotelId, accountIds, false);
+}
+
+/**
+ * Kasa / banka hesabı (modül 47): bakiye ve "kasa eksiye düşmez" denetimi bu kilit altında.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} treasuryAccountIds
+ */
+export function lockTreasuryAccounts(tx, hotelId, treasuryAccountIds) {
+  return lockPlainRows(tx, 'TreasuryAccount', hotelId, treasuryAccountIds, false);
+}
+
+/**
+ * Çek / senet (modül 47): durum geçişi (tahsil, ciro, karşılıksız…) aynı kartta sıraya girer; aynı çek
+ * iki fişte ciro edilemez.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} instrumentIds
+ */
+export function lockInstruments(tx, hotelId, instrumentIds) {
+  return lockPlainRows(tx, 'Instrument', hotelId, instrumentIds, false);
 }

@@ -56,6 +56,8 @@ const ENTITY_LINKS = Object.freeze({
   PosAdjustment: { to: (id) => `/pos/duzeltme/${id}`, permission: PERMISSIONS.POS_OPERATE },
   // Satın alma (modül 45): eşik üstü sipariş.
   PurchaseOrder: { to: (id) => `/satin-alma/siparisler/${id}`, permission: PERMISSIONS.PURCHASING_VIEW },
+  // Ön muhasebe (modül 47): eşik üstü ödeme fişi.
+  AccountingVoucher: { to: (id) => `/muhasebe/fisler/${id}`, permission: PERMISSIONS.ACCOUNTING_VIEW },
 });
 
 export function ApprovalDetailDialog({ approvalId, canDecide, timeZone, initialMode = 'view', onClose }) {

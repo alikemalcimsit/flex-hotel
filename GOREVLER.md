@@ -2767,13 +2767,90 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 47. Ön muhasebe — arkadaşın
 **Gün sonu:** Acente / tedarikçi / şirket carileri, kasa, banka, çek-senet tek yerde; faturalar ve tahsilatlar otomatik cariye işliyor.
-- [ ] Backend: Account (cari), AccountTransaction, CashRegister, BankAccount, Cheque tabloları + API
-- [ ] Ekran: Cari kartlar + ekstre (borç / alacak / bakiye)
-- [ ] Ekran: Kasa hareketleri (giriş / çıkış, açıklama)
-- [ ] Ekran: Banka hesapları + hareketler
-- [ ] Ekran: Çek / senet portföyü (vade, durum, tahsil / ciro / karşılıksız)
-- [ ] Ekran: Tahsilat / ödeme fişi
-- [ ] Aktör: accounting-worker paketi (`invoice.issued` → cari alacak; `payment.received` → kasa/banka; `goods.received` → tedarikçi borç)
+- [x] Backend: Account (cari), AccountTransaction, CashRegister, BankAccount, Cheque tabloları + API — `LedgerAccount` / `LedgerEntry`,
+  kasa ve banka tek tabloda (`TreasuryAccount` türlü) + `TreasuryMovement`, `Instrument` (çek / senet) + `InstrumentMovement`, `AccountingVoucher`
+  (+ satır), `TreasuryMapping`, `AccountingSettings`, `AccountingSequence` (numara serileri)
+- [x] Ekran: Cari kartlar + ekstre (borç / alacak / bakiye)
+- [x] Ekran: Kasa hareketleri (giriş / çıkış, açıklama)
+- [x] Ekran: Banka hesapları + hareketler
+- [x] Ekran: Çek / senet portföyü (vade, durum, tahsil / ciro / karşılıksız)
+- [x] Ekran: Tahsilat / ödeme fişi
+- [x] Aktör: accounting-worker paketi (`invoice.issued` → cari alacak; `payment.received` → kasa/banka; `goods.received` → tedarikçi borç)
+  — fatura modülü (16 / 49) yok: `invoice.issued` sözleşmesi tanımlı, alacak operasyondan doğuyor (aşağıda)
+
+> **✅ Modül 47 tamamlandı (30 Ekim 2026 — Ahmet).** Kararlar (kullanıcı): **alacak operasyondan** — "Acente / cari" ve voucher folyo
+> aktarımı, gerçekleşen / iptal bedelli etkinlik; `invoice.issued` sözleşmesi tanımlı, fatura gelince numara mevcut cari harekete bağlanır
+> (ikinci alacak yazılmaz). **Ödemede cari seçimi** — ödeme penceresinde "Acente / cari" ve voucher için cari seçilir, varsayılan
+> rezervasyonun acentesi. **Başlangıç gününden** — o günden (dahil) sonraki belgeler otomatik işlenir, öncesi açılış bakiyesiyle.
+>
+> **Otomatik akış (aktör `accounting-worker`):** ön büro tahsilatı / iadesi / iptali → eşlemedeki kasaya / bankaya (kanal × yöntem × para
+> birimi; döviz nakit döviz kasası yoksa otel parasına çevrilip kaynak döviz + kurla) ya da seçilen cariye borç (vade = gün + cari
+> vadesi); etkinlik tahsilatı → kasa / banka + etkinlik müşterisinin carisinden düşer; etkinlik bedeli ve acente primi **fark kaydıyla**
+> eşitlenir (iptal bedeline düşen etkinlikte düzeltme farkı, geri alınan primde ters fark); restoran / oda servisi ödemesi → restoran
+> eşlemesi; mal kabul (45) → tedarikçiye KDV dahil alacak, vade siparişin vadesi. Her kayıt **kaynak belgeden** okunur ve otel başına
+> tekil kaynak anahtarıyla yazılır (tekrar işlemek iki kayıt açmaz). Eşleme eksikse iş "Ön muhasebe" manuel görevine düşer; ayarlardaki
+> **eşitleme** eksikleri dönem için işler (20 sn süre sınırı, kalan kesin sayıyla döner, yeniden çalıştırınca kaldığı yerden sürer; aynı
+> hata tek satırda sayılır).
+>
+> **Fişler:** tahsilat (kasa / banka satırları + alınan çek / senet), ödeme (kasa / banka + verilen çek + **ciro**), virman, kasa / banka
+> giriş-çıkış, açılış (cari / kasa / banka; başlangıç gününden bir gün önce tarihli, hesap başına tek). Ödeme toplamı eşiğe eşit /
+> üstündeyse `ACCOUNTING_PAYMENT` onayı (dört göz; onay anında kasa yeterliliği yeniden denetlenir). İptal ters kayıtla, fiş tarihli;
+> fişin açtığı çek ilk durumunda olmalı. **Kasa eksiye düşmez** (elle çıkış ve iptal), banka düşebilir.
+> **Çek / senet:** portföy → tahsile ver → tahsil / karşılıksız / iade; verilen → ödendi / karşılıksız; ciro edilen döndüğünde ciro
+> edilene alacak. **Yaşlandırma** FIFO (bakiyeyi en yeni hareketler kapatır), dilimler vadeye göre (vadesi gelmemiş / 1–30 / 31–60 / 61–90 / 90+).
+>
+> **Eşzamanlılık:** kilit sırası fiş → cari → kasa / banka → çek / senet (her grup kimlik sırasıyla); bakiyeler satır kilidi altında
+> ham SQL artırımıyla. Testli yarışlar: aynı belgeye dört eşzamanlı eşitleme tek kayıt, aynı kasadan iki çıkıştan biri geçer, aynı çek
+> iki fişte ciro edilemez, onay beklerken harcanan kasa onayda yakalanır, aynı istek kimliği tek fiş. Veritabanı kısıtları: hareketin
+> tek tarafı, bakiye = borç − alacak, kart bağı türle uyumlu, kasada banka bilgisi yok, onay bekleyen fişin onayı var, hesap başına tek
+> açılış, çek durumu yönle uyumlu, ciro / tahsil izi, IBAN tekil, çek numarası (yön × tür × banka) iptal edilmemişlerde tekil.
+>
+> **API:** `/accounting` — `accounts` (+ `picker`, `aging`, `link`, `:id`, `:id/statement`), `treasury` (+ `:id`, `:id/movements`),
+> `vouchers` (+ `opening`, `:id`, `:id/void`), `instruments` (+ `:id`, `:id/actions`), `settings` (+ `mappings`), `sync`. İzinler yeni:
+> `accounting.view` / `accounting.manage` (müdür, muhasebe), `accounting.setup` (müdür; tanımlar, eşleme, başlangıç, açılış, fiş iptali).
+> Cari seçici ödeme penceresinde ön büroya açık. Onay türü `ACCOUNTING_PAYMENT`. Kanal `accounting`; olaylar `accounting.*` (7) + `invoice.issued`.
+>
+> **Ekran:** `/muhasebe` sekmeli: **cariler** (alacağımız / borcumuz kutuları, tür / bakiye / durum süzgeci, sıra) ve **cari kartı**
+> (bakiye, yaşlandırma, açık çekler, açılış, ekstre — devir, yürüyen bakiye, dönem toplamı, imleçle sayfa), **yaşlandırma** raporu,
+> **kasa / banka** (hesap kutuları + seçilenin hareketleri, kaynak süzgeci; giriş / çıkış / virman), **çek / senet** portföyü (satırdan
+> işlem), **fişler** (+ fiş ekranı, iptal) ve fiş penceresi (canlı toplam, çek satırları, ciro seçimi), **ayarlar** (başlangıç + eşik,
+> tahsilat eşlemesi, eksik kayıtları eşitle). Ödeme penceresinde "Acente / cari" / voucher için cari alanı; onay ekranında fiş ayrıntısı.
+>
+> **Ölçüm** (`scripts/perf-accounting.mjs`; 25.201 cari, 600.719 cari hareketi — 20 "dev" acentede 10.000'er —, 12 kasa / banka ve
+> 502.940 hareket, 30.205 fiş, 8.030 çek / senet; üç yıl): cari listesi 12–50 ms (derin sayfa 500 dahil), seçici 33 ms, dev cari kartı
+> 18 ms, ekstre 9–10 ms (20 sayfa zinciri 0,12 sn), yaşlandırma alacak (16.456 borçlu cari) 0,68 sn / borç 0,19 sn / acente 0,24 sn,
+> hareketler 29–44 ms (20 sayfa 0,15 sn), fiş ve çek listeleri 9–32 ms, tahsilat fişi (kasa + 2 çek) ~0,1 sn, ödeme 64 ms, virman 54 ms,
+> iptal 72 ms, restoran ödemesinin kaydı 39 ms, eşitleme boş gün 69 ms / birikmiş belge başına 29 ms. Ölçümle düzeltilen:
+> **yaşlandırma 2,15 → 0,68 sn** (cari başına LATERAL okuma + kısmi kapsayan index'ler `LedgerEntry_debit_fifo_idx` / `_credit_fifo_idx`,
+> ayrı migration; özet sayfadan ayrı — sayfa aralık dışındayken de toplam doğru), **imleçli sayfa** yalnız açılış bakiyesini hesaplar
+> (20 sayfa: ekstre 0,39 → 0,12 sn, hareketler 1,17 → 0,15 sn), **eşitleme** belge başına 94 → 29 ms (bağlam ve eşleme bir kez) +
+> süre sınırı (30 günlük ~24.000 belgelik birikim tek istekte 194 sn sürüyordu) + taramalar sıralı (paralel tarama havuzda yeni
+> bağlantı açtırıp boş günü 2 sn'ye çıkarıyordu).
+>
+> **Test:** sözleşme 16 birim (eşleme çözümü, fiş etkisi / dengesi, çek durum makinesi, yaşlandırma dilimleri — elle hesaplı, dönem
+> kuralları); aktör 7 birim; entegrasyon 19 (ön büro → kasa / banka / acente carisi + vade, acentesiz cari seçimi ve dört gözlü iptalin
+> ters kaydı, dövizli nakit, eşleme yokken manuel görev → eşitleme, süre sınırı ve kaldığı yerden devam, başlangıç günü; etkinlik
+> tahsilatı + bedel + iptal bedeline düzeltme, restoran ve iptali, mal kabul vadesi, prim onayı / geri alınması; açılış, tahsilat
+> (nakit + çek), ciro + nakit ödeme, virman, kasa yetmezliği, iptal; dört göz; çek yolculuğu; ekstre / hareketler devir + yürüyen
+> bakiye + imleç ve FIFO yaşlandırma elle hesaplanmış dilimlerle; eşzamanlı yarışlar; izinler, otel kapsamı, IBAN). Bütün backend
+> birim (618), sözleşme (474), ön yüz (71) testleri ve derlemesi, tam entegrasyon seti (634 / 634) geçti.
+>
+> **Yan düzeltmeler:** ödeme servisi seçilen cariyi (`ledgerAccountId`) saklar, iptal satırına taşır; "Acente / cari" ödemesinde
+> referans artık zorunlu değil (cari seçimi yeterli). **Demo sıfırlaması onarıldı** — çamaşır / minibar siparişleri, konaklama
+> parçaları, rezervasyon misafirleri, folyo yönlendirmeleri ve faturalar silinmediği için sıfırlama yabancı anahtarda düşüyordu (cuma
+> günkü canlı demo yüklemesini de kırardı); ters kayıtlar önce, folyo aktarım / birleştirme bağları boşaltılarak siliniyor. Katalogda
+> sözleşme testleri artık sayılıyor (her modülde `x.js` yanındaki `x.test.js`; önceden bütün modüllerde 0 görünüyordu).
+>
+> **Demo** (`scripts/demo-accounting.mjs`, `demo-data.mjs` çağırır): başlangıç 30 gün önce, ödeme fişi eşiği 75.000 TRY; 7 kasa / banka
+> (döviz kasaları, POS bankası) açılışlarıyla, ön büro / etkinlik / restoran eşlemesi, 4 şirket carisi (acentesiz "Acente / cari"
+> ödemeleri bunlara bağlı), cari açılışları (vadesi geçmiş borçlar yaşlandırmayı doldurur); dönemin bütün ödemeleri, mal kabulleri,
+> primleri ve etkinlik bedelleri eşitlemeyle işlenir (süre sınırına takılırsa kalan kalmayana kadar tekrar); tahsilat (havale, çek),
+> ödeme (biri eşik üstü — onay bekliyor; biri alınan çekin cirosuyla; biri firma çekiyle), virman, masraf çıkışı; çekler tahsilde / tahsil
+> edilmiş / ciro edilmiş / ödenecek.
+>
+> **Devir:** 16 / 49 — `invoice.issued` yükündeki `ledgerSourceKey` ile mevcut cari hareket fatura numarasına bağlanır; folyosuz
+> fatura `INVOICE` kaynağıyla yazılır. 48 — cari ve kasa / banka hareketleri yevmiye fişlerinin kaynağı (kaynak türü + anahtarı fiş
+> kuralına eşlenir). 44 / 27 — gider gerçekleşeni mal kabul ve ödeme fişlerinden okunabilir. Kasa sayımı / gün sonu kapanışı 18 ile.
 
 ### 48. Genel muhasebe — Ali Kemal
 **Gün sonu:** Tek Düzen Hesap Planı yüklü; her satış / tahsilat otomatik yevmiye fişi oluyor; mizan çıkıyor.

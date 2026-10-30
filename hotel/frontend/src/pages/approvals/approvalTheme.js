@@ -14,6 +14,7 @@ export const TYPE_ICONS = Object.freeze({
   OVERBOOKING: 'bed',
   FOLIO_VOID: 'fileText',
   PAYMENT_VOID: 'wallet',
+  ACCOUNTING_PAYMENT: 'coins',
   OTHER: 'clipboard',
 });
 

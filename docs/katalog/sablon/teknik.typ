@@ -258,8 +258,9 @@
   ))
   #v(4pt)
   #if test-notu != none { test-notu }
-  #if veri.kod.arka.testDosyalari.len() > 0 {
-    dosyalar(veri.kod.arka.testDosyalari.map(f => (f, if f.contains("integration") [Entegrasyon (gerçek veritabanı)] else [Birim (saf kurallar)])))
+  #let test-dosyalari = veri.kod.arka.testDosyalari + veri.kod.sozlesme.at("testDosyalari", default: ()) + veri.kod.on.at("testDosyalari", default: ())
+  #if test-dosyalari.len() > 0 {
+    dosyalar(test-dosyalari.map(f => (f, if f.contains("integration") [Entegrasyon (gerçek veritabanı)] else if f.contains("/contracts/") [Sözleşme (ön yüzle paylaşılan kurallar)] else [Birim (saf kurallar)])))
   }
 
   #if degistir.len() > 0 [

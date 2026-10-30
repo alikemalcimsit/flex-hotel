@@ -49,7 +49,7 @@ const key = (entry) => `${pad(entry.numara)}-${entry.slug}`;
 const ALANLAR = [
   { ad: 'Ön büro ve konaklama', aciklama: 'Oda envanterinden rezervasyona, oda planından giriş-çıkışa: resepsiyonun günlük işi.', moduller: [3, 4, 5, 6, 21] },
   { ad: 'Misafir iletişimi', aciklama: 'WhatsApp ve web sohbet, yapay zekâ asistanı, istekler ve otomatik bildirimler.', moduller: [7, 8, 9] },
-  { ad: 'Hesap ve kasa', aciklama: 'Folyo, ödeme ve kasa; minibar ve çamaşır gibi ek hizmetlerin folyoya akışı.', moduller: [15, 17, 19] },
+  { ad: 'Hesap, kasa ve muhasebe', aciklama: 'Folyo, ödeme ve kasa; minibar ve çamaşır gibi ek hizmetlerin folyoya akışı; cariler, banka, çek ve senet.', moduller: [15, 17, 19, 47] },
   { ad: 'Satış, dağıtım ve gelir', aciklama: 'Acente kontratları, promosyonlar, OTA kanalları; gelir raporu, tahmin ve bütçe.', moduller: [29, 31, 33, 35, 23, 25, 27] },
   { ad: 'Yiyecek-içecek ve etkinlik', aciklama: 'Restoran, oda servisi, banket ve etkinlik satışı; reçete ve mutfak planı.', moduller: [39, 41, 37, 43] },
   { ad: 'Satın alma ve stok', aciklama: 'Talepten teklife, siparişten mal kabulüne; depo ve stok hareketleri.', moduller: [45] },
@@ -59,6 +59,9 @@ const alanOf = (numara) => ALANLAR.find((alan) => alan.moduller.includes(numara)
 
 /* ─────────────── 1. Olgular ─────────────── */
 
+/** Sözleşme dosyaları ve yanlarındaki birim testleri (`x.js` → `x.test.js`; olmayan dosya sayılmaz). @param {string[]} files */
+const withContractTests = (files) => files.flatMap((file) => (/\.test\.m?js$/.test(file) ? [file] : [file, file.replace(/\.(m?js)$/, '.test.$1')]));
+
 async function buildFacts() {
   await mkdir(path.join(HERE, 'veri'), { recursive: true });
   const [routes, models, permissions, events] = await Promise.all([collectRoutes(), collectModels(), collectPermissions(), collectEvents()]);
@@ -67,7 +70,7 @@ async function buildFacts() {
     const tableNames = entry.tablolar ?? [...new Set(migrations.flatMap((migration) => migration.tables))];
     const backend = await measureCode([...(entry.arka ?? []), ...(entry.aktor ?? [])]);
     const frontend = await measureCode(entry.on ?? []);
-    const contracts = await measureCode(entry.sozlesme ?? []);
+    const contracts = await measureCode(withContractTests(entry.sozlesme ?? []));
     const moduleRoutes = routes.filter((route) => (entry.rotalar ?? []).some((pattern) => pattern.test(route.url)) && !(entry.rotaHaric ?? []).some((pattern) => pattern.test(route.url)));
     const facts = {
       bilgi: {
@@ -85,8 +88,8 @@ async function buildFacts() {
       olaylar: events.filter((event) => (entry.olaylar ?? []).some((prefix) => event.name.startsWith(prefix))),
       kod: {
         arka: { dosya: backend.files, satir: backend.lines, test: backend.tests, entegrasyon: backend.integrationTests, testDosyalari: backend.testFiles },
-        on: { dosya: frontend.files, satir: frontend.lines, test: frontend.tests },
-        sozlesme: { dosya: contracts.files, satir: contracts.lines, test: contracts.tests },
+        on: { dosya: frontend.files, satir: frontend.lines, test: frontend.tests, testDosyalari: frontend.testFiles },
+        sozlesme: { dosya: contracts.files, satir: contracts.lines, test: contracts.tests, testDosyalari: contracts.testFiles },
       },
       dosyalar: await describeFiles([...(entry.sozlesme ?? []), ...(entry.arka ?? []), ...(entry.aktor ?? []), ...(entry.on ?? []), ...(entry.betik ?? [])]),
       ekranlar: Object.fromEntries((entry.ekranlar ?? []).map((shot) => [shot.dosya, { aciklama: shot.aciklama, var: existsSync(path.join(HERE, 'goruntuler', `${shot.dosya}.jpg`)) }])),
@@ -186,7 +189,7 @@ async function buildBooks() {
   await mkdir(path.join(HERE, '.uret'), { recursive: true });
   await mkdir(path.join(HERE, 'cikti'), { recursive: true });
   // Kapaktaki test toplamı: modüllerin paylaştığı dosyalar (ör. actor-kit) bir kez sayılsın diye birleşimden.
-  const all = await measureCode([...new Set(MODULLER.flatMap((entry) => [...(entry.arka ?? []), ...(entry.aktor ?? []), ...(entry.on ?? []), ...(entry.sozlesme ?? [])]))]);
+  const all = await measureCode([...new Set(MODULLER.flatMap((entry) => [...(entry.arka ?? []), ...(entry.aktor ?? []), ...(entry.on ?? []), ...withContractTests(entry.sozlesme ?? [])]))]);
   compile(path.join(HERE, '.uret', 'urun-katalogu.typ'), ['#import "/sablon/musteri.typ": urun-katalogu', ...imports, `#urun-katalogu((${areas('musteri')},))`], path.join(HERE, 'cikti', 'FlexHotel-Urun-Katalogu.pdf'));
   compile(path.join(HERE, '.uret', 'teknik-referans.typ'), ['#import "/sablon/teknik.typ": teknik-referans', ...imports, `#teknik-referans((${areas('teknik')},), toplam-test: ${all.tests + all.integrationTests})`], path.join(HERE, 'cikti', 'FlexHotel-Teknik-Referans.pdf'));
 }
