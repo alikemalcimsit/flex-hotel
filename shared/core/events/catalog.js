@@ -175,6 +175,69 @@ export const EVENT_CATALOG = Object.freeze({
     mode: z.enum(['CANCELLED', 'ENDED']),
   }),
 
+  /* ── Kat hizmetleri (modül 14) ──
+     Görev kayıtlarının olayları. Odanın kat hizmeti durumunu görevler kendisi
+     yazmaz: `housekeeping.task.started/completed` ve `housekeeping.room.inspected`
+     olaylarını housekeeping-worker dinler ve odayı `room.status.changed` ile
+     günceller — aktör kapalıyken iş manuel göreve düşer, oda durumu kaybolmaz. */
+
+  'housekeeping.task.created': hotelScoped.extend({
+    taskId: z.string().uuid(),
+    roomId: z.string().uuid(),
+    roomNumber: z.string(),
+    type: z.enum(['CHECKOUT_CLEAN', 'STAYOVER', 'DEEP_CLEAN', 'GUEST_REQUEST']),
+    /** 1 en acil, 5 en düşük. */
+    priority: z.number().int().min(1).max(5),
+    /** Görevi kim açtı: zamanlayıcı/aktör mü, personel mi. */
+    source: z.enum(['system', 'staff']).default('staff'),
+  }),
+  /** Atama, iptal ya da not değişikliği — liste ekranları tazelensin. */
+  'housekeeping.task.changed': hotelScoped.extend({
+    taskId: z.string().uuid(),
+    roomId: z.string().uuid(),
+    changedFields: z.array(z.string()).default([]),
+  }),
+  /** Toplu atama tek haberle duyurulur; 2500 odalı otelde görev başına event listeyi boğar. */
+  'housekeeping.tasks.assigned': hotelScoped.extend({
+    taskIds: z.array(z.string().uuid()).min(1),
+    assignedToId: z.string().uuid().nullable(),
+  }),
+  /** Sabah üretimi (STAYOVER): gün ve sayı — görev başına event 2500 odada defteri boğar. */
+  'housekeeping.tasks.generated': hotelScoped.extend({
+    date: isoDate,
+    count: z.number().int().min(1),
+  }),
+  /** Görevli "Başladım" dedi; temizlik görevlerinde oda `CLEANING` olur. */
+  'housekeeping.task.started': hotelScoped.extend({
+    taskId: z.string().uuid(),
+    roomId: z.string().uuid(),
+    roomNumber: z.string(),
+    type: z.enum(['CHECKOUT_CLEAN', 'STAYOVER', 'DEEP_CLEAN', 'GUEST_REQUEST']),
+  }),
+  /** Görevli "Bitti" dedi; temizlik görevlerinde oda `CLEAN` olur, bağlı misafir isteği kapanır. */
+  'housekeeping.task.completed': hotelScoped.extend({
+    taskId: z.string().uuid(),
+    roomId: z.string().uuid(),
+    roomNumber: z.string(),
+    type: z.enum(['CHECKOUT_CLEAN', 'STAYOVER', 'DEEP_CLEAN', 'GUEST_REQUEST']),
+    guestRequestId: z.string().uuid().nullable().default(null),
+  }),
+  /** Kat şefi kontrolü: geçtiyse oda `INSPECTED`, kaldıysa yeniden `DIRTY`. */
+  'housekeeping.room.inspected': hotelScoped.extend({
+    taskId: z.string().uuid(),
+    roomId: z.string().uuid(),
+    roomNumber: z.string(),
+    passed: z.boolean(),
+    note: z.string().nullable().default(null),
+  }),
+  /** Görevli "Sorun var" dedi: iş teknik servise (modül 20 gelene dek manuel görev) taşınır. */
+  'housekeeping.issue.reported': hotelScoped.extend({
+    taskId: z.string().uuid(),
+    roomId: z.string().uuid(),
+    roomNumber: z.string(),
+    note: z.string(),
+  }),
+
   /* ── Rezervasyon (modül 4) ── */
 
   'reservation.created': reservationStay.extend({
@@ -1204,6 +1267,18 @@ export const EXTRAS_EVENTS = Object.freeze(['minibar.recorded', 'laundry.order.c
 
 /** Kayıp eşya ekranlarını etkileyen olaylar (canlı yayın: `lost-items.changed`, modül 21). */
 export const LOST_ITEM_EVENTS = Object.freeze(['lost_item.recorded', 'lost_item.changed', 'lost_items.settings.changed']);
+
+/** Kat hizmeti ekranlarını etkileyen olaylar (canlı yayın: `housekeeping.changed`, modül 14). */
+export const HOUSEKEEPING_EVENTS = Object.freeze([
+  'housekeeping.task.created',
+  'housekeeping.task.changed',
+  'housekeeping.tasks.assigned',
+  'housekeeping.tasks.generated',
+  'housekeeping.task.started',
+  'housekeeping.task.completed',
+  'housekeeping.room.inspected',
+  'housekeeping.issue.reported',
+]);
 
 /** Tahmin (modül 25): eşik değişince açık günlük durum ekranları yeniden işaretler (`inventory.changed` kanalı). */
 export const FORECAST_EVENTS = Object.freeze(['forecast.settings.changed']);

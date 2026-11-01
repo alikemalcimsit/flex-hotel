@@ -144,6 +144,7 @@ export * from './dashboard.js';
 export * from './folios.js';
 export * from './payments.js';
 export * from './extras.js';
+export * from './housekeeping.js';
 export * from './lost-items.js';
 export * from './reports.js';
 export * from './forecast.js';

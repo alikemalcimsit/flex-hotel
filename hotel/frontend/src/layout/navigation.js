@@ -91,6 +91,19 @@ export const NAV_SECTIONS = Object.freeze([
           { label: 'Fiyat listeleri', to: '/ek-hizmetler/fiyatlar', icon: 'sliders', permission: PERMISSIONS.EXTRAS_MANAGE },
         ],
       },
+      // Kat hizmetleri (modül 14): görev panosu, görevlinin telefonu, şef kontrolü, kat haritası.
+      {
+        label: 'Kat hizmetleri',
+        to: '/kat-hizmetleri',
+        icon: 'sparkles',
+        permission: PERMISSIONS.HOUSEKEEPING_VIEW,
+        children: [
+          { label: 'Görev panosu', to: '/kat-hizmetleri/gorevler', icon: 'list' },
+          { label: 'Görevlerim', to: '/kat-hizmetleri/gorevlerim', icon: 'user', permission: PERMISSIONS.HOUSEKEEPING_OPERATE },
+          { label: 'Kontrol', to: '/kat-hizmetleri/kontrol', icon: 'checkCircle', permission: PERMISSIONS.HOUSEKEEPING_INSPECT },
+          { label: 'Kat haritası', to: '/kat-hizmetleri/harita', icon: 'layers' },
+        ],
+      },
       {
         label: 'Kayıp eşya',
         to: '/kayip-esya',

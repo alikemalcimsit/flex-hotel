@@ -1,0 +1,14 @@
+{
+  "name": "@hotelos/housekeeping-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "description": "Kat hizmeti aktörü: temizlik görevi üretimi ve oda durumu güncellemesi",
+  "scripts": {
+    "test": "node --test \"*.test.js\""
+  },
+  "dependencies": {
+    "@hotelos/actor-kit": "*"
+  }
+}

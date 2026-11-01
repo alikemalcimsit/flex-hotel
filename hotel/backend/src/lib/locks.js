@@ -548,3 +548,6 @@ export function lockTreasuryAccounts(tx, hotelId, treasuryAccountIds) {
 export function lockInstruments(tx, hotelId, instrumentIds) {
   return lockPlainRows(tx, 'Instrument', hotelId, instrumentIds, false);
 }
+export function lockHousekeepingTasks(tx, hotelId, taskIds) {
+  return lockRows(tx, 'HousekeepingTask', hotelId, taskIds);
+}

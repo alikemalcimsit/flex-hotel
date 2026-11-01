@@ -141,14 +141,14 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 > `requests.*` verilip `messages.*` verilmeyebilir — ekranlar buna göre ayrışıyor.
 > Atanabilir personel listesi `/guest-requests/assignees` (aktif kullanıcılar);
 > kullanıcı yönetimi senin.
-- [ ] Backend: gerçek login (e-posta + şifre → JWT + refresh), logout, refresh, `/me`
-- [ ] Backend: User CRUD API'leri (ekle, düzenle, pasife al, şifre sıfırla)
-- [ ] Backend: izin listesi tanımı (örn. `reservation.create`, `folio.view`, `invoice.cancel`) ve rol → izin eşlemesi
-- [ ] Backend: `requirePermission('...')` hook'u; her route'a eklenir
-- [ ] Ekran: Login sayfasını gerçek API'ye bağla (çatıdaki sahte girişi değiştir)
-- [ ] Ekran: Kullanıcı listesi + form (ad, e-posta, rol, aktif)
-- [ ] Ekran: Rol → izin matrisi (satır rol, sütun izin, checkbox)
-- [ ] Frontend: sidebar menüleri ve butonlar izne göre gizlenir
+- [x] Backend: gerçek login (e-posta + şifre → JWT + refresh), logout, refresh, `/me`
+- [x] Backend: User CRUD API'leri (ekle, düzenle, pasife al, şifre sıfırla)
+- [x] Backend: izin listesi tanımı (örn. `reservation.create`, `folio.view`, `invoice.cancel`) ve rol → izin eşlemesi
+- [x] Backend: `requirePermission('...')` hook'u; her route'a eklenir
+- [x] Ekran: Login sayfasını gerçek API'ye bağla (çatıdaki sahte girişi değiştir)
+- [x] Ekran: Kullanıcı listesi + form (ad, e-posta, rol, aktif)
+- [x] Ekran: Rol → izin matrisi (satır rol, sütun izin, checkbox)
+- [x] Frontend: sidebar menüleri ve butonlar izne göre gizlenir
 
 ### 3. Oda tipi müsaitlik & oda atama — arkadaşın
 **Gün sonu:** "15-18 Ekim'de kaç Standart boş?" sorusuna sistem cevap veriyor; rezervasyona uygun oda otomatik veya elle atanıyor.
@@ -1242,14 +1242,45 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 14. Housekeeping / kat hizmetleri — Ali Kemal
 **Gün sonu:** Check-out olan oda otomatik temizlik listesine düşüyor, kat görevlisine atanıyor, telefondan "temizledim" deyince oda tekrar satılabilir oluyor.
-- [ ] Backend: HousekeepingTask CRUD, atama, tamamlama, inspection API'leri
-- [ ] Backend: her sabah konaklayan odalar için STAYOVER görevi üreten zamanlayıcı
-- [ ] Ekran: Günlük temizlik listesi (oda, tip, öncelik, atanan, durum)
-- [ ] Ekran: Toplu atama (kat görevlisi seç, odaları işaretle)
-- [ ] Ekran: Mobil görünüm (büyük butonlar: Başladım / Bitti / Sorun var)
-- [ ] Ekran: Kat şefi kontrol ekranı (temizlenen odayı onayla → CLEAN → INSPECTED)
-- [ ] Ekran: Oda durum haritası (kat kat, renkli kutular)
-- [ ] Aktör: housekeeping-worker paketi (`guest.checked_out` → CHECKOUT_CLEAN görevi; `housekeeping.task.completed` → kat hizmeti CLEANING→CLEAN)
+- [x] Backend: HousekeepingTask CRUD, atama, tamamlama, inspection API'leri
+- [x] Backend: her sabah konaklayan odalar için STAYOVER görevi üreten zamanlayıcı
+- [x] Ekran: Günlük temizlik listesi (oda, tip, öncelik, atanan, durum)
+- [x] Ekran: Toplu atama (kat görevlisi seç, odaları işaretle)
+- [x] Ekran: Mobil görünüm (büyük butonlar: Başladım / Bitti / Sorun var)
+- [x] Ekran: Kat şefi kontrol ekranı (temizlenen odayı onayla → CLEAN → INSPECTED)
+- [x] Ekran: Oda durum haritası (kat kat, renkli kutular)
+- [x] Aktör: housekeeping-worker paketi (`guest.checked_out` → CHECKOUT_CLEAN görevi; `housekeeping.task.completed` → kat hizmeti CLEANING→CLEAN)
+
+> **Modül 14 kararları (28 Ekim 2026 — Ali Kemal):**
+>
+> - **Görev odayı yazmaz.** Görev kaydı (`HousekeepingTask`) olay yayınlar
+>   (`housekeeping.task.started/completed`, `housekeeping.room.inspected`);
+>   odanın kat hizmeti durumunu **housekeeping-worker** `applySystemRoomState`
+>   ile günceller. Aktör kapalıyken iş manuel göreve düşer — modül 3'ün "tek
+>   yazıcı" kuralı bozulmaz.
+> - Görev tipleri: `CHECKOUT_CLEAN` (çıkış, öncelik 2), `STAYOVER` (sabah
+>   zamanlayıcısı, her 10 dk idempotent koşar; bugün çıkacak oda almaz),
+>   `DEEP_CLEAN` (arıza kaydı kapanınca — `room.unblocked ENDED` — ve elle),
+>   `GUEST_REQUEST` (modül 7'nin `HOUSEKEEPING`/`AMENITY` isteğinden; görev
+>   bitince istek `changeRequestStatus` ile kapanır, elle açılamaz).
+> - **Oda başına tek açık temizlik görevi** — kısmi tekil index + servis
+>   tekilleştirmesi (`createSystemCleaningTask` "zaten var" döndürür, hata
+>   değil). Misafir isteği görevleri muaf (havlu + temizlik aynı anda olur).
+> - **Dört göz:** temizliği yapan kendi işini onaylayamaz
+>   (`housekeepingInspectionError`, contracts). Ret → oda yeniden `DIRTY` +
+>   aynı işlemde öncelikli düzeltme görevi (ret sebebi görev notunda).
+> - "Sorun var" arıza kaydı **açmaz** (modül 3'ün notuna uygun):
+>   `housekeeping.issue.reported` → `rooms.operate` yetkilisine manuel görev
+>   (`'Teknik servis'` modülü). Modül 20 gelince dinleyici MaintenanceTicket
+>   açacak; olay sözleşmesi değişmez.
+> - İzinler: `housekeeping.view` (resepsiyon da görür) / `operate` (görevli) /
+>   `manage` (şef: aç, ata, iptal) / `inspect` (kontrol). HOUSEKEEPING rolünde
+>   dördü de varsayılan açık; otel isterse rol matrisinden ayırır.
+> - Liste "bugün" görünümünde önceki günlerden **açık** kalan görevleri de
+>   gösterir (`carriedOver` rozeti) — devreden iş kaybolmaz.
+> - Canlı yayın: `housekeeping.changed` kanalı; toplu işler tek event yayınlar
+>   (`housekeeping.tasks.assigned/generated`) — 2500 odada görev başına event
+>   defteri ve socket'i boğardı.
 
 > **Modül 3'ten not (16 Eylül 2026 — Ahmet):** "AVAILABLE" diye bir durum artık yok —
 > oda durumu üç bağımsız parça (bkz. modül 3 notu). Senin alanın yalnızca **kat hizmeti**:
@@ -1622,6 +1653,13 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 20. Teknik servis / arıza-bakım — Ali Kemal
 **Gün sonu:** "204 klima bozuk" kaydı açılıyor, teknisyene gidiyor, oda gerekirse bakıma alınıyor, çözülünce kapanıyor.
+
+> **Modül 14'ten not (28 Ekim 2026 — Ali Kemal):** kat görevlisinin "Sorun var"
+> bildirimi `housekeeping.issue.reported` olayı yayınlıyor; şimdilik
+> `modules/housekeeping/subscribers.js` bunu `'Teknik servis'` modüllü manuel
+> göreve çeviriyor (izin eşlemesi `rooms.operate`). Bu modül gelince aynı
+> dinleyici MaintenanceTicket açmalı ve manuel görev yolu kaldırılmalı —
+> olay sözleşmesi hazır, yükte `taskId, roomId, roomNumber, note` var.
 - [ ] Backend: MaintenanceTicket, MaintenancePlan tabloları + API
 - [ ] Backend: arıza "oda kullanılamaz" işaretliyse odaya arıza kaydı (`RoomBlock`) aç — `blockRoom`, bitince `removeBlock`
 - [ ] Ekran: Arıza listesi (oda, başlık, öncelik, durum, atanan, süre)

@@ -51,6 +51,8 @@ import { approvalCacheStats } from './modules/approvals/service.js';
 import { registerApprovalSubscribers, setApprovalSubscriberLogger } from './modules/approvals/subscribers.js';
 import { folioRoutes } from './modules/folios/routes.js';
 import { registerFolioSubscribers } from './modules/folios/subscribers.js';
+import { housekeepingRoutes } from './modules/housekeeping/routes.js';
+import { registerHousekeepingSubscribers } from './modules/housekeeping/subscribers.js';
 import { exchangeRateRoutes, paymentRoutes } from './modules/payments/routes.js';
 import { extrasRoutes } from './modules/extras/routes.js';
 import { lostItemRoutes } from './modules/lost-items/routes.js';
@@ -165,6 +167,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   registerPosSubscribers();
   registerPurchasingSubscribers();
   registerAccountingSubscribers();
+  registerHousekeepingSubscribers();
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
@@ -332,6 +335,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   await app.register(paymentRoutes, { prefix: '/payments' });
   await app.register(exchangeRateRoutes, { prefix: '/exchange-rates' });
   await app.register(extrasRoutes, { prefix: '/extras' });
+  await app.register(housekeepingRoutes, { prefix: '/housekeeping' });
   await app.register(lostItemRoutes, { prefix: '/lost-items' });
   await app.register(reportRoutes, { prefix: '/reports' });
   await app.register(forecastRoutes, { prefix: '/forecast' });

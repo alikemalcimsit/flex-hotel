@@ -13,6 +13,7 @@ import { CHANNEL_SYNC_WORKER_NAME, createChannelSyncWorker } from '@hotelos/chan
 import { parseToolArguments } from '@hotelos/llm';
 import { createNotificationWorker, NOTIFICATION_WORKER_NAME } from '@hotelos/notification-worker';
 import { createReservationWorker } from '@hotelos/reservation-worker';
+import { createHousekeepingWorker } from '@hotelos/housekeeping-worker';
 import { createRoomWorker } from '@hotelos/room-worker';
 import { createRouterAgent, routerAgentManifest } from '@hotelos/router-agent';
 import { createWebchatGateway } from '@hotelos/webchat-gateway';
@@ -31,6 +32,12 @@ import { enqueueTriggerNotifications } from '../modules/notifications/service.js
 import { raiseStaffAlert } from '../modules/notifications/staff-alerts.js';
 import { requestApprovalStandalone } from '../modules/approvals/service.js';
 import { createFromChannelRequest } from '../modules/reservations/service.js';
+import {
+  cancelOpenCheckoutTasks,
+  createRequestTask,
+  createSystemCleaningTask,
+} from '../modules/housekeeping/service.js';
+import { changeRequestStatus } from '../modules/guest-requests/service.js';
 import { channelSyncService } from '../modules/channel-manager/service.js';
 import { applySystemRoomState, autoAssignRoom } from '../modules/rooms/service.js';
 import { registerAutoResponder, registerChannel } from './channels.js';
@@ -223,6 +230,21 @@ const NOTIFICATION_TRIGGERS = Object.freeze(
 export function registerActors() {
   if (!actorRegistry.get('room-worker')) {
     actorRegistry.register(createRoomWorker({ autoAssignRoom, applySystemRoomState }, deps));
+  }
+  if (!actorRegistry.get('housekeeping-worker')) {
+    actorRegistry.register(
+      createHousekeepingWorker(
+        {
+          createCleaningTask: createSystemCleaningTask,
+          createRequestTask,
+          cancelOpenCheckoutTasks,
+          applySystemRoomState,
+          completeGuestRequest: (hotelId, requestId, note) =>
+            changeRequestStatus(hotelId, requestId, { status: 'DONE', note }),
+        },
+        deps,
+      ),
+    );
   }
   if (!actorRegistry.get('reservation-worker')) {
     actorRegistry.register(createReservationWorker({ createFromChannelRequest }, deps));

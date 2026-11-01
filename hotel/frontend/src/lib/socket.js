@@ -55,6 +55,8 @@ export const FOLIOS_CHANNEL = 'folios.changed';
 export const CASH_CHANNEL = 'cash.changed';
 /** Minibar ve çamaşırhane (modül 19): fiş girildi, sipariş durumu, fiyat listesi. */
 export const EXTRAS_CHANNEL = 'extras.changed';
+/** Kat hizmetleri (modül 14): görev açıldı / atandı / başladı / bitti, kontrol, sorun. */
+export const HOUSEKEEPING_CHANNEL = 'housekeeping.changed';
 /** Kayıp eşya (modül 21): kayıt, fotoğraf, eşleşme, teslim, saklama süresi. */
 export const LOST_ITEMS_CHANNEL = 'lost-items.changed';
 /** Bütçe (modül 27): sürüm, gider kalemi, gerçekleşen gider, AI yorumu. */

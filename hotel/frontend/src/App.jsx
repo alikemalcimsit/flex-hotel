@@ -74,6 +74,21 @@ const ExchangeRatesTab = lazy(() => import('./pages/cash/ExchangeRatesTab.jsx').
 const ExtrasPage = lazy(() => import('./pages/extras/ExtrasPage.jsx').then((m) => ({ default: m.ExtrasPage })));
 const ExtrasIndex = lazy(() => import('./pages/extras/ExtrasPage.jsx').then((m) => ({ default: m.ExtrasIndex })));
 const LostItemsPage = lazy(() => import('./pages/lost-items/LostItemsPage.jsx').then((m) => ({ default: m.LostItemsPage })));
+const HousekeepingPage = lazy(() =>
+  import('./pages/housekeeping/HousekeepingPage.jsx').then((m) => ({ default: m.HousekeepingPage })),
+);
+const HousekeepingTasksTab = lazy(() =>
+  import('./pages/housekeeping/HousekeepingTasksTab.jsx').then((m) => ({ default: m.HousekeepingTasksTab })),
+);
+const MyHousekeepingTasksTab = lazy(() =>
+  import('./pages/housekeeping/MyHousekeepingTasksTab.jsx').then((m) => ({ default: m.MyHousekeepingTasksTab })),
+);
+const HousekeepingInspectionTab = lazy(() =>
+  import('./pages/housekeeping/HousekeepingInspectionTab.jsx').then((m) => ({ default: m.HousekeepingInspectionTab })),
+);
+const HousekeepingFloorMapTab = lazy(() =>
+  import('./pages/housekeeping/HousekeepingFloorMapTab.jsx').then((m) => ({ default: m.HousekeepingFloorMapTab })),
+);
 const LostItemDetailPage = lazy(() => import('./pages/lost-items/LostItemDetailPage.jsx').then((m) => ({ default: m.LostItemDetailPage })));
 const RevenueReportPage = lazy(() => import('./pages/reports/RevenueReportPage.jsx').then((m) => ({ default: m.RevenueReportPage })));
 const BudgetPage = lazy(() => import('./pages/budget/BudgetPage.jsx').then((m) => ({ default: m.BudgetPage })));
@@ -391,6 +406,34 @@ export default function App() {
                   </RequirePermission>
                 }
               />
+            </Route>
+            <Route
+              path="kat-hizmetleri"
+              element={
+                <RequirePermission permission={PERMISSIONS.HOUSEKEEPING_VIEW}>
+                  <HousekeepingPage />
+                </RequirePermission>
+              }
+            >
+              <Route index element={<Navigate to="/kat-hizmetleri/gorevler" replace />} />
+              <Route path="gorevler" element={<HousekeepingTasksTab />} />
+              <Route
+                path="gorevlerim"
+                element={
+                  <RequirePermission permission={PERMISSIONS.HOUSEKEEPING_OPERATE}>
+                    <MyHousekeepingTasksTab />
+                  </RequirePermission>
+                }
+              />
+              <Route
+                path="kontrol"
+                element={
+                  <RequirePermission permission={PERMISSIONS.HOUSEKEEPING_INSPECT}>
+                    <HousekeepingInspectionTab />
+                  </RequirePermission>
+                }
+              />
+              <Route path="harita" element={<HousekeepingFloorMapTab />} />
             </Route>
             <Route
               path="kayip-esya"
