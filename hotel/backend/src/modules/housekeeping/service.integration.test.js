@@ -326,4 +326,42 @@ describe('kat hizmetleri servisi (entegrasyon)', { skip }, () => {
     assert.equal(box.openTask.type, 'CHECKOUT_CLEAN');
     assert.equal(box.housekeepingStatus, 'DIRTY');
   });
+
+  it('kat haritası yalnız bu otelin odalarını gösterir (başka otelin odası karışmaz)', async () => {
+    const other = await prismaUnfiltered.hotel.create({ data: { name: 'Başka Otel', code: `OTH-${randomUUID().slice(0, 8)}` } });
+    const otherType = await prismaUnfiltered.roomType.create({
+      data: { hotelId: other.id, code: 'STD', name: 'Standart', basePrice: '1000', capacityAdults: 2, capacityChildren: 1 },
+    });
+    await prismaUnfiltered.room.create({ data: { hotelId: other.id, number: '999', floor: 9, roomTypeId: otherType.id } });
+
+    const map = await service.floorMap(hotelId);
+    assert.deepEqual(map.floors.map((floor) => floor.floor), [1, 2]);
+    assert.equal(map.floors.flatMap((floor) => floor.rooms).some((room) => room.number === '999'), false);
+  });
+
+  it('erken çıkış: açık konaklama temizliği çıkış temizliğine yükselir (öncelik 2), ikinci görev açılmaz', async () => {
+    const stay = await service.createSystemCleaningTask(hotelId, { roomId: roomB.id, type: 'STAYOVER', priority: 3 });
+    assert.equal(stay.created, true);
+
+    const result = await service.createSystemCleaningTask(hotelId, { roomId: roomB.id, type: 'CHECKOUT_CLEAN' });
+    assert.deepEqual([result.created, result.upgraded, result.task.id, result.task.type, result.task.priority], [false, true, stay.task.id, 'CHECKOUT_CLEAN', 2]);
+    const open = await prismaUnfiltered.housekeepingTask.count({ where: { hotelId, roomId: roomB.id, status: { in: ['PENDING', 'IN_PROGRESS'] } } });
+    assert.equal(open, 1);
+  });
+
+  it('kuyruk süzgeçleri sunucuda: görevlinin açıkları, sahipsiz havuz, kontrol bekleyenler', async () => {
+    const type = await prismaUnfiltered.roomType.findFirst({ where: { hotelId } });
+    const roomC = await prismaUnfiltered.room.create({ data: { hotelId, number: '301', floor: 3, roomTypeId: type.id } });
+    const mine = await service.createTask(hotelId, { roomId: roomA.id, type: 'STAYOVER', priority: 3, assignedToId: cleanerId });
+    const pooled = await service.createTask(hotelId, { roomId: roomB.id, type: 'STAYOVER', priority: 3 });
+    const finished = await service.createTask(hotelId, { roomId: roomC.id, type: 'CHECKOUT_CLEAN', priority: 2, assignedToId: cleanerId });
+    await asStaff(cleaner.email, () => service.completeTask(hotelId, finished.id, { expectedUpdatedAt: new Date(finished.updatedAt) }));
+
+    const list = (filters) => service.listTasks(hotelId, { page: 1, pageSize: 30, ...filters });
+    const ids = (page) => page.items.map((task) => task.id);
+    assert.deepEqual(ids(await list({ assignedToId: cleanerId, openOnly: true })), [mine.id]);
+    assert.deepEqual(ids(await list({ unassigned: true, openOnly: true })), [pooled.id]);
+    const awaiting = await list({ awaitingInspection: true });
+    assert.deepEqual([awaiting.meta.total, ...ids(awaiting)], [1, finished.id]);
+  });
 });

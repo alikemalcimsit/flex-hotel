@@ -1281,6 +1281,21 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 > - Canlı yayın: `housekeeping.changed` kanalı; toplu işler tek event yayınlar
 >   (`housekeeping.tasks.assigned/generated`) — 2500 odada görev başına event
 >   defteri ve socket'i boğardı.
+>
+> **Modül 14 — canlıya almadan önce düzeltmeler (2 Kasım 2026 — Ahmet, kullanıcı kararıyla; modül 49 ile birlikte
+> canlıya çıktı):** inceleme dört sorun buldu, hepsi testli düzeltildi.
+>
+> - **Oteller arası sızıntı:** `floorMap` odaları `hotelId` olmadan çekiyordu (`prisma` istemcisi yalnız silinmişleri
+>   süzer, oteli süzmez) — harita bütün otellerin odalarını gösteriyordu. `where: { hotelId }` + çok otelli test.
+> - **Büyük otelde kaybolan görevler:** "Görevlerim" ve "Kontrol" günün ilk 100 görevini çekip tarayıcıda
+>   süzüyordu; yüzlerce görevli günde görevlinin kendi işi / kontrol bekleyen oda görünmüyordu. Liste sorgusuna
+>   sunucu süzgeçleri eklendi: `openOnly`, `unassigned`, `awaitingInspection` (çelişen süzgeç şemada reddedilir);
+>   ekranlar bunları kullanıyor, sayaçlar `meta.total`'dan.
+> - **Hata durumu:** harita, Görevlerim ve Kontrol sekmelerinde istek hatası "oda yok" / "görev yok" diye
+>   görünüyordu; `QueryFallback` (yükleniyor / hata + tekrar dene) eklendi.
+> - **Erken çıkış:** sabahki konaklama temizliği açıkken misafir çıkınca çıkış temizliği açılmıyordu ("zaten var");
+>   açık STAYOVER artık CHECKOUT_CLEAN'e yükseliyor (öncelik ≤ 2, denetim izi, `housekeeping.task.changed`).
+>   Haritada odada hem temizlik hem misafir isteği görevi açıksa kutu temizliği gösteriyor.
 
 > **Modül 3'ten not (16 Eylül 2026 — Ahmet):** "AVAILABLE" diye bir durum artık yok —
 > oda durumu üç bağımsız parça (bkz. modül 3 notu). Senin alanın yalnızca **kat hizmeti**:

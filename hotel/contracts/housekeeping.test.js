@@ -152,6 +152,15 @@ describe('liste sorgusu', () => {
   it('geçersiz durum reddedilir', () => {
     assert.equal(housekeepingTaskListQuerySchema.safeParse({ status: 'YANLIS' }).success, false);
   });
+
+  it('kuyruk süzgeçleri (açık / sahipsiz / kontrol bekleyen) ayrıştırılır; çelişen süzgeç reddedilir', () => {
+    const parsed = housekeepingTaskListQuerySchema.parse({ openOnly: 'true', unassigned: 'true' });
+    assert.equal(parsed.openOnly, true);
+    assert.equal(parsed.unassigned, true);
+    assert.equal(housekeepingTaskListQuerySchema.safeParse({ status: 'DONE', openOnly: 'true' }).success, false);
+    assert.equal(housekeepingTaskListQuerySchema.safeParse({ awaitingInspection: 'true', openOnly: 'true' }).success, false);
+    assert.equal(housekeepingTaskListQuerySchema.safeParse({ unassigned: 'true', assignedToId: '7b0c4b6e-2a7c-4c8e-9b55-1c4c1f0f2a11' }).success, false);
+  });
 });
 
 describe('tip sabitleri', () => {
