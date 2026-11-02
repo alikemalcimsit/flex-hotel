@@ -211,6 +211,18 @@ export const NAV_SECTIONS = Object.freeze([
           { label: 'Depolar', to: '/stok/depolar', icon: 'building' },
         ],
       },
+      // Faturalar (modül 16 / 49): ön büro folyo faturasını keser, muhasebe e-belgeyi izler, müdür ayarlar.
+      {
+        label: 'Faturalar',
+        to: '/faturalar',
+        icon: 'fileText',
+        permission: PERMISSIONS.INVOICES_VIEW,
+        children: [
+          { label: 'Faturalanacaklar', to: '/faturalar/faturalanacaklar', icon: 'inbox' },
+          { label: 'Taslaklar', to: '/faturalar/taslaklar', icon: 'pencil' },
+          { label: 'Kesilenler', to: '/faturalar/liste', icon: 'fileText' },
+        ],
+      },
       // Ön muhasebe (modül 47): cariler, kasa / banka, çek / senet, fişler.
       {
         label: 'Ön muhasebe',

@@ -150,7 +150,10 @@ export const EVENT_LABELS = Object.freeze({
   'accounting.voucher.changed': 'Fiş işlendi / onaya gitti / reddedildi / iptal edildi',
   'accounting.instrument.changed': 'Çek / senet durumu değişti',
   'accounting.settings.changed': 'Muhasebe ayarı / yöntem eşlemesi değişti',
-  'invoice.issued': 'Fatura kesildi (iş olayı; fatura modülü)',
+  'invoice.issued': 'Fatura kesildi (iş olayı)',
+  'invoice.cancelled': 'Fatura iptal edildi (iş olayı)',
+  'invoice.changed': 'Fatura taslağı / kesimi / iptal isteği / e-belge durumu değişti',
+  'invoice.settings.changed': 'Fatura ayarı / vergi kodu / test mükellefi değişti',
   'fnb.order.placed': 'Restoran siparişi mutfağa gitti (iş olayı)',
   'fnb.order.paid': 'Restoran adisyonu kapandı: satılanlar (iş olayı)',
 

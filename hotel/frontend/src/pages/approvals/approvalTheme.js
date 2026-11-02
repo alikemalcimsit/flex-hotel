@@ -15,6 +15,7 @@ export const TYPE_ICONS = Object.freeze({
   FOLIO_VOID: 'fileText',
   PAYMENT_VOID: 'wallet',
   ACCOUNTING_PAYMENT: 'coins',
+  INVOICE_CANCEL: 'fileText',
   OTHER: 'clipboard',
 });
 

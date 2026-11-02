@@ -17,6 +17,7 @@ import { useLiveChannel } from '../../lib/useLiveChannel.js';
 import { toastError, toastSuccess } from '../../store/toast.js';
 import { EditPayerDialog, PostChargeDialog, ReopenFolioDialog, VoidItemDialog } from './FolioDialogs.jsx';
 import { FolioItemsTable } from './FolioItemsTable.jsx';
+import { SourceInvoice } from '../invoicing/SourceInvoice.jsx';
 import { FolioPayments } from './FolioPayments.jsx';
 import { MergeDialog, RoutingDialog, SplitDialog, TransferDialog } from './FolioMoveDialogs.jsx';
 import { PaymentDialog, VoidPaymentDialog } from './PaymentDialogs.jsx';
@@ -333,9 +334,10 @@ function FolioPanel({ folio, stay, siblings, onChanged, onSelect }) {
       )}
       {folio.status === 'CLOSED' && (
         <Alert tone="info" title={`Folyo kapalı · ${formatDate(folio.closedAt)} · ${folio.closedBy ?? ''}`}>
-          Kapalı folyoya kalem işlenmez. Geç gelen bir harcama için yetkili yeniden açabilir.
+          Kapalı folyoya kalem işlenmez. Geç gelen bir harcama için yetkili yeniden açabilir (faturası kesilmişse önce fatura iptal edilir).
         </Alert>
       )}
+      {folio.status === 'CLOSED' && Number(folio.chargesTotal) > 0 && <SourceInvoice kind="folio" id={folio.id} />}
 
       <Totals folio={folio} detail={detail} />
 

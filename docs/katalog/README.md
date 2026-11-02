@@ -7,8 +7,8 @@
 | `cikti/FlexHotel-Urun-Katalogu.pdf` | Müşteri | Modül tanıtımı, öne çıkan özellikler, gerçek ekranlar, kim ne yapar, diğer modüllerle bağlantı | `sablon/musteri.typ`: koyu kapak, kırmızı vurgu, yuvarlak kartlar |
 | `cikti/FlexHotel-Teknik-Referans.pdf` | Teknik ekip | Mimari ve künye, dosya haritası, veri modeli ve kısıtlar, API uçları ve izinleri, olaylar, iş kuralları, eşzamanlılık, ölçek, testler, genişletme rehberi, sınırlar | `sablon/teknik.typ`: lacivert milimetrik kapak, eş aralıklı etiketler, §NN / NN.k numaralı bölümler, başlıklı tablolar |
 
-Her modülün iki PDF'i ayrıca, ayrı dosyalar olarak tek klasörde toplanır: `cikti/moduller/NN-slug-musteri.pdf` ve
-`cikti/moduller/NN-slug-teknik.pdf`; yeni modül üretildikçe bu klasöre eklenir. Müşteri kitabına kod adı, tablo ya da uç
+Her modülün iki PDF'i ayrıca, ayrı dosyalar olarak iki klasörde toplanır: `cikti/moduller/musteri/NN-slug-musteri.pdf` ve
+`cikti/moduller/teknik/NN-slug-teknik.pdf`; yeni modül üretildikçe ilgili klasöre eklenir. Müşteri kitabına kod adı, tablo ya da uç
 girmez; teknik kitaba müşteri tanıtımı girmez.
 
 Teknik tablolar (API uçları ve izinleri, tablolar, kısıtlar, migration'lar, olaylar, dosya haritası, künye, test sayıları)

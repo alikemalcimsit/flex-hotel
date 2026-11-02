@@ -228,7 +228,7 @@ export async function syncPartnerAccount(hotelId, link) {
  * @param {import('@prisma/client').Prisma.TransactionClient} tx
  * @param {{ hotelId: string, accountId: string, date: string, dueDate?: string | null, debit?: string, credit?: string, description: string,
  *   reference?: string | null, sourceType: string, sourceId: string, sourceKey: string, voucherId?: string | null, instrumentId?: string | null,
- *   reversalOfId?: string | null, createdBy?: string }} input
+ *   reversalOfId?: string | null, createdBy?: string, invoiceNumber?: string | null }} input
  * @returns {Promise<{ created: boolean, id: string }>}
  */
 export async function postLedger(tx, input) {
@@ -247,6 +247,7 @@ export async function postLedger(tx, input) {
       credit,
       description: input.description.slice(0, 300),
       reference: input.reference?.slice(0, 60) ?? null,
+      invoiceNumber: input.invoiceNumber ?? null,
       sourceType: /** @type {any} */ (input.sourceType),
       sourceId: input.sourceId,
       sourceKey: input.sourceKey,
@@ -336,6 +337,7 @@ export async function reverseRecords(tx, hotelId, { ledgerEntryIds = [], treasur
       credit: money(entry.debit),
       description: `İptal: ${entry.description} — ${note}`,
       reference: entry.reference,
+      invoiceNumber: entry.invoiceNumber,
       sourceType: entry.sourceType,
       sourceId: entry.sourceId,
       sourceKey: `REVERSAL:${entry.id}`,

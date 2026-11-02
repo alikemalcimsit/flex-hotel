@@ -17,6 +17,8 @@ export const accountingWorkerManifest = defineActor({
     "voucher'la kapatılan folyoyu seçilen cariye borç yazar. Etkinlik tahsilatını müşteri carisinden düşer, gerçekleşen " +
     'etkinliğin bedelini (iptalde iptal bedelini) müşteri carisine borç yazar. Mal kabulü tedarikçi carisine vadeli ' +
     'borcumuz olarak, onaylanan acente primini acente carisine alacak olarak işler. Ödeme iptalini ters kayıtla düşer. ' +
+    'Kesilen faturanın numarasını alacağı doğuran cari harekete bağlar; serbest faturayı cariye borç yazar, iptalinde ' +
+    'bağı çözer ve serbest faturanın borcunu ters kayıtla düşer. ' +
     'Kapalıyken ya da işleyemediğinde iş manuel görev olarak düşer.',
   subscribes: [
     'payment.received',
@@ -27,6 +29,8 @@ export const accountingWorkerManifest = defineActor({
     'purchase.goods.received',
     'agency.bonus.changed',
     'banquet.event.changed',
+    'invoice.issued',
+    'invoice.cancelled',
   ],
   publishes: ['accounting.posted'],
   retry: { attempts: 3, backoffMs: 400 },

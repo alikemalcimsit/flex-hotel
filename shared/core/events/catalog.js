@@ -451,6 +451,7 @@ export const EVENT_CATALOG = Object.freeze({
       'AGENCY_BONUS',
       'BANQUET',
       'POS',
+      'INVOICE',
     ]),
     userId: z.string().uuid().nullable(),
     permission: z.string().nullable(),
@@ -773,21 +774,40 @@ export const EVENT_CATALOG = Object.freeze({
   'accounting.instrument.changed': hotelScoped.extend({ instrumentId: z.string().uuid(), action: z.string().min(1).max(20) }),
   'accounting.settings.changed': hotelScoped,
   /**
-   * İş olayı (sözleşme; üreticisi fatura modülü 16): fatura kesildi. Ön muhasebe faturayı **ikinci alacak
-   * olarak yazmaz** — alacak operasyondan doğar (folyo cariye aktarıldığında, etkinlik gerçekleştiğinde);
-   * fatura numarası o cari harekete bağlanır (`ledgerSourceKey`: alacağı doğuran kaydın anahtarı).
+   * İş olayı (modül 16 / 49): fatura kesildi. Ön muhasebe folyo ve etkinlik faturasını **ikinci alacak
+   * olarak yazmaz** — alacak operasyondan doğmuştur (folyo cariye aktarıldığında, etkinlik gerçekleştiğinde);
+   * fatura numarası o cari harekete bağlanır. Serbest fatura (kaynağı yok) cariye alacak yazar.
    */
   'invoice.issued': hotelScoped.extend({
     invoiceId: z.string().uuid(),
     number: z.string().min(1).max(40),
+    source: z.enum(['FOLIO', 'EVENT', 'MANUAL']),
+    documentType: z.enum(['E_FATURA', 'E_ARSIV']),
     folioId: z.string().uuid().nullable().default(null),
     eventId: z.string().uuid().nullable().default(null),
-    ledgerSourceKey: z.string().max(120).nullable().default(null),
+    ledgerAccountId: z.string().uuid().nullable().default(null),
     total: z.string(),
     taxTotal: z.string(),
     currency: z.string().length(3),
     issuedOn: z.string(),
   }),
+  /** İş olayı: fatura iptal edildi (onaydan sonra). Ön muhasebe bağı çözer, serbest faturanın alacağını ters kayıtla düşer. */
+  'invoice.cancelled': hotelScoped.extend({
+    invoiceId: z.string().uuid(),
+    number: z.string().min(1).max(40),
+    source: z.enum(['FOLIO', 'EVENT', 'MANUAL']),
+    folioId: z.string().uuid().nullable().default(null),
+    eventId: z.string().uuid().nullable().default(null),
+    ledgerAccountId: z.string().uuid().nullable().default(null),
+  }),
+  /** Ekran olayı: fatura listesi / ekranı tazelenir (taslak, kesim, iptal isteği, e-belge durumu). */
+  'invoice.changed': hotelScoped.extend({
+    invoiceId: z.string().uuid(),
+    change: z.enum(['CREATED', 'UPDATED', 'DELETED', 'ISSUED', 'CANCEL_REQUESTED', 'CANCEL_DECLINED', 'CANCELLED', 'EDOC']),
+    folioId: z.string().uuid().nullable().default(null),
+    eventId: z.string().uuid().nullable().default(null),
+  }),
+  'invoice.settings.changed': hotelScoped,
 
   /* ── Restoran POS (modül 39) ──
      Masa planı, adisyon ekranı ve mutfak ekranı (modül 40) bunlarla canlı tazelenir
@@ -1246,6 +1266,9 @@ export const STOCK_EVENTS = Object.freeze(['stock.changed']);
 
 /** Ön muhasebe (modül 47): cari, kasa / banka, çek / senet ve fiş ekranları (`accounting.changed` kanalı). */
 export const ACCOUNTING_EVENTS = Object.freeze(['accounting.account.changed', 'accounting.treasury.changed', 'accounting.posted', 'accounting.voucher.changed', 'accounting.instrument.changed', 'accounting.settings.changed']);
+
+/** Fatura ve e-belge (modül 16 / 49): ekranlar bunlarla tazelenir (`invoices.changed` kanalı). */
+export const INVOICE_EVENTS = Object.freeze(['invoice.changed', 'invoice.settings.changed']);
 
 /** Acente bonusu (modül 35): ekranlar bunlarla tazelenir (`agency-bonus.changed` kanalı). */
 export const AGENCY_BONUS_EVENTS = Object.freeze([

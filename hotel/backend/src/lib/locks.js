@@ -548,3 +548,15 @@ export function lockTreasuryAccounts(tx, hotelId, treasuryAccountIds) {
 export function lockInstruments(tx, hotelId, instrumentIds) {
   return lockPlainRows(tx, 'Instrument', hotelId, instrumentIds, false);
 }
+
+/**
+ * Fatura (modül 16 / 49): kesim, iptal isteği ve kararı, tekrar gönderim aynı faturada sıraya girer. Sıra:
+ * fatura → kaynak (folyo / etkinlik) → cari. Gönderici kendi satırını `SKIP LOCKED` ile üstlenir.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} invoiceIds
+ */
+export function lockInvoices(tx, hotelId, invoiceIds) {
+  return lockPlainRows(tx, 'Invoice', hotelId, invoiceIds, false);
+}

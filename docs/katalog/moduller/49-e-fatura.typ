@@ -1,0 +1,82 @@
+#import "/sablon/standart.typ": *
+
+#let musteri(veri) = tanitim(
+  veri,
+  giris: [Kapanan folyo ve gerçekleşen etkinlik kendiliğinden fatura taslağına dönüşür: satırlar folyo kalemlerinden gelir grubuna göre (konaklama, yiyecek-içecek, minibar…) ve hizmet dönemiyle gelir; alıcı, folyo cariye aktarıldıysa o cari, değilse misafirdir. Kesim anında alıcının GİB e-Fatura mükellefi olup olmadığı sorgulanır: mükellefse e-Fatura olarak posta kutusuna, değilse e-Arşiv olarak gider. Numara seri, yıl ve sırayla boşluksuz verilir; belge entegratöre iletilir, GİB'in sonucu fatura ekranına düşer. Faturalanacaklar listesi 7 günlük yasal sürenin kalanını gösterir; salon kirası gibi folyoya bağlı olmayan hizmet cariye serbest fatura olarak kesilir.],
+  rakam: (("7 gün", "yasal süre satır satır sayılır"), ("0015 · 0059", "KDV ve konaklama vergisi ayrı matrahla"), ("Boşluksuz", "seri × yıl numarası"), ("Dört göz", "kesilmiş faturanın iptali")),
+  adimlar: (("Kapanış", "folyo · etkinlik"), ("Taslak", "satırlar · alıcı"), ("Kesim", "mükellef sorgusu · numara"), ("UBL-TR", "e-Fatura / e-Arşiv"), ("Entegratör", "gönderim · yeniden deneme"), ("GİB sonucu", "tamamlandı · reddedildi")),
+  akis-aciklama: [Taslak açıldıktan sonra folyo değişirse (kalem eklenir, iptal edilir) taslak kendini yeniler ve kesim durur; personel yeni toplamı görüp keser. Faturası kesilmiş folyo yeniden açılamaz; yalnız taslağı olan folyo açılırsa taslak silinir.],
+  ozellik: (
+    ("Faturalanacaklar", "Kapanmış ve faturası kesilmemiş folyolar ile faturaya hazır etkinlikler, en eski önce; yasal sürenin kalanı satırda, süresi geçen kırmızı. Faturalama başlangıcından önce kapananlar önceki sistemde faturalanmış sayılır, listeye girmez."),
+    ("Otomatik taslak", "Folyo kapanınca taslak kendiliğinden açılır: iptal edilen kalemler düşülmüş, indirim satır iskontosu, açıklamada hizmet dönemi. Alıcının adresi ve kimliği aynı kişinin ya da carinin son faturasından gelir."),
+    ("Doğru alıcı", "Kişi (TC kimlik no), şirket (VKN, vergi dairesi), yabancı uyruklu kişi (uyruk, pasaport) ve yurt dışındaki şirket — tur operatörü (kendi ülkesindeki vergi numarasıyla). Kimlik numaraları denetim hanesiyle sınanır; eksik bilgide \"Kesmeden önce\" listesi kesimi durdurur."),
+    ("e-Fatura mı e-Arşiv mi", "Kesim anında alıcı GİB'in kayıtlı kullanıcı listesinde aranır: posta kutusu varsa e-Fatura, yoksa e-Arşiv. Yabancı alıcıya her zaman e-Arşiv."),
+    ("Vergi dökümü", "KDV (0015) ve konaklama vergisi (0059) KDV hariç bedel üzerinden hesaplanır, biri ötekinin matrahına girmez; vergisi olmayan satır %0 ve muafiyet koduyla. Otelin vergileri ayarlarda GİB koduna bir kez eşlenir."),
+    ("Gönderim ve sonuç", "Entegratöre gönderim arka planda yürür; geçici hatada artan aralıkla yeniden denenir, hak bitince \"gönderilemedi\" uyarısı açılır. GİB reddi sebebiyle görünür; \"Tekrar gönder\" tek tık."),
+    ("İptal", "Kesilmiş fatura silinmez: iptal başka bir yetkilinin onayıyla. GİB'e ulaşmamışsa yerelde, e-Arşiv entegratör üzerinden, e-Fatura GİB portalındaki iptal referansıyla kayda geçer."),
+    ("PDF ve karekod", "GİB karekodlu, tutarı yazıyla da gösteren PDF; test ortamında belirgin uyarıyla."),
+    ("Serbest fatura", "Folyo ya da etkinliğe bağlı olmayan hizmet cariye: satırlar vergi kategorisiyle girilir, kesilince carinin vadeli alacağı olur; iptal ters kayıtla düşer."),
+  ),
+  neden: [Resepsiyon faturayı kesmeyi unutursa yasal süre sessizce geçer, muhasebe ay sonunda folyolarla faturaları tek tek eşler. Burada her kapanan folyo kendiliğinden kuyruğa girer, süresi yaklaşan ve geçen görünür; fatura folyodan doğduğu için tutarı folyodan sapamaz, numarası cari harekete bağlanır.],
+  rol: (
+    ([Müdür], [Fatura ayarları (satıcı, seriler, faturalama başlangıcı, vergi kodları, entegratör), serbest fatura, iptal isteği; bütün fatura işlemleri.]),
+    ([Muhasebe], [Taslak, kesim, serbest fatura, iptal isteği, tekrar gönderim.]),
+    ([Ön büro], [Folyo ve etkinlik faturasını keser, alıcıyı düzenler, tekrar gönderir, PDF verir; serbest fatura ve iptal yok.]),
+    ([Yönetici, müdür (ikinci kişi)], [İptal isteğini onay kuyruğundan onaylar ya da gerekçeyle reddeder; isteyen kendi isteğini onaylayamaz.]),
+  ),
+  baglantilar: (
+    "*Folyo (15):* kapanan folyo taslak açar; faturası kesilmiş folyo yeniden açılamaz, yalnız taslağı varsa taslak silinir.",
+    "*Ödeme (17) ve ön muhasebe (47):* \"Acente / cari\" ile kapatılan folyonun alıcısı o cari; fatura numarası mevcut cari harekete bağlanır (ikinci alacak yazılmaz). Serbest fatura cariye vadeli alacak yazar, iptali ters kayıt.",
+    "*Banket (37):* gerçekleşen etkinlik ya da kesinleşen iptal bedeli faturalanacaklarda; satırlar etkinlik kalemlerinden miktar ve birimiyle.",
+    "*Onay kuyruğu (11), bildirim merkezi (9):* iptal dört gözle; gönderilemeyen ya da reddedilen e-belge için personele uyarı.",
+    "*Genel muhasebe ve e-Defter (48):* kesilen ve iptal edilen faturalar yevmiye fişlerinin ve e-Defter'in kaynağı olacak.",
+  ),
+)
+
+#let teknik(veri) = teknik-bolum(
+  veri,
+  mimari: [`modules/invoicing`: faturalar (`invoices.js`: liste, faturalanacaklar, ayrıntı, taslak, kesim, iptal, kopya), kaynaklar (`sources.js`: folyo / etkinlik / serbest satırları, varsayılan alıcı, kaynağın yeniden okunması), UBL-TR belgesi (`ubl.js`), PDF ve karekod (`pdf.js`), e-belge göndericisi ve durum sorgusu (`dispatcher.js`), entegratör adaptörleri (`providers/`: ortak sözleşme, hata türü, test entegratörü), mükellef sorgusu ve önbelleği (`taxpayers.js`), ayarlar (`settings.js`), folyo yeniden açma bekçisi (`guards.js`), onay dinleyicisi (`subscribers.js`). Saf kurallar sözleşmede (`contracts/invoicing.js`: satır kurma ve gruplama, toplamlar ve vergi dökümü, alıcı denetimi, TCKN / VKN denetim hanesi, numara biçimi, karekod içeriği, yazıyla tutar, yasal süre, yeniden deneme aralığı). Folyo kapanınca *folyo aktörü* (`billing-worker`) taslağı açar; kesim ve iptalde *muhasebe aktörü* (`accounting-worker`) numarayı cari harekete bağlar (`LedgerEntry.invoiceNumber`) ya da serbest faturanın alacağını yazar / ters kaydeder.],
+  kural: (
+    ("Satırlar", "Folyo kalemleri (iptal edilenler düşülmüş) gelir grubuna göre birleşir, açıklamada hizmet dönemi. Satır tutarı KDV hariç bedel; vergi, kalemin kayıtlı vergi dökümünden (`taxLines`). Dökümü tutarla tutmayan eski kalem faturayı durdurur (`INVOICE_TAX_BREAKDOWN`). Etkinlikte kalemler miktar ve UBL birim koduyla, iptal bedelinde tek satır."),
+    ("Toplamlar", "Belge tutarı = Σ satır tutarı; vergi dökümü kod × oran × muafiyet başına; ödenecek = matrah + vergiler. Veritabanı kısıtı: net = brüt − iskonto, toplam = net + vergi (belgede ve satırda)."),
+    ("Alıcı", "Kişi: TCKN denetim hanesi. Şirket: VKN (şahıs işletmesinde TCKN) ve vergi dairesi. Yabancı kişi: uyruk + pasaport, UBL'de 11111111111. Yurt dışındaki şirket: ünvan + yurt dışı adresi, UBL'de 2222222222, kendi vergi no notta. Adres (ilçe, il, ülke) her alıcıda. Şahıs carisi kişi alıcıdır; tür ve adres aynı alıcının son faturasından gelir."),
+    ("Belge türü", "Kesimde mükellef sorgusu (24 saat önbellek, işlem dışında): kayıtlı ve posta kutusu varsa e-Fatura (TEMELFATURA, alıcının etiketiyle), yoksa e-Arşiv (EARSIVFATURA). Yabancı alıcı sorgulanmaz."),
+    ("Numara", "Seri (3 karakter; e-Fatura ve e-Arşiv ayrı) + yıl + 9 hane. `InvoiceSequence` satırı kesim işleminin sonuna kadar kilitli (INSERT … ON CONFLICT … +1): işlem geri alınırsa sıra da geri alınır, boşluk kalmaz. Fatura günü otelin takvim günü."),
+    ("Kesim", "Kaynak yeniden okunur; taslaktan sonra değiştiyse taslak yenilenir ve kesim `INVOICE_SOURCE_CHANGED` ile durur. Numara, UBL-TR belgesi (SHA-256 özetiyle donar), gönderim sırası, zaman çizelgesi ve olaylar tek işlemde."),
+    ("Gönderim", "Sırası gelen tek SQL'le üstlenilir (`FOR UPDATE SKIP LOCKED`, kısmi index); 4 eşzamanlı, tur başına en çok 200. Geçici hata 1 dk, 5 dk, 15 dk, 1 sa, 4 sa sonra yeniden; kalıcı hata reddedildi. Durum sorgusu gönderimden 30 sn sonra başlar, 4 eşzamanlı, 7 gün sürer; sonuç gelmezse gönderilemedi + uyarı. 5 dakikadan uzun \"gönderiliyor\"da kalan sıraya döner."),
+    ("İptal", "Onay (`INVOICE_CANCEL`, dört göz) beklerken gönderim durur. Karar anında: GİB'e ulaşmamışsa yerelde, e-Arşiv entegratörden, e-Fatura portal referansıyla (GİB'e ulaşmış e-Faturada istekte zorunlu). Gönderiliyor durumundaki faturada iptal istenemez."),
+    ("Faturalama başlangıcı", "Otelin saatiyle gece yarısından itibaren; öncesinde kapanan kaynak kuyruğa girmez, taslağı açılırsa \"önceki sistemde faturalanmış olabilir\" uyarısı çıkar (kesim durmaz). Ayar yokken kuyruk boş. Başlangıç bugünden sonra olamaz."),
+  ),
+  tutarlilik: (
+    "*Kilit sırası:* fatura → kaynak (folyo / etkinlik). Folyo ve etkinlik başına tek geçerli fatura kısmi tekil index'le (`Invoice_folio_active_key`, `Invoice_event_active_key`); aynı folyoya eşzamanlı üç taslak isteği tek taslak döner (testli).",
+    "*Sıra:* eşzamanlı 8 kesim 1–8 arası boşluksuz numara alır (testli).",
+    "*Folyo bekçisi:* kesilmiş ya da iptal onayı bekleyen faturası olan folyo yeniden açılamaz; folyo ve ödeme servisi aynı bekçiyi çağırır.",
+    "*Değişmezlik:* kesilmiş fatura ve UBL belgesi değişmez; düzeltme iptal + yeni taslakla (\"Yeni taslak\" folyo ve etkinlikte kaynaktan yeniden açar, serbest faturada satırları ve alıcıyı kopyalar).",
+    "*Veritabanı kısıtları:* kaynak bağı (folyo / etkinlik / cari), taslakta numara ve e-belge yok, kesilmişte numara / tür / gün / alıcı / e-belge durumu var, numara biçimi, iptal izi, toplamlar, seri biçimi ve ortam (canlı ortam test entegratörüyle olmaz), vergi kodu yalnız 0015 / 0059.",
+  ),
+  olcek: (
+    ("Fatura listesi (ilk sayfa, ay, GİB durumu, taslaklar, derin sayfa 500)", "3–34 ms"),
+    ("Arama: numara başı · alıcı adı · vergi no başı", "66 · 67 · 101 ms"),
+    ("Fatura ayrıntısı", "14 ms"),
+    ("Faturalanacaklar: 30 gün · 1 yıl · süresi geçenler (1 yıl) · etkinlik", "21 · 82 · 89 · 31 ms"),
+    ("Taslak aç · alıcıyı düzenle · kes (mükellef sorgusu + numara + UBL + sıra)", "44 · 31 · 60 ms"),
+    ("PDF (karekodlu)", "106 ms"),
+    ("Gönderici turu: 200 belge (test entegratörü)", "1,03 sn"),
+    ("Durum sorgusu turu: 200 belge", "0,46 sn"),
+  ),
+  olcek-not: [Ölçüm `scripts/perf-invoicing.mjs`: 2.500 kişilik otelin üç yılı — 150.000 kapanmış folyo (300.000 kalem), 123.000 fatura (120.000 kesilmiş, 3.000 taslak), 120.000 satır, 360.000 zaman çizelgesi satırı; e-belge durumları gerçekçi dağılımda (sırada, entegratörde, reddedildi, gönderilemedi, iptal). Ölçümle yapılan iyileştirmeler: faturalanacaklar (1 yıl) 577 → 82 ms ve süresi geçenler 973 → 89 ms (önce yalın kimlik kümesi ve sayım, rezervasyon / misafir / oda yalnız sayfadaki satırlar için; "süresi geçen" için kalem başına en büyük hizmet günü yerine yakın günlerin kalemlerine anti-join); durum sorgusu turu sıralı yerine 4 eşzamanlı (gerçek entegratörde istek başına 100–300 ms). En kötü durum: bir yıl boyunca neredeyse hiç fatura kesilmemiş 30.000 folyoda iki harfli arama 0,29 sn.],
+  test-notu: [Entegrasyon senaryoları gerçek PostgreSQL'de koşar: folyo kapanınca taslak (misafir alıcı), adres eksikken kesimin durması, kesimde e-Arşiv / numara / UBL, gönderim → GİB tamamlandı, PDF; cariye aktarılan folyoda cari alıcı, kayıtlı mükellefe e-Fatura (posta kutusu), numaranın cari harekete bağlanması ve iptalde çözülmesi; e-Arşiv iptali GİB'e ulaşmadan yerelde ve ulaştıktan sonra entegratörden, ret kararında faturanın kesilmiş kalması; yabancı uyruklu kişi (11111111111) ve yurt dışındaki şirket (2222222222, türün carinin sonraki taslağında hatırlanması); geçici hatada artan aralık, hak bitince "gönderilemedi" ve uyarı, tekrar gönderim; GİB reddi; serbest faturanın vadeli alacağı ve iptalin ters kaydı; şahıs carisinde kişi alıcı; etkinlik faturası ve iptal bedeli eşitliği; kaynak değişince taslağın yenilenmesi ve eski sürümle düzenlemenin reddi; eşzamanlı 8 kesimde boşluksuz sıra, aynı folyoya tek taslak; faturalama başlangıcı (kuyruk, otelin gece yarısı sınırı, taslak uyarısı, ayarsız otel); izinler ve otel kapsamı. Birim testleri: satır kurma, vergi dökümü, alıcı denetimi, numara, karekod, yazıyla tutar, UBL öğe sırası ve tutar tutarlılığı.],
+  degistir: (
+    ("Gerçek entegratör", "`providers/` altına `send` / `status` / `cancel` / `checkTaxpayer` uygulayan adaptör (hata: `EdocProviderError` {code, retryable}); `EDOC_PROVIDERS` ve etiketi; ayarda seçilir, canlı ortam açılır. `UBL_TR_CUSTOMIZATION_ID` (TR1.2 / TR1.2.1) entegratörün doğrulayıcısıyla teyit edilmeli."),
+    ("Yeni vergi kodu", "`INVOICE_TAX_CODES` + `InvoiceTaxCode_code` kısıtı (migration); ayar ekranı listeyi sözleşmeden alır."),
+    ("Yeni alıcı türü", "`INVOICE_BUYER_TYPES` + Prisma enum (ayrı migration'da `ADD VALUE`), `invoiceBuyerProblems` / `invoiceBuyerId` / `chooseInvoiceDocumentType`, UBL taraf öğesi, PDF ve taslak formu."),
+    ("Yeni kaynak", "`INVOICE_SOURCES` + `Invoice_source_link` kısıtı; `sources.js`'te satırlar ve varsayılan alıcı, kesimde yeniden okuma (`composeInvoice`); kaynağın servisinde yeniden açma bekçisi."),
+    ("Ham SQL", "Zaman parametreleri `sqlTimestamp` ile, gün parametreleri metin + `::date` (oturumun saat dilimi sınırı kaydırmasın)."),
+  ),
+  devir: (
+    "*48 (genel muhasebe, e-Defter):* kesilen ve iptal edilen faturalar (`invoice.issued` / `invoice.cancelled`) yevmiye fişlerinin kaynağı; e-Defter 48'de.",
+    "*Gerçek entegratör:* adaptör sözleşmesi ve test entegratörü hazır; canlı ortama geçiş seçilen entegratörün adaptörü ve doğrulayıcısıyla.",
+    "*Döviz faturası:* otel parası TRY değilse kesim durur (`INVOICE_CURRENCY`); dövizli fatura (kur, `PricingExchangeRate`) sonra.",
+    "*e-Arşiv e-posta gönderimi:* alıcının e-postası faturada tutulur; alıcıya iletim entegratörün e-posta servisiyle (adaptör).",
+  ),
+)

@@ -146,6 +146,12 @@ const InstrumentsPage = lazy(() => import('./pages/accounting/InstrumentsPage.js
 const VouchersPage = lazy(() => import('./pages/accounting/VouchersPage.jsx').then((m) => ({ default: m.VouchersPage })));
 const VoucherPage = lazy(() => import('./pages/accounting/VouchersPage.jsx').then((m) => ({ default: m.VoucherPage })));
 const AccountingSettingsPage = lazy(() => import('./pages/accounting/AccountingSettingsPage.jsx').then((m) => ({ default: m.AccountingSettingsPage })));
+const InvoicingLayout = lazy(() => import('./pages/invoicing/InvoicingLayout.jsx').then((m) => ({ default: m.InvoicingLayout })));
+const InvoiceablesPage = lazy(() => import('./pages/invoicing/InvoiceablesPage.jsx').then((m) => ({ default: m.InvoiceablesPage })));
+const InvoicesPage = lazy(() => import('./pages/invoicing/InvoicesPage.jsx').then((m) => ({ default: m.InvoicesPage })));
+const InvoiceDraftsPage = lazy(() => import('./pages/invoicing/InvoicesPage.jsx').then((m) => ({ default: m.InvoiceDraftsPage })));
+const InvoicePage = lazy(() => import('./pages/invoicing/InvoicePage.jsx').then((m) => ({ default: m.InvoicePage })));
+const InvoiceSettingsPage = lazy(() => import('./pages/invoicing/InvoiceSettingsPage.jsx').then((m) => ({ default: m.InvoiceSettingsPage })));
 const WarehousesPage = lazy(() => import('./pages/stock/WarehousesPage.jsx').then((m) => ({ default: m.WarehousesPage })));
 const PromotionsLayout = lazy(() => import('./pages/promotions/PromotionsLayout.jsx').then((m) => ({ default: m.PromotionsLayout })));
 const PromotionListTab = lazy(() => import('./pages/promotions/PromotionListTab.jsx').then((m) => ({ default: m.PromotionListTab })));
@@ -776,6 +782,36 @@ export default function App() {
               element={
                 <RequirePermission permission={PERMISSIONS.ACCOUNTING_VIEW}>
                   <AccountPage />
+                </RequirePermission>
+              }
+            />
+            {/* Faturalar (modül 16 çekirdeği + 49): faturalanacaklar, taslaklar, kesilenler, ayarlar; fatura ekranı. */}
+            <Route
+              path="faturalar"
+              element={
+                <RequirePermission permission={PERMISSIONS.INVOICES_VIEW}>
+                  <InvoicingLayout />
+                </RequirePermission>
+              }
+            >
+              <Route index element={<Navigate to="faturalanacaklar" replace />} />
+              <Route path="faturalanacaklar" element={<InvoiceablesPage />} />
+              <Route path="taslaklar" element={<InvoiceDraftsPage />} />
+              <Route path="liste" element={<InvoicesPage />} />
+              <Route
+                path="ayarlar"
+                element={
+                  <RequirePermission permission={PERMISSIONS.INVOICES_SETUP}>
+                    <InvoiceSettingsPage />
+                  </RequirePermission>
+                }
+              />
+            </Route>
+            <Route
+              path="faturalar/:invoiceId"
+              element={
+                <RequirePermission permission={PERMISSIONS.INVOICES_VIEW}>
+                  <InvoicePage />
                 </RequirePermission>
               }
             />

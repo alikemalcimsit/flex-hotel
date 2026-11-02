@@ -104,13 +104,6 @@ enum FolioItemSource {
   REVERSAL
 }
 
-enum InvoiceStatus {
-  DRAFT
-  ISSUED
-  SENT
-  CANCELLED
-}
-
 enum PaymentMethod {
   CASH
   CARD
@@ -226,6 +219,8 @@ enum StaffAlertKind {
   BANQUET
   /// Restoran POS: kasa farkı, uzun açık kalan vardiya / adisyon, odaya yazılamayan adisyon — modül 39.
   POS
+  /// Fatura / e-belge: gönderilemedi, GİB reddetti — modül 16 / 49.
+  INVOICE
 }
 
 /// Rezervasyon fiyatının kaynağı (modül 4): sistem hesabı ya da yetkili
@@ -751,6 +746,9 @@ model Hotel {
   folioRoutes           FolioRoute[]
   roomChargeRuns        RoomChargeRun[]
   invoices              Invoice[]
+  invoiceSettings       InvoiceSettings?
+  invoiceTaxCodes       InvoiceTaxCode[]
+  testTaxpayers         TestTaxpayer[]
   payments              Payment[]
   exchangeRates         ExchangeRate[]
   minibarItems          MinibarItem[]
@@ -1449,6 +1447,7 @@ model Guest {
   lostItems         LostItem[]
   notifications     Notification[]
   waitlistEntries   WaitlistEntry[]
+  invoices          Invoice[]
 
   @@index([phone])
   @@index([email])
@@ -1772,7 +1771,8 @@ model Tax {
   updatedAt  DateTime  @updatedAt
   deletedAt  DateTime?
 
-  hotel Hotel @relation(fields: [hotelId], references: [id])
+  hotel       Hotel            @relation(fields: [hotelId], references: [id])
+  invoiceCode InvoiceTaxCode?
 
   @@index([hotelId, deletedAt])
 }
@@ -2088,25 +2088,6 @@ model RoomChargeRun {
   hotel Hotel @relation(fields: [hotelId], references: [id])
 
   @@unique([hotelId, night])
-}
-
-model Invoice {
-  id           String        @id @default(uuid())
-  hotelId      String
-  folioId      String
-  number       String        @unique
-  issuedAt     DateTime      @default(now())
-  totalAmount  Decimal       @db.Decimal(12, 2)
-  taxAmount    Decimal       @default(0) @db.Decimal(12, 2)
-  currency     String        @default("TRY")
-  status       InvoiceStatus @default(DRAFT)
-  eInvoiceUuid String?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  deletedAt    DateTime?
-
-  hotel Hotel @relation(fields: [hotelId], references: [id])
-  folio Folio @relation(fields: [folioId], references: [id])
 }
 
 /// Ödeme satırı (modül 17). Silinmez: hatalı giriş iptal kaydıyla (`REVERSAL`,
@@ -3649,6 +3630,7 @@ model Event {
   installments         EventInstallment[]
   payments             EventPayment[]
   documents            EventDocument[]
+  invoices             Invoice[]
   menus                EventMenu[]
   purchaseRequestLines PurchaseRequestLine[]
 
@@ -5243,6 +5225,7 @@ model LedgerAccount {
   eventClient       EventClient?        @relation(fields: [eventClientId], references: [id], onDelete: Restrict)
   entries           LedgerEntry[]
   vouchers          AccountingVoucher[]
+  invoices          Invoice[]
   instruments       Instrument[]        @relation("InstrumentAccount")
   endorsements      Instrument[]        @relation("InstrumentEndorsee")
   treasuryMovements TreasuryMovement[]
@@ -5267,6 +5250,8 @@ model LedgerEntry {
   credit       Decimal      @default(0) @db.Decimal(14, 2)
   description  String
   reference    String?
+  /// Bağlı faturanın numarası (modül 16 / 49): folyo aktarımı ve etkinlik bedeli alacağına fatura kesilince yazılır, iptalde silinir.
+  invoiceNumber String?
   sourceType   LedgerSource
   sourceId     String
   /// Tekrar işleme anahtarı (otel başına tekil): "PAYMENT:<id>", "GOODS_RECEIPT:<id>", "EVENT:<id>:<n>"…
@@ -5525,4 +5510,288 @@ model InstrumentMovement {
   instrument Instrument @relation(fields: [instrumentId], references: [id], onDelete: Restrict)
 
   @@index([instrumentId, createdAt])
+}
+
+/* ─────────────── Fatura ve e-belge (modül 16 çekirdeği + 49) ─────────────── */
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  CANCEL_PENDING
+  CANCELLED
+}
+
+/// Faturanın kaynağı: kapanmış folyo, gerçekleşmiş / iptal bedelli etkinlik, cariye serbest fatura.
+enum InvoiceSource {
+  FOLIO
+  EVENT
+  MANUAL
+}
+
+/// Kesimde alıcının GİB kaydına göre: kayıtlı mükellef → e-Fatura, değilse e-Arşiv.
+enum InvoiceDocumentType {
+  E_FATURA
+  E_ARSIV
+}
+
+enum InvoiceBuyerType {
+  PERSON
+  COMPANY
+  FOREIGN
+  /// Yurt dışındaki tüzel kişi (tur operatörü): GİB kimliği 2222222222, e-Arşiv.
+  FOREIGN_COMPANY
+}
+
+/// e-belgenin entegratör / GİB yolculuğu.
+enum EDocumentState {
+  QUEUED
+  SENDING
+  SENT
+  DELIVERED
+  REJECTED
+  FAILED
+  CANCELLED
+}
+
+/// Test ortamı mükellefinin davranışı (GİB benzetimi).
+enum TestTaxpayerBehavior {
+  ACCEPT
+  REJECT
+  NO_MAILBOX
+  UNAVAILABLE
+}
+
+/// Fatura (modül 16 çekirdeği + 49). Taslak düzenlenir; kesimde numara (seri + yıl + 9 hane), belge türü
+/// (e-Fatura / e-Arşiv), alıcı ve UBL belgesi donar — kesilmiş fatura değişmez, iptal onay kuyruğundan.
+/// Folyo ve etkinlik başına en fazla bir geçerli (iptal edilmemiş) fatura: kısmi tekil index'ler migration'da.
+/// Alıcının bütün bilgisi `buyer`da (JSON); liste ve arama için ad ve vergi no ayrıca.
+model Invoice {
+  id                String               @id @default(uuid())
+  hotelId           String
+  source            InvoiceSource
+  status            InvoiceStatus        @default(DRAFT)
+  /// ETTN (evrensel tekil tanımlama numarası): taslakta verilir, kesimde değişmez.
+  uuid              String               @unique @default(uuid())
+  number            String?
+  documentType      InvoiceDocumentType?
+  folioId           String?
+  eventId           String?
+  ledgerAccountId   String?
+  guestId           String?
+  currency          String
+  exchangeRate      Decimal?             @db.Decimal(12, 6)
+  issueDate         DateTime?            @db.Date
+  issuedAt          DateTime?
+  issuedBy          String?
+  /// Hizmet dönemi (yasal 7 günlük süre ve faturadaki dönem notu).
+  serviceFrom       DateTime?            @db.Date
+  serviceTo         DateTime?            @db.Date
+  buyerType         InvoiceBuyerType?
+  buyerName         String?
+  buyerTaxNumber    String?
+  buyer             Json                 @default("{}")
+  note              String?
+  grossTotal        Decimal              @default(0) @db.Decimal(14, 2)
+  discountTotal     Decimal              @default(0) @db.Decimal(14, 2)
+  netTotal          Decimal              @default(0) @db.Decimal(14, 2)
+  taxTotal          Decimal              @default(0) @db.Decimal(14, 2)
+  total             Decimal              @default(0) @db.Decimal(14, 2)
+  /// Vergi dökümü (kod × oran: matrah, tutar, muafiyet kodu).
+  taxes             Json                 @default("[]")
+  edocState         EDocumentState?
+  edocProvider      String?
+  edocEnvironment   String?
+  edocAttempts      Int                  @default(0)
+  edocNextAttemptAt DateTime?
+  edocLockedAt      DateTime?
+  edocSentAt        DateTime?
+  edocCompletedAt   DateTime?
+  edocCheckedAt     DateTime?
+  edocChecks        Int                  @default(0)
+  edocProviderRef   String?
+  edocStatusCode    String?
+  edocMessage       String?
+  /// e-Faturada alıcının posta kutusu etiketi (urn:mail:…).
+  receiverAlias     String?
+  cancelReason      String?
+  /// e-Faturada GİB portalındaki iptal / itiraz referansı.
+  cancelReference   String?
+  cancelRequestedAt DateTime?
+  cancelRequestedBy String?
+  cancelApprovalId  String?
+  cancelledAt       DateTime?
+  cancelledBy       String?
+  /// LOCAL (GİB'e ulaşmadan), INTEGRATOR (e-Arşiv iptali), PORTAL (e-Fatura, GİB portalında).
+  cancelMethod      String?
+  createdBy         String
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  hotel         Hotel            @relation(fields: [hotelId], references: [id])
+  folio         Folio?           @relation(fields: [folioId], references: [id], onDelete: Restrict)
+  event         Event?           @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  ledgerAccount LedgerAccount?   @relation(fields: [ledgerAccountId], references: [id], onDelete: Restrict)
+  guest         Guest?           @relation(fields: [guestId], references: [id], onDelete: Restrict)
+  lines         InvoiceLine[]
+  document      InvoiceDocument?
+  logs          InvoiceLog[]
+
+  @@unique([hotelId, number])
+  // Fatura listesi: kesim günü (yeniden eskiye), aynı gün kesim anı.
+  @@index([hotelId, issueDate(sort: Desc), issuedAt(sort: Desc), id])
+  // Taslaklar ve durum süzgeci.
+  @@index([hotelId, status, createdAt])
+  // GİB durumu süzgeci.
+  @@index([hotelId, edocState, issueDate])
+  @@index([hotelId, buyerTaxNumber])
+  @@index([folioId])
+  @@index([eventId])
+  @@index([ledgerAccountId, issueDate])
+  // Misafirin önceki faturasından alıcı bilgisi.
+  @@index([guestId, issuedAt])
+  @@index([buyerName(ops: raw("gin_trgm_ops"))], map: "Invoice_buyerName_trgm_idx", type: Gin)
+}
+
+/// Fatura satırı: folyo faturasında gelir grubu, etkinlikte kalem, serbest faturada girilen satır.
+/// Eksi satır yoktur (ters kayıt grubun içinde, indirim satır iskontosu).
+model InvoiceLine {
+  id             String    @id @default(uuid())
+  hotelId        String
+  invoiceId      String
+  sortOrder      Int
+  description    String
+  quantity       Decimal   @db.Decimal(12, 2)
+  unitCode       String
+  unitPrice      Decimal   @db.Decimal(14, 2)
+  grossAmount    Decimal   @db.Decimal(14, 2)
+  discountAmount Decimal   @default(0) @db.Decimal(14, 2)
+  netAmount      Decimal   @db.Decimal(14, 2)
+  taxAmount      Decimal   @db.Decimal(14, 2)
+  total          Decimal   @db.Decimal(14, 2)
+  taxes          Json      @default("[]")
+  serviceFrom    DateTime? @db.Date
+  serviceTo      DateTime? @db.Date
+  /// Elle girilen satır (serbest fatura, iptal bedeli): vergi kategorisi ve birim tutar (dahil vergiler içinde).
+  taxCategory    String?
+  unitAmount     Decimal?  @db.Decimal(14, 2)
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId, sortOrder])
+}
+
+/// Kesimde donan UBL-TR belgesi (gönderim ve tekrar gönderim bunu kullanır).
+model InvoiceDocument {
+  invoiceId String   @id
+  hotelId   String
+  xml       String
+  sha256    String
+  createdAt DateTime @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+/// Faturanın zaman çizelgesi: kesim, sıraya girme, gönderim, GİB cevabı, yeniden deneme, iptal.
+model InvoiceLog {
+  id        String          @id @default(uuid())
+  hotelId   String
+  invoiceId String
+  kind      String
+  state     EDocumentState?
+  code      String?
+  message   String?
+  actor     String
+  createdAt DateTime        @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId, createdAt])
+}
+
+/// Fatura ayarları: satıcı (otelin işletmesi), seriler, entegratör ve ortam.
+model InvoiceSettings {
+  hotelId         String   @id
+  legalName       String
+  taxNumber       String
+  taxOffice       String
+  mersisNo        String?
+  tradeRegistryNo String?
+  street          String
+  district        String
+  city            String
+  postalCode      String?
+  country         String   @default("Türkiye")
+  phone           String?
+  email           String?
+  website         String?
+  eFaturaPrefix   String
+  eArsivPrefix    String
+  provider        String   @default("TEST")
+  environment     String   @default("TEST")
+  senderAlias     String?
+  /// Faturalama başlangıcı (otelin takvim günü): öncesinde kapanan folyo / etkinlik önceki sistemde faturalanmış
+  /// sayılır, "faturalanacaklar"a girmez.
+  startDate       DateTime @db.Date
+  /// Folyo kapanınca fatura taslağı açılır (folyo aktörü).
+  autoDraft       Boolean  @default(true)
+  footerNote      String?
+  bankInfo        String?
+  updatedBy       String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+}
+
+/// Otelin vergi satırı → GİB vergi kodu (KDV 0015, konaklama vergisi 0059).
+model InvoiceTaxCode {
+  hotelId   String
+  taxId     String   @unique
+  code      String
+  updatedAt DateTime @updatedAt
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+  tax   Tax   @relation(fields: [taxId], references: [id], onDelete: Cascade)
+
+  @@id([hotelId, taxId])
+}
+
+/// Seri × yıl sırası (kesimde satır kilidi altında artar; boşluk bırakmaz).
+model InvoiceSequence {
+  hotelId String
+  prefix  String
+  year    Int
+  last    Int
+
+  @@id([hotelId, prefix, year])
+}
+
+/// Test ortamının "kayıtlı kullanıcı listesi": burada olan vergi no e-Fatura mükellefi sayılır.
+model TestTaxpayer {
+  id        String               @id @default(uuid())
+  hotelId   String
+  taxNumber String
+  title     String
+  alias     String
+  behavior  TestTaxpayerBehavior @default(ACCEPT)
+  createdBy String
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+
+  @@unique([hotelId, taxNumber])
+}
+
+/// Mükellef sorgusunun önbelleği (entegratör başına; süresi `TAXPAYER_CHECK_TTL_MS`).
+model TaxpayerLookup {
+  hotelId    String
+  provider   String
+  taxNumber  String
+  registered Boolean
+  title      String?
+  aliases    String[] @default([])
+  checkedAt  DateTime
+
+  @@id([hotelId, provider, taxNumber])
 }
