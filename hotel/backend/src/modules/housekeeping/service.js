@@ -174,6 +174,11 @@ export async function listTasks(hotelId, query) {
   if (query.roomId) where.roomId = query.roomId;
   if (query.floor !== undefined) where.room = { floor: query.floor };
   if (query.onlyIssues) where.issueNote = { not: null };
+  // Kuyruk görünümleri sunucuda süzülür (görevlinin işleri, havuz, kontrol bekleyenler): ilk sayfanın dışında
+  // kalan iş tarayıcıda ayıklanırken kaybolmasın.
+  if (query.openOnly) where.status = { in: [...HOUSEKEEPING_TASK_OPEN_STATUSES] };
+  if (query.unassigned) where.assignedToId = null;
+  if (query.awaitingInspection) Object.assign(where, { status: 'DONE', type: { in: [...HOUSEKEEPING_CLEANING_TYPES] }, inspectionPassed: null });
 
   const [rows, total] = await Promise.all([
     prisma.housekeepingTask.findMany({
@@ -231,6 +236,7 @@ export async function floorMap(hotelId) {
 
   const [rooms, openTasks, arrivals, departures, blocks] = await Promise.all([
     prisma.room.findMany({
+      where: { hotelId },
       select: { id: true, number: true, floor: true, occupancy: true, housekeepingStatus: true },
     }),
     prisma.housekeepingTask.findMany({
@@ -255,19 +261,20 @@ export async function floorMap(hotelId) {
     }),
   ]);
 
-  const openTaskByRoom = new Map(
-    openTasks.map((task) => [
-      task.roomId,
-      {
-        id: task.id,
-        type: task.type,
-        status: task.status,
-        priority: task.priority,
-        assignedTo: task.assignedTo ?? null,
-        issue: Boolean(task.issueNote),
-      },
-    ]),
-  );
+  // Odada hem temizlik hem misafir isteği görevi açıksa kutu temizliği gösterir (odanın rengini o sürer).
+  const openTaskByRoom = new Map();
+  for (const task of openTasks) {
+    const current = openTaskByRoom.get(task.roomId);
+    if (current && (isCleaningTask(current.type) || !isCleaningTask(task.type))) continue;
+    openTaskByRoom.set(task.roomId, {
+      id: task.id,
+      type: task.type,
+      status: task.status,
+      priority: task.priority,
+      assignedTo: task.assignedTo ?? null,
+      issue: Boolean(task.issueNote),
+    });
+  }
 
   return {
     date: toIsoDay(businessDate),
@@ -400,13 +407,14 @@ export async function createTask(hotelId, input) {
 
 /**
  * Sistem kaynaklı temizlik görevi (aktör ve zamanlayıcı) — **tekilleştirir**:
- * odanın açık temizlik görevi varsa yenisini açmaz, olanı döndürür. Aynı olay
+ * odanın açık temizlik görevi varsa yenisini açmaz, olanı döndürür (açık
+ * konaklama temizliği varken gelen çıkış temizliği onu çıkış temizliğine yükseltir). Aynı olay
  * iki yoldan gelirse (çıkış olayı + oda "kirli" haberi) ikinci yol sessizce
  * "zaten var" okur.
  *
  * @param {string} hotelId
  * @param {{ roomId: string, type: string, priority?: number, notes?: string | null }} input
- * @returns {Promise<{ created: boolean, task: object }>}
+ * @returns {Promise<{ created: boolean, upgraded?: boolean, task: object }>}
  */
 export async function createSystemCleaningTask(hotelId, input) {
   const businessDate = await getBusinessDate(hotelId);
@@ -415,6 +423,26 @@ export async function createSystemCleaningTask(hotelId, input) {
     const room = await tx.room.findFirst({ where: { id: input.roomId, hotelId }, select: { id: true, number: true } });
 
     const existing = await openCleaningTask(tx, hotelId, input.roomId);
+    // Erken çıkış: sabah açılmış konaklama temizliği çıkış temizliğine yükselir (oda satışa dönecek; çıkış
+    // temizliği daha kapsamlı ve öncelikli). Oda kilidi görevin diğer geçişleriyle sırayı korur.
+    if (existing && input.type === 'CHECKOUT_CLEAN' && existing.type === 'STAYOVER') {
+      await lockHousekeepingTasks(tx, hotelId, [existing.id]);
+      const upgraded = await tx.housekeepingTask.update({
+        where: { id: existing.id },
+        data: { type: 'CHECKOUT_CLEAN', priority: Math.min(existing.priority, input.priority ?? HOUSEKEEPING_CHECKOUT_PRIORITY) },
+        include: TASK_INCLUDE,
+      });
+      await recordAudit(tx, {
+        hotelId,
+        entity: 'HousekeepingTask',
+        entityId: existing.id,
+        action: 'UPDATE',
+        before: taskSnapshot(existing),
+        after: taskSnapshot(upgraded),
+      });
+      await stage('housekeeping.task.changed', { hotelId, taskId: existing.id, roomId: input.roomId, changedFields: ['type', 'priority'] });
+      return { created: false, upgraded: true, task: toTaskDto(upgraded, { businessDate }) };
+    }
     if (existing) return { created: false, task: toTaskDto(existing, { businessDate }) };
 
     const created = await insertTask(tx, stage, hotelId, room, {

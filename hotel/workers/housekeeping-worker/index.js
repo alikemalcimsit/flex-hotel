@@ -32,7 +32,7 @@ function markBusinessErrorsFinal(error) {
 class HousekeepingWorker extends BaseWorker {
   /**
    * @param {{
-   *   createCleaningTask: (hotelId: string, input: { roomId: string, type: string, priority?: number, notes?: string | null }) => Promise<{ created: boolean, task: { room?: { number: string } } }>,
+   *   createCleaningTask: (hotelId: string, input: { roomId: string, type: string, priority?: number, notes?: string | null }) => Promise<{ created: boolean, upgraded?: boolean, task: { room?: { number: string } } }>,
    *   createRequestTask: (hotelId: string, input: { requestId: string, roomId: string, priority: string }) => Promise<{ created: boolean, task: object | null }>,
    *   cancelOpenCheckoutTasks: (hotelId: string, roomId: string, reason: string) => Promise<{ cancelled: number }>,
    *   applySystemRoomState: (hotelId: string, roomId: string, state: { housekeepingStatus?: string }, reason: string) => Promise<unknown>,
@@ -56,6 +56,7 @@ class HousekeepingWorker extends BaseWorker {
           } catch (error) {
             throw markBusinessErrorsFinal(error);
           }
+          if (result.upgraded) return { message: 'Açık konaklama temizliği çıkış temizliğine çevrildi (erken çıkış)' };
           return result.created
             ? { message: 'Çıkış temizliği görevi açıldı', meta: { taskId: result.task.id ?? null } }
             : { message: 'Odanın açık temizlik görevi zaten var, yenisi açılmadı' };

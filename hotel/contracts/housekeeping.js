@@ -198,6 +198,17 @@ export const housekeepingTaskListQuerySchema = paginationQuerySchema.extend({
   floor: optionalQueryInt({ label: 'Kat', min: -5, max: 200 }),
   /** Yalnızca sorun bildirilen görevler. */
   onlyIssues: queryBoolean.optional(),
+  /** Yalnızca açık görevler (bekleyen + temizlenen): görevlinin listesi ve havuz. */
+  openOnly: queryBoolean.optional(),
+  /** Yalnızca sahipsiz görevler (havuz). */
+  unassigned: queryBoolean.optional(),
+  /** Yalnızca kontrol bekleyen temizlik görevleri (bitmiş, henüz kontrol edilmemiş). */
+  awaitingInspection: queryBoolean.optional(),
+}).superRefine((value, ctx) => {
+  if ([value.status, value.openOnly, value.awaitingInspection].filter(Boolean).length > 1) {
+    ctx.addIssue({ code: 'custom', path: ['status'], message: 'Durum, "açık" ve "kontrol bekleyen" süzgeçlerinden yalnız biri seçilir' });
+  }
+  if (value.unassigned && value.assignedToId) ctx.addIssue({ code: 'custom', path: ['assignedToId'], message: 'Görevli ve "sahipsiz" birlikte seçilemez' });
 });
 
 /* ─────────────── Oda durum haritası ─────────────── */

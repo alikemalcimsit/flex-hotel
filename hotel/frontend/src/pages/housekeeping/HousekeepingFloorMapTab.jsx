@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { HOUSEKEEPING_STATUS_LABELS, ROOM_OCCUPANCY_LABELS } from '@hotelos/hotel-contracts';
-import { Badge, Button, EmptyState, Icon, Spinner } from '@hotelos/ui';
+import { Badge, Button, EmptyState, Icon } from '@hotelos/ui';
 import { Modal } from '../../components/Modal.jsx';
+import { QueryFallback } from '../../components/QueryFallback.jsx';
 import { HOUSEKEEPING_TONES, HousekeepingBadge, OccupancyBadge } from '../../components/RoomStateBadges.jsx';
 import { api } from '../../lib/api.js';
 import { priorityLabel, taskStatusLabel, taskTypeLabel } from '../../lib/housekeeping.js';
@@ -38,8 +39,9 @@ export function HousekeepingFloorMapTab() {
     placeholderData: (previous) => previous,
   });
 
-  if (map.isPending) return <Spinner className="py-8" />;
-  const floors = map.data?.floors ?? [];
+  // Yükleniyor ve hata ayrı: hata "oda yok" diye okunmasın.
+  if (!map.data) return <QueryFallback query={map} errorTitle="Kat haritası yüklenemedi" />;
+  const floors = map.data.floors;
 
   return (
     <div className="flex flex-col gap-5">

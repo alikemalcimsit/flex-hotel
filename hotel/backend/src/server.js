@@ -17,6 +17,7 @@ import { webchatOrigins } from './modules/channels/service.js';
 import { registerWebchatNamespace, setWebchatTransport, webchatSessionSecret } from './modules/channels/webchat.js';
 import { startConciergeJobs } from './modules/concierge/jobs.js';
 import { startNotificationJobs } from './modules/notifications/jobs.js';
+import { startInvoiceJobs } from './modules/invoicing/dispatcher.js';
 import { startLostItemJobs } from './modules/lost-items/jobs.js';
 import { startReportJobs } from './modules/reports/jobs.js';
 import { startChannelManagerJobs } from './modules/channel-manager/jobs.js';
@@ -87,6 +88,8 @@ app.decorate('io', io);
 // Bildirim göndericisi ve zamanlanmış işler yalnızca sunucu sürecinde çalışır
 // (testler ve betikler `buildApp` ile açıp kapatır, arka plan işi başlatmaz).
 const stopNotificationJobs = startNotificationJobs(app.log);
+// e-belge gönderimi, GİB durum sorgusu, takılı gönderim kurtarma (modül 49).
+const stopInvoiceJobs = startInvoiceJobs(app.log);
 const stopMaintenanceJobs = startMaintenanceJobs(app.log);
 const stopApprovalJobs = startApprovalJobs(app.log);
 const stopFolioJobs = startFolioJobs(app.log);
@@ -105,6 +108,7 @@ const stopPosJobs = startPosJobs(app.log);
 // süreç yöneticisi (systemd) onu zorla öldürene kadar asılı kalır.
 app.addHook('onClose', async () => {
   stopNotificationJobs();
+  stopInvoiceJobs();
   stopMaintenanceJobs();
   stopApprovalJobs();
   stopFolioJobs();

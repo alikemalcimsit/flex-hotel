@@ -175,6 +175,15 @@ export const PERMISSIONS = Object.freeze({
   /** Kasa / banka tanımları, yöntem eşlemesi, başlangıç günü ve onay eşiği, açılış bakiyeleri, fiş iptali. */
   ACCOUNTING_SETUP: 'accounting.setup',
 
+  /** Fatura ve e-belge (modül 16 çekirdeği + 49): faturalanacaklar, faturalar, PDF, GİB durumu. */
+  INVOICES_VIEW: 'invoices.view',
+  /** Folyo / etkinlik faturası: taslak aç, alıcıyı düzenle, kes; e-belgeyi tekrar gönder. */
+  INVOICES_ISSUE: 'invoices.issue',
+  /** Cariye serbest fatura; fatura iptali istemek (onay kuyruğu). */
+  INVOICES_MANAGE: 'invoices.manage',
+  /** Fatura ayarları: satıcı bilgileri, seriler, faturalama başlangıcı, vergi kodları, entegratör ve test mükellefleri. */
+  INVOICES_SETUP: 'invoices.setup',
+
   /** Kanal yönetimi (modül 33): kanallar, eşleştirme, senkron logu, kanal rezervasyonları. */
   CHANNEL_MANAGER_VIEW: 'channel_manager.view',
   /** Kanal bağlamak / düzenlemek / senkrona almak, eşleştirme, stop-sale, elle senkron. */
@@ -266,6 +275,10 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.ACCOUNTING_VIEW]: 'Cariler ve ekstre, kasa / banka hareketleri, çek / senet portföyü ve fişleri görüntüle',
   [PERMISSIONS.ACCOUNTING_MANAGE]: 'Tahsilat / ödeme / virman fişi gir, çek / senet işlemleri, cari kartı aç ve düzenle',
   [PERMISSIONS.ACCOUNTING_SETUP]: 'Kasa / banka tanımları, yöntem eşlemesi, başlangıç günü ve onay eşiği, açılış bakiyesi, fiş iptali',
+  [PERMISSIONS.INVOICES_VIEW]: "Faturalanacakları, faturaları, PDF'leri ve GİB durumunu görüntüle",
+  [PERMISSIONS.INVOICES_ISSUE]: 'Folyo / etkinlik faturası kes (taslak, alıcı, kesim), e-belgeyi tekrar gönder',
+  [PERMISSIONS.INVOICES_MANAGE]: 'Cariye serbest fatura kes, fatura iptali iste (onay kuyruğu)',
+  [PERMISSIONS.INVOICES_SETUP]: 'Fatura ayarları: satıcı bilgileri, seriler, faturalama başlangıcı, vergi kodları, entegratör, test mükellefleri',
   [PERMISSIONS.CHANNEL_MANAGER_VIEW]: 'Kanalları, senkron logunu ve kanal rezervasyonlarını görüntüle',
   [PERMISSIONS.CHANNEL_MANAGER_MANAGE]: 'Kanal bağla, eşleştir, stop-sale koy, elle senkronla',
   [PERMISSIONS.ACTORS_VIEW]: 'Aktör panelini görüntüle',
@@ -367,6 +380,7 @@ export const PERMISSION_GROUPS = Object.freeze([
   },
   { key: 'stock', label: 'Stok ve depo', permissions: [PERMISSIONS.STOCK_VIEW, PERMISSIONS.STOCK_MANAGE] },
   { key: 'accounting', label: 'Ön muhasebe', permissions: [PERMISSIONS.ACCOUNTING_VIEW, PERMISSIONS.ACCOUNTING_MANAGE, PERMISSIONS.ACCOUNTING_SETUP] },
+  { key: 'invoices', label: 'Fatura ve e-belge', permissions: [PERMISSIONS.INVOICES_VIEW, PERMISSIONS.INVOICES_ISSUE, PERMISSIONS.INVOICES_MANAGE, PERMISSIONS.INVOICES_SETUP] },
   {
     key: 'agency_bonus',
     label: 'Acente primi',
@@ -492,6 +506,11 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.ACCOUNTING_VIEW,
     PERMISSIONS.ACCOUNTING_MANAGE,
     PERMISSIONS.ACCOUNTING_SETUP,
+    // Fatura müdürün: ayarlar ve serbest fatura dahil; iptali başka bir yetkili onaylar.
+    PERMISSIONS.INVOICES_VIEW,
+    PERMISSIONS.INVOICES_ISSUE,
+    PERMISSIONS.INVOICES_MANAGE,
+    PERMISSIONS.INVOICES_SETUP,
   ]),
   FRONT_DESK: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,
@@ -525,6 +544,9 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     // Resepsiyon salon takvimini görür (bugün balo salonunda ne var) ve depozito alabilir.
     PERMISSIONS.BANQUET_VIEW,
     PERMISSIONS.BANQUET_PAYMENT,
+    // Çıkışta folyonun faturasını resepsiyon keser (alıcı bilgisi masada alınır); serbest fatura ve iptal muhasebede.
+    PERMISSIONS.INVOICES_VIEW,
+    PERMISSIONS.INVOICES_ISSUE,
   ]),
   HOUSEKEEPING: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,
@@ -594,6 +616,10 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     // Cari, kasa, banka, çek / senet ve fişler muhasebenin işi; kasa / banka tanımı, açılış bakiyesi ve fiş iptali müdürün.
     PERMISSIONS.ACCOUNTING_VIEW,
     PERMISSIONS.ACCOUNTING_MANAGE,
+    // Faturalar ve e-belge takibi muhasebenin işi; fatura ayarları müdürün.
+    PERMISSIONS.INVOICES_VIEW,
+    PERMISSIONS.INVOICES_ISSUE,
+    PERMISSIONS.INVOICES_MANAGE,
   ]),
   FNB: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,

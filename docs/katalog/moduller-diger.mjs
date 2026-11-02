@@ -1,5 +1,5 @@
 /**
- * Katalog kaydı — modül 1–43 (45 `moduller.mjs` içinde). Alanlar için bkz. `moduller.mjs` başı.
+ * Katalog kaydı — modül 1–49 (45 `moduller.mjs` içinde). Alanlar için bkz. `moduller.mjs` başı.
  * `bekle` verilmeyen ekranda sayfa, yükleniyor göstergeleri kaybolunca hazır sayılır.
  */
 
@@ -534,7 +534,7 @@ export const DIGER = [
     rotalar: [/^\/accounting\//],
     migrationlar: ['20261030090000_accounting'],
     izinGruplari: ['accounting'],
-    olaylar: ['accounting.', 'invoice.'],
+    olaylar: ['accounting.', 'invoice.issued', 'invoice.cancelled'],
     ekranlar: [
       { dosya: '47-cariler', yol: '/muhasebe/cariler', alan: 'tam', yukseklik: 980, bekle: 'Alacağımız|Borcumuz', aciklama: 'Cariler: acente, tedarikçi, şirket ve etkinlik müşterisi; vade, son hareket ve bakiye — (B) cari bize borçlu, (A) biz borçluyuz. Üstte toplam alacak ve borç.' },
       { dosya: '47-cari', bul: ilk('/accounting/accounts?sort=balance&type=AGENCY&page=1&pageSize=1', '/muhasebe/cariler/'), yukseklik: 1250, bekle: 'Ekstre|Devir', aciklama: 'Cari kartı: bakiye, FIFO yaşlandırma (vadesine göre dilimler), açık çekler ve ekstre — devir, belge sırasıyla hareketler, vade ve yürüyen bakiye.' },
@@ -544,6 +544,29 @@ export const DIGER = [
       { dosya: '47-fisler', yol: '/muhasebe/fisler', yukseklik: 900, bekle: 'Tahsilat fişi', aciklama: 'Fişler: tahsilat, ödeme, virman, giriş / çıkış ve açılış; eşik üstü ödeme fişi onay bekliyor.' },
       { dosya: '47-fis-penceresi', yol: '/muhasebe/fisler', bekle: 'Tahsilat fişi', eylem: "[...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Tahsilat')?.click(); await new Promise((r) => setTimeout(r, 900));", sonraBekle: 'Kasa / banka', yukseklik: 900, aciklama: 'Tahsilat fişi: cari seçimi, kasa / banka satırları ve alınan çek / senet (numara, banka, vade); toplam canlı.' },
       { dosya: '47-ayarlar', yol: '/muhasebe/ayarlar', yukseklik: 1100, bekle: 'Tahsilat eşlemesi', aciklama: 'Ayarlar: başlangıç günü ve ödeme fişi onay eşiği; ön büro / etkinlik / restoran tahsilatının yöntem ve döviz başına hangi kasaya / bankaya gireceği; eksik kayıtları eşitleme.' },
+    ],
+  },
+  {
+    numara: 49,
+    slug: 'e-fatura',
+    ad: 'Fatura, e-Fatura ve e-Arşiv',
+    slogan: 'Kapanan folyo ve gerçekleşen etkinlik kendiliğinden faturaya hazırlanır; alıcı GİB mükellefiyse e-Fatura, değilse e-Arşiv olarak kesilir, entegratöre gider, sonucu fatura ekranına düşer.',
+    arka: [`${B}invoicing`],
+    on: [`${F}invoicing`, 'hotel/frontend/src/lib/invoicing.js'],
+    sozlesme: [`${C}invoicing.js`],
+    betik: ['hotel/backend/scripts/demo-invoicing.mjs', 'hotel/backend/scripts/perf-invoicing.mjs'],
+    rotalar: [/^\/invoices/],
+    migrationlar: ['20261101090000_invoicing', '20261101100000_invoice_alert_kind', '20261101110000_ledger_invoice_number'],
+    izinGruplari: ['invoices'],
+    olaylar: ['invoice.'],
+    ekranlar: [
+      { dosya: '49-faturalanacaklar', yol: '/faturalar/faturalanacaklar', alan: 'tam', yukseklik: 900, bekle: 'Yasal süre', aciklama: 'Faturalanacaklar: kapanmış ve faturası kesilmemiş folyolar (ya da faturaya hazır etkinlikler); 7 günlük yasal sürenin kalanı, süresi geçenler kırmızı; satırdan taslağa.' },
+      { dosya: '49-taslak', bul: "const page = await api('/invoices/invoiceables?kind=FOLIO&days=30&overdueOnly=true&page=1&pageSize=1'); const row = page.items[0]; return row?.draftId ? '/faturalar/' + row.draftId : null;", yukseklik: 1900, bekle: 'Alıcı ve taslak', aciklama: 'Taslak (folyo aktörü kapanışta açtı): alıcı (misafir, şirket, yabancı uyruklu), satırlar gelir grubuna göre ve vergi dökümü. "Kesmeden önce" kesimi durduran eksikleri sayar (kimlik no, adres); bu taslakta yasal süre geçmiş, uyarı kırmızı.' },
+      { dosya: '49-liste', yol: '/faturalar/liste', yukseklik: 900, bekle: 'GİB durumu', aciklama: 'Kesilen faturalar: numara, tür (e-Fatura / e-Arşiv), alıcı, tutar ve GİB durumu (sırada, entegratörde, tamamlandı, reddedildi, gönderilemedi); süzgeç ve arama.' },
+      { dosya: '49-e-fatura', bul: ilk('/invoices?documentType=E_FATURA&edocState=DELIVERED&source=FOLIO&page=1&pageSize=1', '/faturalar/'), yukseklik: 1250, bekle: 'Zaman çizelgesi', aciklama: 'Kesilmiş e-Fatura: numara, ETTN, alıcının posta kutusu, satırlar ve vergi dökümü (KDV, konaklama vergisi); e-belge durumu ve zaman çizelgesi; PDF ve iptal.' },
+      { dosya: '49-reddedildi', bul: ilk('/invoices?edocState=REJECTED&page=1&pageSize=1', '/faturalar/'), yukseklik: 1000, bekle: 'Zaman çizelgesi', aciklama: 'GİB reddi: sebebi e-belge kutusunda ve zaman çizelgesinde; personele uyarı açılır. Düzeltip tekrar gönderilir ya da iptal edilip yeniden kesilir.' },
+      { dosya: '49-serbest-fatura', yol: '/faturalar/liste', bekle: 'GİB durumu', eylem: "[...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Serbest fatura')?.click(); await new Promise((r) => setTimeout(r, 900));", sonraBekle: 'Alıcı cari', yukseklik: 900, aciklama: 'Serbest fatura: folyo ya da etkinliğe bağlı olmayan hizmet cariye faturalanır (salon kirası, kurumsal anlaşma); satırlar vergi kategorisiyle, toplam canlı. Kesildiğinde carinin alacağı olur.' },
+      { dosya: '49-ayarlar', yol: '/faturalar/ayarlar', bekle: 'Vergi kodları', eylem: "const target = [...document.querySelectorAll('h2, h3, div, span')].find((n) => n.childElementCount === 0 && n.textContent.trim() === 'Seriler, başlangıç ve taslak'); if (target) { target.style.scrollMarginTop = '160px'; target.scrollIntoView({ block: 'start' }); } await new Promise((r) => setTimeout(r, 700));", yukseklik: 1500, aciklama: 'Ayarlar (satıcı bilgilerinin altında): faturalama başlangıcı, e-Fatura ve e-Arşiv serileri, otomatik taslak; entegratör ve ortam; otelin vergilerinin GİB koduna eşlenmesi (KDV 0015, konaklama vergisi 0059); test ortamı mükellefleri.' },
     ],
   },
 ];

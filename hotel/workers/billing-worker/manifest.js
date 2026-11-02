@@ -20,7 +20,8 @@ export const billingWorkerManifest = defineActor({
     'harcamalarını, teslim edilen çamaşırı folyoya yazar (çıkmış misafirin açık folyosuna geç kalem). ' +
     'Girişte alınan nakit / havale teminatını ödeme olarak işler. Giriş, çıkış ya da ' +
     'iptal geri alınınca kendi işlediği ücreti ve teminatı ters kayıtla düşer. Çıkmış misafirin folyosu ödemeyle ' +
-    'sıfırlanınca folyoyu kapatır (fatura). Kapalıyken bu işler manuel görev olarak düşer.',
+    'sıfırlanınca folyoyu kapatır; kapanan folyonun fatura taslağını açar (alıcı: folyo cariye aktarıldıysa cari, ' +
+    'değilse misafir). Kapalıyken bu işler manuel görev olarak düşer.',
   subscribes: [
     'guest.checked_in',
     'guest.checked_out',
@@ -36,6 +37,7 @@ export const billingWorkerManifest = defineActor({
     'payment.received',
     'payment.refunded',
     'payment.voided',
+    'folio.closed',
   ],
   publishes: [
     'folio.opened',
@@ -48,6 +50,7 @@ export const billingWorkerManifest = defineActor({
     'payment.received',
     'payment.requested',
     'payment.voided',
+    'invoice.changed',
   ],
   retry: { attempts: 3, backoffMs: 400 },
   fallbackModule: 'Folyo',

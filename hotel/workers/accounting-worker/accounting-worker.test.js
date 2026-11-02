@@ -27,6 +27,7 @@ function makeHarness({ service = {}, isEnabled = async () => true } = {}) {
       syncGoodsReceipt: record('syncGoodsReceipt', { posted: true, message: 'Mal kabul MKB-2026-0001 → Anadolu Süt carisine borç' }),
       syncAgencyBonus: record('syncAgencyBonus', { posted: true, message: 'Prim hak edişi → Tatil Acentesi' }),
       syncEventCharge: record('syncEventCharge', { posted: true, message: 'Etkinlik bedeli ETK-2026-0001 → Demir Holding' }),
+      syncInvoice: record('syncInvoice', { posted: false, message: 'Fatura FTR2026000000001 cari hareketine bağlandı (1)' }),
       ...service,
     },
     {
@@ -50,6 +51,8 @@ describe('manifest', () => {
       'agency.bonus.changed',
       'banquet.event.changed',
       'banquet.payment.changed',
+      'invoice.cancelled',
+      'invoice.issued',
       'payment.received',
       'payment.refunded',
       'payment.voided',
@@ -111,6 +114,24 @@ describe('cari kaynakları', () => {
       calls.service.map((call) => call.name),
       ['syncGoodsReceipt', 'syncAgencyBonus', 'syncAgencyBonus', 'syncAgencyBonus', 'syncEventCharge', 'syncEventCharge', 'syncEventCharge'],
     );
+  });
+});
+
+describe('fatura', () => {
+  it('kesilen ve iptal edilen fatura aynı eşitleme servisine fatura kimliğiyle gider; sonucu iz bırakır', async () => {
+    const { worker, calls } = makeHarness();
+    const invoice = { hotelId: HOTEL, invoiceId: ID, number: 'FTR2026000000001', source: 'FOLIO', folioId: ID, eventId: null, ledgerAccountId: ID };
+    await worker.handle({ ...invoice, documentType: 'E_FATURA', total: '1120.00', taxTotal: '120.00', currency: 'TRY', issuedOn: '2026-11-01' }, envelope('invoice.issued', 'i1'));
+    await worker.handle(invoice, envelope('invoice.cancelled', 'i2'));
+    assert.deepEqual(calls.service.map((call) => [call.name, call.args[1]]), [['syncInvoice', ID], ['syncInvoice', ID]]);
+    assert.match(calls.activity[0].message, /cari hareketine bağlandı/);
+  });
+
+  it('aktör kapalıyken görev başlığı fatura numarasını söyler', async () => {
+    const { worker, calls } = makeHarness({ isEnabled: async () => false });
+    await worker.handle({ hotelId: HOTEL, invoiceId: ID, number: 'EAR2026000000004', source: 'MANUAL', folioId: null, eventId: null, ledgerAccountId: ID }, envelope('invoice.cancelled', 'i3'));
+    assert.equal(calls.service.length, 0);
+    assert.match(calls.manualTasks[0].title, /EAR2026000000004 iptali cariye işlenecek/);
   });
 });
 

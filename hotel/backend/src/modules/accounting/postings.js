@@ -7,7 +7,7 @@ import { AppError, NotFoundError } from '../../lib/errors.js';
 import { lockLedgerAccounts, lockTreasuryAccounts } from '../../lib/locks.js';
 import { writeWithEvents } from '../../lib/write.js';
 import { amountDue } from '../banquet/rules.js';
-import { addDays, dateOnly, day, dotted, ensurePartnerAccount, ensureSettings, hotelContext, money, postLedger, postTreasury, prisma } from './shared.js';
+import { addDays, dateOnly, day, dotted, ensurePartnerAccount, ensureSettings, hotelContext, money, postLedger, postTreasury, prisma, reverseRecords } from './shared.js';
 
 /**
  * Otomatik kayıtlar (modül 47): ödeme, etkinlik, restoran, mal kabul, prim ve etkinlik bedeli olaylarından
@@ -481,6 +481,81 @@ export async function syncAgencyBonus(hotelId, bonusId, memo = newMemo()) {
     });
     if (posted.length) await stage('accounting.posted', { hotelId, source: 'AGENCY_BONUS', ledgerAccountIds: posted.map((row) => row.accountId), treasuryAccountIds: [] });
     return { posted: posted.length > 0, message: posted.length ? `Prim hak edişi → ${account.name}: ${posted.map((row) => row.amount).join(', ')} ${context.currency}` : null };
+  });
+}
+
+/* ═══════════════ Fatura (modül 16 / 49) ═══════════════ */
+
+/**
+ * Faturayı cariye eşitler (faturanın şimdiki durumuna; idempotent).
+ *
+ * - **Folyo ve etkinlik faturası alacak yazmaz** — alacak operasyondan doğdu (folyo cariye aktarıldığında,
+ *   etkinlik gerçekleştiğinde); fatura numarası o cari harekete (folyonun "Acente / cari" / voucher aktarımları,
+ *   etkinlik bedeli) yazılır, iptalde silinir. Folyo cariye aktarılmadıysa (misafir ödedi) carisi yoktur.
+ * - **Serbest fatura** cariye alacak yazar (vade = fatura günü + cari vadesi); iptalde fatura tarihli ters kayıt.
+ * - Başlangıç gününden önceki serbest fatura işlenmez (açılış bakiyesiyle gelir).
+ *
+ * @param {string} hotelId @param {string} invoiceId @param {PostingMemo} [memo]
+ */
+export async function syncInvoice(hotelId, invoiceId, memo = newMemo()) {
+  const context = await accountingContext(hotelId, memo);
+  const invoice = await prisma.invoice.findFirst({
+    where: { id: invoiceId, hotelId },
+    select: { id: true, number: true, status: true, source: true, folioId: true, eventId: true, ledgerAccountId: true, issueDate: true, total: true, buyerName: true },
+  });
+  if (!invoice) throw new NotFoundError('Fatura bulunamadı');
+  if (invoice.status === 'DRAFT' || !invoice.number) return { skipped: 'Taslak: muhasebe etkisi yok' };
+  const number = invoice.number;
+  const active = invoice.status !== 'CANCELLED';
+
+  if (invoice.source !== 'MANUAL') {
+    /** @type {any} */
+    let where;
+    if (invoice.source === 'FOLIO') {
+      const transfers = await prisma.payment.findMany({ where: { hotelId, folioId: /** @type {string} */ (invoice.folioId), method: { in: [...LEDGER_PAYMENT_METHODS] } }, select: { id: true } });
+      if (transfers.length === 0) return { skipped: `Fatura ${number}: folyo cariye aktarılmamış (cari etkisi yok)` };
+      where = { hotelId, sourceType: 'FOLIO_TRANSFER', sourceId: { in: transfers.map((row) => row.id) } };
+    } else {
+      where = { hotelId, sourceType: 'EVENT_CHARGE', sourceId: /** @type {string} */ (invoice.eventId) };
+    }
+    const result = active
+      ? await prisma.ledgerEntry.updateMany({ where: { ...where, OR: [{ invoiceNumber: null }, { invoiceNumber: { not: number } }] }, data: { invoiceNumber: number } })
+      : await prisma.ledgerEntry.updateMany({ where: { ...where, invoiceNumber: number }, data: { invoiceNumber: null } });
+    return {
+      posted: false,
+      message: result.count ? `Fatura ${number} ${active ? 'cari hareketine bağlandı' : 'cari hareketinden çözüldü'} (${result.count})` : null,
+      skipped: result.count ? undefined : active ? `Fatura ${number}: bağlanacak cari hareketi yok (alacak henüz işlenmemiş ya da zaten bağlı)` : `Fatura ${number}: bağı yok`,
+    };
+  }
+
+  const date = day(invoice.issueDate);
+  if (!date || date < context.startDate) return { skipped: `Serbest fatura ${number}: başlangıç gününden önce (${date})` };
+  return writeWithEvents(async (tx, stage) => {
+    const account = await tx.ledgerAccount.findFirst({ where: { id: /** @type {string} */ (invoice.ledgerAccountId), hotelId }, select: { id: true, name: true, paymentTermDays: true } });
+    if (!account) throw new PostingError(`Serbest fatura ${number}: carisi bulunamadı`, 'LEDGER_ACCOUNT_MISSING');
+    await lockLedgerAccounts(tx, hotelId, [account.id]);
+    const sourceKey = `INVOICE:${invoice.id}`;
+    if (active) {
+      const posted = await postLedger(tx, {
+        hotelId,
+        accountId: account.id,
+        date,
+        dueDate: addDays(date, account.paymentTermDays),
+        debit: money(invoice.total),
+        description: `Fatura ${number} · ${invoice.buyerName ?? account.name}`,
+        invoiceNumber: number,
+        sourceType: 'INVOICE',
+        sourceId: invoice.id,
+        sourceKey,
+      });
+      if (posted.created) await stage('accounting.posted', { hotelId, source: 'INVOICE', ledgerAccountIds: [account.id], treasuryAccountIds: [] });
+      return { posted: posted.created, message: posted.created ? `Serbest fatura ${number} → ${account.name} carisine ${money(invoice.total)} ${context.currency} borç (vade ${addDays(date, account.paymentTermDays)})` : null };
+    }
+    const original = await tx.ledgerEntry.findFirst({ where: { hotelId, sourceKey }, select: { id: true } });
+    if (!original) return { skipped: `Serbest fatura ${number}: cariye işlenmemişti` };
+    const reversed = await reverseRecords(tx, hotelId, { ledgerEntryIds: [original.id], date, note: `fatura ${number} iptal edildi` });
+    if (reversed.ledger) await stage('accounting.posted', { hotelId, source: 'INVOICE', ledgerAccountIds: reversed.ledgerAccountIds, treasuryAccountIds: [] });
+    return { posted: reversed.ledger > 0, message: reversed.ledger ? `Serbest fatura ${number} iptali → ${account.name} carisinden ters kayıtla düşüldü` : null };
   });
 }
 

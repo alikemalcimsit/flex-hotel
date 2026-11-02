@@ -79,6 +79,8 @@ export const PURCHASING_CHANNEL = 'purchasing.changed';
 export const STOCK_CHANNEL = 'stock.changed';
 /** Ön muhasebe (modül 47): cari, kasa / banka, çek / senet, fiş ekranları. */
 export const ACCOUNTING_CHANNEL = 'accounting.changed';
+/** Fatura ve e-belge (modül 16 / 49): faturalanacaklar, faturalar, e-belge durumu, fatura ayarı. */
+export const INVOICES_CHANNEL = 'invoices.changed';
 /** Kanal yönetimi (modül 33): kanal ayarı, eşleştirme, stop-sale, senkron logu, kanal rezervasyonları. */
 export const CHANNEL_MANAGER_CHANNEL = 'channel-manager.changed';
 

@@ -53,13 +53,13 @@ const EQUIPMENT = Object.freeze([
 
 const CLIENTS = Object.freeze([
   { type: 'COMPANY', name: 'Anadolu Sigorta A.Ş.', contactName: 'Gökhan Ersoy', phone: '+90 312 555 01 10', email: 'etkinlik@anadolusigorta.demo', taxOffice: 'Çankaya', taxNumber: '0680012345' },
-  { type: 'COMPANY', name: 'Öztürk İnşaat A.Ş.', contactName: 'Şule Çağlar', phone: '+90 312 555 02 20', email: 'sule@ozturkinsaat.demo', taxOffice: 'Kavaklıdere', taxNumber: '6640098765' },
-  { type: 'COMPANY', name: 'Başkent Tıp Derneği', contactName: 'Dr. Ayten Kılıç', phone: '+90 312 555 03 30', email: 'kongre@baskenttip.demo', taxOffice: 'Maltepe', taxNumber: '1230045678' },
-  { type: 'COMPANY', name: 'Yeşilırmak Enerji', contactName: 'Murat Doğan', phone: '+90 312 555 04 40', email: 'murat@yesilirmak.demo', taxOffice: 'Ulus', taxNumber: '9450011223' },
+  { type: 'COMPANY', name: 'Öztürk İnşaat A.Ş.', contactName: 'Şule Çağlar', phone: '+90 312 555 02 20', email: 'sule@ozturkinsaat.demo', taxOffice: 'Kavaklıdere', taxNumber: '6640098769' },
+  { type: 'COMPANY', name: 'Başkent Tıp Derneği', contactName: 'Dr. Ayten Kılıç', phone: '+90 312 555 03 30', email: 'kongre@baskenttip.demo', taxOffice: 'Maltepe', taxNumber: '1230045672' },
+  { type: 'COMPANY', name: 'Yeşilırmak Enerji', contactName: 'Murat Doğan', phone: '+90 312 555 04 40', email: 'murat@yesilirmak.demo', taxOffice: 'Ulus', taxNumber: '9450011228' },
   { type: 'PERSON', name: 'Elif Yılmaz', contactName: 'Elif Yılmaz', phone: '+90 532 555 05 50', email: 'elif.yilmaz@demo.local' },
   { type: 'PERSON', name: 'Can Aydın', contactName: 'Can Aydın', phone: '+90 533 555 06 60', email: 'can.aydin@demo.local' },
   { type: 'PERSON', name: 'Zeynep Arslan', contactName: 'Zeynep Arslan', phone: '+90 535 555 07 70', email: 'zeynep.arslan@demo.local' },
-  { type: 'COMPANY', name: 'Polat Otomotiv', contactName: 'Kerem Polat', phone: '+90 312 555 08 80', email: 'kerem@polatoto.demo', taxOffice: 'Ostim', taxNumber: '7310055667' },
+  { type: 'COMPANY', name: 'Polat Otomotiv', contactName: 'Kerem Polat', phone: '+90 312 555 08 80', email: 'kerem@polatoto.demo', taxOffice: 'Ostim', taxNumber: '7310055663' },
 ]);
 
 /**

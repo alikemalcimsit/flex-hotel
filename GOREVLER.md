@@ -1281,6 +1281,21 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 > - Canlı yayın: `housekeeping.changed` kanalı; toplu işler tek event yayınlar
 >   (`housekeeping.tasks.assigned/generated`) — 2500 odada görev başına event
 >   defteri ve socket'i boğardı.
+>
+> **Modül 14 — canlıya almadan önce düzeltmeler (2 Kasım 2026 — Ahmet, kullanıcı kararıyla; modül 49 ile birlikte
+> canlıya çıktı):** inceleme dört sorun buldu, hepsi testli düzeltildi.
+>
+> - **Oteller arası sızıntı:** `floorMap` odaları `hotelId` olmadan çekiyordu (`prisma` istemcisi yalnız silinmişleri
+>   süzer, oteli süzmez) — harita bütün otellerin odalarını gösteriyordu. `where: { hotelId }` + çok otelli test.
+> - **Büyük otelde kaybolan görevler:** "Görevlerim" ve "Kontrol" günün ilk 100 görevini çekip tarayıcıda
+>   süzüyordu; yüzlerce görevli günde görevlinin kendi işi / kontrol bekleyen oda görünmüyordu. Liste sorgusuna
+>   sunucu süzgeçleri eklendi: `openOnly`, `unassigned`, `awaitingInspection` (çelişen süzgeç şemada reddedilir);
+>   ekranlar bunları kullanıyor, sayaçlar `meta.total`'dan.
+> - **Hata durumu:** harita, Görevlerim ve Kontrol sekmelerinde istek hatası "oda yok" / "görev yok" diye
+>   görünüyordu; `QueryFallback` (yükleniyor / hata + tekrar dene) eklendi.
+> - **Erken çıkış:** sabahki konaklama temizliği açıkken misafir çıkınca çıkış temizliği açılmıyordu ("zaten var");
+>   açık STAYOVER artık CHECKOUT_CLEAN'e yükseliyor (öncelik ≤ 2, denetim izi, `housekeeping.task.changed`).
+>   Haritada odada hem temizlik hem misafir isteği görevi açıksa kutu temizliği gösteriyor.
 
 > **Modül 3'ten not (16 Eylül 2026 — Ahmet):** "AVAILABLE" diye bir durum artık yok —
 > oda durumu üç bağımsız parça (bkz. modül 3 notu). Senin alanın yalnızca **kat hizmeti**:
@@ -1451,13 +1466,17 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 16. Fatura kesme — Ali Kemal
 **Gün sonu:** Kapanan folyodan tek tıkla fatura üretiliyor, PDF alınıyor, numara serisi düzgün ilerliyor.
-- [ ] Backend: Invoice / InvoiceLine tabloları, numara serisi (yıl-sıra), `createInvoiceFromFolio`, `cancelInvoice`
-- [ ] Backend: PDF üretimi (şablon: otel logosu, alıcı, kalemler, vergi dökümü)
-- [ ] Ekran: Faturalandırılacak folyolar listesi
-- [ ] Ekran: Fatura oluştur formu (alıcı tipi: kişi/şirket, vergi no, adres; kalem önizleme)
-- [ ] Ekran: Fatura listesi (numara, tarih, tutar, durum) + PDF indir
-- [ ] Ekran: İptal → onay kuyruğu
-- [ ] Aktör: billing-worker'a `folio.closed` → fatura taslağı kuralı
+- [x] Backend: Invoice / InvoiceLine tabloları, numara serisi (yıl-sıra), `createInvoiceFromFolio`, `cancelInvoice`
+- [x] Backend: PDF üretimi (şablon: otel logosu, alıcı, kalemler, vergi dökümü)
+- [x] Ekran: Faturalandırılacak folyolar listesi
+- [x] Ekran: Fatura oluştur formu (alıcı tipi: kişi/şirket, vergi no, adres; kalem önizleme)
+- [x] Ekran: Fatura listesi (numara, tarih, tutar, durum) + PDF indir
+- [x] Ekran: İptal → onay kuyruğu
+- [x] Aktör: billing-worker'a `folio.closed` → fatura taslağı kuralı
+
+> **📌 Modül 16'nın çekirdeği modül 49 içinde kuruldu (2 Kasım 2026 — Ahmet, kullanıcı kararı):** e-Fatura / e-Arşiv faturanın
+> üzerinde durduğu için fatura (tablolar, numara, kesim, PDF, iptal, ekranlar, folyo aktörü) 49 ile birlikte yazıldı. Ayrıntı ve
+> genişletme noktaları aşağıda **49**'da; bu modülde kalan iş yok, 16'ya eklenecek her şey 49'un yapısını kullanmalı.
 
 ### 17. Ödeme alma — arkadaşın
 **Gün sonu:** Resepsiyon nakit/kart/havale/döviz tahsilat giriyor; büyük tutarlar onaya düşüyor; kasa durumu anlık görünüyor.
@@ -2887,7 +2906,8 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 > edilmiş / ciro edilmiş / ödenecek.
 >
 > **Devir:** 16 / 49 — `invoice.issued` yükündeki `ledgerSourceKey` ile mevcut cari hareket fatura numarasına bağlanır; folyosuz
-> fatura `INVOICE` kaynağıyla yazılır. 48 — cari ve kasa / banka hareketleri yevmiye fişlerinin kaynağı (kaynak türü + anahtarı fiş
+> fatura `INVOICE` kaynağıyla yazılır (**49'da kuruldu:** bağ `LedgerEntry.invoiceNumber` kolonuyla, `postings.syncInvoice`; `reference`
+> değişmez). 48 — cari ve kasa / banka hareketleri yevmiye fişlerinin kaynağı (kaynak türü + anahtarı fiş
 > kuralına eşlenir). 44 / 27 — gider gerçekleşeni mal kabul ve ödeme fişlerinden okunabilir. Kasa sayımı / gün sonu kapanışı 18 ile.
 
 ### 48. Genel muhasebe — Ali Kemal
@@ -2903,12 +2923,97 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 49. e-Fatura / e-Arşiv / e-Defter — arkadaşın
 **Gün sonu:** Faturalar özel entegratör üzerinden GİB'e gidiyor, durumu izleniyor; e-Defter aylık dosyası üretiliyor.
-- [ ] Backend: EInvoiceConfig, EInvoiceLog tabloları; entegratör adaptörü (1 firma ile başla)
-- [ ] Backend: UBL XML üretimi, gönderim, durum sorgulama; alıcı mükellef mi kontrolü (e-Fatura / e-Arşiv ayrımı)
-- [ ] Backend: e-Defter aylık yevmiye / kebir dosyası
-- [ ] Ekran: Entegratör ayarları (hesap, test / canlı)
-- [ ] Ekran: Fatura listesine "GİB durumu" kolonu + gönder / tekrar gönder
-- [ ] Ekran: e-Defter aylık üretim + indirme
+- [x] Backend: EInvoiceConfig, EInvoiceLog tabloları; entegratör adaptörü (1 firma ile başla) — `InvoiceSettings`, `InvoiceLog`,
+  `InvoiceDocument`; adaptör sözleşmesi + **test entegratörü** (firma henüz belli değil — kullanıcı kararı; gerçek adaptör devirde)
+- [x] Backend: UBL XML üretimi, gönderim, durum sorgulama; alıcı mükellef mi kontrolü (e-Fatura / e-Arşiv ayrımı)
+- [ ] Backend: e-Defter aylık yevmiye / kebir dosyası — **48'den sonraya bırakıldı** (kullanıcı kararı: e-Defter yevmiyeden üretilir)
+- [x] Ekran: Entegratör ayarları (hesap, test / canlı)
+- [x] Ekran: Fatura listesine "GİB durumu" kolonu + gönder / tekrar gönder
+- [ ] Ekran: e-Defter aylık üretim + indirme — **48'den sonra**
+
+> **✅ Modül 49 tamamlandı — e-Defter hariç (2 Kasım 2026 — Ahmet).** Kararlar (kullanıcı): **16'nın çekirdeği burada** (fatura ile
+> e-belge birlikte), **entegratör henüz belli değil** (adaptör sözleşmesi + test ortamı; canlı ortam gerçek adaptörle açılır),
+> **e-Defter 48'den sonra**.
+>
+> **Akış:** folyo kapanınca folyo aktörü (`billing-worker`, `folio.closed`) taslak açar; etkinlik (gerçekleşmiş ya da iptal bedeli
+> kesinleşmiş) ve serbest fatura (cariye) taslağı ekrandan. Satırlar folyo kalemlerinden gelir grubuna göre (iptaller düşülmüş, indirim
+> satır iskontosu, açıklamada hizmet dönemi), vergi kalemin kayıtlı dökümünden (`taxLines`). Alıcı: folyo cariye aktarıldıysa cari
+> (şahıs carisi kişi alıcı), değilse misafir; adres ve kimlik aynı alıcının son faturasından. **Kesim:** kaynak yeniden okunur
+> (değiştiyse taslak yenilenir, kesim durur) → mükellef sorgusu (24 sa önbellek, işlem dışında) → e-Fatura (kayıtlı + posta kutusu) ya
+> da e-Arşiv → seri × yıl numarası (satır kilidi, boşluksuz) → UBL-TR belgesi (SHA-256 ile donar) → gönderim sırası; hepsi tek işlemde.
+> **Gönderici:** `FOR UPDATE SKIP LOCKED` üstlenme, 4 eşzamanlı, tur başına ≤ 200; geçici hata 1 dk / 5 dk / 15 dk / 1 sa / 4 sa sonra,
+> hak bitince "gönderilemedi" + personel uyarısı; kalıcı hata / GİB reddi "reddedildi" + uyarı; durum sorgusu gönderimden 30 sn sonra,
+> 4 eşzamanlı, 7 gün; 5 dk'dan uzun "gönderiliyor" sıraya döner. **İptal** dört gözle (`INVOICE_CANCEL`; onay beklerken gönderim durur):
+> GİB'e ulaşmamışsa yerelde, e-Arşiv entegratörden, e-Fatura GİB portal referansıyla. **Ön muhasebe:** folyo / etkinlik faturasının
+> numarası mevcut cari harekete yazılır (`LedgerEntry.invoiceNumber`, iptalde silinir); serbest fatura vadeli alacak, iptali fatura
+> tarihli ters kayıt (muhasebe aktörü `invoice.issued` / `invoice.cancelled`).
+>
+> **GİB kuralları:** KDV 0015 ve konaklama vergisi 0059 KDV hariç bedel üzerinden (biri ötekinin matrahına girmez); vergisiz satır %0 +
+> 351 muafiyet kodu; numara 3 karakter seri + yıl + 9 hane, ETTN ayrı; yabancı kişi 11111111111 (uyruk + pasaport notta), **yurt
+> dışındaki şirket 2222222222** (kendi vergi no notta) — ikisi de her zaman e-Arşiv; karekod GİB Karekod Kılavuzu v1.1 anahtarlarıyla;
+> fatura günü otelin takvim günü; yasal süre hizmetten sonra 7 gün (VUK 231/5). `UBL_TR_CUSTOMIZATION_ID = 'TR1.2'` tek sabitte —
+> entegratörün doğrulayıcısıyla teyit edilmeli (TR1.2 / TR1.2.1).
+>
+> **Veri** (migration `20261101090000_invoicing`, `…100000_invoice_alert_kind`, `…110000_ledger_invoice_number`,
+> `…120000_invoice_start_date`, `…130000_invoice_foreign_company`): eski boş `Invoice` yerine `Invoice` (kaynak, durum, e-belge
+> alanları, alıcı JSON + liste kolonları, iptal izi), `InvoiceLine`, `InvoiceDocument`, `InvoiceLog`, `InvoiceSettings` (satıcı,
+> seriler, **faturalama başlangıcı**, entegratör, ortam), `InvoiceTaxCode`, `InvoiceSequence`, `TestTaxpayer`, `TaxpayerLookup`;
+> `LedgerEntry.invoiceNumber`; `StaffAlertKind.INVOICE`. Kısıtlar: kaynak bağı, taslakta numara / e-belge yok, kesilmişte numara / tür /
+> gün / alıcı / durum var, numara biçimi, iptal izleri, toplamlar (belge ve satır), seri ve ortam (canlı + test entegratörü olmaz),
+> vergi kodu 0015 / 0059; folyo ve etkinlik başına tek geçerli fatura (kısmi tekil index); sıra / sorgu / gönderiliyor için kısmi
+> index'ler, alıcı adında trigram.
+>
+> **Faturalama başlangıcı:** otelin saatiyle gece yarısından; öncesinde kapanan folyo / etkinlik önceki sistemde faturalanmış sayılır
+> (kuyruğa girmez, taslağı açılırsa uyarı). Ayar yokken kuyruk boş ("Faturalama başlamadı"). Canlıya çıkışta otellerin geçmiş
+> folyoları bir anda "süresi geçmiş" görünmesin diye eklendi; başlangıç bugünden sonra olamaz, ileri alınırsa ekran aradakilerin
+> kuyruktan çıkacağını söyler.
+>
+> **API ve izinler:** `/invoices` — liste (+ `folioId` / `eventId`), `invoiceables`, taslak `POST` / `PUT` / `DELETE`, `:id/issue`,
+> `:id/resend`, `:id/cancel`, `:id/copy`, `:id/pdf`, `settings` (+ `test-taxpayers`). Yeni izinler: `invoices.view` / `invoices.issue`
+> (müdür, muhasebe, ön büro), `invoices.manage` (müdür, muhasebe: serbest fatura, satır düzenleme, iptal isteği), `invoices.setup`
+> (müdür). Onay türü `INVOICE_CANCEL`; uyarı türü `INVOICE`; kanal `invoices`; olaylar `invoice.issued` (genişledi),
+> `invoice.cancelled`, `invoice.changed`, `invoice.settings.changed`.
+>
+> **Ekran:** `/faturalar` sekmeli — **faturalanacaklar** (folyo / etkinlik, 7 gün – 1 yıl, süresi geçenler, arama; yasal süre rozeti),
+> **taslaklar**, **kesilenler** (gönderilemedi / reddedildi / sonuç bekleniyor / iptal onayı kutuları, süzgeçler, tekrar gönder,
+> serbest fatura penceresi), **ayarlar** (satıcı, başlangıç, seriler, otomatik taslak, entegratör, vergi kodu eşlemesi, test
+> mükellefleri). **Fatura ekranı:** taslakta alıcı formu (kişi / şirket / yabancı kişi / yabancı şirket), "Kesmeden önce" eksik
+> listesi, yasal süre, başlangıç uyarısı, satırlar ve vergi dökümü; kesilmişte e-belge kutusu (ETTN, posta kutusu, son cevap), zaman
+> çizelgesi, PDF, iptal / yeni taslak. Folyo ve etkinlik ekranında fatura kutusu; onay ekranında fatura bağlantısı.
+>
+> **Ölçüm** (`scripts/perf-invoicing.mjs`; 150.000 kapanmış folyo, 123.000 fatura, 120.000 satır, 360.000 zaman çizelgesi satırı; üç
+> yıl): liste 3–34 ms (derin sayfa 500 dahil), arama 66–101 ms, ayrıntı 14 ms, faturalanacaklar 30 gün 21 ms / 1 yıl 82 ms / süresi
+> geçenler 89 ms / etkinlik 31 ms, taslak 44 ms, alıcı 31 ms, kesim 60 ms, PDF 106 ms, gönderici 200 belge 1,03 sn, durum turu 200
+> belge 0,46 sn. Ölçümle düzeltilen: **faturalanacaklar 1 yıl 577 → 82 ms, süresi geçenler 973 → 89 ms** (yalın kimlik kümesi + sayım,
+> ayrıntı yalnız sayfa için; "süresi geçen" için yakın günlerin kalemlerine anti-join), durum turu sıralı yerine 4 eşzamanlı. En kötü:
+> bir yıl hiç fatura kesilmemiş 30.000 folyoda iki harfli arama 0,29 sn.
+>
+> **Test:** sözleşme 19 birim (satır kurma ve gruplama, toplamlar, vergi dökümü, TCKN / VKN, alıcı denetimi — yabancı kişi / şirket,
+> belge türü, numara, karekod, yazıyla tutar, yasal süre, ayar şeması); UBL 5 birim (öğe sırası, tutar tutarlılığı, yabancı alıcılar,
+> kaçış); aktör testleri (folyo aktörü taslak, muhasebe aktörü bağ); entegrasyon 14 (folyo faturası uçtan uca + PDF, cari alıcı ve
+> e-Fatura + numaranın cariye bağı / iptalde çözülmesi, e-Arşiv iptal yolları, yabancı kişi, **yurt dışındaki şirket ve türün
+> hatırlanması**, geçici hata / hak bitimi / tekrar gönderim, GİB reddi, serbest fatura alacağı + ters kaydı, **şahıs carisi kişi
+> alıcı**, etkinlik + iptal bedeli, kaynak değişince yenileme, eşzamanlı 8 kesim boşluksuz + tek taslak, **faturalama başlangıcı**
+> (saat dilimi sınırı), izinler ve otel kapsamı). Backend birim 624, sözleşme 494, aktörler 101, ön yüz 71 ve derleme geçti.
+>
+> **Yan düzeltmeler:** demo folyo kalemleri vergi dökümüyle (`chargeLine`, `taxLines`) — eskiden dökümsüzdü, fatura eksik vergili
+> kesilirdi (artık `INVOICE_TAX_BREAKDOWN` ile durur); **demo otelin vergileri** gerçek düzene getirildi (KDV %10 oda + yiyecek-içecek,
+> konaklama vergisi %2 oda, KDV %20 minibar / çamaşır / spa / diğer; dahil fiyat değişmedi); demo carilerin, banket müşterilerinin ve
+> yurt içi acentelerin vergi numaraları geçerli denetim haneli; denetim kaydına muhasebe ve fatura varlık etiketleri; folyo ve ödeme
+> servisinin yeniden açma yolu fatura bekçisini çağırıyor. Ham SQL'de zaman parametresi `sqlTimestamp`, gün `::date` (çıplak `Date`
+> oturumun saat dilimiyle 3 saat kayıyordu — test yakaladı).
+>
+> **Demo** (`scripts/demo-invoicing.mjs`, `demo-data.mjs` çağırır): test ortamı, seriler DMF / DMA, faturalama başlangıcı iki hafta
+> önce; vergi kodları eşli; bütün şirketler test mükellefi (biri "posta kutusu yok" → ret); son üç günden eski folyoların faturası
+> **kapanış gününde** kesilmiş ve GİB'de tamamlanmış (numara sırası tarih sırasıyla aynı), en eski ikisi bilerek gecikmiş, son günlerin
+> folyoları otomatik taslakta (yarısının alıcısı eksik); yurt dışındaki acentelere yabancı şirket faturası; bir etkinlik ve bir
+> serbest fatura; birkaç fatura bugün kesilmiş ve sonuç bekliyor; onay kuyruğunda bir iptal isteği.
+>
+> **Devir:** **48** — kesilen / iptal edilen faturalar yevmiye fişlerinin kaynağı; **e-Defter** (aylık yevmiye / kebir dosyası ve ekranı)
+> 48'den sonra burada açık. **Gerçek entegratör** — `providers/` altına `send` / `status` / `cancel` / `checkTaxpayer` adaptörü, CustomizationID
+> teyidi, canlı ortam. **Döviz faturası** — otel parası TRY değilse kesim durur. **e-Arşiv e-posta gönderimi** entegratör adaptörüyle.
+> **Canlıya alırken:** 5 migration + `npm install` (`qrcode-generator`); her otel ayarlarda satıcı ve faturalama başlangıcını girmeli
+> (girene kadar kuyruk boş).
 
 ### 50. Sanal POS / ödeme geçidi — Ali Kemal
 **Gün sonu:** Misafire ödeme linki gönderiliyor veya widget'ta kartla ödeme yapılıyor; sonuç otomatik folyoya düşüyor.

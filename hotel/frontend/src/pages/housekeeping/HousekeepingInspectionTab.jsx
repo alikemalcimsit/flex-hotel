@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Badge, Button, EmptyState, Spinner, Textarea } from '@hotelos/ui';
+import { Badge, Button, EmptyState, Textarea } from '@hotelos/ui';
 import { Modal } from '../../components/Modal.jsx';
+import { QueryFallback } from '../../components/QueryFallback.jsx';
 import { api, apiPatch, withQuery } from '../../lib/api.js';
 import { formatDate } from '../../lib/format.js';
 import { taskTypeLabel } from '../../lib/housekeeping.js';
@@ -10,6 +11,8 @@ import { useLiveChannel } from '../../lib/useLiveChannel.js';
 import { toastError, toastSuccess } from '../../store/toast.js';
 
 const OFFLINE_REFRESH_MS = 60_000;
+/** Kuyruğun bir seferde gösterilen kısmı; onaylandıkça sıradakiler gelir. */
+const INSPECTION_PAGE_SIZE = 100;
 
 /**
  * Kat şefi kontrolü: bitmiş ve henüz kontrol edilmemiş temizlik görevleri.
@@ -28,7 +31,8 @@ export function HousekeepingInspectionTab() {
 
   const list = useQuery({
     queryKey: ['housekeeping', 'inspection'],
-    queryFn: () => api(withQuery('/housekeeping/tasks', { status: 'DONE', page: 1, pageSize: 100 })),
+    // Kontrol bekleyenler sunucuda süzülür: "bitmiş" görevlerin ilk sayfası onaylanmışlarla dolup bekleyeni saklamasın.
+    queryFn: () => api(withQuery('/housekeeping/tasks', { awaitingInspection: true, page: 1, pageSize: INSPECTION_PAGE_SIZE })),
     refetchInterval: isLive ? false : OFFLINE_REFRESH_MS,
     placeholderData: (previous) => previous,
   });
@@ -47,15 +51,17 @@ export function HousekeepingInspectionTab() {
     },
   });
 
-  if (list.isPending) return <Spinner className="py-8" />;
+  if (!list.data) return <QueryFallback query={list} errorTitle="Kontrol listesi yüklenemedi" />;
 
-  const awaiting = (list.data?.items ?? []).filter((task) => task.inspection === null && task.type !== 'GUEST_REQUEST');
+  const awaiting = list.data.items;
+  const awaitingTotal = list.data.meta.total;
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between text-sm text-ink-muted">
         <span>
-          Kontrol bekleyen oda: <strong className="text-ink">{awaiting.length}</strong>
+          Kontrol bekleyen oda: <strong className="text-ink">{awaitingTotal}</strong>
+          {awaitingTotal > awaiting.length ? ` · ilk ${awaiting.length} gösteriliyor, onaylandıkça sıradakiler gelir` : ''}
         </span>
         <Badge tone={isLive ? 'success' : 'warning'}>{isLive ? 'Canlı' : 'Canlı değil'}</Badge>
       </div>

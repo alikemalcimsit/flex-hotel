@@ -17,10 +17,10 @@ import { randomUUID } from 'node:crypto';
  */
 
 const COMPANIES = Object.freeze([
-  { name: 'Demir Holding A.Ş.', taxNumber: '4810011111', taxOffice: 'Çankaya', contactName: 'Selin Demir', phone: '+903124550101', paymentTermDays: 30 },
-  { name: 'Başkent Enerji Ltd.', taxNumber: '4810022222', taxOffice: 'Kavaklıdere', contactName: 'Murat Er', phone: '+903124550202', paymentTermDays: 15 },
-  { name: 'Anka Savunma Sanayi A.Ş.', taxNumber: '4810033333', taxOffice: 'Ostim', contactName: 'Elif Kaya', phone: '+903124550303', paymentTermDays: 45 },
-  { name: 'Yıldız Danışmanlık', taxNumber: '4810044444', taxOffice: 'Maltepe', contactName: 'Can Yıldız', phone: '+903124550404', paymentTermDays: 0 },
+  { name: 'Demir Holding A.Ş.', taxNumber: '4810011118', taxOffice: 'Çankaya', contactName: 'Selin Demir', phone: '+903124550101', paymentTermDays: 30 },
+  { name: 'Başkent Enerji Ltd.', taxNumber: '4810022225', taxOffice: 'Kavaklıdere', contactName: 'Murat Er', phone: '+903124550202', paymentTermDays: 15 },
+  { name: 'Anka Savunma Sanayi A.Ş.', taxNumber: '4810033331', taxOffice: 'Ostim', contactName: 'Elif Kaya', phone: '+903124550303', paymentTermDays: 45 },
+  { name: 'Yıldız Danışmanlık', taxNumber: '4810044447', taxOffice: 'Maltepe', contactName: 'Can Yıldız', phone: '+903124550404', paymentTermDays: 0 },
 ]);
 
 /** Geçerli TR IBAN (denetim haneleri hesaplanır). @param {string} bban 22 hane */
