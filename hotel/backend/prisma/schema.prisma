@@ -139,6 +139,8 @@ enum HousekeepingType {
   STAYOVER
   DEEP_CLEAN
   INSPECTION
+  /// Misafir isteğinden doğan görev (havlu, yastık — modül 7 → 14).
+  GUEST_REQUEST
 }
 
 enum TaskStatus {
@@ -836,6 +838,10 @@ model User {
   staffAlerts           StaffAlert[]
   staffAlertReads       StaffAlertRead[]
   staffAlertState       StaffAlertState?
+
+  assignedHousekeepingTasks  HousekeepingTask[] @relation("HousekeepingAssignee")
+  completedHousekeepingTasks HousekeepingTask[] @relation("HousekeepingCompleter")
+  inspectedHousekeepingTasks HousekeepingTask[] @relation("HousekeepingInspector")
 }
 
 model RefreshToken {
@@ -1918,6 +1924,8 @@ model GuestRequest {
   assignedTo        User?              @relation("GuestRequestAssignee", fields: [assignedToId], references: [id])
   /// Oda servisi siparişine çevrildiyse (modül 41; aynı anda tek açık sipariş — teslim / iptal sonrası yeniden açılan istek yeniden çevrilir).
   roomServiceOrders RoomServiceOrder[]
+  /// Kat görevine çevrildiyse (modül 14; görev bitince istek kapanır).
+  housekeepingTasks HousekeepingTask[]
 
   // İş listesi: "açık istekler, süresi en yakın önce".
   @@index([hotelId, status, dueAt])
@@ -2385,23 +2393,61 @@ model NightAudit {
 
 // ───────────── KAT HİZMETLERİ / BAKIM ─────────────
 
+/// Kat hizmeti görevi (modül 14). Odanın kat hizmeti durumundan ayrı kayıt:
+/// durum "oda şu an nasıl", görev "kim ne zaman ne yapacak" sorusuna cevap.
+/// Açık **temizlik** görevi oda başına tektir (kısmi tekil index, elle);
+/// misafir isteği görevleri (havlu) bundan muaftır.
 model HousekeepingTask {
   id           String           @id @default(uuid())
   hotelId      String
   roomId       String
   type         HousekeepingType @default(CHECKOUT_CLEAN)
   status       TaskStatus       @default(PENDING)
-  assignedTo   String?
+  /// 1 en acil, 5 en düşük. Çıkış temizliği 2'den açılır: oda satışa dönecek.
   priority     Int              @default(3)
+  /// Görevin günü (UTC gün başı, otelin iş günü).
   scheduledFor DateTime         @default(now())
-  completedAt  DateTime?
+  /// Zamanlayıcı/aktör mü açtı, personel mi (Activity ayrımı için).
+  source       String           @default("staff")
   notes        String?
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
-  deletedAt    DateTime?
 
-  hotel Hotel @relation(fields: [hotelId], references: [id])
-  room  Room  @relation(fields: [roomId], references: [id])
+  assignedToId String?
+  startedAt    DateTime?
+
+  completedAt    DateTime?
+  completedById  String?
+  completionNote String?
+
+  /// Kat şefi kontrolü (dört göz: temizleyen onaylayamaz). `null`: henüz bakılmadı.
+  inspectionPassed Boolean?
+  inspectedById    String?
+  inspectedAt      DateTime?
+  inspectionNote   String?
+
+  /// "Sorun var": görev açık kalır, iş teknik servise manuel görevle taşınır.
+  issueNote       String?
+  issueReportedAt DateTime?
+
+  cancelReason String?
+
+  /// Misafir isteğinden doğduysa (modül 7) — görev bitince istek kapanır.
+  guestRequestId String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  hotel        Hotel         @relation(fields: [hotelId], references: [id])
+  room         Room          @relation(fields: [roomId], references: [id])
+  assignedTo   User?         @relation("HousekeepingAssignee", fields: [assignedToId], references: [id])
+  completedBy  User?         @relation("HousekeepingCompleter", fields: [completedById], references: [id])
+  inspectedBy  User?         @relation("HousekeepingInspector", fields: [inspectedById], references: [id])
+  guestRequest GuestRequest? @relation(fields: [guestRequestId], references: [id])
+
+  @@index([hotelId, scheduledFor])
+  @@index([hotelId, status, priority])
+  @@index([hotelId, roomId, status])
+  @@index([hotelId, assignedToId, status])
 }
 
 model MaintenanceTicket {

@@ -560,3 +560,14 @@ export function lockInstruments(tx, hotelId, instrumentIds) {
 export function lockInvoices(tx, hotelId, invoiceIds) {
   return lockPlainRows(tx, 'Invoice', hotelId, invoiceIds, false);
 }
+
+/**
+ * Kat hizmeti görevi (modül 14): başlat / bitir / kontrol / atama aynı görevde sıraya girer. Sıra: oda → görev.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} taskIds
+ */
+export function lockHousekeepingTasks(tx, hotelId, taskIds) {
+  return lockRows(tx, 'HousekeepingTask', hotelId, taskIds);
+}

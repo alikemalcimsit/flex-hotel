@@ -101,6 +101,15 @@ export const EVENT_LABELS = Object.freeze({
   'laundry.order.changed': 'Çamaşır siparişi değişti',
   'extras.catalog.changed': 'Minibar / çamaşır fiyat listesi değişti',
 
+  'housekeeping.task.created': 'Temizlik görevi açıldı',
+  'housekeeping.task.changed': 'Temizlik görevi güncellendi',
+  'housekeeping.tasks.assigned': 'Temizlik görevleri atandı',
+  'housekeeping.tasks.generated': 'Günün konaklama temizliği görevleri açıldı',
+  'housekeeping.task.started': 'Temizliğe başlandı',
+  'housekeeping.task.completed': 'Temizlik görevi tamamlandı',
+  'housekeeping.room.inspected': 'Oda kontrol edildi',
+  'housekeeping.issue.reported': 'Odada sorun bildirildi',
+
   'lost_item.recorded': 'Bulunan eşya kaydedildi',
   'lost_item.changed': 'Kayıp eşya güncellendi',
   'lost_items.settings.changed': 'Kayıp eşya saklama süresi değişti',

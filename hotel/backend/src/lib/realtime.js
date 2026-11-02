@@ -15,6 +15,7 @@ import {
   CHANNEL_EVENTS as CHANNEL_MANAGER_EVENTS,
   EXTRAS_EVENTS,
   FORECAST_EVENTS,
+  HOUSEKEEPING_EVENTS,
   LOST_ITEM_EVENTS,
   FOLIO_EVENTS,
   LIVE_VIEW_EVENTS,
@@ -98,6 +99,9 @@ export const CASH_CHANNEL = 'cash.changed';
 /** Minibar kayıtları, çamaşır panosu ve fiyat listeleri (modül 19). */
 export const EXTRAS_CHANNEL = 'extras.changed';
 
+/** Kat hizmeti görev listesi, kat haritası ve kontrol ekranı (modül 14). */
+export const HOUSEKEEPING_CHANNEL = 'housekeeping.changed';
+
 /** Kayıp eşya listesi ve eşya ekranı (modül 21). */
 export const LOST_ITEMS_CHANNEL = 'lost-items.changed';
 
@@ -161,6 +165,7 @@ const CHANNEL_EVENTS = Object.freeze({
   [FOLIOS_CHANNEL]: [...FOLIO_EVENTS, ...PAYMENT_EVENTS],
   [CASH_CHANNEL]: CASH_EVENTS,
   [EXTRAS_CHANNEL]: EXTRAS_EVENTS,
+  [HOUSEKEEPING_CHANNEL]: HOUSEKEEPING_EVENTS,
   [LOST_ITEMS_CHANNEL]: LOST_ITEM_EVENTS,
   [BUDGET_CHANNEL]: BUDGET_EVENTS,
   [AGENCY_CHANNEL]: AGENCY_EVENTS,

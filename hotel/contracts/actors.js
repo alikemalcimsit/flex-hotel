@@ -106,6 +106,11 @@ export const MANUAL_TASK_MODULE_PERMISSIONS = Object.freeze({
   // Modül 47: muhasebe aktörünün işleyemediği kayıt (eşleme eksik, cari seçilmemiş) muhasebecinin önüne düşer;
   // eşleme / cari düzeltilip Muhasebe → Eşitle çalıştırılır.
   'Ön muhasebe': PERMISSIONS.ACCOUNTING_MANAGE,
+  // Modül 14: aktör kapalıyken oda durumu / görev işleri kat görevlisinin önüne düşer.
+  'Kat hizmeti': PERMISSIONS.HOUSEKEEPING_OPERATE,
+  // Modül 14'ün "Sorun var" bildirimi; modül 20 (teknik servis) gelene dek
+  // arıza kaydını `rooms.operate` yetkilisi açar (blockRoom oradadır).
+  'Teknik servis': PERMISSIONS.ROOMS_OPERATE,
 });
 
 export const MANUAL_TASK_KNOWN_MODULES = Object.freeze(Object.keys(MANUAL_TASK_MODULE_PERMISSIONS));

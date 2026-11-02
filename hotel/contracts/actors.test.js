@@ -40,7 +40,12 @@ describe('manuel görev kimi ilgilendirir', () => {
     assert.equal(scope.all, false);
     assert.equal(scope.others, false);
     // Kanaldan gelip işlenemeyen rezervasyon (modül 33) da resepsiyonun işi.
-    assert.deepEqual([...scope.modules].sort(), ['Folyo', 'Kanal rezervasyonu', 'Misafir mesajları', 'Oda atama', 'Rezervasyon']);
+    // Teknik servis (modül 14'ün "Sorun var" çıkışı) arıza kaydını açabilen
+    // `rooms.operate` yetkisine bağlı; o yetki resepsiyonda da var.
+    assert.deepEqual(
+      [...scope.modules].sort(),
+      ['Folyo', 'Kanal rezervasyonu', 'Misafir mesajları', 'Oda atama', 'Rezervasyon', 'Teknik servis'],
+    );
   });
 
   it('muhasebe folyo ve ön muhasebe görevlerini görür (modül 47)', () => {

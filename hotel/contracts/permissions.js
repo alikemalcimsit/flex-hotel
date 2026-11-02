@@ -86,6 +86,15 @@ export const PERMISSIONS = Object.freeze({
   /** Minibar ve çamaşırhane fiyat listeleri, ekspres farkı. */
   EXTRAS_MANAGE: 'extras.manage',
 
+  /** Kat hizmeti görev listesini, kat haritasını ve günlük özeti görmek (modül 14). */
+  HOUSEKEEPING_VIEW: 'housekeeping.view',
+  /** Görevli işlemleri: görevi başlatmak, bitirmek, sorun bildirmek (modül 14). */
+  HOUSEKEEPING_OPERATE: 'housekeeping.operate',
+  /** Görev açmak, toplu atama yapmak, görevi iptal etmek (kat şefi, modül 14). */
+  HOUSEKEEPING_MANAGE: 'housekeeping.manage',
+  /** Temizlenen odayı kontrol edip onaylamak / reddetmek (kat şefi, modül 14). */
+  HOUSEKEEPING_INSPECT: 'housekeeping.inspect',
+
   /** Kayıp eşya listesini ve kayıtlarını görmek (modül 21). Misafirin iletişim bilgisi teslim yetkisiyle görünür. */
   LOST_ITEMS_VIEW: 'lost_items.view',
   /** Bulunan eşyayı fotoğrafıyla kaydetmek, bilgilerini düzeltmek. */
@@ -228,6 +237,10 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.MINIBAR_POST]: 'Minibar tüketimi gir',
   [PERMISSIONS.LAUNDRY_POST]: 'Çamaşır siparişi al, durumunu güncelle',
   [PERMISSIONS.EXTRAS_MANAGE]: 'Minibar / çamaşır fiyat listelerini yönet',
+  [PERMISSIONS.HOUSEKEEPING_VIEW]: 'Kat hizmeti görevlerini ve haritayı görüntüle',
+  [PERMISSIONS.HOUSEKEEPING_OPERATE]: 'Temizlik görevini başlat / bitir, sorun bildir',
+  [PERMISSIONS.HOUSEKEEPING_MANAGE]: 'Temizlik görevi aç, ata, iptal et',
+  [PERMISSIONS.HOUSEKEEPING_INSPECT]: 'Temizlenen odayı kontrol et (onay / ret)',
   [PERMISSIONS.LOST_ITEMS_VIEW]: 'Kayıp eşyaları görüntüle',
   [PERMISSIONS.LOST_ITEMS_RECORD]: 'Bulunan eşya kaydet',
   [PERMISSIONS.LOST_ITEMS_RELEASE]: 'Kayıp eşyayı misafirle eşleştir, teslim et',
@@ -331,6 +344,16 @@ export const PERMISSION_GROUPS = Object.freeze([
     permissions: [PERMISSIONS.EXTRAS_VIEW, PERMISSIONS.MINIBAR_POST, PERMISSIONS.LAUNDRY_POST, PERMISSIONS.EXTRAS_MANAGE],
   },
   {
+    key: 'housekeeping',
+    label: 'Kat hizmetleri',
+    permissions: [
+      PERMISSIONS.HOUSEKEEPING_VIEW,
+      PERMISSIONS.HOUSEKEEPING_OPERATE,
+      PERMISSIONS.HOUSEKEEPING_MANAGE,
+      PERMISSIONS.HOUSEKEEPING_INSPECT,
+    ],
+  },
+  {
     key: 'lost_items',
     label: 'Kayıp eşya',
     permissions: [PERMISSIONS.LOST_ITEMS_VIEW, PERMISSIONS.LOST_ITEMS_RECORD, PERMISSIONS.LOST_ITEMS_RELEASE, PERMISSIONS.LOST_ITEMS_MANAGE],
@@ -430,6 +453,11 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.MINIBAR_POST,
     PERMISSIONS.LAUNDRY_POST,
     PERMISSIONS.EXTRAS_MANAGE,
+    // Kat hizmetinin tüm akışı yöneticide: görev açar, dağıtır, kontrol eder.
+    PERMISSIONS.HOUSEKEEPING_VIEW,
+    PERMISSIONS.HOUSEKEEPING_OPERATE,
+    PERMISSIONS.HOUSEKEEPING_MANAGE,
+    PERMISSIONS.HOUSEKEEPING_INSPECT,
     PERMISSIONS.LOST_ITEMS_VIEW,
     PERMISSIONS.LOST_ITEMS_RECORD,
     PERMISSIONS.LOST_ITEMS_RELEASE,
@@ -511,6 +539,8 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.LOST_ITEMS_VIEW,
     PERMISSIONS.LOST_ITEMS_RECORD,
     PERMISSIONS.LOST_ITEMS_RELEASE,
+    // Resepsiyon odanın temizlik kuyruğunu görür ("104 ne zaman hazır olur?").
+    PERMISSIONS.HOUSEKEEPING_VIEW,
     // Resepsiyon salon takvimini görür (bugün balo salonunda ne var) ve depozito alabilir.
     PERMISSIONS.BANQUET_VIEW,
     PERMISSIONS.BANQUET_PAYMENT,
@@ -525,6 +555,14 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.STAYS_VIEW,
     PERMISSIONS.REQUESTS_VIEW,
     PERMISSIONS.REQUESTS_MANAGE,
+    // Kat hizmetinin kendi modülü (14): görevli başlatır/bitirir; kat şefi aynı
+    // rolde — görev açma, dağıtma ve kontrol varsayılan açık, dört göz kuralı
+    // kişinin kendi temizliğini onaylamasını zaten engelliyor. Oteli isterse
+    // rol matrisinden şef ve görevliyi ayırır.
+    PERMISSIONS.HOUSEKEEPING_VIEW,
+    PERMISSIONS.HOUSEKEEPING_OPERATE,
+    PERMISSIONS.HOUSEKEEPING_MANAGE,
+    PERMISSIONS.HOUSEKEEPING_INSPECT,
     // Minibar sayımı ve çamaşırhane kat hizmetlerinin işi; fiyat listesi yönetimde.
     PERMISSIONS.EXTRAS_VIEW,
     PERMISSIONS.MINIBAR_POST,
