@@ -50,6 +50,7 @@ class AccountingWorker extends BaseWorker {
    *   syncAgencyBonus: (hotelId: string, bonusId: string) => Promise<{ posted?: boolean, skipped?: string, message?: string | null }>,
    *   syncEventCharge: (hotelId: string, eventId: string) => Promise<{ posted?: boolean, skipped?: string, message?: string | null }>,
    *   syncInvoice: (hotelId: string, invoiceId: string) => Promise<{ posted?: boolean, skipped?: string, message?: string | null }>,
+   *   syncPayrollRun: (hotelId: string, runId: string) => Promise<{ posted?: boolean, skipped?: string, message?: string | null }>,
    * }} service
    * @param {object} deps BaseWorker bağımlılıkları
    */
@@ -87,6 +88,13 @@ class AccountingWorker extends BaseWorker {
         'invoice.issued': async (payload) => said(await run(() => service.syncInvoice(payload.hotelId, payload.invoiceId)), 'Fatura cariye bağlandı'),
         /** Fatura iptal edildi: bağ çözülür; serbest faturanın borcu ters kayıtla düşer. */
         'invoice.cancelled': async (payload) => said(await run(() => service.syncInvoice(payload.hotelId, payload.invoiceId)), 'Fatura iptali cariye işlendi'),
+        /** Bordro onaylandı: net ücret, SGK, vergi, BES ve icra / nafaka carilere tahakkuk. */
+        'payroll.run.approved': async (payload) => said(await run(() => service.syncPayrollRun(payload.hotelId, payload.runId)), 'Bordro tahakkuku işlendi'),
+        /** Maaş ödendi: kasadan / bankadan çıkış, personel carisi kapanır (diğer bordro haberlerinin muhasebe etkisi yok). */
+        'payroll.run.changed': async (payload) => {
+          if (payload.change !== 'PAID') return { message: 'Muhasebe etkisi yok' };
+          return said(await run(() => service.syncPayrollRun(payload.hotelId, payload.runId)), 'Maaş ödemesi işlendi');
+        },
       },
       deps,
     );
@@ -119,6 +127,10 @@ class AccountingWorker extends BaseWorker {
         return `Fatura ${payload?.number ?? ''} cariye bağlanacak`.trim();
       case 'invoice.cancelled':
         return `Fatura ${payload?.number ?? ''} iptali cariye işlenecek`.trim();
+      case 'payroll.run.approved':
+        return 'Onaylanan bordro carilere tahakkuk ettirilecek';
+      case 'payroll.run.changed':
+        return 'Maaş ödemesi kasaya / bankaya ve personel carilerine işlenecek';
       default:
         return super.describeFallback(eventName, payload);
     }

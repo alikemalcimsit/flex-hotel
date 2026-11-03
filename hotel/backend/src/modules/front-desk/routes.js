@@ -6,6 +6,7 @@ import {
   inHouseQuerySchema,
   revertStaySchema,
   stayParamSchema,
+  checkOutBatchSchema,
 } from '@hotelos/hotel-contracts';
 import { PERMISSIONS, assertRequestPermission, requirePermission } from '../../lib/permissions.js';
 import { withHotelContext } from '../../lib/tenant.js';
@@ -69,6 +70,12 @@ export async function frontDeskRoutes(app) {
       // Kayıp eşya uyarısı (modül 21) yalnızca kayıp eşyaları görebilene: açıklama ve saklandığı yer taşır.
       includeLostItems: request.auth.permissions.includes(PERMISSIONS.LOST_ITEMS_VIEW),
     }),
+  }));
+
+  /* Toplu çıkış: yalnız bakiyesi kapalı ve onay / gerekçe gerektirmeyen konaklamalar; diğerleri atlanır. */
+  app.post('/stays/check-out-batch', { ...manage, schema: { body: checkOutBatchSchema } }, async (request) => ({
+    success: true,
+    data: await service.checkOutBatch(request.hotelId, request.body.items),
   }));
 
   app.post('/stays/:reservationId/check-out', { ...manage, schema: { ...params, body: checkOutSchema } }, async (request) => {

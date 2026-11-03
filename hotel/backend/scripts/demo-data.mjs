@@ -64,6 +64,7 @@ const { resetBanquetFnbDemo, seedBanquetFnbDemo } = await import('./demo-banquet
 const { resetPurchasingDemo, seedPurchasingDemo } = await import('./demo-purchasing.mjs');
 const { resetAccountingDemo, seedAccountingDemo } = await import('./demo-accounting.mjs');
 const { resetInvoicingDemo, seedInvoicingDemo } = await import('./demo-invoicing.mjs');
+const { resetPayrollDemo, seedPayrollDemo } = await import('./demo-payroll.mjs');
 
 const HISTORY_DAYS = 400;
 const FUTURE_DAYS = 75;
@@ -102,6 +103,8 @@ if (process.argv.includes('--reset')) {
       await resetInvoicingDemo(tx, hotelId);
       // Demo ön muhasebe (modül 47): cariler acente / tedarikçi / etkinlik müşterisine kısıtlı bağlı, ödemeler cariye — önce.
       await resetAccountingDemo(tx, hotelId);
+      // Demo personel ve bordro (modül 51): personel carileri ön muhasebeyle gitti; bordrolar, kesintiler, kartlar.
+      await resetPayrollDemo(tx, hotelId);
       // Demo banket (modül 37): etkinlikler ödemeleri, onayları, belgeleriyle; salon, ekipman, müşteri.
       banquetFiles = await resetBanquetDemo(tx, hotelId, ACTOR);
       // Demo satın alma ve stok (modül 45): sipariş / mal kabul / hareket malzeme kartına bağlı; F&B'den önce.
@@ -950,6 +953,14 @@ try {
   console.error(`Fatura adımı tamamlanamadı: ${error.message}`);
 }
 
+// ── Personel ve bordro (modül 51): kartlar, yılın bordroları (onaylı, ödenmiş), fark bordrosu, içinde bulunulan ay ──
+let payrollSummary = null;
+try {
+  if (accountingSummary) payrollSummary = await seedPayrollDemo({ prisma, core, contracts, hotelId, today, actor: ACTOR });
+} catch (error) {
+  console.error(`Bordro adımı tamamlanamadı: ${error.message}`);
+}
+
 // Odaların anlık durumu: içeride kimse varsa dolu, boşların bir kısmı kirli.
 const inHouse = new Set(reservations.filter((entry) => entry.row.status === 'CHECKED_IN').map((entry) => entry.row.roomId));
 await prisma.room.updateMany({ where: { hotelId, id: { in: [...inHouse] } }, data: { occupancy: 'OCCUPIED' } });
@@ -1015,6 +1026,7 @@ console.log(
       : '') +
     (accountingSummary
       ? `, ${accountingSummary.accounts} cari, ${accountingSummary.treasury} kasa / banka, ${accountingSummary.vouchers} fiş, ${accountingSummary.instruments} çek / senet, ${accountingSummary.posted} otomatik kayıt (başlangıç ${accountingSummary.startDate}${accountingSummary.failed ? `, ${accountingSummary.failed} işlenemedi` : ''})${invoiceSummary ? `, ${invoiceSummary.issued} fatura (${invoiceSummary.eFatura} e-Fatura, ${invoiceSummary.eArsiv} e-Arşiv; test ortamı), ${invoiceSummary.drafts} taslak${invoiceSummary.skipped ? `, ${invoiceSummary.skipped} kesilemedi` : ''}` : ''}.`
-      : '.'),
+      : '.') +
+    (payrollSummary ? ` Bordro: ${payrollSummary.employees} personel, ${payrollSummary.runs} bordro (${payrollSummary.approved} onaylı, ${payrollSummary.supplementary} fark), ${payrollSummary.paid} ödeme, ${payrollSummary.terminated} işten çıkış, ${payrollSummary.posted} muhasebe kaydı.` : ''),
 );
 await prisma.$disconnect();

@@ -1,0 +1,83 @@
+#import "/sablon/standart.typ": *
+
+#let musteri(veri) = tanitim(
+  veri,
+  giris: [Personel kartı, aylık puantaj, ek ödeme ve kesintiler bir araya gelir; bordro Türkiye mevzuatının sırasıyla hesaplanır: SGK prime esas kazanç (taban ve tavan arasında), işçi ve işveren payları, yıl içi birikmiş matrahla gelir vergisi, asgari ücret istisnası, damga vergisi. Netten anlaşılan ücret her ay brüte çevrilir; çalışanın eline geçen tutar değişmez. Bordro hazırlayanın dışında bir yetkili tarafından onaylanır, onaylanınca kilitlenir; avans, icra ve nafaka kesintisi o anda kesinleşir, ön muhasebeye personel, SGK ve vergi dairesi borcu olarak işlenir. Maaş banka listesiyle ödenir, pusulalar tek tıkla çıkar.],
+  rakam: (("Kuruşu kuruşuna", "asgari ücretli net 28.075,50 TL"), ("Netten brüte", "her ay birikmiş matrahla"), ("Dört göz", "hazırlayan onaylayamaz"), ("Kaynaklı", "teyit edilmeden onaya gitmez")),
+  adimlar: (("Personel kartı", "ücret · sigorta · IBAN"), ("Puantaj", "eksik gün · mesai · bayram"), ("Kalemler", "prim · yemek · servis payı"), ("Hesap", "SGK · GV · DV · istisna"), ("Onay", "dört göz · kilit"), ("Ödeme", "banka · kasa · muhasebe")),
+  akis-aciklama: [Yasal parametreler (asgari ücret, SGK taban / tavan ve oranları, gelir vergisi tarifesi, yemek ve yol istisnaları, kıdem tavanı) yürürlük tarihli setlerdedir; FlexAI'nin kaynaklı hazır setleri yüklenir ve bir yetkili resmî metinle teyit etmeden bordro onaya gidemez. Onaylı ayın düzeltmesi fark bordrosuyla yapılır: ay yeni kalemlerle baştan hesaplanır, yalnız fark ödenir.],
+  ozellik: (
+    ("Personel kartı", "Kimlik (T.C. kimlik no denetim haneli), departman, görev, işe giriş, sigorta türü (tüm sigorta kolları ya da emekli), engellilik derecesi, ücret (brüt ya da net), ödeme (IBAN ya da elden), BES. Ücret ve IBAN yalnız bordro yetkilisine görünür; kimlik numarası diğerlerine maskeli."),
+    ("Puantaj", "Personel başına eksik gün ve SGK nedeni (rapor, ücretsiz izin…), fiilen çalışılan gün, fazla çalışma saati, bayram ve hafta tatili çalışması; değişen satırlar birlikte kaydedilir."),
+    ("Hesap", "Ay 30 gün esaslı; ay içinde giren / çıkan gün kadar. Prime esas kazanç taban ile tavan arasında; gelir vergisi yıl içi birikmiş matrahla, dilim geçişi kendiliğinden; asgari ücret gelir ve damga vergisi istisnası; engellilik indirimi; yemek ve yol istisnası çalışılan gün kadar."),
+    ("Netten anlaşma", "Net ücret (ve netten verilen prim) her ay o ayın birikmiş matrahıyla brüte çevrilir: çalışan her ay aynı neti alır, brüt ve maliyet dilime göre değişir."),
+    ("Kesintiler", "BES (prime esas kazancın %3'ü, cayma tarihiyle), nafaka (önce), icra (tebliğ sırasıyla, net ücretin dörtte biri, borç bitene kadar), avans taksitleri. Net yetmezse kesilemeyen kısım sonraki aya kalır."),
+    ("Teşvik ve indirim", "Teşviksiz çalışana işyerinin Hazine indirimi (imalat dışı / imalat); çalışan bazında teşvik (asgari ücret üzerinden işveren payı, puan ya da sabit tutar) varsa o ay o uygulanır."),
+    ("Servis payı", "Otelin topladığı servis ücreti puan ya da eşit payla, istenirse çalışılan güne göre dağıtılır; toplam kuruşu kuruşuna havuza eşittir, paylar bordroya kalem olarak girer."),
+    ("İşten çıkış", "SGK çıkış nedeni ve varsayılan hakları; kıdem (tavanla, yıl + ay + gün), ihbar (hizmet süresine göre 2–8 hafta; işveren öder ya da çalışandan kesilir), kullanılmayan izin ücreti önizlenir ve çıkış ayının bordrosuna yazılır. Varsayılandan farklı seçim gerekçe ister."),
+    ("Çıktılar", "Bordro listesi ve personel pusulası PDF'i (onaylanmamışta \"TASLAK\"), departman icmali, banka toplu ödeme listesi ve müşavir aktarım Excel'i (muhtasar ve prim hizmet beyannamesi alanları)."),
+  ),
+  neden: [Bordro yanlış hesaplanırsa çalışan eksik maaş alır ya da işveren fazla vergi öder; yanlışı fark etmek aylar sürer. Burada her kuruşun izi vardır: hangi parametre setiyle, hangi puantajla, kimin hazırladığı ve kimin onayladığı. Asgari ücretlinin neti ve işveren maliyeti yayımlanan resmî tablolarla kuruşu kuruşuna aynıdır.],
+  rol: (
+    ([Muhasebe / İK], [Personel kartı, ücret, puantaj, kalemler, avans, icra, servis payı; bordroyu hesaplar ve onaya gönderir; maaşı öder.]),
+    ([Yönetici, müdür (ikinci kişi)], [Bordroyu onay kuyruğundan onaylar ya da gerekçeyle reddeder; hazırlayan kendi bordrosunu onaylayamaz. Yasal parametre setlerini teyit eder.]),
+    ([Müdür], [Personel listesini ve kartları görür (ücret hariç).]),
+  ),
+  baglantilar: (
+    "*Ön muhasebe (47):* onayda personel carisine net ücret borcu, SGK, vergi dairesi, BES ve icra / nafaka carilerine kesinti borçları; maaş ödemesi bankadan / kasadan çıkış ve personel carisinin kapanması; avans ödendiği gün personel carisine borç.",
+    "*Onay kuyruğu (11):* bordro dört gözle onaylanır; karar hazırlayana bildirim olarak döner.",
+    "*İK (52):* izin, vardiya ve puantaj gelince bordronun puantajı oradan dolar; personel kartı ortaktır.",
+    "*Genel muhasebe (48):* onaylı bordro personel gideri yevmiye fişinin kaynağı olacak.",
+    "*Uyum merkezi (94):* muhtasar ve prim hizmet beyannamesinin son tarihleri ve verisi bordrodan.",
+  ),
+)
+
+#let teknik(veri) = teknik-bolum(
+  veri,
+  mimari: [`modules/payroll`: saf hesap motoru (`engine.js`: kuruş tam sayıyla ay hesabı, net → brüt ikili arama, ücret kalemleri, kesinti sırası, hizmet süresi, kıdem / ihbar / izin), hazır yasal setler (`catalog.js`), personel kartı, departman, teşvik, matrah devri ve işten çıkış (`employees.js`), puantaj, kalemler, servis payı, avans ve icra / nafaka (`inputs.js`), bordro: aç, hesapla, onaya gönder, onay kararı, ödeme, dışa aktarım (`runs.js`), ön muhasebe kayıtları (`postings.js`), PDF (`pdf.js`), ayarlar ve parametre setleri (`setup.js`), onay ve kart dinleyicileri (`subscribers.js`). Sözleşme `contracts/payroll.js` (şemalar, SGK eksik gün ve çıkış nedeni katalogları, sistem kalemleri). Onaylanan bordro `payroll.run.approved`, ödeme `payroll.run.changed` (PAID) ile *muhasebe aktörüne* (`accounting-worker`) gider; Muhasebe → Eşitle aynı fonksiyonları tarar.],
+  kural: (
+    ("Gün", "Ay 30 gün esaslı: ayın tamamında çalışan 30 (Şubat dahil), ay içinde giren / çıkan takvim günü kadar (en fazla 30). Prim günü = ücretli gün − eksik gün; çalışılan gün (yemek / yol istisnası) en fazla prim günü."),
+    ("SGK", "Prime esas kazanç = SGK'ya tabi kazanç − yemek istisnası (günlük tutar × çalışılan gün), gün × taban ile gün × tavan arasında. İşçi %14 + %1, işveren %21,75 + %2 (2026); emekli SGDP işçi %7,5, işveren %24,75, işsizlik yok. Hazine indirimi teşviksiz, tüm sigorta kollarına tabi çalışana."),
+    ("Gelir vergisi", "Matrah = GV'ye tabi kazanç − yemek / yol istisnası − işçi payları − engellilik indirimi. Vergi = tarife(birikmiş + matrah) − tarife(birikmiş), kuruşa yuvarlı. Asgari ücret istisnası: çalışanın kendi sigorta paylarıyla bulunan asgari ücret matrahının, kendi birikmiş asgari ücret matrahıyla vergisi (gün payıyla), hesaplanan vergiyi aşmaz."),
+    ("Damga vergisi", "Binde 7,59; asgari ücretin damga vergisi (gün payıyla) istisna, yalnız ücrete düşen kısımdan (kıdem tazminatı ücret değildir)."),
+    ("Net → brüt", "Kalemler verilen sırayla eklenir; net kalem için \"o ana kadarki nete tam hedefi eklesin\" diyen en küçük brüt kuruş üzerinde ikili aramayla bulunur (net, brütle azalmayan). Netten ücretlide ücret önce: anlaşılan net güvencede, sonraki brüt ek ödeme kendi marjinal vergisiyle."),
+    ("Kesinti sırası", "BES (prime esas kazanç × oran; cayma gününden sonra yok) → nafaka (aylık) → icra (tebliğ sırasıyla yalnız ilk dosya; net × oran, kalan borçla sınırlı) → avans taksiti → diğer kesintiler. Ödenecek eksiye düşmez; kesilemeyen kısım sonraki aya kalır (izde görünür)."),
+    ("Sıra ve kilit", "Yılın önceki aylarının aylık bordroları onaylanmadan bir ay hesaplanamaz ve onaya gidemez (birikmiş matrah onaylı bordrolardan). Onaydaki / onaylı ayın puantajı, kalemi, servis payı, işten çıkışı değişmez. Girdisi hesaptan sonra değişen bordro \"yeniden hesaplanmalı\" olur, onaya gidemez."),
+    ("Onay", "Dört göz (`PAYROLL`; hazırlayan onaylayamaz), 5 gün; teyitsiz parametre setiyle hesaplanan bordro gönderilemez. Onayda avans ve icra / nafaka kesintileri kesinleşir (tek SQL, kayıt başına toplam); red / süre dolumu bordroyu hesaplanmış duruma döndürür."),
+    ("Fark bordrosu", "Ayın aylık bordrosu onaylıyken ve sonraki ay onaya gitmemişken açılır; ay onaylı kazançları (net anlaşmalılar artık brüt) + yeni kalemlerle baştan hesaplanır, önceki onaylı tutarlar çıkarılır (eksi olabilir). Onayı sonraki ayı yeniden hesaplanmalı yapar. Fark bordrosunda BES / avans / icra kesilmez."),
+    ("İşten çıkış", "Hizmet süresi giriş ve çıkış günü dahil yıl / ay / gün. Kıdem = min(giydirilmiş brüt, çıkış günündeki tavan) × (yıl + ay/12 + gün/365), bir yıldan kısa hizmette yok; ihbar haftası 6 ay / 1,5 yıl / 3 yıl sınırlarıyla 2 / 4 / 6 / 8; izin ücreti günlük çıplak brüt × gün. Netten ücretlide dayanak ücretin brüt karşılığı."),
+  ),
+  tutarlilik: (
+    "*Kilitler:* bordro satırı (hesap, onaya gönderme, onay kararı, ödeme sırayla), personel satırı (kart, çıkış, avans), kasa / banka ve cari satırları muhasebe kaydında. Eşzamanlı iki hesap çift satır yazmaz (testli).",
+    "*Değişmezlik:* onaylı bordro değişmez, silinmez; düzeltme fark bordrosuyla. Onaylı / onaydaki bordronun parametre seti değişmez, teyidi kaldırılmaz, silinmez.",
+    "*Tek aktif kayıt:* aynı kişinin aynı otelde tek aktif personel kaydı (kısmi tekil index); yeniden işe giriş yeni kayıttır.",
+    "*Muhasebe idempotent:* kaynak anahtarı tekil (`PAYROLL:<bordro>:<personel>`, `:SGK`, `:TAX`, `:BES`, `:GARN:<dosya>`; `PAYROLL_PAYMENT:<ödeme>`); tahakkuk ve ödeme 250 personellik parçalarla (parça başına cariler tek sıra ayırmayla toplu açılır, hareketler tek seferde yazılır, bakiyeler hesap başına tek güncellemeyle), yarıda kalırsa kalan sonraki çağrıda.",
+    "*Veritabanı kısıtları:* ücret ≥ 0, engellilik 1–3, çıkış ≥ giriş; ay 1–12, aylık bordro sırası 1; puantaj günleri 0–30; kalem tutarı > 0; avans ve icra kesilen ≤ tutar.",
+  ),
+  olcek: (
+    ("Personel listesi (ilk sayfa, arama, departman, derin sayfa 90)", "7–13 ms"),
+    ("Personel kartı", "12 ms"),
+    ("Puantaj sayfası (50 satır) · 200 satırlık kayıt", "12 ms · 0,41 sn"),
+    ("Bordro hesabı: 2.500 personel (net → brüt çözümü dahil)", "3,6 sn"),
+    ("Satır listesi (ilk / derin sayfa, arama, departman) · satır ayrıntısı", "11–14 · 5 ms"),
+    ("Bordro ve departman icmali", "9 ms"),
+    ("Banka dosyası · müşavir tablosu", "0,30 · 0,40 sn"),
+    ("Bordro PDF (2.500 satır) · pusula PDF (500 sayfa)", "5,0 · 4,0 sn"),
+    ("Onay (avans ve icra kesintilerinin kesinleşmesi dahil) · banka ödemesi (~2.400 satır)", "149 · 173 ms"),
+    ("Muhasebe: tahakkuk + ödeme (2.500 personel carisi) · tekrar çağrı", "6,2 sn · 0,30 sn"),
+  ),
+  olcek-not: [Ölçüm `scripts/perf-payroll.mjs`: 2.500 kişilik otelin bir yılı her çalıştırmada baştan kurulur — 12 departman, 2.500 personel (%20 net anlaşmalı, %3 emekli, %60 BES), 60 icra, 20 nafaka, 120 avans; her ay personelin ~%30'unda puantaj, ~%25'inde ek ödeme, servis payı; Ocak–Eylül hesaplanıp onaylanır (birikmiş matrah geçmişi), ölçülen Ekim. Ölçümle yapılan iyileştirme: muhasebe aktarımı 60,5 → 6,2 sn (personel başına cari açma ve iki sorguluk hareket yazımı yerine parça başına toplu cari açma, tek `createMany` ve hesap başına toplanmış tek bakiye güncellemesi). Muhasebe aktarımı arka planda (muhasebe aktörü) çalışır; ekranı bekletmez. Hesap 120 sn işlem süresiyle sınırlıdır; 2.500 kişide 3,6 sn.],
+  test-notu: [Motor birim testleri resmî tablolarla karşılaştırır: asgari ücretlinin neti (28.075,50) ve işveren maliyeti (2 puan indirimle 40.214,03, indirimsiz 40.874,63), Temmuz'da dilim geçişi, yarım ay, emekli, SGK tavanı, engellilik, yemek istisnası, teşvik, kıdemde yalnız damga vergisi, net → brütün en küçük brütü bulması, kesinti sırası, hizmet süresi, kıdem / ihbar / izin. Entegrasyon (gerçek PostgreSQL): teyit kapısı, dört göz, onaydaki ayın kilidi, onayda kesintilerin kesinleşmesi, muhasebe tahakkuku ve ödeme (personel carisi kapanır, kalan avans alacak), elden ödemenin yalnız kasadan, yıl içi sıra, yeniden hesap zorunluluğu, eşzamanlı hesap, fark bordrosu, işten çıkış ve geri alma, servis payının kuruşu kuruşuna dağılımı, izinler ve görünürlük, otel kapsamı, PDF ve dışa aktarım.],
+  degistir: (
+    ("Yeni yasal parametre", "`catalog.js`'e yürürlük tarihli set (kaynaklarıyla); oteller \"hazır setleri yükle\" ile alır ve teyit eder. Yeni bir parametre türü: `payrollParameterValuesSchema` + motor + set düzenleyici."),
+    ("Yeni sistem kalemi", "`SYSTEM_PAY_ELEMENTS` (SGK / GV / DV / istisna davranışı); motor kalemi bayraklarıyla işler. Otelin kendi kalemi ekrandan."),
+    ("Yeni sigorta türü (çırak, stajyer…)", "`INSURANCE_TYPES` + Prisma enum (ayrı migration'da `ADD VALUE`), parametre setinde oranlar, motorun asgari ücret matrahı."),
+    ("Yeni kesinti türü", "`applyDeductions` sırası + `PAYROLL_DEDUCTION_LINE_LABELS` + onayda kesinleşme SQL'i + muhasebe carisi."),
+  ),
+  devir: (
+    "*52 (İK):* puantaj `PayrollAttendance` (`source = TIMESHEET`) ile dolar; personel kartı (`Employee`) ortak — 52 yeni personel tablosu açmaz.",
+    "*48 (genel muhasebe):* onaylı bordronun personel gideri fişi (`payroll.run.approved`); departman bazında maliyet `PayrollEntry` / icmal sorgusunda.",
+    "*94 (uyum merkezi):* muhtasar ve prim hizmet beyannamesi verisi müşavir aktarımındaki alanlarla; doğrudan GİB / SGK gönderimi sonra.",
+    "*Banka dosya biçimleri:* toplu ödeme listesi genel Excel; bankaya özel biçim 97 (banka mutabakatı) ile.",
+  ),
+)

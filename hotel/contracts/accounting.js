@@ -23,15 +23,15 @@ import { z } from './locale.js';
 /* ─────────────── Cari hesap ─────────────── */
 
 /** Prisma `LedgerAccountType` ile birebir. */
-export const LEDGER_ACCOUNT_TYPES = Object.freeze(['AGENCY', 'SUPPLIER', 'COMPANY', 'PERSON', 'OTHER']);
-export const LEDGER_ACCOUNT_TYPE_LABELS = Object.freeze({ AGENCY: 'Acente', SUPPLIER: 'Tedarikçi', COMPANY: 'Şirket', PERSON: 'Şahıs', OTHER: 'Diğer' });
+export const LEDGER_ACCOUNT_TYPES = Object.freeze(['AGENCY', 'SUPPLIER', 'COMPANY', 'PERSON', 'OTHER', 'EMPLOYEE']);
+export const LEDGER_ACCOUNT_TYPE_LABELS = Object.freeze({ AGENCY: 'Acente', SUPPLIER: 'Tedarikçi', COMPANY: 'Şirket', PERSON: 'Şahıs', OTHER: 'Diğer', EMPLOYEE: 'Personel' });
 /** Elle açılabilen türler: acente ve tedarikçi carisi kartından (modül 29 / 45) bağlanarak açılır. */
 export const MANUAL_LEDGER_ACCOUNT_TYPES = Object.freeze(['COMPANY', 'PERSON', 'OTHER']);
 /** Cari kodu önekleri (otel × önek sırası). */
-export const LEDGER_ACCOUNT_CODE_PREFIXES = Object.freeze({ AGENCY: 'ACN', SUPPLIER: 'TED', COMPANY: 'SRK', PERSON: 'KIS', OTHER: 'DGR' });
+export const LEDGER_ACCOUNT_CODE_PREFIXES = Object.freeze({ AGENCY: 'ACN', SUPPLIER: 'TED', COMPANY: 'SRK', PERSON: 'KIS', OTHER: 'DGR', EMPLOYEE: 'PRS' });
 
 /** Prisma `LedgerSource` ile birebir: cari hareketin kaynağı. */
-export const LEDGER_SOURCES = Object.freeze(['OPENING', 'FOLIO_TRANSFER', 'EVENT_CHARGE', 'EVENT_PAYMENT', 'GOODS_RECEIPT', 'AGENCY_BONUS', 'VOUCHER', 'INSTRUMENT', 'INVOICE']);
+export const LEDGER_SOURCES = Object.freeze(['OPENING', 'FOLIO_TRANSFER', 'EVENT_CHARGE', 'EVENT_PAYMENT', 'GOODS_RECEIPT', 'AGENCY_BONUS', 'VOUCHER', 'INSTRUMENT', 'INVOICE', 'PAYROLL', 'PAYROLL_PAYMENT', 'EMPLOYEE_ADVANCE']);
 export const LEDGER_SOURCE_LABELS = Object.freeze({
   OPENING: 'Açılış bakiyesi',
   FOLIO_TRANSFER: 'Folyo aktarımı',
@@ -42,6 +42,9 @@ export const LEDGER_SOURCE_LABELS = Object.freeze({
   VOUCHER: 'Fiş',
   INSTRUMENT: 'Çek / senet',
   INVOICE: 'Fatura',
+  PAYROLL: 'Bordro',
+  PAYROLL_PAYMENT: 'Maaş ödemesi',
+  EMPLOYEE_ADVANCE: 'Personel avansı',
 });
 
 /** Folyoda cariye aktaran ödeme yöntemleri: tutar kasaya değil seçilen cariye borç yazılır. */
@@ -55,7 +58,7 @@ export const TREASURY_KIND_LABELS = Object.freeze({ CASH: 'Kasa', BANK: 'Banka' 
 export const TREASURY_CODE_PREFIXES = Object.freeze({ CASH: 'KSA', BANK: 'BNK' });
 
 /** Prisma `TreasurySource` ile birebir: kasa / banka hareketinin kaynağı. */
-export const TREASURY_SOURCES = Object.freeze(['OPENING', 'FOLIO_PAYMENT', 'EVENT_PAYMENT', 'POS_PAYMENT', 'VOUCHER', 'INSTRUMENT']);
+export const TREASURY_SOURCES = Object.freeze(['OPENING', 'FOLIO_PAYMENT', 'EVENT_PAYMENT', 'POS_PAYMENT', 'VOUCHER', 'INSTRUMENT', 'PAYROLL_PAYMENT', 'EMPLOYEE_ADVANCE']);
 export const TREASURY_SOURCE_LABELS = Object.freeze({
   OPENING: 'Açılış bakiyesi',
   FOLIO_PAYMENT: 'Ön büro tahsilatı',
@@ -63,6 +66,8 @@ export const TREASURY_SOURCE_LABELS = Object.freeze({
   POS_PAYMENT: 'Restoran tahsilatı',
   VOUCHER: 'Fiş',
   INSTRUMENT: 'Çek / senet',
+  PAYROLL_PAYMENT: 'Maaş ödemesi',
+  EMPLOYEE_ADVANCE: 'Personel avansı',
 });
 
 /** Prisma `TreasuryChannel` ile birebir: otomatik tahsilatın geldiği yer (eşleme bunun üstüne kurulur). */

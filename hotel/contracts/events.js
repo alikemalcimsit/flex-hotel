@@ -163,6 +163,11 @@ export const EVENT_LABELS = Object.freeze({
   'invoice.cancelled': 'Fatura iptal edildi (iş olayı)',
   'invoice.changed': 'Fatura taslağı / kesimi / iptal isteği / e-belge durumu değişti',
   'invoice.settings.changed': 'Fatura ayarı / vergi kodu / test mükellefi değişti',
+
+  'employee.changed': 'Personel kartı değişti',
+  'payroll.run.changed': 'Bordro değişti (hesap, onay, ödeme)',
+  'payroll.run.approved': 'Bordro onaylandı (iş olayı)',
+  'payroll.settings.changed': 'Bordro ayarı / parametre / puantaj / kesinti değişti',
   'fnb.order.placed': 'Restoran siparişi mutfağa gitti (iş olayı)',
   'fnb.order.paid': 'Restoran adisyonu kapandı: satılanlar (iş olayı)',
 

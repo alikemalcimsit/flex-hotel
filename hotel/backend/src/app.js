@@ -39,6 +39,8 @@ import { accountingRoutes } from './modules/accounting/routes.js';
 import { registerAccountingSubscribers } from './modules/accounting/subscribers.js';
 import { invoiceRoutes } from './modules/invoicing/routes.js';
 import { registerInvoiceSubscribers } from './modules/invoicing/subscribers.js';
+import { payrollRoutes } from './modules/payroll/routes.js';
+import { registerPayrollSubscribers } from './modules/payroll/subscribers.js';
 import { recipeRoutes } from './modules/recipes/routes.js';
 import { publicRoomServiceRoutes } from './modules/pos/room-service-routes.js';
 import { registerPosSubscribers } from './modules/pos/subscribers.js';
@@ -170,6 +172,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   registerPurchasingSubscribers();
   registerAccountingSubscribers();
   registerInvoiceSubscribers();
+  registerPayrollSubscribers();
   registerHousekeepingSubscribers();
 
   app.setValidatorCompiler(validatorCompiler);
@@ -352,6 +355,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   await app.register(stockRoutes, { prefix: '/stock' });
   await app.register(accountingRoutes, { prefix: '/accounting' });
   await app.register(invoiceRoutes, { prefix: '/invoices' });
+  await app.register(payrollRoutes, { prefix: '/payroll' });
   await app.register(promotionRoutes, { prefix: '/promotions' });
   await app.register(channelManagerRoutes, { prefix: '/channel-manager' });
   await app.register(manualTaskRoutes, { prefix: '/manual-tasks' });

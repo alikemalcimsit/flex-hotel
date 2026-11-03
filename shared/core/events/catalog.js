@@ -872,6 +872,29 @@ export const EVENT_CATALOG = Object.freeze({
   }),
   'invoice.settings.changed': hotelScoped,
 
+  /* ── Personel ve bordro (modül 51) ── */
+  /** Ekran olayı: personel kartı açıldı / değişti / çıkış yaptı / çıkışı geri alındı / silindi. Muhasebe personel carisinin adını eşitler. */
+  'employee.changed': hotelScoped.extend({
+    employeeId: z.string().uuid(),
+    change: z.enum(['CREATED', 'UPDATED', 'TERMINATED', 'REINSTATED', 'DELETED']),
+  }),
+  /** Ekran olayı: bordro açıldı / hesaplandı / onaya gitti / onaylandı / reddedildi / silindi / ödendi. */
+  'payroll.run.changed': hotelScoped.extend({
+    runId: z.string().uuid(),
+    year: z.number().int(),
+    month: z.number().int().min(1).max(12),
+    change: z.enum(['CREATED', 'CALCULATED', 'SUBMITTED', 'APPROVED', 'DECLINED', 'DELETED', 'PAID']),
+  }),
+  /** İş olayı: bordro dört gözle onaylandı. Muhasebe aktörü net ücret, SGK, vergi, BES ve icra / nafaka borçlarını carilere yazar. */
+  'payroll.run.approved': hotelScoped.extend({
+    runId: z.string().uuid(),
+    year: z.number().int(),
+    month: z.number().int().min(1).max(12),
+    kind: z.enum(['MONTHLY', 'SUPPLEMENTARY']),
+  }),
+  /** Ekran olayı: bordro ayarı, parametre seti, kalem, departman, servis payı, avans, icra / nafaka, teşvik ya da puantaj değişti. */
+  'payroll.settings.changed': hotelScoped.extend({ area: z.string().min(1).max(40) }),
+
   /* ── Restoran POS (modül 39) ──
      Masa planı, adisyon ekranı ve mutfak ekranı (modül 40) bunlarla canlı tazelenir
      (`POS_EVENTS`); yükte yalnızca kimlik ve süzgeç alanları. */
@@ -1344,6 +1367,9 @@ export const ACCOUNTING_EVENTS = Object.freeze(['accounting.account.changed', 'a
 
 /** Fatura ve e-belge (modül 16 / 49): ekranlar bunlarla tazelenir (`invoices.changed` kanalı). */
 export const INVOICE_EVENTS = Object.freeze(['invoice.changed', 'invoice.settings.changed']);
+
+/** Personel ve bordro (modül 51): ekranlar bunlarla tazelenir (`payroll.changed` kanalı). */
+export const PAYROLL_EVENTS = Object.freeze(['employee.changed', 'payroll.run.changed', 'payroll.settings.changed']);
 
 /** Acente bonusu (modül 35): ekranlar bunlarla tazelenir (`agency-bonus.changed` kanalı). */
 export const AGENCY_BONUS_EVENTS = Object.freeze([

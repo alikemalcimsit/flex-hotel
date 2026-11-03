@@ -167,6 +167,14 @@ const InvoicesPage = lazy(() => import('./pages/invoicing/InvoicesPage.jsx').the
 const InvoiceDraftsPage = lazy(() => import('./pages/invoicing/InvoicesPage.jsx').then((m) => ({ default: m.InvoiceDraftsPage })));
 const InvoicePage = lazy(() => import('./pages/invoicing/InvoicePage.jsx').then((m) => ({ default: m.InvoicePage })));
 const InvoiceSettingsPage = lazy(() => import('./pages/invoicing/InvoiceSettingsPage.jsx').then((m) => ({ default: m.InvoiceSettingsPage })));
+const EmployeesPage = lazy(() => import('./pages/payroll/EmployeesPage.jsx').then((m) => ({ default: m.EmployeesPage })));
+const EmployeePage = lazy(() => import('./pages/payroll/EmployeePage.jsx').then((m) => ({ default: m.EmployeePage })));
+const PayrollLayout = lazy(() => import('./pages/payroll/PayrollLayout.jsx').then((m) => ({ default: m.PayrollLayout })));
+const PayrollRunsPage = lazy(() => import('./pages/payroll/RunsPage.jsx').then((m) => ({ default: m.RunsPage })));
+const PayrollRunPage = lazy(() => import('./pages/payroll/RunPage.jsx').then((m) => ({ default: m.RunPage })));
+const PayrollAttendancePage = lazy(() => import('./pages/payroll/AttendancePage.jsx').then((m) => ({ default: m.AttendancePage })));
+const ServiceChargePage = lazy(() => import('./pages/payroll/ServiceChargePage.jsx').then((m) => ({ default: m.ServiceChargePage })));
+const PayrollSettingsPage = lazy(() => import('./pages/payroll/PayrollSettingsPage.jsx').then((m) => ({ default: m.PayrollSettingsPage })));
 const WarehousesPage = lazy(() => import('./pages/stock/WarehousesPage.jsx').then((m) => ({ default: m.WarehousesPage })));
 const PromotionsLayout = lazy(() => import('./pages/promotions/PromotionsLayout.jsx').then((m) => ({ default: m.PromotionsLayout })));
 const PromotionListTab = lazy(() => import('./pages/promotions/PromotionListTab.jsx').then((m) => ({ default: m.PromotionListTab })));
@@ -855,6 +863,44 @@ export default function App() {
               element={
                 <RequirePermission permission={PERMISSIONS.INVOICES_VIEW}>
                   <InvoicePage />
+                </RequirePermission>
+              }
+            />
+            {/* Personel ve bordro (modül 51): personel kartları; bordrolar, puantaj ve kalemler, servis payı, ayarlar; bordro ekranı. */}
+            <Route
+              path="personel"
+              element={
+                <RequireAnyPermission permissions={[PERMISSIONS.EMPLOYEES_VIEW, PERMISSIONS.PAYROLL_VIEW]}>
+                  <EmployeesPage />
+                </RequireAnyPermission>
+              }
+            />
+            <Route
+              path="personel/:employeeId"
+              element={
+                <RequireAnyPermission permissions={[PERMISSIONS.EMPLOYEES_VIEW, PERMISSIONS.PAYROLL_VIEW]}>
+                  <EmployeePage />
+                </RequireAnyPermission>
+              }
+            />
+            <Route
+              path="bordro"
+              element={
+                <RequirePermission permission={PERMISSIONS.PAYROLL_VIEW}>
+                  <PayrollLayout />
+                </RequirePermission>
+              }
+            >
+              <Route index element={<PayrollRunsPage />} />
+              <Route path="puantaj" element={<PayrollAttendancePage />} />
+              <Route path="servis-payi" element={<ServiceChargePage />} />
+              <Route path="ayarlar" element={<PayrollSettingsPage />} />
+            </Route>
+            <Route
+              path="bordro/:runId"
+              element={
+                <RequirePermission permission={PERMISSIONS.PAYROLL_VIEW}>
+                  <PayrollRunPage />
                 </RequirePermission>
               }
             />

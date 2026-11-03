@@ -1605,6 +1605,10 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 >   kat hizmeti raporu `reservation.roomId`'ye tek başına bakmamalı.
 >   `modules/plan/rules.js` → `summarizeDays` aynı hesabı yapıyor (örnek).
 
+> **FlexAI 2.0'dan not (3 Kasım 2026 — Ahmet):** gün kapanışı bitince bir "gün kapandı" olayı yayınla (ör. `night.audit.closed`, iş günüyle);
+> 2.0'da 87 (gece müdürü), 92 (kârlılık özeti), 96 (dış muhasebe partisi) ve 104 onu dinleyecek. Günlük özet
+> (DailyStats) 75 (patron uygulaması) ve 87'nin kaynağı olacak — göstergeleri 23 ile aynı tanımla yaz.
+
 ### 19. Çamaşırhane & minibar — arkadaşın
 **Gün sonu:** Kat görevlisi odadan tüketilen minibar ürünlerini giriyor, çamaşır siparişi alınıyor; ikisi de folyoya otomatik yansıyor.
 - [x] Backend: MinibarItem, MinibarConsumption, LaundryOrder tabloları + API
@@ -1789,6 +1793,11 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 > `Conversation.guestId` ve `GuestRequest.guestId`'yi de taşımalı. Misafir kartı
 > ekranında telefon girişine "ülke kodu yoksa otelin kodu varsayılır" ipucu konmalı.
 
+> **FlexAI 2.0'dan not (3 Kasım 2026 — Ahmet):** 80 (misafir tanıma) `GuestPreference`'ı kullanacak: tercihleri serbest metin
+> değil **kategori + değer** olarak tut, yanına kaynak (PERSONEL / MİSAFİR / AI), güven ve son teyit tarihi koy;
+> alerjiler 43'ün alerjen kodlarıyla aynı olsun. 69 (göç sihirbazı) mükerrer misafirleri aynı `mergeGuests`
+> kuralıyla birleştirecek — kuralı servis fonksiyonu olarak dışa aç.
+
 ---
 
 ## 3. RAPORLAMA
@@ -1863,6 +1872,9 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 - [ ] Ekran: Rapor sohbeti (soru kutusu, cevap: tablo + grafik + yorum)
 - [ ] Ekran: "Kaydet" → kayıtlı raporlar listesi, tekrar çalıştır
 - [ ] Token bütçesi + LlmUsage kaydı; agent kapalıysa "rapor talebi" manuel görevi
+
+> **FlexAI 2.0'dan not (3 Kasım 2026 — Ahmet):** 86 (işlem yapan asistan) aynı rapor araçlarını kullanacak; araç tanımlarını
+> ajandan ayrı tut (MCP sunucusunda), ajan yalnız çağırsın.
 
 ### 25. Günlük durum — forecast — arkadaşın
 **Gün sonu:** Dashboard'da önümüzdeki 30 günün doluluk ve gelir tahmini görünüyor; riskli günler işaretli.
@@ -2252,6 +2264,10 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 - [ ] Ekran: Yield kuralları ayarı
 - [ ] Ekran: Fiyat geçmişi grafiği
 
+> **FlexAI 2.0'dan not (3 Kasım 2026 — Ahmet):** `PriceSuggestion`'ın gerekçesini serbest metnin yanında yapılandırılmış girdi
+> olarak da sakla (doluluk, forecast, geçen yıl… ayrı alanlar): 90 no-show riskini, 91 rakip fiyatını bu girdilere
+> ekleyecek; öneri yine onaylı kalacak.
+
 ### 35. Acente bonus / sadakat — arkadaşın
 **Gün sonu:** Acentelerin satış hedefleri ve hak ettiği primler dönem sonunda raporlanıyor.
 - [x] Backend: AgencyBonusRule, AgencyBonus tabloları; dönem sonu hesaplama servisi
@@ -2324,6 +2340,9 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 - [ ] Ekran: Fırsat panosu (yeni / teklif verildi / bekliyor / kazanıldı / kaybedildi)
 - [ ] Ekran: Teklif oluştur (tarih, oda, fiyat) → gönder → kabul edilince rezervasyona çevir
 - [ ] Ekran: Hatırlatmalar (bugün aranacaklar)
+
+> **FlexAI 2.0'dan not (3 Kasım 2026 — Ahmet):** `CallLog`'a kanal (PERSONEL / SESLİ AI), kayıt referansı ve özet alanı düşün:
+> 101 (sesli santral) çağrılarını ve geri arama görevlerini buraya yazacak. 90 grup değerlendirmesi teklif ekranına öneri koyacak.
 
 ### 37. Satış projeleri & banket / etkinlik — arkadaşın
 **Gün sonu:** Düğün, toplantı gibi etkinlikler salon takviminde; teklif → sözleşme → fatura akışı çalışıyor.
@@ -2921,6 +2940,14 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 - [ ] Ekran: Otomatik fiş kuralları ayarı
 - [ ] Aktör: accounting-worker'a fiş üretim kuralları
 
+> **FlexAI 2.0'dan not (3 Kasım 2026 — Ahmet):** 93 (USALI) her hesabı bir USALI satırına / departmana, 96 (dış muhasebe
+> aktarımı) hedef programın hesap koduna eşleyecek. Hesabın departmanını (oda, F&B, diğer, dağıtılmamış) tutabilecek
+> yer bırak; e-Defter (49'un kalanı) bu modülden sonra.
+
+> **Modül 51'den not (3 Kasım 2026 — Ahmet):** bordro 47'ye cari tarafını yazıyor (kaynak `PAYROLL` / `PAYROLL_PAYMENT`, anahtar
+> `PAYROLL:<bordro>:<personel|SGK|TAX|BES|GARN:…>`); yevmiye fişinde gider tarafı (departmana göre 740 / 760 / 770 personel giderleri, SGK işveren payı,
+> Hazine indirimi) `payroll.run.approved` olayından ve `PayrollEntry` toplamlarından kurulur.
+
 ### 49. e-Fatura / e-Arşiv / e-Defter — arkadaşın
 **Gün sonu:** Faturalar özel entegratör üzerinden GİB'e gidiyor, durumu izleniyor; e-Defter aylık dosyası üretiliyor.
 - [x] Backend: EInvoiceConfig, EInvoiceLog tabloları; entegratör adaptörü (1 firma ile başla) — `InvoiceSettings`, `InvoiceLog`,
@@ -3024,12 +3051,67 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 - [ ] Widget'a kart ödeme adımı
 - [ ] Ekran: İşlem listesi (başarılı / başarısız / iade)
 
+> **FlexAI 2.0'dan not (3 Kasım 2026 — Ahmet):** 84 provizyon (al, artır, kapat, serbest bırak), kart token'ı ve ters ibraz
+> bildirimi isteyecek; sağlayıcı arayüzünü bunları sonradan ekleyebilecek biçimde kur (49'un `providers/` deseni:
+> ortak arayüz + TEST adaptörü). Kart numarası hiçbir tabloda tutulmaz.
+
 ### 51. Personel & bordro — arkadaşın
 **Gün sonu:** Personel kartları kayıtlı; aylık bordro hesaplanıp çıktı alınıyor.
-- [ ] Backend: Employee, Payroll, PayrollLine tabloları + API; brüt → net hesabı (SGK, vergi dilimi parametrik)
-- [ ] Ekran: Personel listesi + kart (kimlik, pozisyon, departman, işe giriş, maaş, IBAN)
-- [ ] Ekran: Aylık bordro hesapla (ek ödeme / kesinti gir → hesapla → onayla)
-- [ ] Ekran: Bordro PDF / toplu çıktı
+- [x] Backend: Employee, Payroll, PayrollLine tabloları + API; brüt → net hesabı (SGK, vergi dilimi parametrik)
+- [x] Ekran: Personel listesi + kart (kimlik, pozisyon, departman, işe giriş, maaş, IBAN)
+- [x] Ekran: Aylık bordro hesapla (ek ödeme / kesinti gir → hesapla → onayla)
+- [x] Ekran: Bordro PDF / toplu çıktı
+
+> **✅ Modül 51 tamamlandı (3 Kasım 2026 — Ahmet).** Kararlar (kullanıcı): ücret kişi bazında brüt ya da net anlaşmalı (net → brüt
+> çözümü en küçük brütü bulur); çıktılar bordro listesi, pusula, departman icmali, banka dosyası ve müşavir tablosu; onaylanan bordro
+> ön muhasebeye (47) kendiliğinden düşer; kapsamda avans, icra / nafaka ve BES kesintileri, çıkış bordrosu (kıdem, ihbar, kullanılmayan
+> izin), servis payı dağıtımı ve çalışan bazında teşvikler.
+>
+> **Hesap motoru** (`payroll/engine.js`, saf, kuruş tamsayı): 30 gün esası; prime esas kazanç taban–tavan arası; SGK işçi / işsizlik /
+> işveren payları, emekliye SGDP; 5510 Hazine indirimi (2 puan, imalatta 5) teşviksiz ve tüm kollara tabi çalışana; gelir vergisi
+> birikmiş matrah üzerinden dilimli; asgari ücret GV / DV istisnası kişinin kendi birikmiş asgari ücret matrahıyla; engellilik indirimi;
+> yemek ve yol istisnaları; kesinti sırası BES → nafaka → icra (ilk dosya, netin dörtte biri) → avans → diğer. Kıdem yalnız damga
+> vergili (tavanlı), ihbar GV + DV (SGK yok), izin ücreti tam tabi.
+>
+> **Yasal parametreler:** 2026'nın üç seti kaynaklı katalogda (1 Ocak; 17 Nisan yemek SGK istisnası; 1 Temmuz kıdem tavanı); ay, ayın
+> son günü yürürlükteki setle hesaplanır. Kaydedilen set "teyitsiz" başlar; teyitsiz setle hesaplanan bordro onaya gidemez; onaylı ya da
+> onaydaki bordronun seti değişmez, teyidi kaldırılmaz.
+>
+> **Akış:** puantaj (200 satıra kadar tek kayıt) ve kalemler → hesap → onaya gönder (dört göz, `PAYROLL` onay türü) → onayda avans
+> taksitleri ve icra / nafaka kesilenleri kesinleşir → ödeme (banka: banka hesabından + IBAN dosyası; elden: yalnız kasadan; tarih
+> bugünü geçemez; kasa eksiye düşmez). Onaylı ay kilitli, düzeltme fark bordrosuyla. İşten çıkış önizlemeli (kıdem, ihbar ya da ihbar
+> kesintisi, izin ücreti kalemleri), geri alınabilir.
+>
+> **Muhasebe (47):** tahakkuk ay sonu tarihli — personel carisine net ücret (avans mahsubu dahil), SGK / vergi dairesi / BES / icra ve
+> nafaka dosyası carilerine; ödeme kasa / banka çıkışı ve personel carilerine borç (cari kapanır). Kaynak anahtarlarıyla idempotent;
+> 250 kişilik parçalar, parça başına toplu cari açma ve tek seferde hareket + bakiye yazımı. Gider tarafı 48'de.
+>
+> **API ve izinler:** `/payroll` — `employees` (+ `termination` önizleme / kayıt / geri alma, `incentives`, `advances`, `garnishments`),
+> `openings` (yıl içi matrah devri), `departments`, `attendance`, `items`, `service-charge`, `runs` (+ `calculate`, `submit`, `pay`,
+> `entries`, `export` banka / müşavir, `pdf` bordro / pusula), `settings`, `parameters` (+ `catalog`, `verify`), `elements`. Yeni izinler
+> `employees.view` / `employees.manage`, `payroll.view` / `payroll.manage` / `payroll.pay` / `payroll.setup`; ücret, IBAN, avans ve
+> kesintiler yalnız bordro görüntüleme izniyle görünür. Olaylar `employee.changed`, `payroll.run.changed`, `payroll.run.approved`,
+> `payroll.settings.changed`; kanal `payroll`.
+>
+> **Ekran:** `/personel` (liste; kart: kimlik ve iş, ücret, avanslar, icra ve nafaka, teşvikler, matrah devri, işten çıkış), `/bordro`
+> sekmeli — bordrolar, puantaj ve kalemler, servis payı, ayarlar (parametre setleri, işyeri, departmanlar, kalemler); `/bordro/:id`
+> (toplamlar, departman icmali, çıktılar, satırlar, pusula penceresi, ödemeler).
+>
+> **Ölçüm** (`scripts/perf-payroll.mjs`; 2.500 personel, bir yıl): listeler 7–14 ms, kart 12 ms, puantaj 200 satır 0,41 sn, hesap 2.500
+> kişi 3,6 sn, dışa aktarım 0,30–0,40 sn, bordro PDF 2.500 satır 5,0 sn, pusula 500 sayfa 4,0 sn, onay 149 ms, ödeme 173 ms.
+> Ölçümle düzeltilen: **muhasebe aktarımı 60,5 → 6,2 sn** (toplu cari açma, `createMany`, hesap başına tek bakiye güncellemesi).
+>
+> **Test:** motor birim testleri resmî tablolarla (asgari ücretli neti 28.075,50, işveren maliyeti 40.214,03 / indirimsiz 40.874,63,
+> dilim geçişi, tavan, emekli, engellilik, istisnalar, net → brüt, kesinti sırası, kıdem / ihbar / izin); entegrasyon: teyit kapısı,
+> dört göz, ay kilidi, onayda kesinleşme, muhasebe tahakkuku ve ödemesi, elden ödemenin kasadan, eşzamanlı hesap, fark bordrosu,
+> işten çıkış, servis payı, izinler, otel kapsamı. Tam paket: entegrasyon 670/670, backend birim 657, sözleşme 522, ön yüz 80, derleme.
+>
+> **Demo** (`scripts/demo-payroll.mjs`, `demo-data.mjs` çağırır): 45 personel, 8 departman; Ocak–Ekim onaylı ve ödenmiş, Ekim'e fark
+> bordrosu, Kasım hesaplanmış; avans, icra (dosya tutarında tamamlanan), nafaka, BES, servis payı.
+>
+> **Devir:** **52** — `Employee` ortak kayıt; İK puantajı `PayrollAttendance`'a yazar (kaynak `TIMESHEET`). **48** — bordro
+> tahakkukunun gider tarafı (personel gideri, SGK işveren payı). **94** — MUHSGK (muhtasar ve prim hizmet) beyan verisi bordro
+> satırlarından. **Canlıya alırken:** 1 migration; bordro ayarlarında işyeri ve sektör girilmeli, parametre setleri teyit edilmeli.
 
 ### 52. İK — Ali Kemal
 **Gün sonu:** İzin talepleri onaylanıyor, vardiya çizelgesi yapılıyor, puantaj tutuluyor, özlük belgeleri saklanıyor.
@@ -3039,6 +3121,15 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 - [ ] Ekran: Haftalık vardiya çizelgesi (departman × gün)
 - [ ] Ekran: Puantaj (giriş / çıkış, mesai)
 - [ ] Ekran: Özlük belgeleri (yükle, süre takibi)
+
+> **Modül 51'den not (3 Kasım 2026 — Ahmet):** `Employee`, `Department` ve `PayrollAttendance` 51'de kuruldu; İK aynı personel kaydını
+> kullanır (ikinci personel tablosu açılmaz). Puantaj ekranı 51'in `PayrollAttendance` satırına kaynak `TIMESHEET` ile yazmalı; onaylı
+> bordronun ayı kilitlidir (`PAYROLL_MONTH_LOCKED`), düzeltme 51'in fark bordrosuyla. İzin bakiyesi 51'in işten çıkışındaki
+> "kullanılmayan izin" günlerine kaynak olur.
+
+> **FlexAI 2.0'dan not (3 Kasım 2026 — Ahmet):** 88 (işgücü planlama) `Shift`'e öneri yazacak: vardiyayı departman × gün × saat
+> aralığı × kişi olarak tut; yasal dinlenme ve haftalık saat sınırını kural fonksiyonu olarak dışa aç. 76 puantajı
+> telefondan (QR + konum) girecek; 78 stajyerlere `INTERN` rolüyle süreli hesap açacak.
 
 ---
 
@@ -3053,6 +3144,9 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 - [ ] Ekran (personel): online check-in yapanlar listesi, onayla → 6'daki check-in
 - [ ] Dijital anahtar butonu (62 tamamlanınca aktif)
 
+> **FlexAI 2.0'dan not (3 Kasım 2026 — Ahmet):** portal 2.0'da başka modüllerin sayfalarını da taşıyacak: upsell (83), tesis
+> rezervasyonu (99), hediye çeki (84), konaklama ortası nabız (81). Portalı sayfa eklenebilir (yol + menü kaydı) kur.
+
 ### 54. Misafir yorum entegrasyonu + duygu analizi — Ali Kemal
 **Gün sonu:** Google / Booking yorumları sisteme düşüyor; AI olumlu-olumsuz ve konu etiketi veriyor, cevap öneriyor; trend grafiği var.
 - [ ] Backend: Review, ReviewAnalysis tabloları; yorum çekme (API varsa) + manuel / Excel yükleme
@@ -3061,6 +3155,9 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 - [ ] Ekran: Yorum detayı + önerilen cevap → düzenle → gönder / kopyala
 - [ ] Ekran: Trend grafiği (haftalık duygu, konu dağılımı)
 - [ ] Anomali → yöneticiye bildirim
+
+> **FlexAI 2.0'dan not (3 Kasım 2026 — Ahmet):** insight-agent'ın çıktısını şemalı yaz (duygu puanı, konu, departman, dil):
+> 80 (tercih çıkarma), 81 (konaklama içi duygu) ve 102 (kalite skoru) aynı ajanı ve şemayı kullanacak.
 
 ### 55. Anket & memnuniyet — arkadaşın
 **Gün sonu:** Check-out'tan 1 gün sonra anket gidiyor; cevaplar toplanıyor; NPS ve AI özeti görünüyor.
@@ -3105,6 +3202,11 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 - [ ] Ekran: Okunan alanları göster → onayla → forma yaz
 - [ ] Kimlik görselini misafir kaydına ekle (KVKK: süre sonunda sil)
 
+> **FlexAI 2.0'dan not (3 Kasım 2026 — Ahmet):** son maddeyi başlamadan yeniden düşün — öneri: görüntü **saklanmasın**, yalnız
+> makine okunur satır (MRZ) alanları alınsın ve okuma bitince görüntü silinsin; kayda alanlar + "kimlikten okundu"
+> işareti yazılır (KVKK riski neredeyse sıfır). Telefon modu (personel misafirin yanında) ve kiosk modu (misafir
+> kendisi) aynı okuma bileşenini kullanır (73'ün kamera bileşeni). Karar 59'a başlarken.
+
 ### 60. Çoklu dil & çoklu para birimi — Ali Kemal
 **Gün sonu:** Arayüz TR / EN arasında geçiyor; fiyatlar seçilen para biriminde görünüyor; günlük kur otomatik geliyor.
 - [ ] Frontend: i18n altyapısı (çeviri dosyaları, dil seçici, tarih / sayı formatı)
@@ -3122,6 +3224,9 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 - [ ] Ekran: Webhook abonelikleri + teslimat logu
 - [ ] Doküman sayfası (Swagger UI)
 
+> **FlexAI 2.0'dan not (3 Kasım 2026 — Ahmet):** anahtarları kapsamlı (scope) kur ve bir "uygulama" kavramı bırak: 86 uzaktan
+> MCP istemcilerini (OAuth 2.1) buradan kaydedecek; 100 (acente portalı) ve 85'in webhook eylemi bu altyapıyı kullanacak.
+
 ### 62. Donanım entegrasyonları — Ali Kemal
 **Gün sonu:** Check-in'de kapı kartı kodlanıyor, oda telefonu açılıyor; check-out'ta kapanıyor; POS cihazından ödeme sonucu geliyor.
 - [ ] Backend: Device, DeviceLog tabloları; ortak adaptör arayüzü (`encodeKey`, `revokeKey`, `openLine`, `closeLine`, `chargeCard`)
@@ -3131,6 +3236,11 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 - [ ] Ekran: Cihaz tanımları + bağlantı testi
 - [ ] Check-in / check-out akışına cihaz adımları; hata olursa manuel görev
 
+> **FlexAI 2.0'dan not (3 Kasım 2026 — Ahmet):** cihaz çerçevesi 2.0'da iki tür daha taşıyacak: 74 yazarkasa (ÖKC, GMP3: fiş
+> bas, iptal, Z raporu) ve 89 oda yönetim sistemi (GRMS: sensör olayları, klima / sahne komutları). Adaptör arayüzünü
+> sabit yöntem listesi yerine yetenek (capability) bazlı kur; cihaz olayları durum değişince yazılsın, ham akış değil.
+> 101 (sesli santral) çağrı devri için santral adaptörünü kullanacak.
+
 ### 63. Multi-tenant zincir konsolu — arkadaşın
 **Gün sonu:** Zincir yöneticisi birden çok oteli tek panelden görüyor; otel arası geçiş yapıyor; zincir raporu alıyor.
 - [ ] Backend: HotelGroup, UserHotel tabloları; kullanıcı → birden çok otel yetkisi
@@ -3139,6 +3249,10 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 - [ ] Ekran: Üst barda otel seçici
 - [ ] Ekran: Zincir dashboard'u
 - [ ] Ekran: Merkezi kullanıcı yönetimi
+
+> **FlexAI 2.0'dan not (3 Kasım 2026 — Ahmet):** `HotelGroup` / `UserHotel` 2.0'da üç yerde kullanılacak: 75 (sahip birden
+> çok oteli görür), 77 (Akademi sınıfı = eğitim otelleri grubu), 104 (karşılaştırma kümeleri). "Yeni otel sihirbazı"nı
+> servis fonksiyonu olarak dışa aç: 69 (göç) ve 77 (eğitim oteli kurulumu) aynı fonksiyonu çağıracak.
 
 ---
 
@@ -3181,3 +3295,512 @@ Hepsi aynı çekirdeği kullanır. Her paket: kendi manifest'i, birkaç ek tablo
 - [ ] Hekim takvimi + randevu (57'nin uyarlaması)
 - [ ] Tedavi planı ve seans takibi
 - [ ] Fatura (16) ve ödeme (17) aynen kullanılır
+
+---
+
+# FLEXAI 2.0
+
+Tarih: 3 Kasım 2026
+1–68 bittikten sonra başlar. Ortak mimari, yeni yapı taşları, roller, onay türleri, olay alanları ve yol
+haritası: **[FLEXAI-2.0.md](FLEXAI-2.0.md)**. Paylaşım aynı: **tek numaralar = arkadaşın, çift numaralar = Ali Kemal.**
+
+2.0'da her modülün başında iki satır daha var:
+- **Önkoşul:** başlamadan bitmiş olması gereken modüller. "varsa" = isteğe bağlı bağ (yoksa o parça sonra bağlanır).
+- **Aktör:** işi yürüten worker / ajan / geçit (yoksa "manuel" ya da "sistem").
+
+2.0'ın her modülünde geçerli (tek tek yazılmadı): dış bağlantı `providers/` adaptörü + TEST adaptörü (49'un
+deseni), sırlar `secret-box`'ta; yapay zekâ özelliği bütçeli (`LlmUsage`) ve yapay zekâsız yoluyla; yan etkili
+yapay zekâ işi önizleme + kullanıcı onayıyla; yeni özellik bayrak (72) arkasında; yeni kişisel veri alanı
+veri envanterine (71) saklama süresiyle; 5 sn'den uzun iş uzun iş çerçevesinde (69).
+
+---
+
+## 11. SAĞLAM ZEMİN
+
+### 69. Göç sihirbazı — arkadaşın
+**Gün sonu:** Başka bir PMS'ten (önce Elektraweb) gelen dosyalar sihirbazla içeri alınıyor; misafir, gelecek rezervasyon, içerideki konaklama, açık folyo bakiyesi, cari bakiye ve kontratlar geliyor; kaynak toplamlarıyla bizim toplamlar kuruşu kuruşuna tutmadan "canlıya al" açılmıyor.
+**Önkoşul:** 26, 29, 47, 63 · **Aktör:** sistem (uzun iş)
+- [ ] Altyapı: **uzun iş çerçevesi** — `BackgroundJob` (tür, otel, durum, ilerleme, imleç, son hata, deneme), üstlenme `FOR UPDATE SKIP LOCKED`, süre bütçeli tur + kaldığı yerden devam, iptal; ilerleme `jobs.changed` kanalından. Genel yazılır: 77, 88, 90, 91, 92, 96, 104 kullanır
+- [ ] Backend: `MigrationProject`, `MigrationFile` (şifreli saklanır, proje kapanınca 30 gün sonra silinir), `MigrationMapping` (kaynak kod → bizim kayıt: oda tipi, pansiyon, vergi, acente, ödeme tipi), `MigrationRecord` (kaynak kimlik → bizim kimlik; tekrar çalıştırmada aynı kayıt güncellenir, ikinci kez açılmaz)
+- [ ] Adaptör: kaynak biçimleri (`detect`, `readBatch`, `mapRow`) — Elektraweb dışa aktarım dosyaları + genel Excel/CSV şablonu (26'nın sihirbazıyla aynı kolon eşleştirme bileşeni)
+- [ ] Aktarım sırası: ayarlar (oda tipi, oda, vergi, sezon, pansiyon) → acente + kontrat → misafir (TCKN / pasaport / telefon ile mükerrer birleştirme, 22'nin `mergeGuests` kuralı) → gelecek rezervasyonlar (`reservations/service.js` üzerinden, envanter kilidiyle; tabloya doğrudan yazılmaz) → içerideki konaklamalar → açık folyolar (devir bakiyesi kalemi) → cari bakiyeler (47 açılış fişi) → çek / senet
+- [ ] Prova: hiçbir şey yazmadan doğrulama raporu (hatalı satır, eşleşmeyen kod, kapasite aşımı, geçmiş tarihli açık rezervasyon, para birimi)
+- [ ] Mutabakat: kaynak / hedef kayıt sayısı, gelecek oda-gece, açık folyo toplamı, cari bakiye toplamı — para birimi bazında; fark sıfır değilse "canlıya al" kapalı
+- [ ] Kesme günü: son gün delta aktarımı, kanal yöneticisi (33) kısa süreli durdurulur ve tam senkronlanır; canlıya alma onay türü `MIGRATION_COMMIT` (dört göz)
+- [ ] Ekran: Sihirbaz (proje → dosya yükle → eşleştir → prova → mutabakat → canlıya al), aktarım geçmişi, satır bazında hata raporu (Excel)
+- [ ] Ölçek: 300k misafir + 50k gelecek rezervasyon tek projede; 500'lük partiler, kesintide kaldığı yerden; perf betiği
+- [ ] Test: mutabakat hesabı, mükerrer misafir eşleştirme, tekrar çalıştırmada çift kayıt olmaması
+
+### 70. Kesintisiz çalışma — Ali Kemal
+**Gün sonu:** Sunucu tamamen kaybolsa da otel en fazla 15 dakikalık veri kaybıyla ve 1 saat içinde başka sunucuda ayağa kalkıyor; her ay yedek otomatik açılıp sınanıyor; internet kesilince ön büro gelen, konaklayan, giden ve oda durumu listelerini görmeye ve yazdırmaya devam ediyor.
+**Önkoşul:** 63 · **Aktör:** sistem
+- [ ] Sürekli yedek: PostgreSQL WAL arşivi + günlük tam yedek, başka bölgedeki nesne depolamaya, şifreli, 35 gün (hedef RPO ≤ 15 dk); dosya deposu (`FILE_STORAGE_DIR`: PDF, fotoğraf, belge) aynı hedefe
+- [ ] Felaket kurtarma kitabı: boş sunucuya kurulum betiği (altyapı kodu), adım adım geri yükleme, hedef RTO ≤ 1 saat
+- [ ] Geri yükleme tatbikatı: her ay otomatik — yedek ayrı makinede açılır, sağlık ve tutarlılık sorguları koşar, sonuç platforma raporlanır; başarısızlık alarm
+- [ ] İki uygulama süreci + yedek sunucu (akış replikasyonu): süreç içi kayıtların envanteri ve paylaşılan yere taşınması — realtime odaları (socket adaptörü), kanal kaydı (`lib/channels.js`), zamanlanmış işlerin tek süreçte koşması (lider seçimi / danışma kilidi)
+- [ ] Çevrimdışı ön büro: tarayıcı 5 dakikada bir "acil durum anlık görüntüsü" (gelenler, konaklayanlar, gidenler, oda durumu, açık bakiyeler) alır; oturum anahtarıyla şifreli, 24 saatte kendini siler; bağlantı yokken salt okuma + yazdırma
+- [ ] Acil durum çıktısı: tahliye listesi (oda, misafir, kişi sayısı, özel ihtiyaç) tek tıkla, çevrimdışı da
+- [ ] Ekran: Sistem sağlığı (son yedek, son tatbikat, replikasyon gecikmesi) — yalnız ADMIN
+- [ ] Test: iki süreçli entegrasyon testi (olay bir kez işlenir, socket haberi iki süreçten de gelir)
+
+### 71. Güvenlik ve kimlik — arkadaşın
+**Gün sonu:** Personel iki adımlı doğrulamayla giriş yapıyor; zincir kendi kurumsal hesabıyla (SSO) bağlanabiliyor; aktif oturumlar görülüp uzaktan kapatılabiliyor; FlexAI ekibi otel verisine yalnız otelin onayıyla ve süreli erişiyor; bağımsız sızma testinin bulguları kapalı.
+**Önkoşul:** 2 · **Aktör:** sistem
+- [ ] 2FA: TOTP + yedek kodlar; rol bazında zorunluluk (otel ayarı; ADMIN, MANAGER, ACCOUNTING, OWNER için varsayılan zorunlu)
+- [ ] SSO: OpenID Connect (Google Workspace, Microsoft Entra); kullanıcı e-postayla eşleşir, rol ve izin yine bizde
+- [ ] Oturumlar: cihaz, IP, son görülme; uzaktan kapatma; parola politikası; başarısız girişte artan bekleme ve kilit
+- [ ] Socket kimliği: realtime el sıkışmasında JWT doğrulaması (bugünkü "istemcinin söylediği e-posta" sınırı kapanır), otel ve izin odaları token'dan
+- [ ] Hassas işlemde yeniden doğrulama: kullanıcı/rol değişikliği, API anahtarı (61), toplu dışa aktarım
+- [ ] Platform hesabı: FlexAI ekibi için ayrı giriş alanı; otel verisine **süreli destek erişimi** — otel ADMIN'i onaylar, salt okuma, 2 saat, her istek denetim kaydında; 72 ve 79 bunu kullanır
+- [ ] KVKK teknik altyapı: kişisel veri envanteri (tablo, alan, amaç, saklama süresi), süresi dolanı silen imha işi + tutanak, veri sahibi başvurusu (erişim / silme) iş akışı; toplu kişisel veri dışa aktarımı onay türü `DATA_EXPORT` (dört göz)
+- [ ] Güvenlik olayları: giriş, 2FA, yetki değişikliği, dışa aktarım ayrı akış; anormal desen (mesai dışı toplu misafir listesi indirme, çok sayıda başarısız giriş) → `staff.alert.raised`
+- [ ] Bağımsız sızma testi + bulguların kapanışı; bağımlılık taraması derleme hattında
+- [ ] Ekran: Güvenlik ayarları, oturumlarım, güvenlik olayları, KVKK başvuruları
+- [ ] Olaylar: `security.login.failed`, `security.session.revoked`, `security.access.granted` (destek erişimi)
+
+### 72. Gözlem, yayın ve paketleme — Ali Kemal
+**Gün sonu:** Bir hata müşteri fark etmeden ekibe düşüyor; herkese açık durum sayfası var; yeni bir özellik önce tek otelde, sonra yüzde yüzde, sonra herkese açılıyor; her yayında kullanıcı "yenilikler"i görüyor. Her modül katalogda; bir otele istenen modüller ya da hazır bir paket verilebiliyor, lisansı olmayan modül o otelde görünmüyor ve çalışmıyor.
+**Önkoşul:** 71 · **Aktör:** sistem
+- [ ] Metrikler: istek süresi ve hata oranı (uç bazında), outbox birikmesi, aktör gecikmesi ve hata oranı, kuyruk uzunlukları, LLM harcaması, yedek gecikmesi; uyarı kuralları
+- [ ] Ön yüz hata yakalama: tarayıcı hatası kullanıcı/otel/ekran bağlamıyla, kişisel veri maskeli
+- [ ] Durum sayfası: bileşen bazında (uygulama, kanal yöneticisi, e-Fatura, WhatsApp, ödeme, telefon), olay geçmişi, abonelik
+- [ ] Özellik bayrakları: `FeatureFlag` (anahtar, açıklama, varsayılan), `HotelFeature` (otel bazında aç/kapa, yüzde açılış); backend `isEnabled(hotelId, key)` önbellekli; ön yüz `useFeature`; bayrak değişince `feature.changed` ile önbellek tazelenir
+- [ ] Yayın kapısı: hata oranı eşik üstündeyse yeni bayrak açılamaz; bayrak açıldıktan sonra hata sıçrarsa otomatik geri kapatma önerisi
+- [ ] Sürüm notları: yayın başına rol bazlı "Yenilikler" penceresi; 79'un yardım makalesine bağlanır
+- [ ] Ekran (platform): bayrak yönetimi, otel bazlı açılış durumu, metrik panoları
+- [ ] **Modül kataloğu** (genel yapı taşı): `ModuleCatalog` — her modülün anahtarı, adı, bağımlılıkları (ör. 74 → 39), izin grupları, menüleri, aktörleri, uç önekleri; 1–68 geriye dönük kataloğa girer (izin gruplarından türetilir)
+- [ ] **Paket ve lisans:** `Package` (modüller + fiyat kuralı: oda başı / ay, sabit, kullanıcı başı, en az tutar, kurulum), `HotelSubscription` (paket + ek modüller, dönem, deneme süresi); bağımlılığı eksik modül lisanslanamaz
+- [ ] **Lisans kapısı:** backend `hasModule(hotelId, key)` önbellekli — lisanssız modülün uçları 403 `MODULE_NOT_LICENSED`, menüsü gizli (`useModule`), aktörü o otel için çalışmaz, olay dinleyicisi o oteli atlar; diğer modüller bozulmaz
+- [ ] Kullanım ölçümü: oda sayısı, aktif kullanıcı, LLM harcaması, SMS / WhatsApp adedi — otel başına aylık (paket fiyatının girdisi)
+- [ ] Ekran (platform): paket tasarımı, otel aboneliği, kullanım; otel tarafında "paketim" (salt okuma)
+- [ ] Test: bağımlılık kontrolü, lisans kapısının uç / aktör / olay düzeyinde çalışması
+
+### 73. Mobil temel — arkadaşın
+**Gün sonu:** FlexAI telefona uygulama gibi kuruluyor; anlık bildirim geliyor; parmak izi / yüzle açılıyor; bağlantı gidince son veriler görünüyor, yazılan iş kaybolmuyor; patron ve personel uygulamaları bu kabuğun üstüne kuruluyor.
+**Önkoşul:** 71, 9 · **Aktör:** notification-worker (PUSH kanalı)
+- [ ] `hotel/mobile`: ayrı küçük React (Vite) uygulaması, PWA (manifest, service worker), `@hotelos/ui` ve `@hotelos/hotel-contracts`'ı paylaşır; rol bazlı açılış ekranı (OWNER → patron, HOUSEKEEPING → kat, FNB → garson…)
+- [ ] Anlık bildirim: Web Push (VAPID; iOS ana ekran uygulaması dahil); `PushSubscription` (kullanıcı, cihaz, son görülme); notification-worker'a `PUSH` kanalı; zil haberleri (StaffAlert) kullanıcı tercihine göre push'a da; sessiz saatler
+- [ ] Biyometrik açılış: WebAuthn cihaz kaydı + süreli yenileme anahtarı (71'in 2FA'sını karşılar)
+- [ ] Çevrimdışı: okuma önbelleği (sürüm etiketiyle), yazma kuyruğu `requestId` ile; bağlantı gelince sırayla gönderim, 409 çakışması kullanıcıya gösterilir; para işlemi (ödeme, iade) çevrimdışı yapılamaz
+- [ ] Ortak bileşenler: kamera / QR / barkod okuyucu, fotoğraf yükleme (sıkıştırılmış), imza alanı
+- [ ] Ekran: Cihazlarım, bildirim tercihleri
+- [ ] Mağaza: PWA yeterli değilse aynı kodla Capacitor sarmalayıcı (karar noktası)
+
+### 74. Yazarkasa (ÖKC) ve e-Adisyon — Ali Kemal
+**Gün sonu:** Restorana dışarıdan gelen müşterinin hesabı kapanınca yeni nesil yazarkasadan mali fiş çıkıyor (ya da e-Arşiv kesiliyor); oda hesabına aktarılan adisyonda fiş çıkmıyor (belge folyodan, 49'dan); gün sonu Z raporu vardiya kasasıyla mutabık; fiş iptali yalnız onayla.
+**Önkoşul:** 39, 49, 62 · **Aktör:** fnb-worker (mali fiş kuralı) + 62'nin cihaz aktörü
+- [ ] Backend: `FiscalDevice` (62'nin `Device`'ına bağlı; outlet, seri no, departman eşlemesi), `FiscalReceipt` (adisyon, fiş no, Z no, tutar, KDV kırılımı, durum), `FiscalDayClose`
+- [ ] Adaptör: GMP3 ile 1 ÖKC markası + TEST — `printReceipt`, `voidReceipt`, `zReport`, `status`
+- [ ] Kural: hangi ödeme mali belge ister — nakit / kart → ÖKC fişi veya e-Arşiv (49), oda hesabı → belge yok, ikram → belge yok ama kayıt var; KDV oranları ÖKC departmanlarına eşlenir
+- [ ] Cihaz yanıt vermezse adisyon "fiş bekliyor" kalır, kasiyer görür, sessizce geçilmez; alternatif e-Arşiv yolu (ayar)
+- [ ] e-Adisyon: kapsamdaki işletmede adisyon açılış/kapanış bildirimi — 49'un sağlayıcı arayüzüne yöntem (kapsam kararı)
+- [ ] Fiş iptali: aynı gün ve onay türü `FISCAL_VOID` (dört göz)
+- [ ] Gün sonu: Z raporu ↔ 39'un `PosShift` kapanışı; fark → `staff.alert.raised`
+- [ ] Ekran: Cihazlar ve durumları, fiş listesi (yeniden bas, iptal iste), Z raporu geçmişi
+- [ ] Olaylar: `fiscal.receipt.printed`, `fiscal.receipt.failed`, `fiscal.day.closed`
+- [ ] Test: belge türü kuralı (ödeme türü × müşteri türü), KDV departman eşlemesi
+
+---
+
+## 12. SAHİP VE OKUL
+
+### 75. Patron uygulaması — arkadaşın
+**Gün sonu:** Otel sahibi telefonunu açınca bütün otellerinin bugünkü doluluğunu, gelirini, kasasını, bütçe sapmasını, forecast'ini ve yorum puanını görüyor; onay bekleyen büyük işleri oradan onaylıyor; kritik bir olay olunca bildirim alıyor; pazartesi sabahı haftalık sahip raporu e-postasında.
+**Önkoşul:** 73, 63, 11, 18, 23, 25, 27, 54 (varsa) · **Aktör:** notification-worker
+- [ ] Rol `OWNER` (Sahip): varsayılan salt okuma + `approvals.decide` + `owner.view`; misafir kişisel verisi maskeli (ayarla açılabilir)
+- [ ] Backend: sahip özeti (otel başına bugün / dün / ay / yıl: doluluk, ADR, RevPAR, oda ve toplam gelir, tahsilat, açık alacak, kasa, bütçe sapması, 30 gün forecast, yorum puanı) — 18'in günlük özeti ve 23'ün tablolarından, 5 dk önbellekli
+- [ ] Çoklu otel: 63'ün `UserHotel`'i; zincir toplamı ve otel karşılaştırması
+- [ ] Onaylar: bekleyen onaylar, ayrıntı, onayla / reddet (dört göz kuralı aynen); push'tan derin bağlantı
+- [ ] Uyarı abonelikleri: eşik bazlı (forecast doluluğu < %X, kasa farkı > Y, kötü yorum, büyük iptal, overbooking, sistem uyarısı) → push; sessiz saatler; `owner.alert.raised`
+- [ ] Haftalık sahip raporu PDF'i (pdf-writer) e-postayla, pazartesi 08:00 otelin saatiyle
+- [ ] Ekran (mobil): Bugün, Gelir, Onaylar, Uyarılar, Oteller; büyük rakam + trend + geçen yıl; karanlık mod
+- [ ] Ölçek: 20 otelli zincirde özet < 300 ms (özet tablolar; otel başına ayrı sorgu döngüsü yok)
+
+### 76. Personel mobil uygulaması — Ali Kemal
+**Gün sonu:** Kat görevlisi, teknisyen, garson ve vardiya şefi işlerini telefondan yapıyor: görev alıp bitiriyor, fotoğraf ekliyor, minibar giriyor, barkodla sayım yapıyor, vardiyaya giriş yapıyor; bağlantı kopsa da iş kaybolmuyor.
+**Önkoşul:** 73 (aynı aşamada; bitmeden başlamaz), 14, 19, 20, 21, 39, 41, 44, 46, 52 · **Aktör:** mevcut aktörler
+- [ ] Kat hizmetleri: görevlerim (14), başla / bitir, "sorun var" (fotoğraflı → 20), minibar (19), kayıp eşya kaydı (21)
+- [ ] Teknik servis: bana atananlar (20), başla / bitir, parça kullanımı (44 stok çıkışı), periyodik kontrol listesi
+- [ ] Garson: masa / adisyon (39), siparişi mutfağa gönder (40), oda servisi teslimi (41)
+- [ ] Sayım: barkodla stok sayımı (44), demirbaş sayımı (46)
+- [ ] Vardiya: giriş-çıkış (52 puantaj; QR + konum doğrulamalı), izin talebi (52), bordro pusulası (51)
+- [ ] Çevrimdışı: görev bitirme, minibar, sayım çevrimdışı yazılabilir; ödeme çevrimdışı kapalı
+- [ ] Ekran: role göre sekmeler, büyük dokunma alanları, tek elle kullanım, personelin kendi dili (60)
+
+### 77. FlexAI Akademi — arkadaşın
+**Gün sonu:** Eğitmen bir sınıf açıyor; her öğrenciye gerçekçi verili, sıfırlanabilir bir eğitim oteli kuruluyor; öğrenci senaryoları (overbooking, grup girişi, gece kapanışı, şikâyet) çözüyor; sistem ne yaptığını olay ve denetim kaydından okuyup puanlıyor ve nedenini yazıyor; başaran öğrenci QR ile doğrulanan sertifika alıyor.
+**Önkoşul:** 63, 69 (uzun iş), 10, 8, 71 · **Aktör:** academy-worker (puanlama) + rol yapma ajanı (concierge altyapısı)
+- [ ] Ayrı kurulum: aynı kod `ACADEMY_MODE` ile; bütün dış adaptörler TEST'e kilitli, giden mesaj kapalı, canlı otellerin veritabanına hiçbir yol yok
+- [ ] Backend: `AcademyClass` (eğitmen, dönem, ders), `AcademyEnrollment` (öğrenci → eğitim oteli), `Scenario` (başlangıç tohumu, hedefler, puan anahtarı, süre), `ScenarioAttempt`, `Certificate` (kod, seviye, tarih)
+- [ ] Eğitim oteli: demo veri betikleriyle tohumlanır (uzun iş), "sıfırla" ve "senaryo başlangıcına götür"
+- [ ] Puanlama: hedefler olay kaydı + denetim kaydı üzerinde kural (ör. overbooking: misafir başka odaya taşındı, folyo doğru, `OVERBOOKING` onayı gerekçeli); kısmi puan + açıklamalı geri bildirim
+- [ ] Rol yapma: yapay zekâ "zor misafir"i senaryo kişiliğiyle oynar (önce yazılı, 101'den sonra sesli); öğrencinin cevabı rubrikle puanlanır (nezaket, çözüm, kurala uygunluk); öğrenci başına token bütçesi
+- [ ] Senaryo kütüphanesi (ilk 20): rezervasyon, grup + rooming list, giriş-çıkış, folyo bölme, ödeme / iade, gece kapanışı, overbooking, oda değişikliği, kayıp eşya, şikâyet, kat planı, POS adisyon, oda servisi, banket teklifi, e-Fatura, KBS hatası, acente kontratı, kupon, bütçe, kasa farkı
+- [ ] Eğitmen paneli: sınıf ilerlemesi, öğrenci bazında deneme geçmişi, ödev (senaryo + son tarih), not çıktısı (Excel)
+- [ ] Sertifika: seviyeler (Ön Büro 1/2, F&B, Gelir Yönetimi…), herkese açık QR doğrulama sayfası (yalnız ad + seviye + tarih)
+- [ ] Rol `INSTRUCTOR` (Eğitmen) + öğrenci; üniversite SSO'su (71)
+- [ ] Olaylar: `academy.attempt.completed`, `certificate.issued`
+
+### 78. Staj ve kariyer ağı — Ali Kemal
+**Gün sonu:** Okul stajyerleri otellerle eşleştiriyor; stajyer otelde süreli ve kısıtlı bir hesapla çalışıyor, yetkisi olmayan işi yapınca istek mentoruna düşüyor; staj defteri dijital tutulup otelce onaylanıyor; dönem sonunda değerlendirmeler ve sertifikalar öğrencinin izniyle mezun havuzunda otellerin işe alımına açılıyor.
+**Önkoşul:** 77 (aynı aşamada; bitmeden başlamaz), 52, 63, 71 · **Aktör:** manuel
+- [ ] Backend: `InternshipProgram` (okul, dönem, kontenjan), `InternshipPlacement` (öğrenci, otel, departman, tarih aralığı, mentor), `InternshipLog` (günlük defter), `InternshipEvaluation`
+- [ ] Eşleştirme: otel kontenjanı + departman ihtiyacı ↔ öğrenci tercihi + Akademi sertifikası (77); öneri listesi, son karar okul + otel
+- [ ] Rol `INTERN` (Stajyer): staj bitince hesap otomatik pasif
+- [ ] **Denetimli işlem** (genel yapı taşı): izin çözümüne "denetimli" kip — yetkisi olmayan işi (iade, iptal, fiyat değişikliği, indirim) yapınca istek mentorun onayına düşer, onay türü `SUPERVISED_ACTION`; deneme süresindeki personel için de kullanılabilir
+- [ ] Staj defteri: günlük giriş (yaptığı işler denetim kaydından önerilir: "bugün 14 giriş yaptın"), mentor onayı, okul biçiminde PDF
+- [ ] Değerlendirme formları (otel → öğrenci, öğrenci → otel); okul için otel bazında staj memnuniyeti
+- [ ] Mezun havuzu: öğrencinin açık rızasıyla profil + sertifikalar + değerlendirmeler; otel İK'sı (52) ilan açar, havuzdan davet eder
+- [ ] Ekran: Okul paneli, otel staj paneli, öğrenci ekranları (mobil, 73)
+- [ ] Olaylar: `internship.placement.changed`, `internship.log.approved`
+
+### 79. Uygulama içi yardım ve destek — arkadaşın
+**Gün sonu:** Her ekranda "bu ekran ne yapar, nasıl yapılır" yardımı ve kısa videolar var; yardım asistanı yardım içeriğinden kaynak göstererek cevap veriyor; kullanıcı destek talebini ekran bağlamıyla tek tıkla açıyor; destek ekibi otelin onayıyla süreli erişimle sorunu görüyor.
+**Önkoşul:** 71, 72, 77 · **Aktör:** assistant-agent (ilk sürüm: yalnız yardım içeriği)
+- [ ] Yardım içeriği: ekran anahtarına bağlı makaleler (Markdown, sürümlü), Akademi senaryolarıyla aynı kaynaktan; arama
+- [ ] İlk kullanım turları: rol bazlı adım adım; boş durum ekranlarında "nasıl başlarım"
+- [ ] **Bilgi bankası altyapısı** (genel yapı taşı): belge → parça → gömme + Türkçe tam metin, karma arama, kaynak gösteren cevap, belge erişim listesi; sunucuya pgvector eklentisi. 86 otel belgeleri için kullanır
+- [ ] `assistant-agent` ilk sürüm: yalnız yardım içeriğinden cevap, otel verisine erişim yok; bilmiyorsa "destek talebi aç" önerir; bütçe + LlmUsage
+- [ ] Destek talebi: `SupportTicket` (otel, kullanıcı, ekran, tarayıcı, son hatalar (72), isteğe bağlı ekran görüntüsü), durum, öncelik, yanıt süresi
+- [ ] Süreli destek erişimi (71) talep ekranından istenir; otel ADMIN'i onaylar
+- [ ] Ekran: Yardım merkezi, taleplerim; platform tarafında destek kuyruğu
+- [ ] Olaylar: `support.ticket.changed`
+
+---
+
+## 13. LÜKS MİSAFİR DENEYİMİ
+
+### 80. Misafir tanıma ve kişiselleştirme — Ali Kemal
+**Gün sonu:** Misafir ikinci kez geldiğinde otel onu tanıyor: tercihleri (yastık, kat, alerji, özel gün) geliş hazırlığına otomatik görev olarak düşüyor; yapay zekâ mesajlardan ve notlardan yeni tercih öneriyor, personel onaylamadan karta yazılmıyor; her sabah gelen VIP ve tekrar gelen misafirlerin brifingi hazır.
+**Önkoşul:** 22, 7, 8, 14, 19, 41, 43, 56, 54/55 (varsa) · **Aktör:** insight-agent (tercih çıkarma) + guest-experience-worker (geliş hazırlığı)
+- [ ] Tercih sözlüğü: 22'nin `GuestPreference`'ı kategori sözlüğüyle (oda, yastık, kat, minibar, yiyecek, alerji, özel gün, iletişim dili, hitap), kaynak (PERSONEL / MİSAFİR / AI), güven, son teyit; alerjiler 43'ün alerjen sözlüğüyle aynı kodlar
+- [ ] Tercih çıkarma: insight-agent mesaj (7), istek, not, anket (55), yorumdan (54) aday tercih çıkarır → öneri kuyruğu; onaylanan karta yazılır, reddedilen bir daha önerilmez
+- [ ] VIP: `VipCode` (seviye, kural: sadakat 56 seviyesi, harcama, yönetim notu), rezervasyonda görünür
+- [ ] Geliş hazırlığı (geliş −1 gün, `guest-experience-worker`): tercih ve VIP'e göre görev üret — oda seçimi önerisi (3), amenity siparişi (41 / 19), kat hizmeti notu (14), karşılama kartı; `guest.arrival.prepared`
+- [ ] Sabah brifingi: bugün gelen VIP ve tekrar gelenler, tercihler, geçmiş şikâyetler (81 gelince), özel günler — ekran + PDF + push (75 / 76)
+- [ ] Kişiselleştirilmiş iletişim: mesaj ve e-postada misafirin dili ve hitabı (60)
+- [ ] KVKK: alerji / sağlık özel nitelikli veri — açık rıza alanı + ayrı izin `guests.sensitive.view`; tercihlerin saklama süresi
+- [ ] Ekran: Misafir kartında "Tanıma" sekmesi, öneri kuyruğu, VIP geliş panosu
+- [ ] Olaylar: `guest.preference.suggested`, `guest.preference.changed`, `guest.arrival.prepared`
+
+### 81. Servis kurtarma (misafir ilişkileri) — arkadaşın
+**Gün sonu:** Konaklama sırasında memnuniyetsizlik (mesajdaki olumsuz ton, tekrarlanan istek, geciken görev, çözülmemiş arıza, düşük ara anket) misafir ilişkileri panosuna düşüyor; olay kaydı açılıyor, sorumlusu ve süresi var; telafi (ikram, indirim, yükseltme) onayla veriliyor ve maliyeti tutuluyor; açık olayı olan misafir çıkışa gelince ön büro uyarılıyor.
+**Önkoşul:** 7, 8, 11, 14, 15, 20, 55, 80 (varsa) · **Aktör:** guest-experience-worker (sinyal kuralları) + insight-agent (duygu)
+- [ ] Rol `GUEST_RELATIONS` (Misafir ilişkileri); izinler `recovery.view`, `recovery.manage`
+- [ ] Sinyaller: konaklama içi mesajda olumsuz duygu (insight-agent), aynı istek ikinci kez, istek süresi aşıldı (7), arıza çözülmedi (20), ara anket ≤ 3 (55), oda değişikliği isteği; her sinyal ayrı kural, ayrı açılıp kapanır
+- [ ] Backend: `GuestIncident` (konaklama, kategori, departman, ciddiyet, durum, sorumlu, süre), `IncidentAction`, `Compensation` (tür, tutar ve maliyet, folyo kalemi bağlantısı)
+- [ ] Telafi: folyoya indirim / ikram (15'in düzeltme yolu), oda yükseltme (3), ücretsiz hizmet; eşik üstü tutar onay türü `SERVICE_RECOVERY` (dört göz)
+- [ ] Kapanış: misafire takip mesajı (8), memnuniyet sorusu; açık olayla çıkışta ön büroya uyarı
+- [ ] Analiz: departman / oda / konu bazında olay sıklığı; tekrar eden sorun listesi (102 bunu DÖF kaynağı olarak okur)
+- [ ] Ekran: Misafir ilişkileri panosu (konaklayanların nabzı renkli), olay ayrıntısı, aylık telafi maliyeti raporu; canlı kanal `recovery.changed`
+- [ ] Olaylar: `guest.incident.opened`, `guest.incident.changed`, `guest.incident.closed`
+
+### 82. Concierge ve butler masası — Ali Kemal
+**Gün sonu:** Concierge misafir adına dış restoran, tur ve transfer rezervasyonu yapıyor, komisyonunu takip ediyor; uçuş numarası girilen misafirin iniş saati izleniyor, rötar olunca transfer ve oda hazırlığı kendiliğinden güncelleniyor; süit misafirine butler atanıyor, talepler butlerin telefonuna düşüyor.
+**Önkoşul:** 7, 8, 14, 36, 47, 76, 80 · **Aktör:** guest-experience-worker (uçuş saati kuralı)
+- [ ] Backend: `ConciergeVendor` (restoran, tur, transfer, kiralama; komisyon oranı, iletişim, cari bağlantısı 47), `ConciergeBooking` (misafir, tedarikçi, tarih/saat, kişi, durum, ücret, folyoya yansır mı, komisyon), `TransferBooking` (uçuş no, terminal, araç, şoför, saat)
+- [ ] Adaptör: uçuş verisi (TEST + 1 sağlayıcı) — tahmini iniş, rötar; değişince `guest.arrival.eta_changed` → kat önceliği (14) ve transfer saati
+- [ ] Komisyon: tedarikçi carisi (47) üzerinden aylık komisyon alacağı
+- [ ] Butler: süit / VIP konaklamaya butler atama, butlerin görev akışı (76), misafirin butlere doğrudan mesajı (8'in kanalı)
+- [ ] Şehir rehberi: otelin önerileri çok dilli; 53 portalında ve concierge ajanının `get_hotel_info` aracında
+- [ ] Ekran: Concierge masası (bugünün dış rezervasyonları ve transferleri), tedarikçiler, butler panosu
+- [ ] Olaylar: `concierge.booking.changed`, `guest.arrival.eta_changed`
+
+### 83. Upsell ve oda özelliği satışı — arkadaşın
+**Gün sonu:** Gelişten 3 gün önce misafire kendi dilinde, fiyatı doluluğa göre hesaplanmış yükseltme, erken giriş, geç çıkış ve paket teklifleri gidiyor; misafir portaldan seçip ödüyor; deniz manzarası, yüksek kat gibi oda özellikleri ayrı fiyatla garanti satılabiliyor; ön büro girişte hangi misafire ne önereceğini görüyor.
+**Önkoşul:** 3, 4, 14, 15, 25, 28, 50, 53, 80 (varsa) · **Aktör:** guest-experience-worker (teklif zamanlaması)
+- [ ] Oda özellikleri: `RoomAttribute` (manzara, kat, bağlantılı oda, köşe, balkon), `RoomAttributePrice`; garanti edilen özellik oda atamasında (3) kısıt — ihlal eden atama reddedilir
+- [ ] Teklif motoru: `UpsellOffer` (tür, fiyat, geçerlilik), `UpsellOrder`; yükseltme fiyatı üst oda tipinin müsaitliği ve forecast'e (25) göre; dolması beklenen günde teklif yok
+- [ ] Erken giriş / geç çıkış: o günün kat planı (14) ve gelen / giden yüküne göre satılabilir saat
+- [ ] Gönderim: geliş −3 gün mesaj (8 / e-posta; hizmet mesajı sınıfında değilse İYS izni), portal sayfası (53), girişte ön büro önerisi
+- [ ] Kabul: kartla (50) ya da folyoya; rezervasyon değişikliği `reservations/service.js` üzerinden (envanter kilidi, fiyat gece gece)
+- [ ] Personel primi: kim ne sattı raporu
+- [ ] Rapor: teklif / kabul oranı, ek gelir, oda tipi ve kanal bazında
+- [ ] Ekran: Teklif kuralları, upsell panosu; misafir sayfası (53)
+- [ ] Olaylar: `upsell.offer.sent`, `upsell.order.changed`
+- [ ] Test: yükseltme fiyatı kuralı, özellik garantili atama kısıtı
+
+### 84. Ödeme güvencesi, hediye çeki ve üyelik — Ali Kemal
+**Gün sonu:** Girişte karttan provizyon alınıyor, harcama arttıkça artırılıyor, çıkışta kapanıyor; kart bilgisi bizde değil sağlayıcıda (token) duruyor; itiraz edilen ödemenin dosyası tek tıkla hazır; hediye çeki online satılıyor, oda, spa ve restoranda harcanıyor; dışarıdan spa / spor üyeliği satılıyor ve aidat otomatik yenileniyor.
+**Önkoşul:** 50, 15, 17, 39, 53, 57, 59 · **Aktör:** billing-worker (provizyon kuralları)
+- [ ] Provizyon: `PaymentAuthorization` (kart token'ı, tutar, durum: alındı / artırıldı / kapandı / serbest), girişte tutar kuralı (gece × fiyat + günlük harcama limiti), limite yaklaşınca artırım ya da ön büroya uyarı; izin `payment.authorize`
+- [ ] Token: kart numarası bizde hiç tutulmaz; rezervasyon garantisi token'la
+- [ ] Ters ibraz: sağlayıcı bildirimi → dosya (rezervasyon, imzalı kayıt kartı 53/59, folyo, giriş-çıkış saatleri, mesajlar) PDF; son tarih takibi
+- [ ] Hediye çeki: `GiftCard` (kod, bakiye, son kullanma, kapsam: oda / spa / restoran), online satış (50), harcama POS (39) / folyo (15) / spa (57) ödeme türü; muhasebede alınan avans, harcanınca gelir (47)
+- [ ] Üyelik: `Membership` (plan, dönem, aile üyeleri, giriş hakları), aidat tahsilatı token'la otomatik yenileme
+- [ ] Bakiye düzeltmesi onay türü `GIFT_CARD_ADJUST` (dört göz)
+- [ ] Ekran: Provizyonlar, itirazlar, hediye çekleri, üyelikler
+- [ ] Olaylar: `payment.authorization.changed`, `gift_card.changed`, `membership.changed`
+- [ ] Test: provizyon tutarı ve artırım kuralı, hediye çeki bakiyesi (eşzamanlı harcama kilidi)
+
+---
+
+## 14. OTONOM OPERASYON
+
+### 85. Otomasyon stüdyosu — arkadaşın
+**Gün sonu:** Otel yöneticisi kod yazmadan "şu olunca, şu koşulda, şunu yap" kuralı kuruyor (ör. "VIP girişinde müdüre bildirim + odaya meyve"); misafir yolculuğu mesajları (geliş öncesi, konaklama ortası, çıkış sonrası) aynı yerden yönetiliyor; her kural önce geçmiş olaylara karşı provada deneniyor, yayına onayla çıkıyor.
+**Önkoşul:** 9, 11, 12, 22, 61 · **Aktör:** automation-worker
+- [ ] Backend: `AutomationRule` (tetik, koşullar, eylemler, sürüm, durum), `AutomationRun` (olay, kural sürümü, sonuç, süre); tetik yalnız katalogdaki olaylar + zamanlı tetik (geliş −N gün, çıkış +N gün)
+- [ ] Koşul dili: beyana dayalı JSON (alan, işleç, değer) — kod çalıştırmaz; alan listesi olayın zod şemasından üretilir
+- [ ] Eylemler (beyaz liste): bildirim / mesaj (9 / 8, şablonla), görev (12 manuel görev, 14, 20), etiket (22), webhook (61), folyoya kalem (yalnız onaylı); eylem ilgili servisin kendisini çağırır, kural motoru veriye doğrudan yazmaz
+- [ ] `automation-worker`: döngü koruması (kuralın ürettiği olay aynı kuralı tetiklemez, zincir derinliği ≤ 3), kural başına saatlik çalışma sınırı, kural hatası diğer kuralları durdurmaz
+- [ ] Prova: son 30 günün olaylarına karşı "kaç kez çalışırdı" + örnek kayıtlar
+- [ ] Yayın: yeni / değişen kural onay türü `AUTOMATION_RULE` (dört göz); sürüm geçmişi, geri al
+- [ ] Yolculuk şablonları: geliş öncesi (online check-in 53, upsell 83, transfer 82), konaklama ortası nabız (81), çıkış sonrası anket (55) ve yorum daveti (memnunsa platforma, değilse 81'e); İYS izni olmayana pazarlama mesajı gitmez
+- [ ] Ekran: Kural listesi, görsel düzenleyici (tetik → koşul → eylem), çalışma geçmişi, prova sonucu
+- [ ] Olaylar: `automation.rule.changed`, `automation.run.failed`
+- [ ] Test: koşul değerlendirici, döngü koruması
+
+### 86. İşlem yapan yapay zekâ asistanı ve uzaktan MCP — Ali Kemal
+**Gün sonu:** Personel uygulamanın içinde asistana Türkçe yazıyor; asistan otelin kendi prosedürlerinden kaynak göstererek cevap veriyor, doğru ekranı açıyor, raporu getiriyor ve kullanıcının yetkisiyle iş yapıyor (rooming list Excel'inden grup rezervasyonu taslağı, toplu oda bloğu); yan etkili her iş önce önizleme ve kullanıcı onayıyla, türü varsa onay kuyruğundan geçiyor. Yönetici aynı araçlara Claude veya ChatGPT'den bağlanabiliyor.
+**Önkoşul:** 24, 61, 79, 11, 26, 29, 30 · **Aktör:** assistant-agent (79'un ajanı genişler)
+- [ ] Araçlar iki sınıf: okuma (23/24'ün raporlama MCP araçları + kayıt arama) ve eylem (beyaz liste, servis çağırır); her araç bir izin ister; çağrı kullanıcının kimliği ve izinleriyle — ajan kullanıcıdan fazla yetki taşımaz
+- [ ] Eylem protokolü: ajan önce plan + önizleme üretir (ne değişecek, kaç kayıt), kullanıcı onaylar, servis çalışır; türü olan işler (`BULK_PRICE_CHANGE`, `OVERBOOKING`…) onay kuyruğuna; denetim kaydında "asistan aracılığıyla" işaretli
+- [ ] Bilgi bankası: otelin belgeleri (prosedür, SOP, sözleşme, menü) 79'un altyapısıyla; cevap kaynak gösterir; belge erişimi role göre; izin `knowledge.manage`
+- [ ] Dosyadan iş: rooming list (Excel / PDF) → 30'un grup rezervasyonu taslağı; kontrat PDF'i → 29 fiyat tablosu taslağı; hep taslak, insan onaylar
+- [ ] Gezinme: "yarın gelen grupları aç" → doğru sayfa + süzgeç
+- [ ] Uzaktan MCP: 23'ün MCP sunucusu Streamable HTTP + OAuth 2.1; istemci kaydı 61'in uygulama yönetiminden; araç seti kullanıcının izinleriyle sınırlı; önce yalnız okuma, eylem araçları ayrı açılır
+- [ ] Güvenlik: belge veya misafir mesajındaki talimat eylem tetikleyemez (eylem yalnız kullanıcının kendi isteğinden); kişisel veri maskesi; ajan bütçesi + LlmUsage
+- [ ] Ekran: Asistan çekmecesi (her ekranda), sohbet geçmişi, bilgi bankası yönetimi, MCP bağlantıları
+- [ ] Olaylar: `assistant.action.requested`, `assistant.action.completed`
+
+### 87. Yapay zekâ gece müdürü ve sabah brifingi — arkadaşın
+**Gün sonu:** Her gece gün kapanışından sonra sistem bütün oteli tarıyor: kontrat altı satılmış gece, sıfır fiyatlı gece, dengesiz folyo, açık bakiyeyle çıkış, kasa farkı, açık kalmış provizyon, iptal sıçraması, overbooking riski, kanal senkron hatası; bulduklarını önem sırasıyla, kanıtına bağlantıyla ve "ne yapmalı" önerisiyle genel müdüre sabah 07:00'de tek sayfa brifing olarak gönderiyor.
+**Önkoşul:** 15, 17, 18, 23, 25, 27, 29, 33, 75, 80 (varsa), 84 (varsa) · **Aktör:** night-manager-agent
+- [ ] Kontrol kütüphanesi (deterministik, her biri ayrı test): fiyat (kontrat / plan altı satış, sıfır fiyat, para birimi hatası), folyo (açık bakiyeyle çıkış, negatif bakiye, iptal ama ödemeli), kasa (vardiya farkı, iade yoğunluğu), envanter (overbooking riski, bloklu oda + rezervasyon, uzun süre arızalı oda), dağıtım (senkron hatası, stop-sale tutarsızlığı), gelir (forecast ve bütçe sapması)
+- [ ] Backend: `OpsCheck` (anahtar, eşik, açık / kapalı), `OpsFinding` (kontrol, önem, kanıt bağlantısı, durum: yeni / incelendi / çözüldü / yanlış alarm), `OpsBriefing`
+- [ ] **Özet tabloları** (genel yapı taşı): gün kapanışında güncellenen günlük göstergeler; 92, 93, 104 bunlardan okur, 75'in özeti de bunlara geçer
+- [ ] `night-manager-agent`: gün kapanışı olayıyla (18) çalışır; kontroller deterministik, LLM yalnız önceliklendirme özeti ve öneri metni; LLM yoksa brifing şablon metinle yine çıkar
+- [ ] Gün içi: kritik bulgu anında `staff.alert.raised` + sahip push'u (75)
+- [ ] Geri bildirim: "yanlış alarm" işaretlenen kontrol için eşik önerisi; kontrol başına isabet oranı ekranda
+- [ ] Brifing: bugün (gelen / giden / VIP), dün (gelir, bütçe, kasa), riskler, bulgular — ekran + PDF + e-posta + 75
+- [ ] Ekran: Bulgular (kanıta tıklayınca kayıt), kontrol ayarları, brifing arşivi; canlı kanal `ops.changed`
+- [ ] Olaylar: `ops.finding.raised`, `ops.briefing.ready`
+
+### 88. İşgücü planlama — Ali Kemal
+**Gün sonu:** Doluluk tahmininden yarın ve gelecek hafta her departmanda kaç kişi-saat gerektiği hesaplanıyor (kat hizmeti oda kredisinden, ön büro giriş-çıkış yükünden, F&B kuver tahmininden, banketten); vardiya çizelgesi bu ihtiyaca göre öneriliyor; kat görevlilerine günün odaları dengeli dağıtılıyor; plan ile gerçekleşen ve personel maliyeti / dolu oda raporlanıyor.
+**Önkoşul:** 14, 25, 37, 39, 51, 52, 82 (varsa) · **Aktör:** sistem (uzun iş) + housekeeping-worker (dağıtım önerisi)
+- [ ] Standartlar: `LaborStandard` (departman, iş birimi, süre — ör. çıkış odası 35 dk, konaklama odası 20 dk, giriş 4 dk, kuver 6 dk), sabit kadro; otel ayarı
+- [ ] İhtiyaç: forecast (25) + gelen / giden + banket (37) + POS kuver tahmini (39) → departman × gün × vardiya saat ihtiyacı; `LaborDemand`
+- [ ] Çizelge önerisi: 52'nin `Shift`'ine öneri — izinler, haftalık saat sınırı, art arda çalışma günü, yasal dinlenme; yönetici düzenler, yayınlar
+- [ ] Kat dağıtımı: günün odaları kredi + kat + öncelik (VIP, erken giriş, uçuş saati 82) ile görevlilere dengeli; 14'ün atama ekranına öneri
+- [ ] Gerçekleşen: puantaj (52) ve iş süreleri (14) → verimlilik (görevli başı oda, dk / oda)
+- [ ] Rapor: personel maliyeti / dolu oda, departman bazında plan-gerçekleşen
+- [ ] Ekran: İhtiyaç takvimi, çizelge önerisi, verimlilik
+- [ ] Test: ihtiyaç hesabı, çizelge kısıtları (dinlenme, haftalık sınır)
+
+### 89. Akıllı oda ve enerji — arkadaşın
+**Gün sonu:** Oda yönetim sistemi (GRMS) bağlı: misafir odada değilken klima kısılıyor, çıkış yapılan oda tasarruf kipine geçiyor; "rahatsız etmeyin" ve "odamı temizleyin" kat hizmetine düşüyor; minibar sensörü tüketimi teyide düşürüyor; cihaz alarmı arıza kaydı açıyor; sayaçlardan enerji ve su tüketimi dolu oda başına raporlanıyor.
+**Önkoşul:** 6, 14, 19, 20, 62 · **Aktör:** 62'nin cihaz aktörü + room-worker
+- [ ] Adaptör: 62'nin cihaz çerçevesine GRMS (1 marka + TEST) — olaylar (varlık sensörü, DND / MUR, kapı, pencere, minibar kapağı, cihaz alarmı) ve komutlar (klima ayar noktası, karşılama sahnesi, tasarruf kipi)
+- [ ] Olay tasarrufu: yalnız durum değişince yazılır (`room.sensor.changed`); ham akış saklanmaz
+- [ ] Kurallar: giriş → karşılama sahnesi; boş oda + açık pencere → klima kapalı; çıkış → tasarruf kipi; DND → 14 görevi ertele; MUR → öncelik artır
+- [ ] Minibar sensörü → 19'a "doğrulanmamış tüketim", kat görevlisi teyit eder (teyitsiz folyoya yazılmaz)
+- [ ] Cihaz alarmı (klima arızası, su kaçağı) → 20'ye arıza kaydı
+- [ ] Enerji: `MeterReading` (elektrik, su, doğalgaz; sayaç / alan / oda), otomatik ya da elle okuma; dolu oda başı tüketim, dış sıcaklığa göre düzeltilmiş karşılaştırma; 103'e veri
+- [ ] Ekran: Sensörlü oda haritası, enerji panosu, kural ayarları
+- [ ] Ölçek: 2500 oda × dakikalık sensör olayı — değişim bazlı yazım, oda başı son durum tablosu
+
+---
+
+## 15. GELİR VE KÂRLILIK
+
+### 90. No-show tahmini ve grup değerlendirme — Ali Kemal
+**Gün sonu:** Her rezervasyonun gelmeme ve iptal olasılığı hesaplanıyor ve nedeni gösteriliyor; oda tipi bazında güvenli overbooking miktarı öneriliyor; gelen grup talebinin bireysel satışı ne kadar ittiği hesaplanıp "al / alma / en az şu fiyatla al" önerisi veriliyor.
+**Önkoşul:** 4, 25, 30, 33, 34, 36 · **Aktör:** sistem (model eğitimi uzun işte) + pricing-agent
+- [ ] **Model çerçevesi** (genel yapı taşı): `DemandModel` (otel, tür, sürüm, özellikler, katsayılar, backtest metrikleri, durum); haftalık eğitim uzun işte; yeni sürüm backtest'te eskisinden kötüyse yayına çıkmaz
+- [ ] No-show / iptal modeli: açıklanabilir (lojistik regresyon) — kanal, acente, rezervasyon önceliği, konaklama süresi, garanti, ülke, sezon, misafirin geçmişi; `ReservationRisk` (olasılıklar, ana sebepler)
+- [ ] Overbooking önerisi: oda tipi × gün beklenen boşalma − risk payı (walk maliyeti ayarı); 34'ün ekranına öneri — otomatik değil, `OVERBOOKING` onayı aynen
+- [ ] Walk planı: anlaşmalı oteller ve maliyet
+- [ ] Grup değerlendirme: talep (tarih, oda, fiyat, F&B, banket) → forecast'e göre yerinden edilen bireysel gelir, grubun toplam katkısı, öneri ve en düşük kabul fiyatı; 30 ve 36'nın teklif ekranına
+- [ ] Ekran: Riskli rezervasyonlar (ön büro: depozito iste / teyit ara), overbooking önerileri, grup değerlendirme, model başarımı
+- [ ] Olaylar: `risk.scores.refreshed`
+- [ ] Test: overbooking önerisi hesabı, displacement hesabı
+
+### 91. Rakip fiyat izleme — arkadaşın
+**Gün sonu:** Seçilen rakip otellerin (10'a kadar) gelecek 365 günlük fiyatı ve müsaitliği her gün geliyor; tabloda pazarın en düşük / en yüksek / ortalaması ve bizim farkımız görünüyor; 34'ün fiyat önerisi bu veriyi de kullanıyor; rakip fiyatında sert değişiklik olunca uyarı geliyor.
+**Önkoşul:** 25, 33, 34, 60 · **Aktör:** rate-shop-worker + pricing-agent
+- [ ] Adaptör: lisanslı rakip fiyat veri sağlayıcısı (TEST + 1); OTA sayfası kazımak yok (kullanım koşulları)
+- [ ] Backend: `CompSet` (rakipler, ağırlık), `RateShopSnapshot` (rakip, giriş tarihi, oda / pansiyon, fiyat, para birimi, müsait mi, çekiliş zamanı)
+- [ ] Normalizasyon: oda tipi ve pansiyon eşlemesi (standart oda + kahvaltı kıyası), vergi dahil / hariç, para birimi (60)
+- [ ] Analiz: gün bazında en düşük / en yüksek / ortalama / medyan, bizim sıramız, rakip müsaitliği (pazar doluyor sinyali), sert değişim uyarısı
+- [ ] 34'e girdi: pricing-agent gerekçesine rakip verisi eklenir; öneri yine onaylı
+- [ ] Ekran: Fiyat tablosu (gün × otel), grafik, uyarılar, Excel çıktısı
+- [ ] Ölçek: 10 rakip × 365 gün × 3 oda tipi ≈ 11k satır / gün / otel — tarih bölümlemeli tablo, 400 günden eskisi özetlenir
+- [ ] Olaylar: `rate_shop.snapshot.received`, `rate_shop.change.detected`
+
+### 92. Kontrat ve pansiyon kârlılığı — Ali Kemal
+**Gün sonu:** Her acente / kontrat, oda tipi ve pansiyon için gece başı net katkı görülüyor: oda geliri − komisyon ve bonus − pansiyonun gerçek F&B maliyeti − değişken maliyetler (kat hizmeti, enerji, amenity, kart komisyonu); "hangi kontrat bize zarar ettiriyor" tek ekranda; yeni kontrat pazarlığında simülasyon yapılabiliyor.
+**Önkoşul:** 28, 29, 35, 39, 44, 87, 88, 89, 90 · **Aktör:** accounting-worker (gece özeti)
+- [ ] Maliyet sürücüleri: `CostDriver` — pansiyon başına kişi-gün F&B maliyeti (44 tüketimi + 39 açık büfe / her şey dahil sayımı), kat hizmeti dk × saat ücreti (88), enerji / oda-gece (89), amenity, kart komisyonu, acente komisyonu ve bonusu (35)
+- [ ] Her şey dahil maliyeti: outlet tüketimi kişi-gün başına (yetişkin / çocuk eşdeğeri), pansiyon tiplerine dağıtım
+- [ ] Kârlılık özeti: `ProfitabilityFact` (kontrat × oda tipi × pansiyon × gün) — gün kapanışında; ekran ham folyo kalemine inmez
+- [ ] Simülasyon: yeni fiyat / komisyon / allotment ile beklenen katkı (90'ın displacement'ıyla)
+- [ ] Ekran: Kontrat kârlılık tablosu, pansiyon maliyet trendi, simülatör
+- [ ] Olaylar: `profitability.refreshed`
+- [ ] Test: maliyet dağıtımı, gece başı katkı hesabı
+
+### 93. USALI kâr-zarar ve sahip raporu — arkadaşın
+**Gün sonu:** Genel muhasebe (48) hesapları USALI departmanlarına eşlenmiş; oda, F&B, diğer gelir merkezleri ve dağıtılmamış giderler için departman kâr-zararı, GOP ve GOPPAR aylık ve yıl içi, bütçe ve geçen yılla karşılaştırmalı çıkıyor; sahip / yatırımcı paketi tek tıkla PDF ve Excel.
+**Önkoşul:** 23, 27, 44, 46, 48, 51 · **Aktör:** accounting-worker + budget-agent (yorum)
+- [ ] Eşleme: `UsaliMapping` (hesap → USALI satırı / departman), USALI'nin güncel baskısına göre şablon; eşlenmemiş hesap uyarısı; kural: mizan toplamı = USALI toplamı (fark 0 değilse rapor "eksik eşleme" işaretli)
+- [ ] Dağıtım anahtarları: ortak giderlerin departmanlara dağıtımı (m², personel, gelir payı)
+- [ ] İstatistikler: dolu oda, satılabilir oda (23 ile aynı tanım), kuver, personel sayısı (51)
+- [ ] Raporlar: departman P&L, özet P&L, GOP / GOPPAR, flow-through, bütçe (27) ve geçen yıl sapması, yıl içi toplam
+- [ ] Sahip paketi: aylık PDF (yönetim yorumu + budget-agent yorumu) ve Excel; 75'te özet
+- [ ] Ay kapanışı kontrol listesi: tahakkuk, amortisman (46), stok sayımı (44) yapılmadan rapor "ön" işaretli
+- [ ] Ekran: Eşleme, P&L, sahip paketi
+- [ ] Test: eşleme bütünlüğü (toplam = toplam), dağıtım anahtarı hesabı
+
+---
+
+## 16. UYUM VE FİNANS OTOMASYONU
+
+### 94. Uyum merkezi — Ali Kemal
+**Gün sonu:** Otelin bütün yasal yükümlülükleri tek takvimde: KBS bildirimleri, e-belgeler, konaklama vergisi ve turizm payı beyanı, KDV için veri, KVKK (VERBİS, saklama ve imha, veri sahibi başvuruları), İYS izinleri, Bakanlık istatistikleri, belge ve ruhsat süreleri; yaklaşan son tarih uyarıyor, beyan verisi sistemden hazır geliyor.
+**Önkoşul:** 9, 47, 48, 49, 58, 71, 85 · **Aktör:** compliance-worker
+- [ ] Backend: `ComplianceObligation` (tür, dönem, son tarih kuralı, sorumlu), `ComplianceFiling` (dönem, hazırlanan veri, durum, kanıt dosyası)
+- [ ] Konaklama vergisi ve turizm payı: dönem matrahı 49'un fatura vergi satırlarından; beyan taslağı + kesilen faturalarla mutabakat
+- [ ] KBS: 58'in kaydından hatalı / bekleyen bildirimler; günlük mutabakat (konaklayan sayısı = bildirilen)
+- [ ] KVKK: 71'in veri envanteri, imha işi ve tutanakları, veri sahibi başvurusu (30 gün süre takibi), VERBİS kaydı bilgisi
+- [ ] İYS: ticari ileti izinlerinin İYS ile eşitlenmesi; izinsiz alıcıya pazarlama mesajı engeli (9, 85)
+- [ ] Belge / ruhsat takibi: turizm işletme belgesi, yangın, gıda, asansör, havuz analizleri… süre + dosya + hatırlatma
+- [ ] Bakanlık istatistikleri: aylık konaklama istatistiği (ülke × gece) hazır çıktı; elektronik gönderim varsa adaptör
+- [ ] Ekran: Uyum takvimi, yükümlülük ayrıntısı, KVKK paneli
+- [ ] Olaylar: `compliance.deadline.due`, `compliance.filing.changed`
+- [ ] Test: vergi matrahı hesabı ve fatura mutabakatı, son tarih kuralları
+
+> **Modül 51'den not (3 Kasım 2026 — Ahmet):** MUHSGK verisi `PayrollEntry` / `PayrollLine`'da hazır: kişi bazında prim günü, eksik gün
+> nedeni (puantaj), prime esas kazanç, SGK paylarının dökümü, GV matrahı, hesaplanan / istisna / ödenecek GV ve DV, teşvik indirimi.
+> Beyan taslağı onaylı aylık + fark bordrolarının toplamı olmalı.
+
+### 95. Gelen e-belge ve üçlü eşleştirme — arkadaşın
+**Gün sonu:** Tedarikçiden gelen e-Fatura ve e-İrsaliye entegratörden otomatik çekiliyor; sipariş (45), mal kabul ve fatura satır satır eşleşiyor; fiyat / miktar farkı varsa fatura bloke ve satın almanın önünde; eşleşen fatura ön muhasebeye (47) borç olarak düşüyor; ticari faturaya 8 gün içinde kabul / red veriliyor.
+**Önkoşul:** 45, 47, 48, 49 · **Aktör:** 49'un gönderici deseninde gelen kutusu işi + inventory-worker
+- [ ] 49'un sağlayıcı arayüzüne gelen kutusu: `listInbound`, `fetchInbound`, `respond` (kabul / red, ticari senaryo); TEST adaptörü
+- [ ] Backend: `InboundDocument` (tür, gönderen VKN, numara, UUID, tutarlar, XML, PDF), `InboundLine`, `MatchResult`
+- [ ] Eşleştirme: tedarikçi (VKN → 45'in Supplier'ı), sipariş referansı, satır (stok kartı eşlemesi; öğrenen eşleme tablosu), tolerans (fiyat %, miktar); e-İrsaliye → 45'in mal kabul taslağı
+- [ ] Farklar: fiyat farkı / eksik teslim / siparişsiz fatura → satın alma kararına; kabulde 47'ye kayıt, maliyet 44'e
+- [ ] Ticari fatura yanıtı: 8 gün sınırı takibi, red gerekçesi
+- [ ] Muhasebe: tedarikçi borcu + KDV (47), fiş (48)
+- [ ] Ekran: Gelen kutusu, eşleştirme (sipariş – irsaliye – fatura yan yana), farklar
+- [ ] Olaylar: `edoc.inbound.received`, `edoc.inbound.matched`
+- [ ] Test: eşleştirme toleransları, satır eşlemesi
+
+### 96. Dış muhasebe aktarımı — Ali Kemal
+**Gün sonu:** Muhasebesini Logo, Mikro, Netsis veya Luca'da tutmaya devam eden otel; satış, tahsilat, fatura, cari ve kasa hareketlerini hesap eşlemesiyle o programın içe aktarma biçiminde alıyor; aynı kayıt iki kez aktarılmıyor; parti toplamları bizim toplamlarla mutabık.
+**Önkoşul:** 47, 48, 49 · **Aktör:** accounting-worker + sistem (uzun iş)
+- [ ] Adaptörler: Logo, Mikro, Netsis, Luca (dosya biçimi ya da API) + TEST
+- [ ] Eşleme: bizim hesap / kanal / vergi / departman → hedef hesap kodu; cari eşleme (VKN)
+- [ ] Aktarım partisi: `ExportBatch` (dönem, kapsam, kayıt listesi, durum, dosya); aktarılan kayıt işaretlenir, bir daha gitmez; düzeltme ters kayıtla
+- [ ] Mutabakat: parti toplamı = kaynak toplamı (para birimi bazında); fark varsa parti kapalı
+- [ ] Zamanlama: gün kapanışından sonra otomatik parti ya da elle
+- [ ] Ekran: Eşleme, partiler (indir / yeniden üret), hata raporu
+- [ ] Olaylar: `accounting.export.completed`
+- [ ] Test: bir kaydın bir kez aktarılması, parti mutabakatı
+
+### 97. Banka mutabakatı — arkadaşın
+**Gün sonu:** Bütün banka hesaplarının hareketleri (ekstre dosyası ya da banka toplayıcısı) içeri geliyor; vergi no, IBAN, açıklama ve tutar kurallarıyla carilere ve hesaplara otomatik eşleşiyor; eşleşmeyenler kuyruğa düşüyor; POS yatışlarında komisyon ve bloke ayrışıyor; banka bakiyesi ile defter bakiyesi her gün mutabık.
+**Önkoşul:** 17, 47, 50 · **Aktör:** bank-sync-worker + accounting-worker
+- [ ] İçe alma: Excel / CSV / MT940 ekstre + toplayıcı adaptörü (TEST + 1)
+- [ ] Backend: `BankStatement`, `BankStatementLine` (tekrar yüklemede aynı satır tanınır: tarih + tutar + referans parmak izi), `BankMatchRule` (VKN / IBAN / anahtar kelime / tutar aralığı → cari / hesap), `BankMatch`
+- [ ] Eşleştirme: tam (tutar + referans), kurallı, yapay zekâ önerisi (açıklamadan cari tahmini; personel onaylar); kısmi ve çoklu (bir havale → birden çok fatura)
+- [ ] POS: sanal / fiziksel POS gün sonu ↔ banka yatışı, komisyon ve bloke günü ayrımı
+- [ ] Muhasebe: onaylanan eşleşme 47'de tahsilat / ödeme hareketi; eşik üstü `ACCOUNTING_PAYMENT` aynen
+- [ ] Mutabakat: banka bakiyesi vs defter, açıklanamayan fark listesi
+- [ ] Ekran: Ekstreler, eşleştirme kuyruğu, kurallar, mutabakat
+- [ ] Olaylar: `bank.statement.imported`, `bank.match.confirmed`
+- [ ] Test: parmak izi tekrarı, kısmi / çoklu eşleştirme tutarları, POS komisyon ayrımı
+
+---
+
+## 17. RESORT VE DAĞITIM
+
+### 98. Tur operatörü bağlantısı — Ali Kemal
+**Gün sonu:** Tur operatörlerinden rezervasyonlar API'yle, diğerlerinden e-postayla gelen voucher'lar yapay zekâyla okunarak operatör rezervasyonu ekranına düşüyor; kontrat fiyatı, stop-sale ve kontenjan kontrolünden geçen otomatik kesinleşiyor, geçmeyen nedeniyle bekliyor; aynı voucher iki kez açılmıyor; değişiklik ve iptal de aynı yoldan geliyor.
+**Önkoşul:** 4, 29, 30, 33 · **Aktör:** tour-operator-sync-worker + voucher-reader-agent
+- [ ] Adaptörler: 1–2 operatör API'si + TEST; e-posta kanalı (shared/channels `email-gateway` gelen kutusu)
+- [ ] `voucher-reader-agent`: e-posta gövdesi ve eki (PDF / Excel) → zod şemalı voucher (isimler, tarihler, oda, pansiyon, fiyat, voucher no); düşük güvenli alanlar işaretli; bütçe + LlmUsage; ajan kapalıysa elle giriş formu
+- [ ] Backend: `OperatorBooking` (kaynak, voucher no, sürüm, ham veri, durum: YENİ / KONTROL / BEKLİYOR / AKTARILDI / REDDEDİLDİ), `OperatorBookingRevision`
+- [ ] Kontroller: kontrat fiyatıyla (29) fark (tolerans), stop-sale, allotment (30), mükerrer (operatör + voucher no; isim + tarih benzerliği), çocuk yaşı kuralları
+- [ ] Aktarım: geçen → `reservations/service.js` (33'teki kanal rezervasyonu gibi); fiyat farkı kabulü onay türü `OPERATOR_PRICE` (dört göz); değişiklik / iptal revizyon olarak
+- [ ] `tour-operator-sync-worker`: `channel-sync-worker` deseni — tarama, tekrar deneme, eşitleme kaydı
+- [ ] Ekran: Operatör rezervasyonları (durum sekmeleri, fark ayrıntısı), operatör bağlantıları, e-posta okuma geçmişi; canlı kanal `operator-bookings.changed`
+- [ ] Olaylar: `operator.booking.received`, `operator.booking.changed`
+- [ ] Test: fiyat toleransı, mükerrer tespiti
+
+### 99. Tesis ve aktivite rezervasyonu — arkadaşın
+**Gün sonu:** Misafir à la carte restoran, şezlong / kabana, mini kulüp ve aktivitelerini portaldan, uygulamadan ya da resepsiyondan ayırtıyor; her şey dahil konaklama hakları (kaç à la carte hakkı) otomatik uygulanıyor; masa ve kabana planının doluluğu canlı; gelmeyen misafirin rezervasyonu düşüyor ve ücreti kurala göre folyoya yansıyor.
+**Önkoşul:** 15, 28, 39, 53, 57, 80 (varsa) · **Aktör:** guest-experience-worker (no-show, hak kuralı)
+- [ ] Backend: `Facility` (tür: restoran / kabana / şezlong alanı / mini kulüp / aktivite; kapasite, saat dilimleri), `FacilitySlot`, `FacilityBooking` (konaklama ya da dış misafir, kişi, durum, no-show), `StayEntitlement` (pansiyon hakları)
+- [ ] Kapasite ve çakışma: slot kilidi (envanter kilidi deseni); aynı misafir aynı saatte iki yerde olamaz
+- [ ] Haklar: 28'in pansiyon tanımına hak kuralı (konaklama başı N à la carte); aşan kullanım ücretli (folyo 15)
+- [ ] Mini kulüp: çocuk giriş-çıkışı, alerji (80), teslim alan kişinin doğrulanması
+- [ ] "Şu anda ne var": günün aktiviteleri ve yer durumu — 53 portalında, concierge ajanının aracında
+- [ ] Ekran: Tesis takvimi / planı, rezervasyon listesi, hostes ekranı (bugünün masaları); canlı kanal `facilities.changed`
+- [ ] Olaylar: `facility.booking.changed`
+- [ ] Test: kapasite / çakışma kuralı, hak sayımı
+
+### 100. Acente B2B portalı — Ali Kemal
+**Gün sonu:** Acente kendi kullanıcısıyla portala giriyor; kontrat fiyatlarıyla müsaitlik görüp rezervasyon yapıyor; rezervasyonlarını, faturalarını, cari ekstresini ve bonus / hedef durumunu (35) görüyor; otel aynı portalda acentelere kampanya duyuruyor.
+**Önkoşul:** 29, 30, 35, 47, 49, 50, 61, 71 · **Aktör:** reservation-worker (mevcut zincir)
+- [ ] Ayrı kimlik alanı: `PartnerAccount` (acente), `PartnerUser` (2FA zorunlu); personel JWT'sinden ayrı imza ve kapsam; yalnız kendi acentesinin verisi
+- [ ] Rezervasyon: kontrat fiyatı (29) + allotment (30) ile müsaitlik; rezervasyon `reservations/service.js` üzerinden (kaynak acente portalı); değişiklik / iptal kontrat koşullarıyla
+- [ ] Finans: cari ekstre (47), fatura PDF'leri (49), ödeme linki (50)
+- [ ] Bonus: hedef ilerlemesi, kademe, hak edişler (35)
+- [ ] Duyuru / kampanya: otel → seçili acentelere
+- [ ] Portal: ayrı küçük React uygulaması; otel tarafında acente kullanıcı yönetimi (`partners.manage`)
+- [ ] Olaylar: `partner.user.changed`
+
+### 101. Sesli yapay zekâ santral — arkadaşın
+**Gün sonu:** Otelin telefonunu yapay zekâ 7/24 açıyor; arayanın dilinde konuşuyor; canlı müsaitlik ve fiyat verip rezervasyon talebi alıyor, ödeme linkini SMS / WhatsApp ile gönderiyor; bilmediği konuda tahmin etmiyor, çağrıyı nöbetçi personele aktarıyor; her çağrının özeti ve (izinle) kaydı misafir kartına ve çağrı kaydına düşüyor.
+**Önkoşul:** 8, 36, 50, 62, 79, 80, 86 · **Aktör:** voice-gateway + concierge-agent
+- [ ] `voice-gateway` (shared/channels): telefon (SIP) sağlayıcı adaptörü (TEST + 1), gerçek zamanlı ses akışı; konuşma modeline `VOICE` kanalı
+- [ ] Konuşma: konuşma tanıma → concierge-agent'ın araçları (`check_availability`, `request_reservation`, `get_hotel_info`) → ses; hedef gecikme < 1 sn (gerçek zamanlı ses modeli kararı)
+- [ ] Bilgi sınırı: yalnız otelin onaylı bilgisi (8'in otel bilgisi + 86'nın bilgi bankası); bilinmeyen → aktarma
+- [ ] Devir: nöbetçi listesine canlı aktarma (62 santral); aktarılamazsa geri arama görevi (36'nın `CallLog`'u)
+- [ ] Ödeme linki görüşme sırasında (50)
+- [ ] KVKK: çağrı başında aydınlatma, kayıt saklama süresi, kayıt kapatma seçeneği; özet + metin `CallLog`'a
+- [ ] Bütçe: dakika + token maliyeti LlmUsage'a; günlük üst sınır aşılınca çağrı doğrudan personele
+- [ ] Ekran: Çağrı geçmişi (özet, dinle, metin), santral ayarları (saatler, diller, devir listesi)
+- [ ] Olaylar: `voice.call.started`, `voice.call.ended`, `voice.call.transferred`
+
+---
+
+## 18. KALİTE, ÇEVRE, AĞ
+
+### 102. Kalite ve standart denetimi — Ali Kemal
+**Gün sonu:** Otel lüks hizmet standartlarını, HACCP ve iş güvenliği kontrol listelerini sisteme tanımlıyor; denetçi telefondan fotoğraflı denetim yapıyor; uymayan madde DÖF (düzeltici-önleyici faaliyet) olarak sorumluya ve süreye bağlanıyor; prosedürler sürümlü, onaylı yayınlanıyor ve okundu onayı toplanıyor.
+**Önkoşul:** 20, 52, 54, 55, 76, 81, 86, 89 (varsa) · **Aktör:** insight-agent (skor) + notification-worker (süre hatırlatma)
+- [ ] Standartlar: `QualityStandard` (kütüphane: lüks hizmet, HACCP, İSG, havuz, yangın), `Checklist`, `ChecklistItem` (ağırlık, kritik mi)
+- [ ] Denetim: `QualityAudit` (iç / gizli müşteri / yasal), mobilde yürütme (76: fotoğraf, not, puan), çevrimdışı
+- [ ] DÖF: `CorrectiveAction` (kaynak: denetim / 81 olayı / 54 yorum / 20 tekrarlayan arıza), kök neden, sorumlu, son tarih, etkinlik kontrolü
+- [ ] Doküman yönetimi: `ControlledDocument` (SOP, prosedür, form), sürüm, onay akışı (hazırlayan → kontrol → onay), personel okundu onayı, yapay zekâyla taslak (86'nın bilgi bankasına girer)
+- [ ] HACCP kayıtları: sıcaklık ölçümleri (elle ya da 89 sensörü), sapma → DÖF
+- [ ] Skor kartları: departman kalite skoru (denetim + 54 / 55 duygu + 81 olay)
+- [ ] Ekran: Denetim takvimi, denetim yürütme (mobil), DÖF panosu, doküman merkezi
+- [ ] Olaylar: `quality.audit.completed`, `quality.action.changed`
+
+### 103. Sürdürülebilirlik — arkadaşın
+**Gün sonu:** Enerji, su, atık ve kimyasal tüketimi aylık izleniyor; karbon ayak izi konaklama-gece başına hesaplanıyor; Bakanlığın sürdürülebilir turizm belgelendirmesi ve GSTC kriterleri için kanıt dosyası hazırlanıyor; misafir isterse konaklamasının karbonunu dengeleme bedelini ödüyor ve QR'lı sertifikasını alıyor.
+**Önkoşul:** 44, 45, 50, 89, 102 (aynı aşamada; bitmeden başlamaz) · **Aktör:** manuel + dengeleme adaptörü
+- [ ] Veri: 89'un sayaçları, atık kayıtları (tür, kg), kimyasal (44 stok çıkışı), satın alma (45: yerel tedarikçi oranı)
+- [ ] Karbon: emisyon faktörleri tablosu (yıllık, kaynaklı), kapsam 1 / 2 / 3 ayrımı, konaklama-gece başı
+- [ ] Belgelendirme: kriter listesi (GSTC + Bakanlık programı) ↔ kanıt (102 dokümanı, ölçüm, fotoğraf); eksik kriter raporu
+- [ ] Hedef ve trend: yıllık hedef, aylık ilerleme, 75'te özet
+- [ ] Misafir dengelemesi: konaklama karbonu, dengeleme sağlayıcı adaptörü (TEST + 1), bedel folyoya ya da online (50), QR'lı sertifika (77'nin doğrulama sayfası)
+- [ ] Ekran: Sürdürülebilirlik panosu, kriter / kanıt, rapor PDF
+- [ ] Olaylar: `sustainability.reading.recorded`
+- [ ] Test: karbon hesabı (faktör × tüketim, kapsam ayrımı)
+
+### 104. Anonim pazar karşılaştırması — Ali Kemal
+**Gün sonu:** Katılmayı seçen otel kendini bölgesindeki benzer otellerle karşılaştırıyor: doluluk, ortalama fiyat, RevPAR, kanal dağılımı, iptal oranı — indeks ve sıra olarak; veri yalnız geçmiş ve toplulaştırılmış (gelecek fiyat ve doluluk paylaşılmıyor); hiçbir otel tek başına tanınamıyor.
+**Önkoşul:** 23, 25, 63, 72, 87, 94 · **Aktör:** sistem (uzun iş)
+- [ ] Katılım: otel ayarı + sözleşme onayı; karşılıklılık (katılmayan karşılaştırma göremez)
+- [ ] Küme: bölge + segment + oda sayısı aralığı; en az 5 otel ve hiçbir otel kümenin %40'ından fazla ağırlıkta değil; şart sağlanmazsa küme gösterilmez
+- [ ] Veri: `BenchmarkFact` (otel, gün, gösterge) yalnız kapanmış günler, en az 1 gün gecikmeli, 87'nin özet tablolarından; gelecek fiyat ve eldeki doluluk (OTB) yok
+- [ ] Hesap: doluluk, fiyat ve RevPAR indeksleri (MPI, ARI, RGI), sıra (kademeli), trend
+- [ ] Hukuk: rekabet hukuku görüşü alınmadan açılmaz (karar noktası); açılış bayrakla (72)
+- [ ] Ekran: Karşılaştırma panosu, aylık rapor, 75'te özet
+- [ ] Olaylar: `benchmark.refreshed`
+- [ ] Test: küme şartları (en az 5, %40 kuralı), indeks hesabı

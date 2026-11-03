@@ -7,6 +7,7 @@ import {
   createReservationSchema,
   createWaitlistSchema,
   guestSearchQuerySchema,
+  noShowBatchSchema,
   noShowReservationSchema,
   reservationGroupParamSchema,
   reservationListQuerySchema,
@@ -182,6 +183,12 @@ export async function reservationRoutes(app) {
       data: await service.cancelReservation(request.hotelId, request.params.reservationId, request.body),
     }),
   );
+
+  /* Toplu gelmedi (seçilenler; tek tek işlemin kuralıyla, biri başarısızsa diğerleri sürer). */
+  app.post('/no-show-batch', { ...manage, schema: { body: noShowBatchSchema } }, async (request) => ({
+    success: true,
+    data: await service.markNoShowBatch(request.hotelId, request.body.items, { waiveFee: request.body.waiveFee }),
+  }));
 
   app.post(
     '/:reservationId/no-show',

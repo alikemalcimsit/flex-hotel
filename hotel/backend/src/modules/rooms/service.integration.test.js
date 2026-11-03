@@ -551,6 +551,48 @@ describe('oda envanteri servisi (entegrasyon)', { skip }, () => {
       const page = await service.listUnassignedReservations(hotelId, { page: 1, pageSize: 25 });
       assert.deepEqual(page.items.map((item) => item.confirmationCode), ['YAKIN', 'GEC']);
     });
+
+    it('gelişi geçmiş ayrı görünümde ve sayılı; toplu gelmedi ve toplu otomatik atama kayıt kayıt sonuç döner', async () => {
+      await seedReservation({ checkIn: 10, checkOut: 13, code: 'YAKIN' });
+      const late = await seedReservation({ checkIn: -2, checkOut: 3, code: 'GECIKEN' });
+      // Çıkışı bugün (saatli: bugün 12:00): eskiden "oda bekleyenler"de görünüp "tarihleri geçmiş" hatasıyla takılı kalırdı.
+      const ended = await seedReservation({ checkIn: -3, checkOut: 0, code: 'BITEN' });
+      const upcoming = await service.listUnassignedReservations(hotelId, { page: 1, pageSize: 25, view: 'UPCOMING' });
+      assert.deepEqual([upcoming.items.map((item) => item.confirmationCode), upcoming.meta.lateCount], [['YAKIN'], 2]);
+      const lateView = await service.listUnassignedReservations(hotelId, { page: 1, pageSize: 25, view: 'LATE' });
+      assert.deepEqual(
+        lateView.items.map((item) => [item.confirmationCode, item.late, item.stayEnded]),
+        [
+          ['BITEN', true, true],
+          ['GECIKEN', true, false],
+        ],
+      );
+      await assert.rejects(asUser(() => service.autoAssignRoom(hotelId, ended.id)), { code: 'STAY_ENDED' });
+
+      const reservations = await import('../reservations/service.js');
+      const noShow = await asUser(() =>
+        reservations.markNoShowBatch(
+          hotelId,
+          [
+            { id: late.id, expectedUpdatedAt: late.updatedAt },
+            { id: ended.id, expectedUpdatedAt: ended.updatedAt },
+            { id: randomUUID(), expectedUpdatedAt: new Date() },
+          ],
+          { waiveFee: true },
+        ),
+      );
+      assert.deepEqual([noShow.succeeded, noShow.failed], [2, 1]);
+      assert.equal((await prismaUnfiltered.reservation.findUnique({ where: { id: late.id } })).status, 'NO_SHOW');
+      assert.equal((await prismaUnfiltered.reservation.findUnique({ where: { id: ended.id } })).status, 'NO_SHOW');
+      assert.equal((await service.listUnassignedReservations(hotelId, { page: 1, pageSize: 25, view: 'LATE' })).meta.total, 0);
+
+      const a = await seedReservation({ checkIn: 20, checkOut: 22, code: 'A1' });
+      const b = await seedReservation({ checkIn: 20, checkOut: 22, code: 'B1' });
+      const result = await asUser(() => service.autoAssignBatch(hotelId, [a.id, b.id, randomUUID()]));
+      assert.deepEqual([result.assigned, result.failed], [2, 1]);
+      const assigned = result.results.filter((row) => row.ok).map((row) => row.room);
+      assert.equal(new Set(assigned).size, 2, 'iki rezervasyona iki ayrı oda');
+    });
   });
 
   describe('oda durumu', () => {
