@@ -136,3 +136,99 @@ Numara = geliştirme sırası. Sağdaki etiket: hangi aktör destekliyor (yoksa 
 - **53-57:** Misafir deneyimi, mevcut modüllerin üstüne katman.
 - **58-63:** Yasal zorunluluklar ve entegrasyonlar; pilot otele girmeden önce.
 - **64-68:** Aynı çekirdeğe takılan sektör paketleri. Apart en yakın olduğu için ilk.
+
+---
+
+# FLEXAI 2.0 (1–68 bittikten sonra)
+
+Tarih: 3 Kasım 2026
+Mimari ve yol haritası: `FLEXAI-2.0.md`. Görev maddeleri: `GOREVLER.md` → "FLEXAI 2.0".
+1.0'dan farkı: ürünü kusursuz yapan altyapı işleri de (69–73) numaralı modüldür.
+
+## 11. SAĞLAM ZEMİN
+
+| Sıra | Modül | Aktör |
+|---|---|---|
+| 69 | Göç sihirbazı (başka PMS'ten taşıma, mutabakat) + uzun iş çerçevesi | sistem |
+| 70 | Kesintisiz çalışma (sürekli yedek, felaket kurtarma, çevrimdışı ön büro) | sistem |
+| 71 | Güvenlik ve kimlik (2FA, SSO, oturumlar, platform hesabı, KVKK altyapısı) | sistem |
+| 72 | Gözlem, yayın ve paketleme (metrik, durum sayfası, özellik bayrakları, modül kataloğu ve lisans) | sistem |
+| 73 | Mobil temel (PWA kabuk, anlık bildirim, çevrimdışı kuyruk) | notification-worker |
+| 74 | Yazarkasa (ÖKC) ve e-Adisyon | fnb-worker + entegrasyon |
+
+## 12. SAHİP VE OKUL
+
+| Sıra | Modül | Aktör |
+|---|---|---|
+| 75 | Patron uygulaması | notification-worker |
+| 76 | Personel mobil uygulaması | mevcut aktörler |
+| 77 | FlexAI Akademi (eğitim oteli, senaryo, puanlama, sertifika) | academy-worker + ajan |
+| 78 | Staj ve kariyer ağı (+ denetimli işlem) | manuel |
+| 79 | Uygulama içi yardım ve destek (+ bilgi bankası) | assistant-agent |
+
+## 13. LÜKS MİSAFİR DENEYİMİ
+
+| Sıra | Modül | Aktör |
+|---|---|---|
+| 80 | Misafir tanıma ve kişiselleştirme | insight-agent + guest-experience-worker |
+| 81 | Servis kurtarma (misafir ilişkileri) | guest-experience-worker + insight-agent |
+| 82 | Concierge ve butler masası (+ uçuş takibi) | guest-experience-worker |
+| 83 | Upsell ve oda özelliği satışı | guest-experience-worker |
+| 84 | Ödeme güvencesi, hediye çeki ve üyelik | billing-worker + entegrasyon |
+
+## 14. OTONOM OPERASYON
+
+| Sıra | Modül | Aktör |
+|---|---|---|
+| 85 | Otomasyon stüdyosu (+ misafir yolculuğu) | automation-worker |
+| 86 | İşlem yapan yapay zekâ asistanı + uzaktan MCP | assistant-agent |
+| 87 | Yapay zekâ gece müdürü ve sabah brifingi | night-manager-agent |
+| 88 | İşgücü planlama | sistem + housekeeping-worker |
+| 89 | Akıllı oda ve enerji (GRMS, sayaçlar) | cihaz aktörü (62) + room-worker |
+
+## 15. GELİR VE KÂRLILIK
+
+| Sıra | Modül | Aktör |
+|---|---|---|
+| 90 | No-show tahmini ve grup değerlendirme | sistem (model) + pricing-agent |
+| 91 | Rakip fiyat izleme | rate-shop-worker + pricing-agent |
+| 92 | Kontrat ve pansiyon kârlılığı | accounting-worker |
+| 93 | USALI kâr-zarar ve sahip raporu | accounting-worker + budget-agent |
+
+## 16. UYUM VE FİNANS OTOMASYONU
+
+| Sıra | Modül | Aktör |
+|---|---|---|
+| 94 | Uyum merkezi (vergi, KBS, KVKK, İYS, ruhsatlar) | compliance-worker |
+| 95 | Gelen e-belge ve üçlü eşleştirme | entegrasyon + inventory-worker |
+| 96 | Dış muhasebe aktarımı (Logo, Mikro, Netsis, Luca) | accounting-worker + entegrasyon |
+| 97 | Banka mutabakatı | bank-sync-worker + accounting-worker |
+
+## 17. RESORT VE DAĞITIM
+
+| Sıra | Modül | Aktör |
+|---|---|---|
+| 98 | Tur operatörü bağlantısı (+ voucher okuma) | tour-operator-sync-worker + voucher-reader-agent |
+| 99 | Tesis ve aktivite rezervasyonu (à la carte, kabana, mini kulüp) | guest-experience-worker |
+| 100 | Acente B2B portalı | reservation-worker |
+| 101 | Sesli yapay zekâ santral | voice-gateway + concierge-agent |
+
+## 18. KALİTE, ÇEVRE, AĞ
+
+| Sıra | Modül | Aktör |
+|---|---|---|
+| 102 | Kalite ve standart denetimi (DÖF, doküman yönetimi, HACCP) | insight-agent + notification-worker |
+| 103 | Sürdürülebilirlik (karbon, belgelendirme, misafir dengelemesi) | manuel + entegrasyon |
+| 104 | Anonim pazar karşılaştırması | sistem |
+
+---
+
+## Neden bu sıra (2.0)
+- **69-74:** İlk gerçek otel taşınmadan önce: veri eksiksiz gelsin, kaybolmasın, güvende olsun, hata görünsün, yeni özellik kontrollü açılsın, restoranın mali fişi yasal olsun. Mobil kabuk iki hattın mobil modüllerinden önce tek yerde kurulur.
+- **75-79:** Satın alan sahip ve kalıcı kanal okul. Akademi yardım içeriğini besler.
+- **80-84:** Lüks otelin farkı: misafiri tanımak, sorunu çıkıştan önce çözmek, misafire doğru anda doğru teklifi yapmak, ödemeyi güvenceye almak.
+- **85-89:** Kural motoru ve bilgi bankası hazır olunca yapay zekâ iş yapmaya ve sapmayı kendiliğinden yakalamaya başlar.
+- **90-93:** Gece kapanışı özet tabloları ve maliyet verisi (88, 89) oturunca kârlılık anlamlı olur.
+- **94-97:** Mutabakat ve yasal iş, çekirdeğin bütün para hareketleri 2.0'da da oturduktan sonra otomatikleşir.
+- **98-101:** Resort ve B2B dağıtım. Hedef genel ve büyük ölçek; sıra sabit.
+- **102-104:** Ölçme ve kıyaslama; karşılaştırma ağ büyüdükçe değer kazanır, en sona.
