@@ -1,0 +1,12 @@
+/*
+ * Misafir uygulamasının stili: panelin tasarım jetonları ve ortak bileşen sınıfları aynen (tek kaynak). Yazı tipleri
+ * panelin `/fonts` yolundan gelir (aynı alan adı); Kiril harfleri sistem yazı tipine düşer.
+ */
+@import '../../src/index.css';
+@source './';
+
+@layer base {
+  body {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}

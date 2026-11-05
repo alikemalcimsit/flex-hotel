@@ -1,7 +1,13 @@
-import { useState } from 'react';
-import { DEPARTURE_VIEWS, DEPARTURE_VIEW_LABELS, DEPOSIT_METHOD_LABELS, RESERVATION_COUNT_CAP } from '@hotelos/hotel-contracts';
+import { useEffect, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { DEPARTURE_VIEWS, DEPARTURE_VIEW_LABELS, DEPOSIT_METHOD_LABELS, MAX_BULK_CHECK_OUTS, RESERVATION_COUNT_CAP } from '@hotelos/hotel-contracts';
 import { Badge, Button } from '@hotelos/ui';
+import { BulkResultAlert, useRowSelection } from '../../components/BulkSelection.jsx';
+import { ConfirmDialog } from '../../components/ConfirmDialog.jsx';
 import { DataTable } from '../../components/DataTable.jsx';
+import { apiPost } from '../../lib/api.js';
+import { frontDeskKeys } from '../../lib/front-desk.js';
+import { toastError } from '../../store/toast.js';
 import { formatDate, formatMoney } from '../../lib/format.js';
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 import { partyLabel } from '../reservations/reservationTheme.js';
@@ -25,8 +31,36 @@ export function DeparturesTab() {
   const [revert, setRevert] = useState(null);
   const expected = list.filters.view === 'EXPECTED';
   const { query } = list;
+  const queryClient = useQueryClient();
+  const selection = useRowSelection();
+  const [confirmBulk, setConfirmBulk] = useState(false);
+  const [bulkResult, setBulkResult] = useState(null);
+  const { clear } = selection;
+  useEffect(() => clear(), [list.filters.view, list.filters.search, list.filters.page, clear]);
+  const rows = query.data?.items ?? [];
+  // Toplu çıkışa yalnız bakiyesi kapalı olanlar girer (açık bakiye gerekçe ve ayrı yetki ister: tek tek).
+  const bulkEligible = (row) => Number(row.balance ?? 0) === 0;
+  const bulkCheckOut = useMutation({
+    mutationFn: (items) => apiPost('/front-desk/stays/check-out-batch', { items }),
+    onSuccess: (data) => {
+      setBulkResult(data);
+      setConfirmBulk(false);
+      clear();
+    },
+    onError: (error) => toastError(error.message),
+    // Yarıda kesilse de işlenenler kalıcıdır: liste her durumda tazelenir.
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: frontDeskKeys.lists });
+      queryClient.invalidateQueries({ queryKey: frontDeskKeys.summary });
+    },
+  });
+  const labelOf = (id) => {
+    const row = rows.find((item) => item.id === id);
+    return row ? `${row.room?.number ?? '—'} · ${row.guest?.name ?? row.confirmationCode}` : id;
+  };
 
   const columns = [
+    ...(canManage && expected ? [selection.column(rows, bulkEligible, 'Bakiyesi açık: çıkışı tek tek yapın (ödeme ya da gerekçe gerekir)')] : []),
     {
       key: 'room',
       header: 'Oda',
@@ -89,6 +123,20 @@ export function DeparturesTab() {
         searchText={list.searchText}
         onSearch={list.setSearchText}
       />
+      {bulkResult && <BulkResultAlert title="Toplu çıkış" result={bulkResult} labelOf={labelOf} onClose={() => setBulkResult(null)} />}
+      {canManage && expected && selection.count > 0 && (
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <span className="text-sm text-ink-muted">{selection.count} konaklama seçili (yalnız bakiyesi kapalı olanlar seçilebilir)</span>
+          <Button type="button" icon="logout" disabled={bulkCheckOut.isPending || selection.count > MAX_BULK_CHECK_OUTS} onClick={() => setConfirmBulk(true)}>
+            Seçilenlerin çıkışını yap ({selection.count})
+          </Button>
+        </div>
+      )}
+      {canManage && expected && selection.count === 0 && rows.length > 0 && (
+        <p className="text-xs text-ink-muted">
+          Toplu çıkış: bakiyesi kapalı konaklamaları seçip birlikte çıkarabilirsiniz ({rows.filter(bulkEligible).length} / {rows.length} seçilebilir). Bakiyesi açık olanlar ödeme ya da gerekçe istediği için tek tek yapılır.
+        </p>
+      )}
       {expected && summary?.departures.overdue > 0 && (
         <p className="text-sm text-sec-strong">
           {summary.departures.overdue} misafirin çıkış günü geçti ama çıkışı yapılmadı. Ayrıldıysa çıkışı kaydedin, kalıyorsa konaklamayı uzatın.
@@ -121,6 +169,18 @@ export function DeparturesTab() {
       />
       {query.data?.meta?.totalCapped && <p className="text-xs text-ink-muted">{RESERVATION_COUNT_CAP}+ kayıt; aramayla daraltın.</p>}
       {checkOut && <CheckOutDialog reservationId={checkOut} onClose={() => setCheckOut(null)} />}
+      <ConfirmDialog
+        open={confirmBulk}
+        title={`${selection.count} konaklamanın çıkışını yap`}
+        message="Her konaklama tek tek çıkışın kuralıyla işlenir: oda kirliye düşer, folyo kapanır. Geç çıkış ücreti, erken ayrılış onayı ya da açık bakiye isteyenler toplu yapılmaz; atlanıp listelenir, onları tek tek yapın."
+        confirmLabel="Çıkışları yap"
+        confirmVariant="primary"
+        confirmIcon="logout"
+        isPending={bulkCheckOut.isPending}
+        onConfirm={() => bulkCheckOut.mutate(selection.ids.map((id) => ({ id, expectedUpdatedAt: rows.find((row) => row.id === id)?.updatedAt })).filter((item) => item.expectedUpdatedAt))}
+        onClose={() => setConfirmBulk(false)}
+      />
+
       {revert && <RevertStayDialog kind="checkOut" stay={revert} onClose={() => setRevert(null)} />}
     </div>
   );

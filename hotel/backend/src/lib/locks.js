@@ -571,3 +571,26 @@ export function lockInvoices(tx, hotelId, invoiceIds) {
 export function lockHousekeepingTasks(tx, hotelId, taskIds) {
   return lockRows(tx, 'HousekeepingTask', hotelId, taskIds);
 }
+
+/**
+ * Bordro (modül 51): hesap, onaya gönderme, onay kararı ve ödeme aynı bordroyu bu kilit altında değiştirir;
+ * hesap sürerken onaya gönderilemez, onay işlenirken ödeme yazılamaz.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} runIds
+ */
+export function lockPayrollRuns(tx, hotelId, runIds) {
+  return lockPlainRows(tx, 'PayrollRun', hotelId, runIds, false);
+}
+
+/**
+ * Personel (modül 51): kart güncellemesi, işten çıkış ve avans / icra kaydı aynı çalışanı bu kilit altında değiştirir.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} employeeIds
+ */
+export function lockEmployees(tx, hotelId, employeeIds) {
+  return lockPlainRows(tx, 'Employee', hotelId, employeeIds, false);
+}

@@ -84,7 +84,7 @@ export function notificationRetryAt(attemptsMade, now) {
 /* ─────────────── Tetikleyiciler ve şablonlar ─────────────── */
 
 /** Şablonu olan olaylar. */
-export const NOTIFICATION_TRIGGERS = Object.freeze(['RESERVATION_CONFIRMED', 'ROOM_ASSIGNED', 'CHECKED_IN', 'CHECKED_OUT']);
+export const NOTIFICATION_TRIGGERS = Object.freeze(['RESERVATION_CONFIRMED', 'ROOM_ASSIGNED', 'CHECKED_IN', 'CHECKED_OUT', 'CHECKIN_INVITE']);
 
 /** Geçmişte görünen bütün kaynaklar (şablonlu olaylar + kanal testi). */
 export const NOTIFICATION_SOURCES = Object.freeze([...NOTIFICATION_TRIGGERS, 'CHANNEL_TEST']);
@@ -94,6 +94,7 @@ export const NOTIFICATION_SOURCE_LABELS = Object.freeze({
   ROOM_ASSIGNED: 'Oda bilgisi',
   CHECKED_IN: 'Hoş geldiniz',
   CHECKED_OUT: 'Teşekkür',
+  CHECKIN_INVITE: 'Online check-in daveti',
   CHANNEL_TEST: 'Kanal testi',
 });
 
@@ -104,12 +105,15 @@ export const NOTIFICATION_TRIGGER_HINTS = Object.freeze({
     'Oda giriş günü ya da misafir içerideyken atanınca (oda değişikliği dahil) gönderilir. Günler önceden yapılan atamada gönderilmez; oda son ana kadar değişebilir.',
   CHECKED_IN: 'Misafir giriş yapınca gönderilir.',
   CHECKED_OUT: 'Misafir çıkış yapınca gönderilir.',
+  CHECKIN_INVITE:
+    'Girişten, misafir portalı ayarındaki gün kadar önce (onaylı rezervasyona, online check-in yapılmadıysa) gönderilir; personel rezervasyondan elle de gönderebilir. {portalLinki} misafirin portal bağlantısıdır.',
 });
 
 /**
  * Tetikleyiciyi yayınlayan event(ler) (dinleyen: notification-worker). Bir
  * tetikleyiciyi birden çok event açabilir; aynı rezervasyona ikinci kez
- * gönderilmez (tekilleştirme anahtarı).
+ * gönderilmez (tekilleştirme anahtarı). Online check-in daveti (`CHECKIN_INVITE`)
+ * event'le değil misafir portalının zamanlanmış işiyle gönderilir; burada yok.
  */
 export const NOTIFICATION_TRIGGER_EVENTS = Object.freeze({
   RESERVATION_CONFIRMED: Object.freeze(['reservation.created', 'reservation.confirmed']),
@@ -150,6 +154,7 @@ export const TEMPLATE_VARIABLES = Object.freeze({
   odaTipi: 'Oda tipi',
   odaNo: 'Oda numarası',
   tarih: 'Bildirimin gönderildiği gün',
+  portalLinki: 'Misafir portalı bağlantısı (online check-in)',
 });
 
 const STAY_VARIABLES = Object.freeze([
@@ -175,6 +180,7 @@ export const TRIGGER_VARIABLES = Object.freeze({
   ROOM_ASSIGNED: Object.freeze([...STAY_VARIABLES, 'odaNo']),
   CHECKED_IN: Object.freeze([...STAY_VARIABLES, 'odaNo']),
   CHECKED_OUT: Object.freeze([...STAY_VARIABLES, 'odaNo']),
+  CHECKIN_INVITE: Object.freeze([...STAY_VARIABLES, 'portalLinki']),
 });
 
 /** Önizleme ve uzunluk denetimi için gerçekçi (uzunca) örnek değerler. */
@@ -191,6 +197,7 @@ export const TEMPLATE_SAMPLE_VALUES = Object.freeze({
   odaTipi: 'Deluxe Deniz Manzaralı',
   odaNo: '1204',
   tarih: '17.09.2026',
+  portalLinki: 'https://hotel.flexai.tr/misafir/p/6f1c2a7e-0b9d-4c5e-8a3f-2d7e9b1c4a60.Qm9vbGVhbkJhc2U2NFVybFNpZ25hdHVyZVNhbXBsZTEy',
 });
 
 const VARIABLE_PATTERN = /\{([A-Za-z]+)\}/g;
@@ -411,6 +418,20 @@ export const DEFAULT_NOTIFICATION_TEMPLATES = Object.freeze([
     'Dear {misafirAdi},\n\nThank you for choosing {otelAdi}. We would be delighted to welcome you again.\n\nHave a safe journey.\n{otelAdi}',
   ),
   en('CHECKED_OUT', 'SMS', null, '{otelAdi}: thank you for staying with us. We hope to see you again. Safe travels!'),
+  tr(
+    'CHECKIN_INVITE',
+    'EMAIL',
+    'Online check-in — {otelAdi}',
+    'Sayın {misafirAdi},\n\n{girisTarihi} tarihindeki konaklamanız için online check-in açıldı. Kimlik bilgilerinizi ve belgenizin fotoğrafını şimdiden gönderin; girişte beklemeden odanıza geçin.\n\nOnline check-in: {portalLinki}\n\nAynı bağlantıdan rezervasyonunuzu, konaklamanızda folyonuzu ve isteklerinizi görebilirsiniz. Bağlantı size özeldir; lütfen paylaşmayın.\n\nGiriş saati {girisSaati}. Sorularınız için: {otelTelefonu}\n{otelAdi}',
+  ),
+  tr('CHECKIN_INVITE', 'SMS', null, '{otelAdi} online check-in: {portalLinki}'),
+  en(
+    'CHECKIN_INVITE',
+    'EMAIL',
+    'Online check-in — {otelAdi}',
+    'Dear {misafirAdi},\n\nOnline check-in for your stay on {girisTarihi} is now open. Send your identity details and a photo of your document in advance and go straight to your room on arrival.\n\nOnline check-in: {portalLinki}\n\nThe same link shows your reservation and, during your stay, your bill and requests. The link is personal; please do not share it.\n\nCheck-in is from {girisSaati}. Questions: {otelTelefonu}\n{otelAdi}',
+  ),
+  en('CHECKIN_INVITE', 'SMS', null, '{otelAdi} online check-in: {portalLinki}'),
 ]);
 
 /* ─────────────── Personel uyarıları ─────────────── */
@@ -434,6 +455,7 @@ export const STAFF_ALERT_KINDS = Object.freeze([
   'BANQUET',
   'POS',
   'INVOICE',
+  'ONLINE_CHECKIN',
 ]);
 
 export const STAFF_ALERT_KIND_LABELS = Object.freeze({
@@ -455,6 +477,7 @@ export const STAFF_ALERT_KIND_LABELS = Object.freeze({
   BANQUET: 'Banket (opsiyon, depozito, etkinlik)',
   POS: 'Restoran POS (vardiya, adisyon, odaya yaz)',
   INVOICE: 'Fatura / e-belge (gönderilemedi, reddedildi)',
+  ONLINE_CHECKIN: 'Online check-in (inceleme bekliyor)',
 });
 
 export const STAFF_ALERT_SEVERITIES = Object.freeze(['INFO', 'WARNING', 'CRITICAL']);

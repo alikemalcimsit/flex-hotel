@@ -7,6 +7,7 @@ import { AppError, NotFoundError } from '../../lib/errors.js';
 import { lockLedgerAccounts, lockTreasuryAccounts } from '../../lib/locks.js';
 import { writeWithEvents } from '../../lib/write.js';
 import { amountDue } from '../banquet/rules.js';
+import { syncPayrollPayment, syncPayrollRun } from '../payroll/postings.js';
 import { addDays, dateOnly, day, dotted, ensurePartnerAccount, ensureSettings, hotelContext, money, postLedger, postTreasury, prisma, reverseRecords } from './shared.js';
 
 /**
@@ -637,6 +638,25 @@ export async function syncPeriod(hotelId, { from, to }, { budgetMs = SYNC_TIME_B
           AND NOT EXISTS (SELECT 1 FROM "TreasuryMovement" m WHERE m."hotelId" = ${hotelId} AND m."sourceKey" = 'PAYMENT:' || s."id")
           AND NOT EXISTS (SELECT 1 FROM "LedgerEntry" e WHERE e."hotelId" = ${hotelId} AND e."sourceKey" = 'PAYMENT:' || s."id")`,
       order: Prisma.sql`s."businessDate", s."receivedAt"`,
+    },
+    {
+      name: 'PAYROLL',
+      sync: syncPayrollRun,
+      scan: Prisma.sql`
+        FROM "PayrollRun" s
+        WHERE s."hotelId" = ${hotelId} AND s."status" = 'APPROVED'
+          AND (make_date(s."year", s."month", 1) + interval '1 month' - interval '1 day')::date BETWEEN ${start}::date AND ${to}::date
+          AND NOT EXISTS (SELECT 1 FROM "LedgerEntry" e WHERE e."hotelId" = ${hotelId} AND e."sourceType" = 'PAYROLL' AND e."sourceId" = s."id")`,
+      order: Prisma.sql`s."year", s."month", s."sequence"`,
+    },
+    {
+      name: 'PAYROLL_PAYMENT',
+      sync: syncPayrollPayment,
+      scan: Prisma.sql`
+        FROM "PayrollPayment" s
+        WHERE s."hotelId" = ${hotelId} AND s."date" BETWEEN ${start}::date AND ${to}::date
+          AND NOT EXISTS (SELECT 1 FROM "TreasuryMovement" m WHERE m."hotelId" = ${hotelId} AND m."sourceKey" = 'PAYROLL_PAYMENT:' || s."id")`,
+      order: Prisma.sql`s."date", s."createdAt"`,
     },
     {
       name: 'POS_PAYMENT',

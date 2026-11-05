@@ -48,11 +48,12 @@ const key = (entry) => `${pad(entry.numara)}-${entry.slug}`;
 /** İki kitabın kısımları (iş alanları); her modül tam bir alanda olmalı (yoksa kitap adımı durur). */
 const ALANLAR = [
   { ad: 'Ön büro ve konaklama', aciklama: 'Oda envanterinden rezervasyona, oda planından giriş-çıkışa: resepsiyonun günlük işi.', moduller: [3, 4, 5, 6, 21] },
-  { ad: 'Misafir iletişimi', aciklama: 'WhatsApp ve web sohbet, yapay zekâ asistanı, istekler ve otomatik bildirimler.', moduller: [7, 8, 9] },
+  { ad: 'Misafir iletişimi', aciklama: 'WhatsApp ve web sohbet, yapay zekâ asistanı, istekler, otomatik bildirimler; misafir portalı ve online check-in.', moduller: [7, 8, 9, 53] },
   { ad: 'Hesap, kasa ve muhasebe', aciklama: 'Folyo, ödeme ve kasa; minibar ve çamaşır gibi ek hizmetlerin folyoya akışı; fatura, e-Fatura ve e-Arşiv; cariler, banka, çek ve senet.', moduller: [15, 17, 19, 49, 47] },
   { ad: 'Satış, dağıtım ve gelir', aciklama: 'Acente kontratları, promosyonlar, OTA kanalları; gelir raporu, tahmin ve bütçe.', moduller: [29, 31, 33, 35, 23, 25, 27] },
   { ad: 'Yiyecek-içecek ve etkinlik', aciklama: 'Restoran, oda servisi, banket ve etkinlik satışı; reçete ve mutfak planı.', moduller: [39, 41, 37, 43] },
   { ad: 'Satın alma ve stok', aciklama: 'Talepten teklife, siparişten mal kabulüne; depo ve stok hareketleri.', moduller: [45] },
+  { ad: 'Personel ve bordro', aciklama: 'Personel kartları, puantaj ve servis payı; aylık bordro, onayı, ödemesi ve muhasebeye akışı.', moduller: [51] },
   { ad: 'Yönetim ve denetim', aciklama: 'Ayarlar, roller ve yetkiler, onaylar, otomasyon paneli, canlı akış ve günlük durum.', moduller: [13, 1, 2, 11, 12, 10] },
 ];
 const alanOf = (numara) => ALANLAR.find((alan) => alan.moduller.includes(numara))?.ad ?? '';

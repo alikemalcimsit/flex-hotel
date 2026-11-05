@@ -538,6 +538,20 @@ export class BusyError extends AppError {
   }
 }
 
+/**
+ * Toplu işlemde bir kaydın hatası. Alan hatası (`AppError`, 4xx ya da `BUSY`) kaydın sonucuna yazılır, iş diğer
+ * kayıtlarla sürer; beklenmeyen hata (programlama hatası, çözülmemiş DB hatası) **fırlatılır** — merkezi işleyici 500
+ * döner, iç hata metni ekrana sızmaz. O ana kadar işlenen kayıtlar kendi işlemlerinde kalıcıdır.
+ *
+ * @param {string} id
+ * @param {unknown} error
+ * @returns {{ id: string, ok: false, message: string, code: string }}
+ */
+export function bulkItemFailure(id, error) {
+  if (!(error instanceof AppError) || (error.statusCode >= 500 && error.code !== 'BUSY')) throw error;
+  return { id, ok: false, message: error.message, code: error.code };
+}
+
 /** Prisma: havuzdan bağlantı alınamadı / transaction başlatılamadı ya da süresi doldu. */
 const BUSY_PRISMA_CODES = new Set(['P2024', 'P2028']);
 

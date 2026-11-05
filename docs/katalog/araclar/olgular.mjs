@@ -36,7 +36,8 @@ export async function collectRoutes() {
   for (const match of source.matchAll(/^import \{([^}]+)\} from '(\.\/modules\/[^']+)';$/gm)) {
     for (const name of match[1].split(',').map((entry) => entry.trim()).filter(Boolean)) imports.set(name, match[2]);
   }
-  const registrations = [...source.matchAll(/await app\.register\((\w+), \{ prefix: '([^']+)' \}\);/g)].map((match) => ({ name: match[1], prefix: match[2] })).filter((entry) => imports.has(entry.name));
+  // Kayıt kök örnekte ya da ortak kapsamlı bir alt eklentide olabilir (misafir uçları: `guestApp.register`).
+  const registrations = [...source.matchAll(/await \w+\.register\((\w+), \{ prefix: '([^']+)' \}\);/g)].map((match) => ({ name: match[1], prefix: match[2] })).filter((entry) => imports.has(entry.name));
 
   const { default: Fastify } = await import(pathToFileURL(path.join(BACKEND, 'node_modules/fastify/fastify.js')).href).catch(() => import('fastify'));
   const { serializerCompiler, validatorCompiler } = await import('fastify-type-provider-zod');

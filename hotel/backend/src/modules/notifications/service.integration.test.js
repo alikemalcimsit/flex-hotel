@@ -544,9 +544,11 @@ describe('bildirim merkezi (entegrasyon)', { skip }, () => {
   });
 
   describe('şablonlar', () => {
-    it('24 birleşim listelenir; SMS/e-posta varsayılanları yüklüdür, WhatsApp boştur', async () => {
+    it('her olay × kanal × dil birleşimi listelenir; SMS/e-posta varsayılanları yüklüdür, WhatsApp boştur', async () => {
+      const { NOTIFICATION_TRIGGERS, NOTIFICATION_CHANNELS, NOTIFICATION_LANGUAGES } = await import('@hotelos/hotel-contracts');
       const { items } = await service.listTemplates(hotelId);
-      assert.equal(items.length, 24);
+      assert.equal(items.length, NOTIFICATION_TRIGGERS.length * NOTIFICATION_CHANNELS.length * NOTIFICATION_LANGUAGES.length);
+      assert.ok(NOTIFICATION_TRIGGERS.includes('CHECKIN_INVITE'), 'online check-in daveti de şablon listesinde (modül 53)');
       assert.ok(items.filter((item) => item.channel !== 'WHATSAPP').every((item) => item.template));
       assert.ok(items.filter((item) => item.channel === 'WHATSAPP').every((item) => !item.template && !item.defaultTemplate));
     });

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { asBusyError, BusyError, ConflictError, isRetryableTransactionError, rethrowPrismaError, ValidationError } from './errors.js';
+import { AppError, asBusyError, bulkItemFailure, BusyError, ConflictError, isRetryableTransactionError, NotFoundError, rethrowPrismaError, ValidationError } from './errors.js';
 
 /**
  * Yoğun saatte veritabanı hatalarının sınıflandırması: hangisi kullanıcıya
@@ -42,5 +42,19 @@ describe('iş kuralı doğrulama hatası', () => {
     assert.equal(new ValidationError('Hatalı', { fields: ['pax'] }).fields, undefined);
     assert.equal(new ValidationError('Hatalı', { issues: ['a'] }).fields, undefined);
     assert.equal(new ValidationError('Hatalı').fields, undefined);
+  });
+});
+
+describe('toplu işlemde kayıt hatası', () => {
+  it('alan hatası ve "yoğun" kaydın sonucuna yazılır', () => {
+    assert.deepEqual(bulkItemFailure('a', new ConflictError('Bakiye açık', 'BALANCE_DUE')), { id: 'a', ok: false, message: 'Bakiye açık', code: 'BALANCE_DUE' });
+    assert.equal(bulkItemFailure('b', new NotFoundError('Yok')).code, 'NOT_FOUND');
+    assert.equal(bulkItemFailure('c', new BusyError()).code, 'BUSY');
+  });
+
+  it('beklenmeyen hata fırlatılır: iç metin kayıt sonucuna sızmaz', () => {
+    const internal = new Error('connect ECONNREFUSED 127.0.0.1:5432');
+    assert.throws(() => bulkItemFailure('a', internal), (error) => error === internal);
+    assert.throws(() => bulkItemFailure('a', new AppError('İç hata')), { code: 'INTERNAL' });
   });
 });

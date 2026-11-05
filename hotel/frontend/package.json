@@ -6,7 +6,8 @@
   "description": "HotelOS web arayüzü (Vite + React + Tailwind)",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "dev:guest": "vite -c vite.guest.config.js",
+    "build": "vite build && vite build -c vite.guest.config.js",
     "preview": "vite preview",
     "test": "node --test \"src/**/*.test.js\""
   },

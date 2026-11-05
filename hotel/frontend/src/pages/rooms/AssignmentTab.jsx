@@ -1,7 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { RESERVATION_STATUS_LABELS } from '@hotelos/hotel-contracts';
+import { ASSIGNMENT_VIEW_LABELS, ASSIGNMENT_VIEWS, MAX_BULK_ITEMS, RESERVATION_STATUS_LABELS } from '@hotelos/hotel-contracts';
 import { Alert, Badge, Button, Checkbox, Icon, Input, Spinner } from '@hotelos/ui';
+import { BulkResultAlert, useRowSelection } from '../../components/BulkSelection.jsx';
+import { ChoiceChips } from '../../components/ChoiceChips.jsx';
+
 import { DataTable } from '../../components/DataTable.jsx';
 import { Modal } from '../../components/Modal.jsx';
 import { AssignmentKindBadge, HousekeepingBadge, OccupancyBadge } from '../../components/RoomStateBadges.jsx';
@@ -16,23 +19,61 @@ import { toastError, toastSuccess } from '../../store/toast.js';
 const CANDIDATE_PAGE_SIZE = 8;
 
 /**
- * Oda atanmayı bekleyen rezervasyonlar.
- *
- * Modül 4'ün rezervasyon detay ekranı geldiğinde aynı API oradan da
- * kullanılacak; bu ekran o zaman da "toplu atama" görünümü olarak işe yarar.
+ * Oda atanmayı bekleyen rezervasyonlar: girişi bugün ya da sonra olanlar (oda seç, otomatik ata — tek tek ya da
+ * seçilenlere toplu) ve gelişi geçmiş olanlar (giriş günü geçti, giriş yapılmadı: gelmediyse "gelmedi" — tek tek ya
+ * da toplu —, geç gelecekse oda verilir). Toplu işlem her kaydı tek tek işlemin kuralıyla işler; yapılamayanlar
+ * sebebiyle listelenir.
  */
 export function AssignmentTab() {
   const queryClient = useQueryClient();
-  const canOperate = useCan()(PERMISSIONS.ROOMS_OPERATE);
+  const can = useCan();
+  const canOperate = can(PERMISSIONS.ROOMS_OPERATE);
+  const canNoShow = can(PERMISSIONS.RESERVATIONS_MANAGE);
   const [assigning, setAssigning] = useState(null);
+  const [view, setView] = useState('UPCOMING');
+  const [bulkResult, setBulkResult] = useState(null);
+  const [confirmNoShow, setConfirmNoShow] = useState(null);
+  const selection = useRowSelection();
 
   const resource = useCrudResource({
     basePath: '/rooms/assignments/pending',
     queryKey: ['rooms', 'assignments'],
     labels: { singular: 'Atama' },
+    extraParams: { view },
   });
+  const late = view === 'LATE';
+  const { clear } = selection;
+  useEffect(() => clear(), [view, resource.page, resource.search, clear]);
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['rooms'] });
+  const labelOf = (id) => {
+    const row = resource.rows?.find((item) => item.id === id);
+    return row ? `${row.confirmationCode}${row.guestName ? ` · ${row.guestName}` : ''}` : id;
+  };
+  const bulkAssign = useMutation({
+    mutationFn: (reservationIds) => apiPost('/rooms/assignments/auto-batch', { reservationIds }),
+    onSuccess: (data) => {
+      setBulkResult({ title: 'Toplu otomatik atama', data });
+      clear();
+    },
+    onError: (error) => toastError(error.message),
+    // Yarıda kesilse de işlenenler kalıcıdır: liste her durumda tazelenir.
+    onSettled: refresh,
+  });
+  const bulkNoShow = useMutation({
+    mutationFn: ({ items, waiveFee }) => apiPost('/reservations/no-show-batch', { items, waiveFee }),
+    onSuccess: (data) => {
+      setBulkResult({ title: 'Gelmedi işaretleme', data });
+      setConfirmNoShow(null);
+      clear();
+    },
+    onError: (error) => toastError(error.message),
+    onSettled: () => {
+      refresh();
+      queryClient.invalidateQueries({ queryKey: ['reservations'] });
+    },
+  });
+  const noShowItems = (ids) => ids.map((id) => resource.rows.find((row) => row.id === id)).filter(Boolean).map((row) => ({ id: row.id, expectedUpdatedAt: row.updatedAt }));
 
   const autoAssignMutation = useMutation({
     mutationFn: (reservationId) => apiPost(`/rooms/assignments/${reservationId}/auto`, {}),
@@ -48,6 +89,7 @@ export function AssignmentTab() {
   });
 
   const columns = [
+    ...((late ? canNoShow : canOperate) ? [selection.column(resource.rows ?? [])] : []),
     {
       key: 'confirmationCode',
       header: 'Onay kodu',
@@ -71,8 +113,11 @@ export function AssignmentTab() {
       key: 'dates',
       header: 'Tarihler',
       render: (row) => (
-        <span className="whitespace-nowrap">
-          {formatDate(row.checkIn)} → {formatDate(row.checkOut)}
+        <span className="flex flex-col whitespace-nowrap">
+          <span>
+            {formatDate(row.checkIn)} → {formatDate(row.checkOut)}
+          </span>
+          {row.late && <span className="text-xs font-semibold text-sec-strong">{row.stayEnded ? 'Konaklama günleri bitti' : 'Giriş günü geçti'}</span>}
         </span>
       ),
     },
@@ -90,7 +135,39 @@ export function AssignmentTab() {
 
   return (
     <div className="flex flex-col gap-5">
-      <Toolbar>
+      <ChoiceChips
+        label="Görünüm"
+        options={ASSIGNMENT_VIEWS.map((value) => ({ value, label: value === 'LATE' && resource.meta?.lateCount ? `${ASSIGNMENT_VIEW_LABELS[value]} (${resource.meta.lateCount})` : ASSIGNMENT_VIEW_LABELS[value] }))}
+        value={view}
+        onChange={setView}
+      />
+      {!late && resource.meta?.lateCount > 0 && (
+        <Alert tone="warning" action={<Button type="button" size="sm" variant="outline" onClick={() => setView('LATE')}>Gelişi geçmişleri aç</Button>}>
+          {resource.meta.lateCount} rezervasyonun giriş günü geçti ama girişi yapılmadı. Gelmediyse "gelmedi" işaretleyin (tek tek ya da toplu); geç gelecekse oda verin.
+        </Alert>
+      )}
+      {late && resource.rows?.some((row) => row.stayEnded) && (
+        <p className="text-sm text-ink-muted">Konaklama günleri biten rezervasyona oda verilemez; misafir gelmediyse "gelmedi" işaretleyin, geldiyse rezervasyonun tarihlerini düzeltin.</p>
+      )}
+      {bulkResult && <BulkResultAlert title={bulkResult.title} result={bulkResult.data} labelOf={labelOf} onClose={() => setBulkResult(null)} />}
+      <Toolbar
+        actions={
+          selection.count > 0 &&
+          (late ? (
+            canNoShow && (
+              <Button type="button" variant="outline" icon="close" disabled={bulkNoShow.isPending || selection.count > MAX_BULK_ITEMS} onClick={() => setConfirmNoShow({ ids: selection.ids })}>
+                Seçilenleri gelmedi işaretle ({selection.count})
+              </Button>
+            )
+          ) : (
+            canOperate && (
+              <Button type="button" icon="sparkles" disabled={bulkAssign.isPending || selection.count > MAX_BULK_ITEMS} onClick={() => bulkAssign.mutate(selection.ids)}>
+                {bulkAssign.isPending ? 'Atanıyor…' : `Seçilenlere otomatik ata (${selection.count})`}
+              </Button>
+            )
+          ))
+        }
+      >
         <Input
           name="search"
           label="Ara"
@@ -111,14 +188,23 @@ export function AssignmentTab() {
         error={resource.error}
         onRetry={resource.refetch}
         onPageChange={resource.setPage}
-        emptyTitle={resource.search ? 'Eşleşen rezervasyon yok' : 'Oda bekleyen rezervasyon yok'}
+        emptyTitle={resource.search ? 'Eşleşen rezervasyon yok' : late ? 'Gelişi geçmiş rezervasyon yok' : 'Oda bekleyen rezervasyon yok'}
         emptyHint={
           resource.search
             ? 'Farklı bir kod veya isim deneyin.'
-            : 'Oda atanmamış bekleyen/onaylı rezervasyon bulunmuyor.'
+            : late
+              ? 'Giriş günü geçip girişi yapılmamış, odası olmayan rezervasyon yok.'
+              : 'Oda atanmamış bekleyen/onaylı rezervasyon bulunmuyor.'
         }
-        rowActions={canOperate ? (row) => (
+        rowActions={canOperate || canNoShow ? (row) => (
           <div className="flex justify-end gap-2">
+            {late && canNoShow && (
+              <Button variant="outline" size="sm" icon="close" onClick={() => setConfirmNoShow({ ids: [row.id] })} disabled={bulkNoShow.isPending}>
+                Gelmedi
+              </Button>
+            )}
+            {canOperate && !row.stayEnded && (
+            <>
             <Button
               variant="outline"
               size="sm"
@@ -131,9 +217,19 @@ export function AssignmentTab() {
             <Button size="sm" icon="key" onClick={() => setAssigning(row)}>
               Oda seç
             </Button>
+            </>
+            )}
           </div>
         ) : undefined}
       />
+      {confirmNoShow && (
+        <NoShowConfirm
+          count={confirmNoShow.ids.length}
+          isPending={bulkNoShow.isPending}
+          onConfirm={(waiveFee) => bulkNoShow.mutate({ items: noShowItems(confirmNoShow.ids), waiveFee })}
+          onClose={() => setConfirmNoShow(null)}
+        />
+      )}
 
       {assigning && (
         <AssignRoomModal
@@ -147,6 +243,33 @@ export function AssignmentTab() {
         />
       )}
     </div>
+  );
+}
+
+/** Gelmedi onayı: ücret politikası (ilk gece) uygulanır ya da gerekçesiz vazgeçilir. */
+function NoShowConfirm({ count, isPending, onConfirm, onClose }) {
+  const [waiveFee, setWaiveFee] = useState(false);
+  return (
+    <Modal
+      open
+      title={count > 1 ? `${count} rezervasyonu gelmedi işaretle` : 'Gelmedi işaretle'}
+      onClose={isPending ? () => {} : onClose}
+      footer={
+        <>
+          <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>
+            Vazgeç
+          </Button>
+          <Button type="button" variant="danger" icon="close" disabled={isPending} onClick={() => onConfirm(waiveFee)}>
+            {isPending ? 'İşleniyor…' : 'Gelmedi işaretle'}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3 text-sm text-ink-soft">
+        <p>Rezervasyon "gelmedi" olur, envanter serbest kalır; gelmeme ücreti (ilk gece) politikaya göre yazılır. Her kayıt kendi kuralıyla işlenir; işlenemeyen (bu arada değişmiş, durumu uygun değil) atlanıp listelenir.</p>
+        <Checkbox label="Gelmeme ücretinden vazgeç" checked={waiveFee} onChange={(event) => setWaiveFee(event.target.checked)} />
+      </div>
+    </Modal>
   );
 }
 

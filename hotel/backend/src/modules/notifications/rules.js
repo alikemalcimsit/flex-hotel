@@ -41,6 +41,9 @@ export function triggerSkipReason(trigger, reservation, businessDate) {
       return reservation.status === 'CHECKED_IN' ? null : 'Misafir içeride değil';
     case 'CHECKED_OUT':
       return reservation.status === 'CHECKED_OUT' ? null : 'Misafir çıkış yapmamış';
+    case 'CHECKIN_INVITE':
+      if (!ARRIVING_STATUSES.has(reservation.status)) return `Rezervasyon durumu uygun değil (${reservation.status})`;
+      return toIsoDay(reservation.checkIn) < toIsoDay(businessDate) ? 'Giriş günü geçti' : null;
     default:
       return 'Bilinmeyen tetikleyici';
   }
@@ -51,12 +54,14 @@ export function triggerSkipReason(trigger, reservation, businessDate) {
  * anahtarda: misafir başka odaya taşınırsa yeni oda bildirilir.
  *
  * @param {string} trigger
- * @param {{ reservationId: string, roomId?: string | null }} subject
+ * @param {{ reservationId: string, roomId?: string | null, suffix?: string | null }} subject `suffix`: aynı olayın bilerek
+ *   ikinci gönderimi (online check-in davetini personel elle yeniden gönderir).
  * @param {string} channel
  */
-export function notificationDedupeKey(trigger, { reservationId, roomId }, channel) {
+export function notificationDedupeKey(trigger, { reservationId, roomId, suffix = null }, channel) {
   const parts = [trigger, reservationId];
   if (trigger === 'ROOM_ASSIGNED') parts.push(roomId ?? '-');
+  if (suffix) parts.push(suffix);
   parts.push(channel);
   return parts.join(':');
 }
