@@ -196,6 +196,12 @@ export const PERMISSIONS = Object.freeze({
   PAYROLL_PAY: 'payroll.pay',
   /** Yasal parametreler (teyit dahil), kalem türleri, departmanlar, işyeri ayarları. */
   PAYROLL_SETUP: 'payroll.setup',
+  /** Online check-in listesi ve ayrıntısı (belge fotoğrafları dahil), misafir portalı bağlantıları (modül 53). */
+  GUEST_PORTAL_VIEW: 'guest_portal.view',
+  /** Online check-in onayı / düzeltme isteği; portal bağlantısı ver / iptal et, daveti gönder. */
+  GUEST_PORTAL_MANAGE: 'guest_portal.manage',
+  /** Portal ayarları: davet ve açılış günleri, belge saklama süresi, misafire gösterilen metinler. */
+  GUEST_PORTAL_SETUP: 'guest_portal.setup',
 
   /** Kanal yönetimi (modül 33): kanallar, eşleştirme, senkron logu, kanal rezervasyonları. */
   CHANNEL_MANAGER_VIEW: 'channel_manager.view',
@@ -298,6 +304,9 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.PAYROLL_MANAGE]: 'Ücret, puantaj, ek ödeme / kesinti, avans, icra, teşvik, servis payı; bordro hesapla ve onaya gönder',
   [PERMISSIONS.PAYROLL_PAY]: 'Maaş ve avans öde (kasa / banka)',
   [PERMISSIONS.PAYROLL_SETUP]: 'Bordro ayarları: yasal parametreler ve teyidi, kalem türleri, departmanlar, işyeri bilgileri',
+  [PERMISSIONS.GUEST_PORTAL_VIEW]: 'Online check-in\'leri ve belge fotoğraflarını gör, misafir portalı bağlantısını gör',
+  [PERMISSIONS.GUEST_PORTAL_MANAGE]: 'Online check-in onayla / düzeltme iste; portal bağlantısı ver, iptal et, davet gönder',
+  [PERMISSIONS.GUEST_PORTAL_SETUP]: 'Misafir portalı ayarları: davet ve açılış günleri, belge saklama süresi, metinler',
   [PERMISSIONS.CHANNEL_MANAGER_VIEW]: 'Kanalları, senkron logunu ve kanal rezervasyonlarını görüntüle',
   [PERMISSIONS.CHANNEL_MANAGER_MANAGE]: 'Kanal bağla, eşleştir, stop-sale koy, elle senkronla',
   [PERMISSIONS.ACTORS_VIEW]: 'Aktör panelini görüntüle',
@@ -402,6 +411,7 @@ export const PERMISSION_GROUPS = Object.freeze([
   { key: 'invoices', label: 'Fatura ve e-belge', permissions: [PERMISSIONS.INVOICES_VIEW, PERMISSIONS.INVOICES_ISSUE, PERMISSIONS.INVOICES_MANAGE, PERMISSIONS.INVOICES_SETUP] },
   { key: 'employees', label: 'Personel', permissions: [PERMISSIONS.EMPLOYEES_VIEW, PERMISSIONS.EMPLOYEES_MANAGE] },
   { key: 'payroll', label: 'Bordro', permissions: [PERMISSIONS.PAYROLL_VIEW, PERMISSIONS.PAYROLL_MANAGE, PERMISSIONS.PAYROLL_PAY, PERMISSIONS.PAYROLL_SETUP] },
+  { key: 'guest_portal', label: 'Misafir portalı ve online check-in', permissions: [PERMISSIONS.GUEST_PORTAL_VIEW, PERMISSIONS.GUEST_PORTAL_MANAGE, PERMISSIONS.GUEST_PORTAL_SETUP] },
   {
     key: 'agency_bonus',
     label: 'Acente primi',
@@ -534,6 +544,10 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.INVOICES_SETUP,
     // Personel listesini müdür görür; ücret ve bordro muhasebenin (bordronun onayı başka bir yetkilinin).
     PERMISSIONS.EMPLOYEES_VIEW,
+    // Misafir portalı ve online check-in (modül 53): ayarlar dahil.
+    PERMISSIONS.GUEST_PORTAL_VIEW,
+    PERMISSIONS.GUEST_PORTAL_MANAGE,
+    PERMISSIONS.GUEST_PORTAL_SETUP,
   ]),
   FRONT_DESK: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,
@@ -570,6 +584,9 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     // Çıkışta folyonun faturasını resepsiyon keser (alıcı bilgisi masada alınır); serbest fatura ve iptal muhasebede.
     PERMISSIONS.INVOICES_VIEW,
     PERMISSIONS.INVOICES_ISSUE,
+    // Online check-in'i girişten önce resepsiyon inceler (belgeyi görür, onaylar ya da düzeltme ister); bağlantıyı verir.
+    PERMISSIONS.GUEST_PORTAL_VIEW,
+    PERMISSIONS.GUEST_PORTAL_MANAGE,
   ]),
   HOUSEKEEPING: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,

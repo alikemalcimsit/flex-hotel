@@ -85,6 +85,8 @@ export const INVOICES_CHANNEL = 'invoices.changed';
 export const CHANNEL_MANAGER_CHANNEL = 'channel-manager.changed';
 /** Personel ve bordro (modül 51): personel kartı, puantaj, kalemler, bordro hesabı / onayı / ödemesi, ayarlar. */
 export const PAYROLL_CHANNEL = 'payroll.changed';
+/** Misafir portalı ve online check-in (modül 53): gönderim, onay, düzeltme, giriş, bağlantı, ayar. */
+export const GUEST_PORTAL_CHANNEL = 'guest-portal.changed';
 
 /**
  * Kanal aboneliği sayacı. Aynı kanalı birden fazla bileşen dinleyebilir

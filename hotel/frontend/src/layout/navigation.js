@@ -45,6 +45,7 @@ export const NAV_SECTIONS = Object.freeze([
           { label: 'Gelecekler', to: '/on-buro/gelecekler', icon: 'arrowRight' },
           { label: 'Gidecekler', to: '/on-buro/gidecekler', icon: 'logout' },
           { label: 'Konaklayanlar', to: '/on-buro/konaklayanlar', icon: 'bed' },
+          { label: 'Online check-in', to: '/on-buro/online-check-in', icon: 'globe', permission: PERMISSIONS.GUEST_PORTAL_VIEW },
         ],
       },
       {

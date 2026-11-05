@@ -6,6 +6,7 @@ import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod
 import { enterContext } from '@hotelos/core';
 import { checkDb, disconnectDb } from './db.js';
 import { asBusyError } from './lib/errors.js';
+import { applyGuestIpCeiling } from './lib/guest-rate-limit.js';
 import { cache } from './lib/cache.js';
 import { actorRegistry, registerActors, setActorLogger } from './lib/actors.js';
 import { registerCoreSubscribers, setEventLogger } from './lib/events.js';
@@ -41,6 +42,8 @@ import { invoiceRoutes } from './modules/invoicing/routes.js';
 import { registerInvoiceSubscribers } from './modules/invoicing/subscribers.js';
 import { payrollRoutes } from './modules/payroll/routes.js';
 import { registerPayrollSubscribers } from './modules/payroll/subscribers.js';
+import { registerGuestPortalSubscribers } from './modules/guest-portal/jobs.js';
+import { guestPortalRoutes, publicGuestPortalRoutes } from './modules/guest-portal/routes.js';
 import { recipeRoutes } from './modules/recipes/routes.js';
 import { publicRoomServiceRoutes } from './modules/pos/room-service-routes.js';
 import { registerPosSubscribers } from './modules/pos/subscribers.js';
@@ -173,6 +176,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   registerAccountingSubscribers();
   registerInvoiceSubscribers();
   registerPayrollSubscribers();
+  registerGuestPortalSubscribers();
   registerHousekeepingSubscribers();
 
   app.setValidatorCompiler(validatorCompiler);
@@ -356,6 +360,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   await app.register(accountingRoutes, { prefix: '/accounting' });
   await app.register(invoiceRoutes, { prefix: '/invoices' });
   await app.register(payrollRoutes, { prefix: '/payroll' });
+  await app.register(guestPortalRoutes, { prefix: '/guest-portal' });
   await app.register(promotionRoutes, { prefix: '/promotions' });
   await app.register(channelManagerRoutes, { prefix: '/channel-manager' });
   await app.register(manualTaskRoutes, { prefix: '/manual-tasks' });
@@ -366,8 +371,15 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   await app.register(channexWebhookRoutes, { prefix: '/webhooks/channex' });
   await app.register(icalExportRoutes, { prefix: '/channel-ical' });
   await app.register(webchatWidgetRoutes, { prefix: '/webchat' });
-  // Oda servisi (modül 41): misafirin QR sipariş uçları (oturumsuz, imzalı bağlantıyla; sayfası modül 53).
-  await app.register(publicRoomServiceRoutes, { prefix: '/public/room-service' });
+  // Misafirin oturumsuz uçları (imzalı bağlantıyla). Ortak kapsam: bağlantı başına sınırların üstünde tek IP tavanı
+  // (otel Wi-Fi'ı misafirleri tek adresten çıkarır; bkz. lib/guest-rate-limit.js).
+  await app.register(async (guestApp) => {
+    applyGuestIpCeiling(guestApp);
+    // Oda servisi (modül 41): QR sipariş uçları (sayfası modül 53).
+    await guestApp.register(publicRoomServiceRoutes, { prefix: '/public/room-service' });
+    // Misafir portalı (modül 53): online check-in, folyo, istek, oda servisine geçiş.
+    await guestApp.register(publicGuestPortalRoutes, { prefix: '/public/portal' });
+  });
 
   app.addHook('onClose', async () => {
     await disconnectDb();

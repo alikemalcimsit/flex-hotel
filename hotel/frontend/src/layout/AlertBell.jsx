@@ -31,6 +31,8 @@ const KIND_ICONS = Object.freeze({
   AGENCY_BONUS: 'coins',
   BANQUET: 'calendar',
   POS: 'utensils',
+  INVOICE: 'fileText',
+  ONLINE_CHECKIN: 'user',
 });
 
 const SEVERITY_TONES = Object.freeze({

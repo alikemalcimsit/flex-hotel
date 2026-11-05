@@ -215,6 +215,8 @@ const ReservationDetailPage = lazy(() =>
 const FrontDeskPage = lazy(() => import('./pages/front-desk/FrontDeskPage.jsx').then((m) => ({ default: m.FrontDeskPage })));
 const ArrivalsTab = lazy(() => import('./pages/front-desk/ArrivalsTab.jsx').then((m) => ({ default: m.ArrivalsTab })));
 const DeparturesTab = lazy(() => import('./pages/front-desk/DeparturesTab.jsx').then((m) => ({ default: m.DeparturesTab })));
+const OnlineCheckinTab = lazy(() => import('./pages/guest-portal/OnlineCheckinTab.jsx').then((m) => ({ default: m.OnlineCheckinTab })));
+const GuestPortalSettingsPage = lazy(() => import('./pages/guest-portal/GuestPortalSettingsPage.jsx').then((m) => ({ default: m.GuestPortalSettingsPage })));
 const InHouseTab = lazy(() => import('./pages/front-desk/InHouseTab.jsx').then((m) => ({ default: m.InHouseTab })));
 const ApprovalsPage = lazy(() => import('./pages/approvals/ApprovalsPage.jsx').then((m) => ({ default: m.ApprovalsPage })));
 const ApprovalsPendingTab = lazy(() => import('./pages/approvals/PendingTab.jsx').then((m) => ({ default: m.PendingTab })));
@@ -332,6 +334,22 @@ export default function App() {
               <Route path="gelecekler" element={<ArrivalsTab />} />
               <Route path="gidecekler" element={<DeparturesTab />} />
               <Route path="konaklayanlar" element={<InHouseTab />} />
+              <Route
+                path="online-check-in"
+                element={
+                  <RequirePermission permission={PERMISSIONS.GUEST_PORTAL_VIEW}>
+                    <OnlineCheckinTab />
+                  </RequirePermission>
+                }
+              />
+              <Route
+                path="online-check-in/ayarlar"
+                element={
+                  <RequirePermission permission={PERMISSIONS.GUEST_PORTAL_VIEW}>
+                    <GuestPortalSettingsPage />
+                  </RequirePermission>
+                }
+              />
             </Route>
             <Route path="oda-plani" element={<RoomPlanPage />} />
             <Route

@@ -26,7 +26,7 @@
     ("Zamanlama", "Hemen: düşüş + hedef. İleri saatli: teslim − hazırlık payında düşer (o an geçmişse hemen). İstenen an ≥ 10 dk, ≤ 3 gün, çıkış gününden sonra değil; otelin duvar saatiyle."),
     ("Teslim", "Tek transaction: kapı ödemeleri + kalanın odaya yazılması + adisyonun kapanması + turların servis edildisi + isteğin tamamlanması. Teslimden önce ödeme / kapatma yok; kapı ödemesinde fazla ya da ödenmemiş kalan reddedilir."),
     ("Oda değişimi", "Misafir sipariş verdikten sonra oda değiştirdiyse düşüşte şimdiki oda yazılır; konaklaması bitenin mutfağa düşmemiş siparişi iptal edilir."),
-    ("QR güvenliği", "Bağlantı imzası JWT sırrından türetilen anahtarla HMAC (veritabanı okunsa da üretilemez); IP başına hız sınırı (menü 60, durum 120, yazma 10 / dk); konaklamada en çok 3 açık misafir siparişi; kabul edilmezse teslim hedefini 30 dk aşınca kendiliğinden reddedilir."),
+    ("QR güvenliği", "Bağlantı imzası JWT sırrından türetilen anahtarla HMAC (veritabanı okunsa da üretilemez); bağlantı başına hız sınırı (menü 60, durum 120, yazma 10 / dk), üstünde portal uçlarıyla ortak IP tavanı (otel Wi-Fi'ında misafirler tek adresten çıkar); konaklamada en çok 3 açık misafir siparişi; kabul edilmezse teslim hedefini 30 dk aşınca kendiliğinden reddedilir."),
   ),
   tutarlilik: (
     "Kilit sırası: vardiya → adisyon → sipariş → rezervasyon → istek / bağlantı (`locks.js`).",

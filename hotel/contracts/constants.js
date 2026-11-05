@@ -332,7 +332,7 @@ export const GUEST_REQUEST_STATUS_LABELS = Object.freeze({
 /** Hâlâ iş bekleyen durumlar. */
 export const GUEST_REQUEST_ACTIVE_STATUSES = Object.freeze(['OPEN', 'IN_PROGRESS']);
 
-export const GUEST_REQUEST_SOURCES = Object.freeze(['CONVERSATION', 'PHONE', 'FRONT_DESK', 'STAFF', 'AI']);
+export const GUEST_REQUEST_SOURCES = Object.freeze(['CONVERSATION', 'PHONE', 'FRONT_DESK', 'STAFF', 'AI', 'PORTAL']);
 
 export const GUEST_REQUEST_SOURCE_LABELS = Object.freeze({
   CONVERSATION: 'Mesaj',
@@ -340,6 +340,7 @@ export const GUEST_REQUEST_SOURCE_LABELS = Object.freeze({
   FRONT_DESK: 'Resepsiyon',
   STAFF: 'Personel',
   AI: 'AI asistanı',
+  PORTAL: 'Misafir portalı',
 });
 
 /** Personelin elle açabileceği kaynaklar (AI ve mesaj kaynağı sistem tarafından yazılır). */

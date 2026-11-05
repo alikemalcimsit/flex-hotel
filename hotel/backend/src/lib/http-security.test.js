@@ -139,10 +139,11 @@ describe('rateLimitKey', () => {
 });
 
 describe('istek günlüğünde belirteç', () => {
-  it('misafirin oda servisi bağlantısı ve iCal belirteci maskelenir; diğer adresler olduğu gibi', () => {
+  it('misafirin oda servisi ve portal bağlantısı, iCal belirteci maskelenir; diğer adresler olduğu gibi', () => {
     const token = `${'a'.repeat(8)}-0000-4000-8000-${'b'.repeat(12)}.${'S'.repeat(43)}`;
     assert.equal(maskSecretPath(`/public/room-service/${token}`), '/public/room-service/***');
     assert.equal(maskSecretPath(`/public/room-service/${token}/orders?x=1`), '/public/room-service/***/orders?x=1');
+    assert.equal(maskSecretPath(`/public/portal/${token}/check-in/photos`), '/public/portal/***/check-in/photos');
     assert.equal(maskSecretPath('/channel-ical/gizli-belirtec.ics'), '/channel-ical/***');
     assert.equal(maskSecretPath('/pos/room-service/board'), '/pos/room-service/board');
     assert.equal(maskSecretPath(undefined), undefined);

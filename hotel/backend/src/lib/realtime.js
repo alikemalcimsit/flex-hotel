@@ -12,6 +12,7 @@ import {
   ACCOUNTING_EVENTS,
   INVOICE_EVENTS,
   PAYROLL_EVENTS,
+  GUEST_PORTAL_EVENTS,
   PROMOTION_EVENTS,
   CHANNEL_EVENTS as CHANNEL_MANAGER_EVENTS,
   EXTRAS_EVENTS,
@@ -139,6 +140,9 @@ export const INVOICES_CHANNEL = 'invoices.changed';
 /** Personel ve bordro (modül 51). */
 export const PAYROLL_CHANNEL = 'payroll.changed';
 
+/** Misafir portalı ve online check-in (modül 53). */
+export const GUEST_PORTAL_CHANNEL = 'guest-portal.changed';
+
 /** Promosyon ve kupon (modül 31): promosyon, kupon üretimi / kapatma. */
 export const PROMOTION_CHANNEL = 'promotions.changed';
 
@@ -182,6 +186,7 @@ const CHANNEL_EVENTS = Object.freeze({
   [ACCOUNTING_CHANNEL]: ACCOUNTING_EVENTS,
   [INVOICES_CHANNEL]: INVOICE_EVENTS,
   [PAYROLL_CHANNEL]: PAYROLL_EVENTS,
+  [GUEST_PORTAL_CHANNEL]: GUEST_PORTAL_EVENTS,
   [PROMOTION_CHANNEL]: PROMOTION_EVENTS,
   [CHANNEL_MANAGER_CHANNEL]: CHANNEL_MANAGER_EVENTS,
 });

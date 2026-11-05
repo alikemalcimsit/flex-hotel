@@ -6,6 +6,7 @@ import { ConfirmDialog } from '../../components/ConfirmDialog.jsx';
 import { api, apiPost, withQuery } from '../../lib/api.js';
 import { formatDate, formatMoney } from '../../lib/format.js';
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
+import { GuestPortalCard } from '../guest-portal/GuestPortalCard.jsx';
 import { reservationKeys } from '../../lib/reservations.js';
 import { RESERVATIONS_CHANNEL } from '../../lib/socket.js';
 import { formatDateTime } from '../../lib/timeFormat.js';
@@ -276,6 +277,8 @@ export function ReservationDetailPage() {
               <Field label="E-posta">{detail.guest.email ?? '—'}</Field>
             </dl>
           </Card>
+
+          {can(PERMISSIONS.GUEST_PORTAL_VIEW) && <GuestPortalCard reservationId={detail.id} />}
 
           {detail.groupMembers.length > 0 && (
             <Card

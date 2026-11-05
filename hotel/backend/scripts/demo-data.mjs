@@ -65,6 +65,7 @@ const { resetPurchasingDemo, seedPurchasingDemo } = await import('./demo-purchas
 const { resetAccountingDemo, seedAccountingDemo } = await import('./demo-accounting.mjs');
 const { resetInvoicingDemo, seedInvoicingDemo } = await import('./demo-invoicing.mjs');
 const { resetPayrollDemo, seedPayrollDemo } = await import('./demo-payroll.mjs');
+const { resetGuestPortalDemo, seedGuestPortalDemo } = await import('./demo-guest-portal.mjs');
 
 const HISTORY_DAYS = 400;
 const FUTURE_DAYS = 75;
@@ -97,9 +98,12 @@ const existingDemo =
   (await prisma.posOutlet.count({ where: { hotelId, createdBy: ACTOR } }));
 if (process.argv.includes('--reset')) {
   let banquetFiles = [];
+  let portalFiles = [];
   await prisma.$transaction(
     async (tx) => {
-      // Demo faturalar (modül 16 / 49): folyo, etkinlik, cari ve misafire kısıtlı bağlı — en önce.
+      // Demo misafir portalı (modül 53): bağlantı, online check-in ve belgeleri rezervasyona kısıtlı bağlı — en önce.
+      portalFiles = await resetGuestPortalDemo(tx, hotelId);
+      // Demo faturalar (modül 16 / 49): folyo, etkinlik, cari ve misafire kısıtlı bağlı.
       await resetInvoicingDemo(tx, hotelId);
       // Demo ön muhasebe (modül 47): cariler acente / tedarikçi / etkinlik müşterisine kısıtlı bağlı, ödemeler cariye — önce.
       await resetAccountingDemo(tx, hotelId);
@@ -189,6 +193,8 @@ if (process.argv.includes('--reset')) {
   // Belge PDF'leri diskte: kayıtlar gittikten sonra silinir (silinemeyen yetim kalır, log'a yazılır).
   const leftover = await removeFiles(banquetFiles);
   if (leftover.length) console.error(`${leftover.length} banket belgesi diskten silinemedi`);
+  const portalLeftover = await removeFiles(portalFiles);
+  if (portalLeftover.length) console.error(`${portalLeftover.length} online check-in belgesi diskten silinemedi`);
   console.log('Önceki demo veri silindi.');
 } else if (existingDemo > 0) {
   console.error('Demo veri zaten var; silip yeniden üretmek için --reset ile çalıştırın.');
@@ -961,6 +967,14 @@ try {
   console.error(`Bordro adımı tamamlanamadı: ${error.message}`);
 }
 
+// ── Misafir portalı (modül 53): yakın varışlara bağlantı ve davet, online check-in'ler (bekleyen / onaylı / düzeltme / tamam) ──
+let portalSummary = null;
+try {
+  portalSummary = await seedGuestPortalDemo({ prisma, core, contracts, hotelId, today, actor: ACTOR });
+} catch (error) {
+  console.error(`Misafir portalı adımı tamamlanamadı: ${error.message}`);
+}
+
 // Odaların anlık durumu: içeride kimse varsa dolu, boşların bir kısmı kirli.
 const inHouse = new Set(reservations.filter((entry) => entry.row.status === 'CHECKED_IN').map((entry) => entry.row.roomId));
 await prisma.room.updateMany({ where: { hotelId, id: { in: [...inHouse] } }, data: { occupancy: 'OCCUPIED' } });
@@ -1028,5 +1042,6 @@ console.log(
       ? `, ${accountingSummary.accounts} cari, ${accountingSummary.treasury} kasa / banka, ${accountingSummary.vouchers} fiş, ${accountingSummary.instruments} çek / senet, ${accountingSummary.posted} otomatik kayıt (başlangıç ${accountingSummary.startDate}${accountingSummary.failed ? `, ${accountingSummary.failed} işlenemedi` : ''})${invoiceSummary ? `, ${invoiceSummary.issued} fatura (${invoiceSummary.eFatura} e-Fatura, ${invoiceSummary.eArsiv} e-Arşiv; test ortamı), ${invoiceSummary.drafts} taslak${invoiceSummary.skipped ? `, ${invoiceSummary.skipped} kesilemedi` : ''}` : ''}.`
       : '.') +
     (payrollSummary ? ` Bordro: ${payrollSummary.employees} personel, ${payrollSummary.runs} bordro (${payrollSummary.approved} onaylı, ${payrollSummary.supplementary} fark), ${payrollSummary.paid} ödeme, ${payrollSummary.terminated} işten çıkış, ${payrollSummary.posted} muhasebe kaydı.` : ''),
+    (portalSummary ? ` Misafir portalı: ${portalSummary.links} bağlantı, ${portalSummary.checkins} online check-in, ${portalSummary.documents} belge fotoğrafı.` : ''),
 );
 await prisma.$disconnect();

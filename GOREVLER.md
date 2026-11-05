@@ -398,6 +398,10 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 >    (`/oda-plani`) bir konaklamayı görmenin ve oda vermenin çalışan yolu. Modül 4
 >    gelince plan ekranındaki "boş hücreye tıkla → yeni rezervasyon" adımı da açılır.
 
+> **Modül 53'ten not (4 Kasım 2026 — Ahmet):** rezervasyon ayrıntısına `GuestPortalCard` eklendi (`guest_portal.view` ile: misafir
+> portalı bağlantısı, QR, davet, online check-in durumu ve incelemesi). Online check-in'in giriş günü `reservation.updated`
+> olayındaki `checkIn` ile eşitlenir: tarih değiştiren yeni bir yol bu olayı yayınlamalı.
+
 ### 5. Oda planı / takvim — arkadaşın
 **Gün sonu:** Resepsiyon, tüm odaları ve rezervasyonları tek takvimde görüyor; tıklayınca detay açılıyor.
 - [x] Backend: takvim verisi API'si (tarih aralığı → odalar + o aralıktaki rezervasyonlar)
@@ -571,6 +575,11 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 > (`Reservation_room_since_valid`): taşındığı gün çıkan misafirin çıkış tarihi
 > taşıma günüyle eşit olabilir, daha önce olamaz. Oda geçmişi için
 > `RoomStaySegment` + açık dilim kullanılır (bkz. modül 5 notu).
+
+> **Modül 53'ten not (4 Kasım 2026 — Ahmet):** `CheckInDialog` rezervasyonun online check-in'ini okur (`guest_portal.view` varsa) ve boş
+> formu onunla doldurur (kimlik, refakatçiler, plaka; onay durumunu gösteren uyarı). Giriş kuralları değişmedi. `guest.checked_in`
+> online check-in'i "giriş yapıldı"ya, `guest.check_in_reverted` onaylıya çeker. Ön büroya "Online check-in" sekmesi eklendi
+> (gezinme kaydıyla; `FrontDeskPage` değişmedi).
 
 ### 7. Misafir mesajları / istek takibi — arkadaşın
 **Gün sonu:** Personel, misafirlerle yapılan tüm chat/WhatsApp konuşmalarını görüyor, gerekirse elle cevaplıyor; misafir istekleri görev olarak takip ediliyor.
@@ -2628,6 +2637,10 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 >
 > **44 için (stok, Ali):** `fnb.order.paid` kalemlerinde tepsi ücreti (`MenuItem.system = TRAY_CHARGE`) de satılmış görünür; reçetesi
 > yoktur, stok düşümünde sistem ürünleri atlanmalı.
+>
+> **Modül 53'ten not (4 Kasım 2026 — Ahmet):** misafir uçlarının hız sınırı IP başına değil **bağlantı başına** (aynı sayılar), üstünde
+> portal uçlarıyla ortak IP tavanı (3.000 / dk; `lib/guest-rate-limit.js`): otel Wi-Fi'ında tek NAT adresinden çıkan misafirler
+> birbirinin kotasını yiyordu. Entegrasyon testi yeni anlama göre güncellendi.
 
 ### 42. Online paket sipariş — Ali Kemal
 **Gün sonu:** Dışarıdan gelen paket siparişler aynı POS zincirinden geçiyor; kurye ataması ve teslim takibi var.
@@ -3055,6 +3068,10 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 > bildirimi isteyecek; sağlayıcı arayüzünü bunları sonradan ekleyebilecek biçimde kur (49'un `providers/` deseni:
 > ortak arayüz + TEST adaptörü). Kart numarası hiçbir tabloda tutulmaz.
 
+> **Modül 53'ten not (4 Kasım 2026 — Ahmet):** online check-in'de "kartla ön ödeme" ve portal ana sayfasında "kartla ödeme" pasif bekliyor
+> (`portalOverview` → `features.payOnline`). 50 gelince provizyon / ödeme bağlantısı buradan açılır; misafirin seçtiği ödeme tercihi
+> `OnlineCheckin.paymentPreference`'ta.
+
 ### 51. Personel & bordro — arkadaşın
 **Gün sonu:** Personel kartları kayıtlı; aylık bordro hesaplanıp çıktı alınıyor.
 - [x] Backend: Employee, Payroll, PayrollLine tabloları + API; brüt → net hesabı (SGK, vergi dilimi parametrik)
@@ -3137,15 +3154,81 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 53. Temassız uygulamalar — arkadaşın
 **Gün sonu:** Misafir gelmeden telefonundan check-in yapıyor, QR ile menüden sipariş veriyor, portalda folyosunu görüyor.
-- [ ] Backend: OnlineCheckin, GuestPortalSession tabloları; token'lı public linkler
-- [ ] Misafir portalı (ayrı küçük React app): rezervasyonum, online check-in formu (kimlik, imza, kart), folyom, istek gönder, chat (8)
-- [ ] QR menü sayfası (38'deki menü JSON'u; sipariş → 41) — **41'den hazır:** imzalı bağlantı + QR, misafir uçları ve sözleşme
+- [x] Backend: OnlineCheckin, GuestPortalSession tabloları; token'lı public linkler — oturum tablosu yerine rezervasyona bağlı imzalı `GuestPortalLink`
+- [x] Misafir portalı (ayrı küçük React app): rezervasyonum, online check-in formu (kimlik, imza, kart), folyom, istek gönder, chat (8) — kart adımı 50 gelince (kullanıcı kararı)
+- [x] QR menü sayfası (38'deki menü JSON'u; sipariş → 41) — **41'den hazır:** imzalı bağlantı + QR, misafir uçları ve sözleşme
   (bkz. 41 notu "53 için"); burada yalnızca misafirin gördüğü sayfa yapılır
-- [ ] Ekran (personel): online check-in yapanlar listesi, onayla → 6'daki check-in
-- [ ] Dijital anahtar butonu (62 tamamlanınca aktif)
+- [x] Ekran (personel): online check-in yapanlar listesi, onayla → 6'daki check-in
+- [x] Dijital anahtar butonu (62 tamamlanınca aktif) — portalda yerinde, pasif
 
 > **FlexAI 2.0'dan not (3 Kasım 2026 — Ahmet):** portal 2.0'da başka modüllerin sayfalarını da taşıyacak: upsell (83), tesis
 > rezervasyonu (99), hediye çeki (84), konaklama ortası nabız (81). Portalı sayfa eklenebilir (yol + menü kaydı) kur.
+
+> **✅ Modül 53 tamamlandı (4 Kasım 2026 — Ahmet).** Kararlar (kullanıcı): her yetişkin için kimlik bilgisi + **zorunlu belge
+> fotoğrafı** (açık rıza, saklama süresi sonunda otomatik silme); davet **otomatik + elle** (girişten N gün önce 9'un kanallarıyla;
+> rezervasyondan kopyala / QR / yeniden gönder); portal **TR + EN + DE + RU**; kart adımı **50 gelince** (şimdilik ödeme tercihi + pasif
+> "kartla ön ödeme"; kart numarası hiçbir yerde tutulmaz).
+>
+> **Bağlantı:** `/misafir/p/<kimlik>.<imza>` — rezervasyona bağlı, JWT sırrından türetilen anahtarla HMAC (41'den ayrı bağlam), sabit
+> zamanlı karşılaştırma; rezervasyonda tek geçerli bağlantı (kısmi tekil index), yenileme eskisini iptal eder; iptal / gelmedi ve
+> çıkıştan 14 gün sonra kapanır. Misafir uçları `/public/portal/:token` oturumsuz, `no-store` / `no-referrer`, belirteç istek günlüğünde
+> maskeli. Hız sınırı **bağlantı başına**, üstünde IP tavanı (3.000 / dk; `lib/guest-rate-limit.js`, 41'in oda servisi uçlarıyla ortak):
+> otel Wi-Fi'ı misafirleri tek NAT adresinden çıkarır, yalnız IP'ye göre sınır lobideki misafirleri birbirine kilitlerdi.
+>
+> **Online check-in:** girişten `checkinOpenDays` (7) gün önce açılır; yetişkin refakatçi ≤ yetişkin − 1, çocuk ≤ çocuk; yetişkine en az
+> bir, kişi başına en fazla iki belge fotoğrafı (telefonda küçültülür, EXIF düşer; misafire geri gösterilmez — yalnız sayısı ve maskeli
+> numara); kurallar + KVKK + fotoğraf rızası + ticari ileti tercihi + parmakla imza (PNG, sürümlü). Gönderim rezervasyon kilidi ve
+> sürümle; işlem kaydına kimlik numarası yazılmaz; resepsiyon ziline `ONLINE_CHECKIN` uyarısı. Durumlar: inceleme bekliyor → onaylandı /
+> düzeltme istendi (sebep misafire görünür, misafirin dilini gösteren alan) → giriş yapıldı (`guest.checked_in`; geri almada onaylıya
+> döner). Misafir onaydan sonra değiştirirse yeniden incelemeye düşer.
+>
+> **KVKK:** belge fotoğrafları çıkıştan (gelmeyende girişten) `documentRetentionDays` (7) gün sonra, bağlanmayan yükleme 48 saat sonra
+> silinir; silinince kayıttaki kimlik numarası / doğum tarihi kopyası da temizlenir (ad, belge türü, uyruk, imza kalır).
+>
+> **Davet (9):** yeni tetikleyici `CHECKIN_INVITE` (`{portalLinki}`; TR / EN e-posta + SMS şablonu; kurulmuş otelde ilk davet şablonları
+> yükler, silineni geri getirmez); iş 30 dk'da bir, otel başına 100'lük parçalar, 60 sn bütçe; elle gönderim 10 dk'da bir. Portal adresi
+> (`publicBaseUrl`) ya da davetin gidebileceği açık kanal + etkin şablon yoksa tur başlamaz. Davet bir kanala satır açılınca "gitti"
+> sayılır (iletişimsiz misafirde harcanmaz, bilgi eklenince sonraki turda gider); personelin iptal ettiği / yenilediği bağlantıya otomatik
+> davet gitmez (elle gönderilir). Adaylar `[hotelId, status, checkIn, id]` indeksiyle imleçli; ayıklama parça içinde `IN` ile.
+>
+> **Folyo (misafire):** yalnız misafirin ödediği pencereler — şirket / acente penceresi (`payerName` dolu; kontrat fiyatı) gösterilmez,
+> yalnız varlığı söylenir. Ödeme satırı folyonun para biriminde ve işaretli (iade / iptal eksi, iptal "Ödeme iptali"); dövizli ödemenin
+> kendi tutarı altında.
+>
+> **Misafir uygulaması:** panelden ayrı Vite girişi (`frontend/guest`, `vite.guest.config.js`), `/misafir/` altında, `dist/misafir`'e
+> derlenir (yayın adımı aynı). Sayfa kaydı `PORTAL_PAGES` (2.0 sayfaları bir satırla). Zod / sözleşme paketini taşımaz (104 KB gzip);
+> sınırlar ve belge numarası kuralı `guest/src/limits.js`, sözleşmeyle testle bağlı. Sunucu derin bağlantıyı tanımazsa panelin
+> `index.html`'i misafiri `/misafir/index.html?p=` ile yönlendirir (nginx ayarı gerekmez). Oda servisi sayfası 41'in uçlarıyla; portal
+> içerideki misafire oda bağlantısını kendisi verir. Web sohbeti (8) kanal açıksa ve portal adresi izinliyse portalda.
+>
+> **Personel:** Ön büro → Online check-in (liste: giriş günü, durum sayıları, arama; inceleme penceresi: kişiler, belge fotoğrafları,
+> imza, onaylar, onay / düzeltme, "Girişi yap"), portal ayarları (adres, günler, saklama, dört dilde karşılama / kurallar / KVKK metni,
+> eksik dil ve sohbet uyarısı), rezervasyon ayrıntısında portal kartı (bağlantı, QR, davet, yenile / iptal, online check-in durumu).
+> Giriş penceresi (6) online check-in'le dolu açılır.
+>
+> **API ve izinler:** `/guest-portal` — `settings`, `online-checkins` (+ `by-reservation`, `documents`, `signature`, `approve`, `reject`),
+> `links/:reservationId` (+ `invite`); `/public/portal/:token` — ana sayfa, `check-in` (+ `photos`), `folio`, `requests`, `room-service`.
+> İzinler `guest_portal.view` / `.manage` (müdür, ön büro), `guest_portal.setup` (müdür). Olaylar `online_checkin.changed`,
+> `guest_portal.link.changed`, `guest_portal.settings.changed`; kanal `guest-portal.changed`.
+>
+> **Ölçüm** (`scripts/perf-guest-portal.mjs`; 550.500 rezervasyonlu otelde 30.000 bağlantı, 18.000 online check-in, 36.000 belge): liste
+> 31–54 ms, arama 29–50 ms, ayrıntı 8 ms, misafir ana sayfa 19 ms, form 7 ms, fotoğraf 22 ms, gönderim 90 ms, davet turu (e-posta
+> kanalı açık, gerçek bildirim satırı) 60 sn bütçede 1.399 davet, kalan 183 sonraki turda (~43 ms / davet, arka planda), silme turu
+> 34 ms. Ölçümle düzeltilen: **liste 0,2–0,3 sn → 30–50 ms** (giriş günü kayıtta, indeksli;
+> `reservation.updated` ile eşitlenir), **arama 0,9–1,8 sn → 30–50 ms** (onay kodu + adlar kayıtta, trigram), davet işi tur başına
+> 100'le sınırlıyken zaman bütçeli döngü.
+>
+> **Demo** (`scripts/demo-guest-portal.mjs`, `demo-data.mjs` çağırır; adres `DEMO_PORTAL_URL`): 4 günün varışlarına bağlantı + davet,
+> yarısına online check-in (bekleyen / onaylı / düzeltme), son girişlerde tamamlanmış; geçerli TC kimlik / pasaport; belge ve imza
+> `scripts/assets/` altındaki "örnek belge" görselleri (gerçek kişi yok).
+>
+> **Testler:** entegrasyon (gerçek PostgreSQL, bütün suite) 680 / 680; backend birim 660, sözleşme 531, ön yüz 83 — hepsi geçti; iki
+> derleme temiz. Öz incelemede bulunup testle kapatılan: belirtecin istek günlüğüne açık yazılması, IP başına hız sınırı (otel
+> Wi-Fi'ı), acente penceresinin misafire görünmesi, dövizli / iade / iptal ödemenin yanlış yazılması, iletişimsiz misafirde davetin
+> harcanması, iptal edilen bağlantıya otomatik davet, davet sorgusunun bütün otellerin kayıtlarını taraması.
+>
+> **Canlıya alırken:** 4 migration; yeni paket yok (`npm run build` iki uygulamayı derler); her otel portal ayarlarında adresi girip
+> kaydetmeli (otomatik davet için), web sohbetinin izinli adreslerine portal adresini eklemeli; demo için yeniden yükleme.
 
 ### 54. Misafir yorum entegrasyonu + duygu analizi — Ali Kemal
 **Gün sonu:** Google / Booking yorumları sisteme düşüyor; AI olumlu-olumsuz ve konu etiketi veriyor, cevap öneriyor; trend grafiği var.
@@ -3195,6 +3278,10 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 - [ ] Ekran: Bildirim logu (başarılı / hatalı, tekrar gönder)
 - [ ] Check-in formunda KBS için zorunlu alan kontrolü
 
+> **Modül 53'ten not (4 Kasım 2026 — Ahmet):** online check-in her yetişkinin belge türü / numarası / uyruğu / doğum tarihini toplar;
+> giriş penceresi bunlarla dolar, KBS bildirimi girişin kaydından gider (online check-in'in kendisi bildirilmez). Belge fotoğrafları
+> KBS'ye gitmez, saklama süresi sonunda silinir.
+
 ### 59. Kimlik / pasaport okuma (OCR) — arkadaşın
 **Gün sonu:** Check-in'de kimliğin fotoğrafı çekilince ad, soyad, TC / pasaport no, doğum tarihi otomatik doluyor.
 - [ ] Backend: OCR servisi bağlantısı (MRZ okuma; bulut API veya kütüphane)
@@ -3206,6 +3293,10 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 > makine okunur satır (MRZ) alanları alınsın ve okuma bitince görüntü silinsin; kayda alanlar + "kimlikten okundu"
 > işareti yazılır (KVKK riski neredeyse sıfır). Telefon modu (personel misafirin yanında) ve kiosk modu (misafir
 > kendisi) aynı okuma bileşenini kullanır (73'ün kamera bileşeni). Karar 59'a başlarken.
+
+> **Modül 53'ten not (4 Kasım 2026 — Ahmet):** online check-in belge fotoğrafları (`OnlineCheckinDocument`, yalnız personel uçlarından)
+> OCR'ın doğal girdisi: okunan alanlar misafirin yazdıklarıyla karşılaştırılıp inceleme penceresinde uyarı olabilir. Fotoğraflar saklama
+> süresinde silinir; OCR süre dolmadan çalışmalı.
 
 ### 60. Çoklu dil & çoklu para birimi — Ali Kemal
 **Gün sonu:** Arayüz TR / EN arasında geçiyor; fiyatlar seçilen para biriminde görünüyor; günlük kur otomatik geliyor.
@@ -3240,6 +3331,9 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 > bas, iptal, Z raporu) ve 89 oda yönetim sistemi (GRMS: sensör olayları, klima / sahne komutları). Adaptör arayüzünü
 > sabit yöntem listesi yerine yetenek (capability) bazlı kur; cihaz olayları durum değişince yazılsın, ham akış değil.
 > 101 (sesli santral) çağrı devri için santral adaptörünü kullanacak.
+
+> **Modül 53'ten not (4 Kasım 2026 — Ahmet):** portal ana sayfasında "Dijital anahtar" kutusu pasif bekliyor (`features.digitalKey`);
+> anahtar, içerideki konaklamanın odasına ve portal bağlantısına bağlanmalı (oda değişince / çıkışta geçersiz).
 
 ### 63. Multi-tenant zincir konsolu — arkadaşın
 **Gün sonu:** Zincir yöneticisi birden çok oteli tek panelden görüyor; otel arası geçiş yapıyor; zincir raporu alıyor.

@@ -15,7 +15,7 @@ import {
   sanitizeSmsValue,
   smsInfo,
 } from '@hotelos/hotel-contracts';
-import { prisma } from '../../db.js';
+import { prisma, prismaUnfiltered } from '../../db.js';
 import { recordAudit } from '../../lib/audit.js';
 import { getBusinessDate } from '../../lib/business-date.js';
 import { encodeCursor, olderThan, parseCursor } from '../../lib/cursor.js';
@@ -411,6 +411,30 @@ export async function saveTemplate(hotelId, input) {
  * @param {import('@prisma/client').PrismaClient} [client]
  * @returns {Promise<number>} eklenen şablon
  */
+/**
+ * Sonradan eklenen bir tetikleyicinin (ör. online check-in daveti, modül 53) kurulmuş otelde hiç şablonu yoksa
+ * varsayılanlarını yükler. Otelin bilerek sildiği şablon geri gelmez (silinmiş satır da "var" sayılır).
+ * @param {string} hotelId @param {string} trigger
+ * @returns {Promise<number>} eklenen şablon
+ */
+export async function ensureTriggerTemplates(hotelId, trigger) {
+  if ((await prismaUnfiltered.notificationTemplate.count({ where: { hotelId, key: trigger } })) > 0) return 0;
+  const result = await prismaUnfiltered.notificationTemplate.createMany({
+    data: DEFAULT_NOTIFICATION_TEMPLATES.filter((template) => template.key === trigger).map((template) => ({
+      hotelId,
+      key: template.key,
+      channel: template.channel,
+      language: template.language,
+      subject: template.subject,
+      body: template.body,
+      isActive: true,
+      updatedBy: 'kurulum',
+    })),
+    skipDuplicates: true,
+  });
+  return result.count;
+}
+
 export async function ensureDefaultTemplates(hotelId, client = prisma) {
   const result = await client.notificationTemplate.createMany({
     data: DEFAULT_NOTIFICATION_TEMPLATES.map((template) => ({
@@ -478,10 +502,11 @@ export function raiseDeliveryFailureAlert(tx, stage, { hotelId, channel, errorCo
  *
  * @param {string} hotelId
  * @param {string} trigger `NOTIFICATION_TRIGGERS`
- * @param {{ reservationId: string, roomId?: string | null }} subject
+ * @param {{ reservationId: string, roomId?: string | null, extraValues?: Record<string, string>, dedupeSuffix?: string | null }} subject
+ *   `extraValues`: tetikleyiciye özel değişkenler (`{portalLinki}`); `dedupeSuffix`: bilerek ikinci gönderim.
  * @returns {Promise<{ queued: Array<{ id: string, channel: string, status: string }>, skipped: string | null, duplicates: number }>}
  */
-export async function enqueueTriggerNotifications(hotelId, trigger, { reservationId, roomId = null }) {
+export async function enqueueTriggerNotifications(hotelId, trigger, { reservationId, roomId = null, extraValues = {}, dedupeSuffix = null }) {
   const [hotel, businessDate, reservation] = await Promise.all([
     getHotelSettings(hotelId),
     getBusinessDate(hotelId),
@@ -517,6 +542,8 @@ export async function enqueueTriggerNotifications(hotelId, trigger, { reservatio
     roomNumber: reservation.room?.number,
     today: businessDate,
   });
+  // Tetikleyiciye özel değerler (online check-in davetinde portal bağlantısı).
+  Object.assign(values, extraValues);
   const now = new Date();
   const actor = currentActor();
   const rows = [];
@@ -557,7 +584,7 @@ export async function enqueueTriggerNotifications(hotelId, trigger, { reservatio
       templateId: template.id,
       guestId: reservation.guest.id,
       reservationId: reservation.id,
-      dedupeKey: notificationDedupeKey(trigger, { reservationId: reservation.id, roomId: reservation.roomId }, channel),
+      dedupeKey: notificationDedupeKey(trigger, { reservationId: reservation.id, roomId: reservation.roomId, suffix: dedupeSuffix }, channel),
       createdBy: actor,
     };
 

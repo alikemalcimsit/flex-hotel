@@ -182,6 +182,7 @@ enum NotificationSource {
   CHECKED_IN
   CHECKED_OUT
   CHANNEL_TEST
+  CHECKIN_INVITE
 }
 
 /// Şablonu olan olaylar.
@@ -190,6 +191,7 @@ enum NotificationTrigger {
   ROOM_ASSIGNED
   CHECKED_IN
   CHECKED_OUT
+  CHECKIN_INVITE
 }
 
 /// Personel uyarısı türleri (üst bardaki zil).
@@ -223,6 +225,8 @@ enum StaffAlertKind {
   POS
   /// Fatura / e-belge: gönderilemedi, GİB reddetti — modül 16 / 49.
   INVOICE
+  /// Online check-in incelemesi bekliyor (modül 53): resepsiyona.
+  ONLINE_CHECKIN
 }
 
 /// Rezervasyon fiyatının kaynağı (modül 4): sistem hesabı ya da yetkili
@@ -651,6 +655,7 @@ enum GuestRequestSource {
   FRONT_DESK
   STAFF
   AI
+  PORTAL
 }
 
 enum LogLevel {
@@ -710,118 +715,122 @@ model Hotel {
   updatedAt                     DateTime          @updatedAt
   deletedAt                     DateTime?
 
-  users                 User[]
-  refreshTokens         RefreshToken[]
-  rolePermissions       RolePermission[]
-  aiSettings            AiSettings?
-  messagingChannels     MessagingChannel[]
-  conversationAiStates  ConversationAiState[]
-  eventLogs             EventLog[]
-  processedEvents       ProcessedEvent[]
-  actorSettings         ActorSetting[]
-  activityLogs          ActivityLog[]
-  auditLogs             AuditLog[]
-  approvals             Approval[]
-  pendingActions        PendingAction[]
-  manualTasks           ManualTask[]
-  llmUsages             LlmUsage[]
-  llmUsageDaily         LlmUsageDaily[]
-  notifications         Notification[]
-  notificationTemplates NotificationTemplate[]
-  notificationChannels  NotificationChannelConfig[]
-  staffAlerts           StaffAlert[]
-  roomTypes             RoomType[]
-  rooms                 Room[]
-  roomBlocks            RoomBlock[]
-  roomStaySegments      RoomStaySegment[]
-  guests                Guest[]
-  reservations          Reservation[]
-  reservationGuests     ReservationGuest[]
-  ratePlans             RatePlan[]
-  seasons               Season[]
-  taxes                 Tax[]
-  conversations         Conversation[]
-  messages              Message[]
-  guestRequests         GuestRequest[]
-  folios                Folio[]
-  folioItems            FolioItem[]
-  folioRoutes           FolioRoute[]
-  roomChargeRuns        RoomChargeRun[]
-  invoices              Invoice[]
-  invoiceSettings       InvoiceSettings?
-  invoiceTaxCodes       InvoiceTaxCode[]
-  departments           Department[]
-  employees             Employee[]
-  payrollSettings       PayrollSettings?
-  payrollParameterSets  PayrollParameterSet[]
-  payElements           PayElement[]
-  payrollRuns           PayrollRun[]
-  testTaxpayers         TestTaxpayer[]
-  payments              Payment[]
-  exchangeRates         ExchangeRate[]
-  minibarItems          MinibarItem[]
-  minibarConsumptions   MinibarConsumption[]
-  laundryItems          LaundryItem[]
-  laundryOrders         LaundryOrder[]
-  nightAudits           NightAudit[]
-  housekeepingTasks     HousekeepingTask[]
-  maintenanceTickets    MaintenanceTicket[]
-  lostItems             LostItem[]
-  lostItemPhotos        LostItemPhoto[]
-  lostItemNotes         LostItemNote[]
-  revenueDayStats       RevenueDayStat[]
-  revenueStatDays       RevenueStatDay[]
-  budgets               Budget[]
-  budgetLines           BudgetLine[]
-  budgetExpenseItems    BudgetExpenseItem[]
-  budgetExpenseActuals  BudgetExpenseActual[]
-  budgetCommentaries    BudgetCommentary[]
-  reservationGroups     ReservationGroup[]
-  reservationNights     ReservationNight[]
-  waitlistEntries       WaitlistEntry[]
-  agencies              Agency[]
-  contracts             Contract[]
-  contractRates         ContractRate[]
-  contractStopSales     ContractStopSale[]
-  promotions            Promotion[]
-  coupons               Coupon[]
-  channels              Channel[]
-  agencyBonusRules      AgencyBonusRule[]
-  agencyBonuses         AgencyBonus[]
-  venues                Venue[]
-  eventEquipment        EventEquipment[]
-  eventClients          EventClient[]
-  eventSettings         EventSettings?
-  events                Event[]
-  eventPayments         EventPayment[]
-  eventDocuments        EventDocument[]
-  posOutlets            PosOutlet[]
-  menuCategories        MenuCategory[]
-  menuItems             MenuItem[]
-  posSettings           PosSettings?
-  posShifts             PosShift[]
-  roomServiceOrders     RoomServiceOrder[]
-  roomServiceLinks      RoomServiceLink[]
-  posChecks             PosCheck[]
-  posPayments           PosPayment[]
-  stockItems            StockItem[]
-  recipes               Recipe[]
-  banquetMenus          BanquetMenu[]
-  purchaseRequests      PurchaseRequest[]
-  suppliers             Supplier[]
-  purchaseSettings      PurchaseSettings?
-  purchaseRounds        PurchaseRound[]
-  purchaseOrders        PurchaseOrder[]
-  goodsReceipts         GoodsReceipt[]
-  warehouses            Warehouse[]
-  accountingSettings    AccountingSettings?
-  ledgerAccounts        LedgerAccount[]
-  ledgerEntries         LedgerEntry[]
-  treasuryAccounts      TreasuryAccount[]
-  treasuryMovements     TreasuryMovement[]
-  treasuryMappings      TreasuryMapping[]
-  accountingVouchers    AccountingVoucher[]
-  instruments           Instrument[]
+  users                  User[]
+  refreshTokens          RefreshToken[]
+  rolePermissions        RolePermission[]
+  aiSettings             AiSettings?
+  messagingChannels      MessagingChannel[]
+  conversationAiStates   ConversationAiState[]
+  eventLogs              EventLog[]
+  processedEvents        ProcessedEvent[]
+  actorSettings          ActorSetting[]
+  activityLogs           ActivityLog[]
+  auditLogs              AuditLog[]
+  approvals              Approval[]
+  pendingActions         PendingAction[]
+  manualTasks            ManualTask[]
+  llmUsages              LlmUsage[]
+  llmUsageDaily          LlmUsageDaily[]
+  notifications          Notification[]
+  notificationTemplates  NotificationTemplate[]
+  notificationChannels   NotificationChannelConfig[]
+  staffAlerts            StaffAlert[]
+  roomTypes              RoomType[]
+  rooms                  Room[]
+  roomBlocks             RoomBlock[]
+  roomStaySegments       RoomStaySegment[]
+  guests                 Guest[]
+  reservations           Reservation[]
+  reservationGuests      ReservationGuest[]
+  ratePlans              RatePlan[]
+  seasons                Season[]
+  taxes                  Tax[]
+  conversations          Conversation[]
+  messages               Message[]
+  guestRequests          GuestRequest[]
+  folios                 Folio[]
+  folioItems             FolioItem[]
+  folioRoutes            FolioRoute[]
+  roomChargeRuns         RoomChargeRun[]
+  invoices               Invoice[]
+  invoiceSettings        InvoiceSettings?
+  invoiceTaxCodes        InvoiceTaxCode[]
+  departments            Department[]
+  employees              Employee[]
+  payrollSettings        PayrollSettings?
+  guestPortalSettings    GuestPortalSettings?
+  guestPortalLinks       GuestPortalLink[]
+  onlineCheckins         OnlineCheckin[]
+  onlineCheckinDocuments OnlineCheckinDocument[]
+  payrollParameterSets   PayrollParameterSet[]
+  payElements            PayElement[]
+  payrollRuns            PayrollRun[]
+  testTaxpayers          TestTaxpayer[]
+  payments               Payment[]
+  exchangeRates          ExchangeRate[]
+  minibarItems           MinibarItem[]
+  minibarConsumptions    MinibarConsumption[]
+  laundryItems           LaundryItem[]
+  laundryOrders          LaundryOrder[]
+  nightAudits            NightAudit[]
+  housekeepingTasks      HousekeepingTask[]
+  maintenanceTickets     MaintenanceTicket[]
+  lostItems              LostItem[]
+  lostItemPhotos         LostItemPhoto[]
+  lostItemNotes          LostItemNote[]
+  revenueDayStats        RevenueDayStat[]
+  revenueStatDays        RevenueStatDay[]
+  budgets                Budget[]
+  budgetLines            BudgetLine[]
+  budgetExpenseItems     BudgetExpenseItem[]
+  budgetExpenseActuals   BudgetExpenseActual[]
+  budgetCommentaries     BudgetCommentary[]
+  reservationGroups      ReservationGroup[]
+  reservationNights      ReservationNight[]
+  waitlistEntries        WaitlistEntry[]
+  agencies               Agency[]
+  contracts              Contract[]
+  contractRates          ContractRate[]
+  contractStopSales      ContractStopSale[]
+  promotions             Promotion[]
+  coupons                Coupon[]
+  channels               Channel[]
+  agencyBonusRules       AgencyBonusRule[]
+  agencyBonuses          AgencyBonus[]
+  venues                 Venue[]
+  eventEquipment         EventEquipment[]
+  eventClients           EventClient[]
+  eventSettings          EventSettings?
+  events                 Event[]
+  eventPayments          EventPayment[]
+  eventDocuments         EventDocument[]
+  posOutlets             PosOutlet[]
+  menuCategories         MenuCategory[]
+  menuItems              MenuItem[]
+  posSettings            PosSettings?
+  posShifts              PosShift[]
+  roomServiceOrders      RoomServiceOrder[]
+  roomServiceLinks       RoomServiceLink[]
+  posChecks              PosCheck[]
+  posPayments            PosPayment[]
+  stockItems             StockItem[]
+  recipes                Recipe[]
+  banquetMenus           BanquetMenu[]
+  purchaseRequests       PurchaseRequest[]
+  suppliers              Supplier[]
+  purchaseSettings       PurchaseSettings?
+  purchaseRounds         PurchaseRound[]
+  purchaseOrders         PurchaseOrder[]
+  goodsReceipts          GoodsReceipt[]
+  warehouses             Warehouse[]
+  accountingSettings     AccountingSettings?
+  ledgerAccounts         LedgerAccount[]
+  ledgerEntries          LedgerEntry[]
+  treasuryAccounts       TreasuryAccount[]
+  treasuryMovements      TreasuryMovement[]
+  treasuryMappings       TreasuryMapping[]
+  accountingVouchers     AccountingVoucher[]
+  instruments            Instrument[]
 }
 
 model User {
@@ -1546,33 +1555,36 @@ model Reservation {
   updatedAt           DateTime             @updatedAt
   deletedAt           DateTime?
 
-  hotel               Hotel                @relation(fields: [hotelId], references: [id])
-  guest               Guest                @relation(fields: [guestId], references: [id])
-  roomType            RoomType             @relation(fields: [roomTypeId], references: [id])
-  room                Room?                @relation(fields: [roomId], references: [id])
-  group               ReservationGroup?    @relation(fields: [groupId], references: [id])
-  agency              Agency?              @relation(fields: [agencyId], references: [id], onDelete: Restrict)
-  promotion           Promotion?           @relation(fields: [promotionId], references: [id], onDelete: Restrict)
-  coupon              Coupon?              @relation(fields: [couponId], references: [id], onDelete: Restrict)
-  channelBooking      ChannelBooking?      @relation(fields: [channelBookingId], references: [id], onDelete: Restrict)
-  nights              ReservationNight[]
-  waitlistEntries     WaitlistEntry[]
-  reservationGuests   ReservationGuest[]
-  folios              Folio[]
-  folioItems          FolioItem[]
-  folioRoutes         FolioRoute[]
-  payments            Payment[]
-  lostItems           LostItem[]
-  minibarConsumptions MinibarConsumption[]
-  laundryOrders       LaundryOrder[]
-  roomSegments        RoomStaySegment[]
-  conversations       Conversation[]
-  guestRequests       GuestRequest[]
-  notifications       Notification[]
-  agencyBonusLines    AgencyBonusLine[]
-  posRoomCharges      PosRoomCharge[]
-  roomServiceOrders   RoomServiceOrder[]
-  roomServiceLinks    RoomServiceLink[]
+  hotel                  Hotel                   @relation(fields: [hotelId], references: [id])
+  guest                  Guest                   @relation(fields: [guestId], references: [id])
+  roomType               RoomType                @relation(fields: [roomTypeId], references: [id])
+  room                   Room?                   @relation(fields: [roomId], references: [id])
+  group                  ReservationGroup?       @relation(fields: [groupId], references: [id])
+  agency                 Agency?                 @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  promotion              Promotion?              @relation(fields: [promotionId], references: [id], onDelete: Restrict)
+  coupon                 Coupon?                 @relation(fields: [couponId], references: [id], onDelete: Restrict)
+  channelBooking         ChannelBooking?         @relation(fields: [channelBookingId], references: [id], onDelete: Restrict)
+  nights                 ReservationNight[]
+  waitlistEntries        WaitlistEntry[]
+  reservationGuests      ReservationGuest[]
+  folios                 Folio[]
+  folioItems             FolioItem[]
+  folioRoutes            FolioRoute[]
+  payments               Payment[]
+  lostItems              LostItem[]
+  minibarConsumptions    MinibarConsumption[]
+  laundryOrders          LaundryOrder[]
+  roomSegments           RoomStaySegment[]
+  conversations          Conversation[]
+  guestRequests          GuestRequest[]
+  notifications          Notification[]
+  agencyBonusLines       AgencyBonusLine[]
+  posRoomCharges         PosRoomCharge[]
+  roomServiceOrders      RoomServiceOrder[]
+  roomServiceLinks       RoomServiceLink[]
+  guestPortalLinks       GuestPortalLink[]
+  onlineCheckin          OnlineCheckin?
+  onlineCheckinDocuments OnlineCheckinDocument[]
 
   // Müsaitlik sorgusunun sıcak yolu: "şu otelde, şu oda tipinde, şu tarihlerde
   // envanteri tüketen rezervasyonlar". Dolu bir otelde saniyede onlarca kez çalışır.
@@ -6447,4 +6459,126 @@ model PayrollSequence {
   last    Int    @default(0)
 
   @@id([hotelId, kind])
+}
+
+/**
+ * ══════════════════ Temassız uygulamalar (modül 53) ══════════════════
+ */
+
+/// Misafir portalı ayarı (otel başına bir satır; yoksa varsayılanlar).
+model GuestPortalSettings {
+  hotelId               String   @id
+  enabled               Boolean  @default(true)
+  /// Girişten kaç gün önce otomatik davet (0: yalnız elle).
+  inviteDaysBefore      Int      @default(3)
+  /// Online check-in girişten kaç gün önce açılır.
+  checkinOpenDays       Int      @default(7)
+  /// Belge fotoğrafları çıkıştan (gelmeyen / iptalde giriş gününden) kaç gün sonra silinir (KVKK).
+  documentRetentionDays Int      @default(7)
+  /// Davet bağlantısının tabanı ("https://hotel.flexai.tr"); boşsa otomatik davet gönderilmez.
+  publicBaseUrl         String?
+  /// Misafire gösterilen metinler: { tr: { welcome, houseRules, privacyNotice }, en: …, de: …, ru: … }.
+  texts                 Json     @default("{}")
+  updatedBy             String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+}
+
+/// Misafir portalı bağlantısı: rezervasyona bağlı, imzalı (`/misafir/p/<kimlik>.<imza>`). Rezervasyonda tek geçerli
+/// bağlantı (kısmi tekil index); yenilemek eskisini öldürür.
+model GuestPortalLink {
+  id            String    @id @default(uuid())
+  hotelId       String
+  reservationId String
+  /// İmzaya giren rastgele değer: veritabanı sızsa da bağlantı imza anahtarı olmadan üretilemez.
+  nonce         String
+  createdBy     String
+  createdAt     DateTime  @default(now())
+  revokedAt     DateTime?
+  revokedBy     String?
+  lastUsedAt    DateTime?
+  /// Son davetin gönderildiği an (otomatik ya da elle).
+  invitedAt     DateTime?
+
+  hotel       Hotel       @relation(fields: [hotelId], references: [id])
+  reservation Reservation @relation(fields: [reservationId], references: [id], onDelete: Restrict)
+
+  @@index([hotelId, reservationId])
+}
+
+enum OnlineCheckinStatus {
+  SUBMITTED
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
+/// Online check-in (rezervasyon başına bir kayıt; misafir düzeltip yeniden gönderir). Kimlik bilgileri girişte
+/// personelin penceresini doldurur; belge fotoğrafları ayrı tabloda ve diskte, saklama süresi sonunda silinir.
+model OnlineCheckin {
+  id                String              @id @default(uuid())
+  hotelId           String
+  reservationId     String              @unique
+  status            OnlineCheckinStatus
+  /// Rezervasyonun giriş günü (liste sırası ve süzgeci; rezervasyon tarihi değişince `reservation.updated` ile eşitlenir).
+  arrivalDate       DateTime            @db.Date
+  /// Personel aramasının metni: onay kodu, rezervasyon sahibinin ve refakatçilerin adları (gönderimde yazılır; trigram indeksli).
+  searchText        String
+  /// Rezervasyon sahibinin kimliği: { firstName, lastName, idType, idNumber, nationality, birthDate }.
+  guest             Json
+  /// Refakatçiler: [{ firstName, lastName, isChild, idType, idNumber, nationality, birthDate }].
+  companions        Json                @default("[]")
+  vehiclePlate      String?
+  /// Tahmini varış saati ("SS:DD").
+  arrivalTime       String?
+  paymentPreference String
+  note              String?
+  language          String
+  /// Onaylar ve anları: { privacyAt, rulesAt, documentPhotosAt, marketing }.
+  consents          Json
+  /// İmza (PNG) disk anahtarı.
+  signatureKey      String
+  submittedAt       DateTime
+  submitCount       Int                 @default(1)
+  reviewedAt        DateTime?
+  reviewedBy        String?
+  rejectReason      String?
+  completedAt       DateTime?
+  documentsPurgedAt DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  hotel       Hotel                   @relation(fields: [hotelId], references: [id])
+  reservation Reservation             @relation(fields: [reservationId], references: [id], onDelete: Restrict)
+  documents   OnlineCheckinDocument[]
+
+  @@index([hotelId, arrivalDate, submittedAt, id])
+  @@index([hotelId, status, arrivalDate, submittedAt, id])
+  @@index([searchText(ops: raw("gin_trgm_ops"))], map: "OnlineCheckin_searchText_trgm_idx", type: Gin)
+}
+
+/// Belge fotoğrafı (disk: `online-checkin/<otel>/<kimlik>.jpg` + önizleme). Yüklenince gönderime bağlanmamış
+/// (`onlineCheckinId` boş) bekler; bağlanmayan 48 saat sonra, bağlanan saklama süresi sonunda silinir.
+model OnlineCheckinDocument {
+  id              String    @id @default(uuid())
+  hotelId         String
+  reservationId   String
+  onlineCheckinId String?
+  /// 0: rezervasyon sahibi, 1…: refakatçi sırası (gönderimde yazılır).
+  person          Int?
+  contentType     String
+  sizeBytes       Int
+  thumbBytes      Int
+  createdAt       DateTime  @default(now())
+  purgedAt        DateTime?
+
+  hotel         Hotel          @relation(fields: [hotelId], references: [id])
+  reservation   Reservation    @relation(fields: [reservationId], references: [id], onDelete: Restrict)
+  onlineCheckin OnlineCheckin? @relation(fields: [onlineCheckinId], references: [id], onDelete: Restrict)
+
+  @@index([hotelId, reservationId])
+  @@index([onlineCheckinId])
+  @@index([createdAt])
 }
