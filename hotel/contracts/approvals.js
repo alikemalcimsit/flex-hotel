@@ -32,6 +32,8 @@ export const APPROVAL_TYPES = Object.freeze([
   'POS_PAYMENT',
   'PURCHASE_ORDER',
   'ACCOUNTING_PAYMENT',
+  'INVOICE_CANCEL',
+  'PAYROLL',
   'OTHER',
 ]);
 
@@ -48,6 +50,8 @@ export const APPROVAL_TYPE_LABELS = Object.freeze({
   POS_PAYMENT: 'Restoran ödemesi (büyük ödeme, hatalı giriş iptali)',
   PURCHASE_ORDER: 'Satın alma siparişi (eşik üstü tutar)',
   ACCOUNTING_PAYMENT: 'Ödeme fişi (eşik üstü tutar)',
+  INVOICE_CANCEL: 'Fatura iptali',
+  PAYROLL: 'Bordro onayı',
   OTHER: 'Diğer',
 });
 
@@ -70,6 +74,8 @@ export const APPROVAL_SELF_DECISION_FORBIDDEN_TYPES = Object.freeze([
   'POS_PAYMENT',
   'PURCHASE_ORDER',
   'ACCOUNTING_PAYMENT',
+  'INVOICE_CANCEL',
+  'PAYROLL',
 ]);
 
 /**

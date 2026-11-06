@@ -28,6 +28,8 @@ import { conciergeService, routerService } from '../modules/concierge/service.js
 import * as folioService from '../modules/folios/service.js';
 import * as paymentService from '../modules/payments/service.js';
 import * as accountingPostings from '../modules/accounting/postings.js';
+import { syncPayrollRun } from '../modules/payroll/postings.js';
+import * as invoiceService from '../modules/invoicing/invoices.js';
 import { enqueueTriggerNotifications } from '../modules/notifications/service.js';
 import { raiseStaffAlert } from '../modules/notifications/staff-alerts.js';
 import { requestApprovalStandalone } from '../modules/approvals/service.js';
@@ -264,6 +266,7 @@ export function registerActors() {
           recordCheckInDeposit: paymentService.recordCheckInDeposit,
           reverseCheckInDeposits: paymentService.reverseCheckInDeposits,
           closeFolioIfSettled: folioService.closeFolioIfSettled,
+          createFolioInvoiceDraft: invoiceService.createFolioInvoiceDraft,
         },
         deps,
       ),
@@ -292,6 +295,8 @@ export function registerActors() {
           syncGoodsReceipt: accountingPostings.syncGoodsReceipt,
           syncAgencyBonus: accountingPostings.syncAgencyBonus,
           syncEventCharge: accountingPostings.syncEventCharge,
+          syncInvoice: accountingPostings.syncInvoice,
+          syncPayrollRun,
         },
         deps,
       ),

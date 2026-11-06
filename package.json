@@ -13,6 +13,7 @@
     "dev": "concurrently -n backend,frontend -c blue,green \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "npm run dev -w @hotelos/hotel-backend",
     "dev:frontend": "npm run dev -w @hotelos/hotel-frontend",
+    "dev:guest": "npm run dev:guest -w @hotelos/hotel-frontend",
     "build": "npm run build -w @hotelos/hotel-frontend",
     "test": "npm run test --workspaces --if-present",
     "db:generate": "npm run db:generate -w @hotelos/hotel-backend",

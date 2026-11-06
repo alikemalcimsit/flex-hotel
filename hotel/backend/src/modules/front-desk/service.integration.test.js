@@ -541,4 +541,27 @@ describe('check-in / check-out (entegrasyon)', { skip }, () => {
       assert.equal(summary.inHouse, 1);
     });
   });
+
+  describe('toplu çıkış', () => {
+    it('bakiyesi kapalı olan çıkar; borçlu ve sürümü eskimiş olan atlanır, sebebiyle döner', async () => {
+      const paid = await seedInHouse({ checkOutOffset: 0, roomId: room[101].id });
+      await seedFolio(paid, { payments: ['2000.00'] });
+      const owing = await seedInHouse({ checkOutOffset: 0, roomId: room[102].id });
+      const result = await as(async () =>
+        frontDesk.checkOutBatch(
+          hotelId,
+          [
+            { id: paid.id, expectedUpdatedAt: await version(paid.id) },
+            { id: owing.id, expectedUpdatedAt: await version(owing.id) },
+            { id: owing.id, expectedUpdatedAt: new Date('2020-01-01T00:00:00Z') },
+          ],
+          { now: at('11:00') },
+        ),
+      );
+      assert.deepEqual([result.succeeded, result.failed], [1, 2]);
+      assert.deepEqual(result.results.map((row) => row.code ?? 'OK'), ['OK', 'BALANCE_DUE', 'STALE_WRITE']);
+      assert.equal((await db.reservation.findUnique({ where: { id: paid.id } })).status, 'CHECKED_OUT');
+      assert.equal((await db.reservation.findUnique({ where: { id: owing.id } })).status, 'CHECKED_IN');
+    });
+  });
 });

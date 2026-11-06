@@ -562,15 +562,18 @@ describe('oda servisi (entegrasyon)', { skip }, () => {
     assert.equal((await open('GET', `/public/room-service/${fresh}`)).statusCode, 409);
   });
 
-  it('misafir QR: yazma uçlarında IP başına hız sınırı; aynı anda gelen siparişler sınırı aşmaz', async () => {
+  it('misafir QR: yazma uçlarında bağlantı başına hız sınırı (aynı otel ağındaki başka misafir etkilenmez); aynı anda gelen siparişler sınırı aşmaz', async () => {
     const stay = await seedStay();
     const token = (await as(DESK, () => guest.issueLink(hotelId, stay.id))).link.token;
     const statuses = [];
     for (let index = 0; index < 11; index += 1) statuses.push((await open('POST', `/public/room-service/${token}/orders/${randomUUID()}/cancel`, undefined, '10.9.8.7')).statusCode);
     assert.deepEqual(statuses.slice(0, 10), Array(10).fill(404));
     assert.equal(statuses[10], 429);
-    // Başka IP etkilenmez.
-    assert.equal((await open('POST', `/public/room-service/${token}/orders/${randomUUID()}/cancel`, undefined, '10.9.8.8')).statusCode, 404);
+    // Aynı bağlantı başka ağdan da sınırda; aynı ağdaki (otel Wi-Fi'ı, tek NAT adresi) başka misafirin bağlantısı etkilenmez.
+    assert.equal((await open('POST', `/public/room-service/${token}/orders/${randomUUID()}/cancel`, undefined, '10.9.8.8')).statusCode, 429);
+    const neighbourStay = await seedStay({ roomNumber: '102', lastName: 'Demir' });
+    const neighbour = (await as(DESK, () => guest.issueLink(hotelId, neighbourStay.id))).link.token;
+    assert.equal((await open('POST', `/public/room-service/${neighbour}/orders/${randomUUID()}/cancel`, undefined, '10.9.8.7')).statusCode, 404);
 
     const burst = await Promise.all(
       Array.from({ length: 5 }, (_, index) =>

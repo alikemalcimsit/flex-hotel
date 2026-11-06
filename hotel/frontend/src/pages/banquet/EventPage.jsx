@@ -17,6 +17,7 @@ import { EventMenuTab } from './EventMenuTab.jsx';
 import { EventPaymentsTab } from './EventPaymentsTab.jsx';
 import { EventProgramTab } from './EventProgramTab.jsx';
 import { CompleteDialog, ConfirmEventDialog, EventReasonDialog, TentativeDialog } from './EventStatusDialogs.jsx';
+import { SourceInvoice } from '../invoicing/SourceInvoice.jsx';
 
 const TABS = Object.freeze([
   { key: 'genel', label: 'Genel', icon: 'info' },
@@ -135,6 +136,7 @@ export function EventPage() {
         )}
         {event.requireSignedContract && open && <Badge tone={event.contractSigned ? 'success' : 'neutral'}>{event.contractSigned ? 'Sözleşme imzalı' : 'İmzalı sözleşme bekleniyor'}</Badge>}
         {event.invoiceReady && <Badge tone={event.proformaIssued ? 'success' : 'info'}>{event.proformaIssued ? 'Proforma üretildi' : 'Faturaya hazır'}</Badge>}
+        {event.invoiceReady && <SourceInvoice kind="event" id={event.id} />}
       </div>
       {event.status === 'TENTATIVE' && event.optionRank > 1 && (
         <Alert tone="warning" title={`Bu dosya ${event.optionRank}. opsiyon`}>

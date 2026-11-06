@@ -24,7 +24,7 @@ import { MODULLER } from './moduller.mjs';
  * Çıktı — iki ayrı kitap, iki ayrı tema (`veri/` bütün modüller için güncel olmalı):
  * - `cikti/FlexHotel-Urun-Katalogu.pdf`: müşteri — tanıtım, ekranlar, kim ne yapar (sablon/musteri.typ)
  * - `cikti/FlexHotel-Teknik-Referans.pdf`: teknik — mimari, veri modeli, API, izinler, olaylar, kurallar (sablon/teknik.typ)
- * - modül başına iki ayrı PDF, tek klasörde: `cikti/moduller/NN-slug-musteri.pdf` ve `cikti/moduller/NN-slug-teknik.pdf`
+ * - modül başına iki ayrı PDF, iki klasörde: `cikti/moduller/musteri/NN-slug-musteri.pdf` ve `cikti/moduller/teknik/NN-slug-teknik.pdf`
  *   (her yeni modül üretildikçe bu klasöre eklenir)
  */
 
@@ -48,11 +48,12 @@ const key = (entry) => `${pad(entry.numara)}-${entry.slug}`;
 /** İki kitabın kısımları (iş alanları); her modül tam bir alanda olmalı (yoksa kitap adımı durur). */
 const ALANLAR = [
   { ad: 'Ön büro ve konaklama', aciklama: 'Oda envanterinden rezervasyona, oda planından giriş-çıkışa: resepsiyonun günlük işi.', moduller: [3, 4, 5, 6, 21] },
-  { ad: 'Misafir iletişimi', aciklama: 'WhatsApp ve web sohbet, yapay zekâ asistanı, istekler ve otomatik bildirimler.', moduller: [7, 8, 9] },
-  { ad: 'Hesap, kasa ve muhasebe', aciklama: 'Folyo, ödeme ve kasa; minibar ve çamaşır gibi ek hizmetlerin folyoya akışı; cariler, banka, çek ve senet.', moduller: [15, 17, 19, 47] },
+  { ad: 'Misafir iletişimi', aciklama: 'WhatsApp ve web sohbet, yapay zekâ asistanı, istekler, otomatik bildirimler; misafir portalı ve online check-in.', moduller: [7, 8, 9, 53] },
+  { ad: 'Hesap, kasa ve muhasebe', aciklama: 'Folyo, ödeme ve kasa; minibar ve çamaşır gibi ek hizmetlerin folyoya akışı; fatura, e-Fatura ve e-Arşiv; cariler, banka, çek ve senet.', moduller: [15, 17, 19, 49, 47] },
   { ad: 'Satış, dağıtım ve gelir', aciklama: 'Acente kontratları, promosyonlar, OTA kanalları; gelir raporu, tahmin ve bütçe.', moduller: [29, 31, 33, 35, 23, 25, 27] },
   { ad: 'Yiyecek-içecek ve etkinlik', aciklama: 'Restoran, oda servisi, banket ve etkinlik satışı; reçete ve mutfak planı.', moduller: [39, 41, 37, 43] },
   { ad: 'Satın alma ve stok', aciklama: 'Talepten teklife, siparişten mal kabulüne; depo ve stok hareketleri.', moduller: [45] },
+  { ad: 'Personel ve bordro', aciklama: 'Personel kartları, puantaj ve servis payı; aylık bordro, onayı, ödemesi ve muhasebeye akışı.', moduller: [51] },
   { ad: 'Yönetim ve denetim', aciklama: 'Ayarlar, roller ve yetkiler, onaylar, otomasyon paneli, canlı akış ve günlük durum.', moduller: [13, 1, 2, 11, 12, 10] },
 ];
 const alanOf = (numara) => ALANLAR.find((alan) => alan.moduller.includes(numara))?.ad ?? '';
@@ -145,7 +146,8 @@ const SURUMLER = [
 
 async function buildPdfs() {
   await mkdir(path.join(HERE, '.uret'), { recursive: true });
-  await mkdir(path.join(HERE, 'cikti', 'moduller'), { recursive: true });
+  await mkdir(path.join(HERE, 'cikti', 'moduller', 'musteri'), { recursive: true });
+  await mkdir(path.join(HERE, 'cikti', 'moduller', 'teknik'), { recursive: true });
   for (const entry of modules) {
     const content = `/moduller/${key(entry)}.typ`;
     if (!existsSync(path.join(HERE, content))) {
@@ -161,7 +163,7 @@ async function buildPdfs() {
           `#let veri = json("/veri/${pad(entry.numara)}.json")`,
           `#${surum.sablon}(veri.bilgi, ${surum.ad}(veri))`,
         ],
-        path.join(HERE, 'cikti', 'moduller', `${key(entry)}-${surum.ad}.pdf`),
+        path.join(HERE, 'cikti', 'moduller', surum.ad, `${key(entry)}-${surum.ad}.pdf`),
       );
     }
   }

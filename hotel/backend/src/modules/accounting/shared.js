@@ -228,7 +228,7 @@ export async function syncPartnerAccount(hotelId, link) {
  * @param {import('@prisma/client').Prisma.TransactionClient} tx
  * @param {{ hotelId: string, accountId: string, date: string, dueDate?: string | null, debit?: string, credit?: string, description: string,
  *   reference?: string | null, sourceType: string, sourceId: string, sourceKey: string, voucherId?: string | null, instrumentId?: string | null,
- *   reversalOfId?: string | null, createdBy?: string }} input
+ *   reversalOfId?: string | null, createdBy?: string, invoiceNumber?: string | null }} input
  * @returns {Promise<{ created: boolean, id: string }>}
  */
 export async function postLedger(tx, input) {
@@ -247,6 +247,7 @@ export async function postLedger(tx, input) {
       credit,
       description: input.description.slice(0, 300),
       reference: input.reference?.slice(0, 60) ?? null,
+      invoiceNumber: input.invoiceNumber ?? null,
       sourceType: /** @type {any} */ (input.sourceType),
       sourceId: input.sourceId,
       sourceKey: input.sourceKey,
@@ -266,6 +267,66 @@ export async function postLedger(tx, input) {
     WHERE "id" = ${input.accountId} AND "hotelId" = ${input.hotelId}`;
   if (changed !== 1) throw new NotFoundError('Cari bulunamadı');
   return { created: true, id: entry.id };
+}
+
+/**
+ * Çok sayıda cari hareketi tek seferde (bordro: 2.500 personel). `postLedger` ile aynı kurallar — kaynak anahtarı
+ * tekrar işlenmez, tek taraf dolu, bakiye / toplamlar / son hareket günü güncellenir — ama satır başına iki sorgu
+ * yerine üç sorgu: var olan anahtarlar, `createMany`, hesap başına toplanmış tek `UPDATE … FROM unnest`.
+ * Çağıran, hesapları önceden kilitler (`lockLedgerAccounts`): anahtar denetimi kilitten sonra yapılır.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {Array<{ accountId: string, date: string, debit?: string, credit?: string, description: string, reference?: string | null,
+ *   sourceType: string, sourceId: string, sourceKey: string }>} rows
+ * @returns {Promise<{ created: number }>}
+ */
+export async function postLedgerBatch(tx, hotelId, rows) {
+  if (rows.length === 0) return { created: 0 };
+  const done = new Set(
+    (await tx.ledgerEntry.findMany({ where: { hotelId, sourceKey: { in: rows.map((row) => row.sourceKey) } }, select: { sourceKey: true } })).map((row) => row.sourceKey),
+  );
+  const actor = currentActor();
+  const data = [];
+  /** @type {Map<string, { debit: import('decimal.js').Decimal, credit: import('decimal.js').Decimal, date: string }>} */
+  const perAccount = new Map();
+  for (const row of rows) {
+    if (done.has(row.sourceKey)) continue;
+    done.add(row.sourceKey);
+    const debit = money(row.debit ?? 0);
+    const credit = money(row.credit ?? 0);
+    if (toDecimal(debit).isZero() === toDecimal(credit).isZero()) throw new ValidationError('Cari hareketin tek tarafı dolu olmalı');
+    data.push({
+      hotelId,
+      accountId: row.accountId,
+      date: dateOnly(row.date),
+      debit,
+      credit,
+      description: row.description.slice(0, 300),
+      reference: row.reference?.slice(0, 60) ?? null,
+      sourceType: /** @type {any} */ (row.sourceType),
+      sourceId: row.sourceId,
+      sourceKey: row.sourceKey,
+      createdBy: actor,
+    });
+    const sum = perAccount.get(row.accountId) ?? { debit: toDecimal('0'), credit: toDecimal('0'), date: row.date };
+    perAccount.set(row.accountId, { debit: sum.debit.plus(debit), credit: sum.credit.plus(credit), date: row.date > sum.date ? row.date : sum.date });
+  }
+  if (data.length === 0) return { created: 0 };
+  await tx.ledgerEntry.createMany({ data });
+  const ids = [...perAccount.keys()];
+  const values = [...perAccount.values()];
+  const changed = await tx.$executeRaw`
+    UPDATE "LedgerAccount" a
+    SET "balance" = a."balance" + v."debit" - v."credit",
+        "debitTotal" = a."debitTotal" + v."debit",
+        "creditTotal" = a."creditTotal" + v."credit",
+        "lastEntryOn" = GREATEST(COALESCE(a."lastEntryOn", v."day"), v."day")
+    FROM unnest(${ids}::text[], ${values.map((sum) => sum.debit.toFixed(2))}::numeric[], ${values.map((sum) => sum.credit.toFixed(2))}::numeric[], ${values.map((sum) => sum.date)}::date[])
+      AS v("id", "debit", "credit", "day")
+    WHERE a."id" = v."id" AND a."hotelId" = ${hotelId}`;
+  if (changed !== ids.length) throw new NotFoundError('Cari bulunamadı');
+  return { created: data.length };
 }
 
 /**
@@ -336,6 +397,7 @@ export async function reverseRecords(tx, hotelId, { ledgerEntryIds = [], treasur
       credit: money(entry.debit),
       description: `İptal: ${entry.description} — ${note}`,
       reference: entry.reference,
+      invoiceNumber: entry.invoiceNumber,
       sourceType: entry.sourceType,
       sourceId: entry.sourceId,
       sourceKey: `REVERSAL:${entry.id}`,

@@ -57,6 +57,7 @@ describe('manifest', () => {
       [...billingWorkerManifest.subscribes].sort(),
       [
         'fnb.order.charged',
+        'folio.closed',
         'folio.room_charges.due',
         'guest.check_in_reverted',
         'guest.check_out_reverted',

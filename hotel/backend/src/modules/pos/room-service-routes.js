@@ -16,6 +16,7 @@ import {
   roomServicePrepQuerySchema,
   roomServiceReportQuerySchema,
 } from '@hotelos/hotel-contracts';
+import { guestLinkLimit } from '../../lib/guest-rate-limit.js';
 import { PERMISSIONS, requireAnyPermission, requirePermission } from '../../lib/permissions.js';
 import { withHotelContext } from '../../lib/tenant.js';
 import * as guest from './room-service-guest.js';
@@ -102,18 +103,18 @@ export async function roomServiceRoutes(app) {
   app.delete('/links/:reservationId', { ...links, schema: { params: roomServiceLinkParamSchema } }, async (request) => ok(await guest.revokeLink(request.hotelId, request.params.reservationId)));
 }
 
-/** Misafir uçlarının IP başına hız sınırları (dakikada). */
+/** Misafir uçlarının bağlantı başına hız sınırları (dakikada; IP tavanı üst kapsamda, bkz. `lib/guest-rate-limit.js`). */
 const GUEST_LIMITS = Object.freeze({ menu: 60, status: 120, write: 10 });
 
 /**
  * Misafirin oda servisi uçları (modül 41; sayfası modül 53), `/public/room-service` altında. Oturumsuzdur: kimlik
- * bağlantının imzasıdır. Hız sınırı **yalnızca IP'ye** göredir (genel sınırın anahtarındaki `x-actor` başlığı misafirin
- * elindedir; değiştirerek sınırdan kaçmasın). Yanıt önbelleğe alınmaz, belirteç yönlendirmeyle sızmaz.
+ * bağlantının imzasıdır. Hız sınırı bağlantı başınadır, üstünde IP tavanı vardır (otel Wi-Fi'ı misafirleri tek adresten
+ * çıkarır; bkz. `lib/guest-rate-limit.js`). Yanıt önbelleğe alınmaz, belirteç yönlendirmeyle sızmaz.
  *
  * @param {import('fastify').FastifyInstance} app
  */
 export async function publicRoomServiceRoutes(app) {
-  const limited = (max) => ({ config: { rateLimit: { max, timeWindow: '1 minute', keyGenerator: (request) => request.ip } } });
+  const limited = guestLinkLimit;
   const ok = (data) => ({ success: true, data });
   app.addHook('onSend', async (_request, reply) => {
     reply.header('cache-control', 'no-store').header('referrer-policy', 'no-referrer').header('x-content-type-options', 'nosniff');

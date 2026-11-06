@@ -30,6 +30,7 @@ import { raiseStaffAlert } from '../notifications/staff-alerts.js';
 import { guestFullName } from '../reservations/guests.js';
 import { getHotelSettings } from '../settings/service.js';
 import { ensurePartnerAccount } from '../accounting/shared.js';
+import { releaseFolioInvoices } from '../invoicing/guards.js';
 import {
   needsLargePaymentApproval,
   paymentSourceForStay,
@@ -1228,6 +1229,8 @@ export async function reverseCheckInDeposits(hotelId, reservationId, { reason, o
       }
       const folio = await findFolio(tx, hotelId, payment.folioId);
       if (folio.status === 'CLOSED') {
+        // Faturalı folyo açılmaz (girişin geri alınması fatura iptalinden sonra); taslağı silinir.
+        await releaseFolioInvoices(tx, stage, { hotelId, folioIds: [folio.id] });
         await tx.folio.update({ where: { id: folio.id }, data: { status: 'OPEN', closedAt: null, closedBy: null } });
         await recordAudit(tx, { hotelId, entity: 'Folio', entityId: folio.id, action: 'UPDATE', before: { status: 'CLOSED' }, after: { status: 'OPEN', reason: 'Giriş geri alındı' } });
         await stage('folio.reopened', { hotelId, folioId: folio.id, reservationId: folio.reservationId, reason: 'Giriş geri alındı' });

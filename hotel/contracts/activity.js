@@ -129,6 +129,14 @@ export const AUDIT_ENTITY_LABELS = Object.freeze({
   Channel: 'Kanal',
   ChannelStopSale: 'Kanal stop-sale',
   ChannelBooking: 'Kanal rezervasyonu',
+  LedgerAccount: 'Cari hesap',
+  TreasuryAccount: 'Kasa / banka hesabı',
+  AccountingVoucher: 'Muhasebe fişi',
+  Instrument: 'Çek / senet',
+  AccountingSettings: 'Muhasebe ayarı',
+  Invoice: 'Fatura',
+  InvoiceSettings: 'Fatura ayarı',
+  TestTaxpayer: 'Test ortamı mükellefi',
 });
 
 export const AUDIT_ENTITIES = Object.freeze(Object.keys(AUDIT_ENTITY_LABELS));

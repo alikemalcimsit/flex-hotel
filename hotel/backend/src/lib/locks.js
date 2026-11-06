@@ -548,6 +548,49 @@ export function lockTreasuryAccounts(tx, hotelId, treasuryAccountIds) {
 export function lockInstruments(tx, hotelId, instrumentIds) {
   return lockPlainRows(tx, 'Instrument', hotelId, instrumentIds, false);
 }
+
+/**
+ * Fatura (modül 16 / 49): kesim, iptal isteği ve kararı, tekrar gönderim aynı faturada sıraya girer. Sıra:
+ * fatura → kaynak (folyo / etkinlik) → cari. Gönderici kendi satırını `SKIP LOCKED` ile üstlenir.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} invoiceIds
+ */
+export function lockInvoices(tx, hotelId, invoiceIds) {
+  return lockPlainRows(tx, 'Invoice', hotelId, invoiceIds, false);
+}
+
+/**
+ * Kat hizmeti görevi (modül 14): başlat / bitir / kontrol / atama aynı görevde sıraya girer. Sıra: oda → görev.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} taskIds
+ */
 export function lockHousekeepingTasks(tx, hotelId, taskIds) {
   return lockRows(tx, 'HousekeepingTask', hotelId, taskIds);
+}
+
+/**
+ * Bordro (modül 51): hesap, onaya gönderme, onay kararı ve ödeme aynı bordroyu bu kilit altında değiştirir;
+ * hesap sürerken onaya gönderilemez, onay işlenirken ödeme yazılamaz.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} runIds
+ */
+export function lockPayrollRuns(tx, hotelId, runIds) {
+  return lockPlainRows(tx, 'PayrollRun', hotelId, runIds, false);
+}
+
+/**
+ * Personel (modül 51): kart güncellemesi, işten çıkış ve avans / icra kaydı aynı çalışanı bu kilit altında değiştirir.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} employeeIds
+ */
+export function lockEmployees(tx, hotelId, employeeIds) {
+  return lockPlainRows(tx, 'Employee', hotelId, employeeIds, false);
 }

@@ -1,5 +1,5 @@
 /**
- * Katalog kaydı — modül 1–43 (45 `moduller.mjs` içinde). Alanlar için bkz. `moduller.mjs` başı.
+ * Katalog kaydı — modül 1–49 (45 `moduller.mjs` içinde). Alanlar için bkz. `moduller.mjs` başı.
  * `bekle` verilmeyen ekranda sayfa, yükleniyor göstergeleri kaybolunca hazır sayılır.
  */
 
@@ -9,6 +9,8 @@ const C = 'hotel/contracts/';
 const W = 'hotel/workers/';
 
 /** Listenin ilk kaydının detay sayfası. @param {string} api @param {string} sayfa */
+/** Misafir uygulamasının (modül 53) yerel adresi: katalogda bağlantı canlı alan adıyla görünür, görüntü yerelden çekilir. */
+const MISAFIR = process.env.KATALOG_MISAFIR ?? 'http://localhost:5176';
 const ilk = (api, sayfa) => `const page = await api(${JSON.stringify(api)}); const row = (page.items ?? page)[0]; return row ? ${JSON.stringify(sayfa)} + row.id : null;`;
 /** Sayfada başlığa kaydırır. @param {string} yazi */
 const kaydir = (yazi) =>
@@ -534,7 +536,7 @@ export const DIGER = [
     rotalar: [/^\/accounting\//],
     migrationlar: ['20261030090000_accounting'],
     izinGruplari: ['accounting'],
-    olaylar: ['accounting.', 'invoice.'],
+    olaylar: ['accounting.', 'invoice.issued', 'invoice.cancelled'],
     ekranlar: [
       { dosya: '47-cariler', yol: '/muhasebe/cariler', alan: 'tam', yukseklik: 980, bekle: 'Alacağımız|Borcumuz', aciklama: 'Cariler: acente, tedarikçi, şirket ve etkinlik müşterisi; vade, son hareket ve bakiye — (B) cari bize borçlu, (A) biz borçluyuz. Üstte toplam alacak ve borç.' },
       { dosya: '47-cari', bul: ilk('/accounting/accounts?sort=balance&type=AGENCY&page=1&pageSize=1', '/muhasebe/cariler/'), yukseklik: 1250, bekle: 'Ekstre|Devir', aciklama: 'Cari kartı: bakiye, FIFO yaşlandırma (vadesine göre dilimler), açık çekler ve ekstre — devir, belge sırasıyla hareketler, vade ve yürüyen bakiye.' },
@@ -544,6 +546,76 @@ export const DIGER = [
       { dosya: '47-fisler', yol: '/muhasebe/fisler', yukseklik: 900, bekle: 'Tahsilat fişi', aciklama: 'Fişler: tahsilat, ödeme, virman, giriş / çıkış ve açılış; eşik üstü ödeme fişi onay bekliyor.' },
       { dosya: '47-fis-penceresi', yol: '/muhasebe/fisler', bekle: 'Tahsilat fişi', eylem: "[...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Tahsilat')?.click(); await new Promise((r) => setTimeout(r, 900));", sonraBekle: 'Kasa / banka', yukseklik: 900, aciklama: 'Tahsilat fişi: cari seçimi, kasa / banka satırları ve alınan çek / senet (numara, banka, vade); toplam canlı.' },
       { dosya: '47-ayarlar', yol: '/muhasebe/ayarlar', yukseklik: 1100, bekle: 'Tahsilat eşlemesi', aciklama: 'Ayarlar: başlangıç günü ve ödeme fişi onay eşiği; ön büro / etkinlik / restoran tahsilatının yöntem ve döviz başına hangi kasaya / bankaya gireceği; eksik kayıtları eşitleme.' },
+    ],
+  },
+  {
+    numara: 49,
+    slug: 'e-fatura',
+    ad: 'Fatura, e-Fatura ve e-Arşiv',
+    slogan: 'Kapanan folyo ve gerçekleşen etkinlik kendiliğinden faturaya hazırlanır; alıcı GİB mükellefiyse e-Fatura, değilse e-Arşiv olarak kesilir, entegratöre gider, sonucu fatura ekranına düşer.',
+    arka: [`${B}invoicing`],
+    on: [`${F}invoicing`, 'hotel/frontend/src/lib/invoicing.js'],
+    sozlesme: [`${C}invoicing.js`],
+    betik: ['hotel/backend/scripts/demo-invoicing.mjs', 'hotel/backend/scripts/perf-invoicing.mjs'],
+    rotalar: [/^\/invoices/],
+    migrationlar: ['20261101090000_invoicing', '20261101100000_invoice_alert_kind', '20261101110000_ledger_invoice_number'],
+    izinGruplari: ['invoices'],
+    olaylar: ['invoice.'],
+    ekranlar: [
+      { dosya: '49-faturalanacaklar', yol: '/faturalar/faturalanacaklar', alan: 'tam', yukseklik: 900, bekle: 'Yasal süre', aciklama: 'Faturalanacaklar: kapanmış ve faturası kesilmemiş folyolar (ya da faturaya hazır etkinlikler); 7 günlük yasal sürenin kalanı, süresi geçenler kırmızı; satırdan taslağa.' },
+      { dosya: '49-taslak', bul: "const page = await api('/invoices/invoiceables?kind=FOLIO&days=30&overdueOnly=true&page=1&pageSize=1'); const row = page.items[0]; return row?.draftId ? '/faturalar/' + row.draftId : null;", yukseklik: 1900, bekle: 'Alıcı ve taslak', aciklama: 'Taslak (folyo aktörü kapanışta açtı): alıcı (misafir, şirket, yabancı uyruklu), satırlar gelir grubuna göre ve vergi dökümü. "Kesmeden önce" kesimi durduran eksikleri sayar (kimlik no, adres); bu taslakta yasal süre geçmiş, uyarı kırmızı.' },
+      { dosya: '49-liste', yol: '/faturalar/liste', yukseklik: 900, bekle: 'GİB durumu', aciklama: 'Kesilen faturalar: numara, tür (e-Fatura / e-Arşiv), alıcı, tutar ve GİB durumu (sırada, entegratörde, tamamlandı, reddedildi, gönderilemedi); süzgeç ve arama.' },
+      { dosya: '49-e-fatura', bul: ilk('/invoices?documentType=E_FATURA&edocState=DELIVERED&source=FOLIO&page=1&pageSize=1', '/faturalar/'), yukseklik: 1250, bekle: 'Zaman çizelgesi', aciklama: 'Kesilmiş e-Fatura: numara, ETTN, alıcının posta kutusu, satırlar ve vergi dökümü (KDV, konaklama vergisi); e-belge durumu ve zaman çizelgesi; PDF ve iptal.' },
+      { dosya: '49-reddedildi', bul: ilk('/invoices?edocState=REJECTED&page=1&pageSize=1', '/faturalar/'), yukseklik: 1000, bekle: 'Zaman çizelgesi', aciklama: 'GİB reddi: sebebi e-belge kutusunda ve zaman çizelgesinde; personele uyarı açılır. Düzeltip tekrar gönderilir ya da iptal edilip yeniden kesilir.' },
+      { dosya: '49-serbest-fatura', yol: '/faturalar/liste', bekle: 'GİB durumu', eylem: "[...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Serbest fatura')?.click(); await new Promise((r) => setTimeout(r, 900));", sonraBekle: 'Alıcı cari', yukseklik: 900, aciklama: 'Serbest fatura: folyo ya da etkinliğe bağlı olmayan hizmet cariye faturalanır (salon kirası, kurumsal anlaşma); satırlar vergi kategorisiyle, toplam canlı. Kesildiğinde carinin alacağı olur.' },
+      { dosya: '49-ayarlar', yol: '/faturalar/ayarlar', bekle: 'Vergi kodları', eylem: "const target = [...document.querySelectorAll('h2, h3, div, span')].find((n) => n.childElementCount === 0 && n.textContent.trim() === 'Seriler, başlangıç ve taslak'); if (target) { target.style.scrollMarginTop = '160px'; target.scrollIntoView({ block: 'start' }); } await new Promise((r) => setTimeout(r, 700));", yukseklik: 1500, aciklama: 'Ayarlar (satıcı bilgilerinin altında): faturalama başlangıcı, e-Fatura ve e-Arşiv serileri, otomatik taslak; entegratör ve ortam; otelin vergilerinin GİB koduna eşlenmesi (KDV 0015, konaklama vergisi 0059); test ortamı mükellefleri.' },
+    ],
+  },
+  {
+    numara: 51,
+    slug: 'bordro',
+    ad: 'Personel ve bordro',
+    slogan: 'Personel kartı, puantaj ve ek ödemelerle aylık bordro yasal parametrelerle hesaplanır, dört gözle onaylanır, bankaya ödenir; pusula, icmal, banka dosyası ve müşavir tablosu hazır, tahakkuk ve ödeme cariye kendiliğinden düşer.',
+    arka: [`${B}payroll`],
+    on: [`${F}payroll`, 'hotel/frontend/src/lib/payroll.js', 'hotel/frontend/src/lib/payrollPeriod.js'],
+    sozlesme: [`${C}payroll.js`],
+    betik: ['hotel/backend/scripts/demo-payroll.mjs', 'hotel/backend/scripts/perf-payroll.mjs'],
+    rotalar: [/^\/payroll/],
+    migrationlar: ['20261103090000_payroll'],
+    izinGruplari: ['employees', 'payroll'],
+    olaylar: ['payroll.', 'employee.'],
+    ekranlar: [
+      { dosya: '51-personel', yol: '/personel', alan: 'tam', yukseklik: 950, bekle: 'Departman / görev', aciklama: 'Personel listesi: sicil, departman ve görev, işe giriş, aylık ücret (yetkiye göre) ve durum; arama, departman ve durum süzgeci.' },
+      { dosya: '51-kart', bul: ilk('/payroll/employees?page=1&pageSize=1', '/personel/'), yukseklik: 1250, bekle: 'Kimlik ve iş', aciklama: 'Personel kartı: kimlik ve iş, ücret (brüt ya da net anlaşma), sigorta türü ve engellilik; avanslar, icra ve nafaka dosyaları, teşvikler; yıl içinde başlayana önceki işverenden matrah devri; işten çıkış.' },
+      { dosya: '51-bordrolar', yol: '/bordro', yukseklik: 900, bekle: 'İşveren maliyeti', aciklama: 'Bordrolar: ay ay aylık ve fark bordroları; durum (taslak, hesaplandı, onayda, onaylandı), kişi sayısı, brüt, ödenecek, ödenen ve işveren maliyeti.' },
+      { dosya: '51-bordro', bul: "const page = await api('/payroll/runs?page=1&pageSize=10'); const row = page.items.find((r) => r.kind === 'MONTHLY' && r.status === 'APPROVED' && Number(r.totals?.paid) > 0); return row ? '/bordro/' + row.id : null;", yukseklik: 1700, bekle: 'Ödemeler', aciklama: 'Ödenmiş aylık bordro: toplamlar, departman icmali, kişi satırları; çıktılar (bordro listesi, pusulalar, banka dosyası, müşavir tablosu) ve ödemeler.' },
+      { dosya: '51-pusula', bul: "const page = await api('/payroll/runs?page=1&pageSize=10'); const row = page.items.find((r) => r.kind === 'MONTHLY' && r.status === 'APPROVED' && Number(r.totals?.paid) > 0); return row ? '/bordro/' + row.id : null;", bekle: 'Ödemeler', eylem: "document.querySelector('main tbody button.text-left')?.click(); await new Promise((r) => setTimeout(r, 1500));", sonraBekle: 'Yasal kesintiler', yukseklik: 1300, aciklama: 'Kişinin bordro satırı: kazançlar (ücret, mesai, yemek, yol, servis payı), yasal kesintiler (SGK işçi ve işsizlik, gelir vergisi ve damga — asgari ücret istisnası düşülmüş), diğer kesintiler (BES, icra, avans) ve işveren maliyeti.' },
+      { dosya: '51-puantaj', yol: '/bordro/puantaj', yukseklik: 1000, bekle: 'Fazla mesai (saat)', aciklama: 'Puantaj: ayın eksik günleri ve nedeni (ücretsiz izin, rapor, devamsızlık), çalışılan gün, fazla mesai saati, bayram ve hafta tatili çalışması; satır satır düzenlenir, 200 satıra kadar tek kayıtla.' },
+      { dosya: '51-servis-payi', yol: '/bordro/servis-payi', yukseklik: 1000, bekle: 'Paylar', aciklama: 'Servis payı: ayın havuzu departman ve kişi ağırlığıyla dağıtılır; kuruş artığı en büyük paylara, dağıtım bordroya ek ödeme olarak girer; hesaplanmadan geri alınabilir.' },
+      { dosya: '51-ayarlar', yol: '/bordro/ayarlar', yukseklik: 1500, bekle: 'Yasal parametreler', aciklama: 'Bordro ayarları: yasal parametre setleri (asgari ücret, SGK tavan ve tabanı, oranlar, vergi dilimleri; geçerlilik tarihiyle, teyit edilmeden onaya gidilmez), işyeri, departmanlar, ödeme ve kesinti kalemleri.' },
+    ],
+  },
+  {
+    numara: 53,
+    slug: 'temassiz',
+    ad: 'Temassız uygulamalar: misafir portalı ve online check-in',
+    slogan: 'Misafir rezervasyonuna özel bağlantıyla telefonundan online check-in yapar (kimlik, belge fotoğrafı, imza); resepsiyon girişten önce inceler, misafir gelince giriş dolu pencereyle tek tıkla. Konaklamada aynı portal hesabı, istekleri ve oda servisini açar; dört dilde.',
+    arka: [`${B}guest-portal`],
+    on: [`${F}guest-portal`, 'hotel/frontend/src/lib/guestPortal.js', 'hotel/frontend/guest'],
+    sozlesme: [`${C}guest-portal.js`],
+    betik: ['hotel/backend/scripts/demo-guest-portal.mjs', 'hotel/backend/scripts/perf-guest-portal.mjs'],
+    rotalar: [/^\/guest-portal/, /^\/public\/portal/],
+    migrationlar: ['20261104090000_guest_portal', '20261104100000_online_checkin_alert', '20261104110000_online_checkin_arrival_date', '20261104120000_online_checkin_search'],
+    izinGruplari: ['guest_portal'],
+    olaylar: ['online_checkin.', 'guest_portal.'],
+    ekranlar: [
+      { dosya: '53-misafir-ana', bul: "const page = await api('/guest-portal/online-checkins?page=1&pageSize=1&status=COMPLETED'); const row = page.items[0]; if (!row) return null; const link = await api('/guest-portal/links/' + row.reservationId); return link.link?.url ? '" + MISAFIR + "' + new URL(link.link.url).pathname + '' : null;", genislik: 420, yukseklik: 950, alan: 'tam', bekle: 'DMO-', eylem: "const s = document.querySelector('header select'); Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(s, 'tr'); s.dispatchEvent(new Event('change', { bubbles: true })); await new Promise((r) => setTimeout(r, 700));", sonraBekle: 'Konaklamam', aciklama: 'Misafir portalı (telefon): konaklamadaki misafirin ana sayfası — rezervasyon özeti ve oda numarası, hesabım, istek, oda servisi; dijital anahtar ve kartla ödeme yerinde, ilgili modüller gelince açılır.' },
+      { dosya: '53-misafir-checkin', bul: "const page = await api('/guest-portal/online-checkins?page=1&pageSize=1&status=REJECTED'); const row = page.items[0]; if (!row) return null; const link = await api('/guest-portal/links/' + row.reservationId); return link.link?.url ? '" + MISAFIR + "' + new URL(link.link.url).pathname + '/check-in' : null;", genislik: 420, yukseklik: 1350, alan: 'tam', bekle: '•', eylem: "const s = document.querySelector('header select'); Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(s, 'tr'); s.dispatchEvent(new Event('change', { bubbles: true })); await new Promise((r) => setTimeout(r, 700)); [...document.querySelectorAll('main button')].find((b) => b.textContent.includes('yeniden gönder'))?.click(); await new Promise((r) => setTimeout(r, 900));", sonraBekle: 'Belge fotoğrafı', aciklama: 'Online check-in (telefon), düzeltme istenmiş bir kayıt: kişi başına kimlik bilgisi ve belge fotoğrafı (telefonun kamerasıyla; küçültülür, konum bilgisi düşer), refakatçi ekle / kaldır, üç adım (kişiler, varış, onay ve imza).' },
+      { dosya: '53-misafir-almanca', bul: "const page = await api('/guest-portal/online-checkins?page=1&pageSize=1&status=APPROVED&from=' + new Date().toISOString().slice(0, 10) + ''); const row = page.items[0]; if (!row) return null; const link = await api('/guest-portal/links/' + row.reservationId); return link.link?.url ? '" + MISAFIR + "' + new URL(link.link.url).pathname + '' : null;", genislik: 420, yukseklik: 1000, alan: 'tam', bekle: 'DMO-', eylem: "const s = document.querySelector('header select'); Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(s, 'de'); s.dispatchEvent(new Event('change', { bubbles: true })); await new Promise((r) => setTimeout(r, 700));", sonraBekle: 'Reservierung', aciklama: 'Aynı portal Almanca (Türkçe, İngilizce, Almanca, Rusça; ilk açılış misafirin uyruğuna göre): online check-in onaylanmış, girişte yalnız belge gösterilecek.' },
+      { dosya: '53-liste', yol: '/on-buro/online-check-in', alan: 'tam', yukseklik: 1100, bekle: 'Gönderim', aciklama: 'Online check-in listesi (resepsiyon): giriş gününe göre, durum sayıları (inceleme bekliyor, onaylandı, düzeltme istendi, giriş yapıldı), varış saati, kişi ve belge sayısı, ödeme tercihi, misafirin dili.' },
+      { dosya: '53-inceleme', yol: '/on-buro/online-check-in', bekle: 'Gönderim', eylem: "[...document.querySelectorAll('main button')].find((b) => b.textContent.trim() === 'İncele')?.click(); await new Promise((r) => setTimeout(r, 1800));", sonraBekle: 'İmza', yukseklik: 1500, aciklama: 'İnceleme penceresi: kişiler ve kimlikleri, belge fotoğrafları (büyütülebilir), varış, ödeme tercihi, onaylar ve imza; onay ya da misafire gidecek sebeple düzeltme isteği, giriş günü geldiyse dolu pencereyle giriş.' },
+      { dosya: '53-rezervasyon', bul: "const page = await api('/guest-portal/online-checkins?page=1&pageSize=1&status=SUBMITTED'); const row = page.items[0]; return row ? '/rezervasyonlar/' + row.reservationId : null;", bekle: 'Misafir portalı', eylem: "const target = [...document.querySelectorAll('h2, h3, div, span')].find((n) => n.childElementCount === 0 && n.textContent.trim() === 'Misafir portalı'); if (target) { target.style.scrollMarginTop = '160px'; target.scrollIntoView({ block: 'start' }); } await new Promise((r) => setTimeout(r, 700));", yukseklik: 900, aciklama: 'Rezervasyon ayrıntısında portal kartı: misafire özel bağlantı (kopyala, QR), davetin ve son açılışın zamanı, daveti gönder, yenile / iptal; online check-in durumu ve incelemesi.' },
+      { dosya: '53-ayarlar', yol: '/on-buro/online-check-in/ayarlar', yukseklik: 1500, bekle: 'Misafire gösterilen metinler', aciklama: 'Portal ayarları: açık / kapalı, portal adresi (davet bağlantısının tabanı), davet ve açılış günleri, belge fotoğrafı saklama süresi (KVKK), web sohbetinin portalda açılıp açılmayacağı; karşılama, kurallar ve KVKK metni dört dilde.' },
     ],
   },
 ];

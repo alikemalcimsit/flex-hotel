@@ -11,7 +11,7 @@ import {
 import { prisma } from '../../db.js';
 import { recordAudit } from '../../lib/audit.js';
 import { getBusinessDate } from '../../lib/business-date.js';
-import { ConflictError, ForbiddenError, NotFoundError, StaleWriteError, ValidationError, rethrowPrismaError } from '../../lib/errors.js';
+import { bulkItemFailure, ConflictError, ForbiddenError, NotFoundError, StaleWriteError, ValidationError, rethrowPrismaError } from '../../lib/errors.js';
 import { LIVE_SCOPES, liveVersion } from '../../lib/live-version.js';
 import { lockReservations, lockRooms, lockRoomTypes } from '../../lib/locks.js';
 import { buildPage, toSkipTake } from '../../lib/pagination.js';
@@ -700,6 +700,26 @@ export async function getCheckOutPreview(hotelId, reservationId, { now = new Dat
  * @param {{ now?: Date, canAllowOpenBalance?: boolean }} [options]
  *   `canAllowOpenBalance`: isteği yapanın `stays.checkout_open_balance` izni var (route denetler)
  */
+/**
+ * Toplu çıkış: yalnız "temiz" çıkışlar — bakiye kapalı, geç çıkış ücreti ya da erken ayrılış onayı gerekmeyen.
+ * Her konaklama tek tek çıkışın kuralıyla ve kendi işleminde; gerekçe / onay isteyen atlanır, sebebiyle döner.
+ *
+ * @param {string} hotelId @param {Array<{ id: string, expectedUpdatedAt: Date }>} items @param {{ now?: Date }} [options]
+ */
+export async function checkOutBatch(hotelId, items, { now = new Date() } = {}) {
+  const results = [];
+  for (const item of items) {
+    try {
+      const input = { expectedUpdatedAt: item.expectedUpdatedAt, confirmEarlyDeparture: false, waiveLateFee: false, expectedLateFee: null, allowOpenBalance: false, openBalanceReason: null };
+      await checkOut(hotelId, item.id, input, { now });
+      results.push({ id: item.id, ok: true, message: null });
+    } catch (error) {
+      results.push(bulkItemFailure(item.id, error));
+    }
+  }
+  return { results, succeeded: results.filter((row) => row.ok).length, failed: results.filter((row) => !row.ok).length };
+}
+
 export async function checkOut(hotelId, reservationId, input, { now = new Date(), canAllowOpenBalance = false } = {}) {
   const { hotel, businessDate, clock } = await loadClock(hotelId, now);
   const actor = currentActor();

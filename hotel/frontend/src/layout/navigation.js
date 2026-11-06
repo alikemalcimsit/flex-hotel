@@ -45,6 +45,7 @@ export const NAV_SECTIONS = Object.freeze([
           { label: 'Gelecekler', to: '/on-buro/gelecekler', icon: 'arrowRight' },
           { label: 'Gidecekler', to: '/on-buro/gidecekler', icon: 'logout' },
           { label: 'Konaklayanlar', to: '/on-buro/konaklayanlar', icon: 'bed' },
+          { label: 'Online check-in', to: '/on-buro/online-check-in', icon: 'globe', permission: PERMISSIONS.GUEST_PORTAL_VIEW },
         ],
       },
       {
@@ -222,6 +223,38 @@ export const NAV_SECTIONS = Object.freeze([
           { label: 'Mevcut', to: '/stok', icon: 'package', end: true },
           { label: 'Hareketler', to: '/stok/hareketler', icon: 'list' },
           { label: 'Depolar', to: '/stok/depolar', icon: 'building' },
+        ],
+      },
+      // Faturalar (modül 16 / 49): ön büro folyo faturasını keser, muhasebe e-belgeyi izler, müdür ayarlar.
+      {
+        label: 'Faturalar',
+        to: '/faturalar',
+        icon: 'fileText',
+        permission: PERMISSIONS.INVOICES_VIEW,
+        children: [
+          { label: 'Faturalanacaklar', to: '/faturalar/faturalanacaklar', icon: 'inbox' },
+          { label: 'Taslaklar', to: '/faturalar/taslaklar', icon: 'pencil' },
+          { label: 'Kesilenler', to: '/faturalar/liste', icon: 'fileText' },
+        ],
+      },
+      // Personel (modül 51): kartlar; ücret ve bordro bilgisi yetkiye göre.
+      {
+        label: 'Personel',
+        to: '/personel',
+        icon: 'users',
+        anyPermission: [PERMISSIONS.EMPLOYEES_VIEW, PERMISSIONS.PAYROLL_VIEW],
+      },
+      // Bordro (modül 51): bordrolar, puantaj ve kalemler, servis payı, ayarlar.
+      {
+        label: 'Bordro',
+        to: '/bordro',
+        icon: 'banknote',
+        permission: PERMISSIONS.PAYROLL_VIEW,
+        children: [
+          { label: 'Bordrolar', to: '/bordro', icon: 'fileText', end: true },
+          { label: 'Puantaj ve kalemler', to: '/bordro/puantaj', icon: 'calendar' },
+          { label: 'Servis payı', to: '/bordro/servis-payi', icon: 'coins' },
+          { label: 'Ayarlar', to: '/bordro/ayarlar', icon: 'settings' },
         ],
       },
       // Ön muhasebe (modül 47): cariler, kasa / banka, çek / senet, fişler.

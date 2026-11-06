@@ -49,6 +49,8 @@ class AccountingWorker extends BaseWorker {
    *   syncGoodsReceipt: (hotelId: string, receiptId: string) => Promise<{ posted?: boolean, skipped?: string, message?: string | null }>,
    *   syncAgencyBonus: (hotelId: string, bonusId: string) => Promise<{ posted?: boolean, skipped?: string, message?: string | null }>,
    *   syncEventCharge: (hotelId: string, eventId: string) => Promise<{ posted?: boolean, skipped?: string, message?: string | null }>,
+   *   syncInvoice: (hotelId: string, invoiceId: string) => Promise<{ posted?: boolean, skipped?: string, message?: string | null }>,
+   *   syncPayrollRun: (hotelId: string, runId: string) => Promise<{ posted?: boolean, skipped?: string, message?: string | null }>,
    * }} service
    * @param {object} deps BaseWorker bağımlılıkları
    */
@@ -82,6 +84,17 @@ class AccountingWorker extends BaseWorker {
           if (!EVENT_CHARGE_CHANGES.includes(payload.change)) return { message: 'Muhasebe etkisi yok' };
           return said(await run(() => service.syncEventCharge(payload.hotelId, payload.eventId)), 'Etkinlik bedeli cariye işlendi');
         },
+        /** Fatura kesildi: numara alacağı doğuran cari harekete bağlanır; serbest fatura cariye borç. */
+        'invoice.issued': async (payload) => said(await run(() => service.syncInvoice(payload.hotelId, payload.invoiceId)), 'Fatura cariye bağlandı'),
+        /** Fatura iptal edildi: bağ çözülür; serbest faturanın borcu ters kayıtla düşer. */
+        'invoice.cancelled': async (payload) => said(await run(() => service.syncInvoice(payload.hotelId, payload.invoiceId)), 'Fatura iptali cariye işlendi'),
+        /** Bordro onaylandı: net ücret, SGK, vergi, BES ve icra / nafaka carilere tahakkuk. */
+        'payroll.run.approved': async (payload) => said(await run(() => service.syncPayrollRun(payload.hotelId, payload.runId)), 'Bordro tahakkuku işlendi'),
+        /** Maaş ödendi: kasadan / bankadan çıkış, personel carisi kapanır (diğer bordro haberlerinin muhasebe etkisi yok). */
+        'payroll.run.changed': async (payload) => {
+          if (payload.change !== 'PAID') return { message: 'Muhasebe etkisi yok' };
+          return said(await run(() => service.syncPayrollRun(payload.hotelId, payload.runId)), 'Maaş ödemesi işlendi');
+        },
       },
       deps,
     );
@@ -110,6 +123,14 @@ class AccountingWorker extends BaseWorker {
         return 'Acente prim hak edişi acente carisine işlenecek';
       case 'banquet.event.changed':
         return 'Etkinlik bedeli müşteri carisine işlenecek';
+      case 'invoice.issued':
+        return `Fatura ${payload?.number ?? ''} cariye bağlanacak`.trim();
+      case 'invoice.cancelled':
+        return `Fatura ${payload?.number ?? ''} iptali cariye işlenecek`.trim();
+      case 'payroll.run.approved':
+        return 'Onaylanan bordro carilere tahakkuk ettirilecek';
+      case 'payroll.run.changed':
+        return 'Maaş ödemesi kasaya / bankaya ve personel carilerine işlenecek';
       default:
         return super.describeFallback(eventName, payload);
     }

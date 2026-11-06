@@ -4,6 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#101010" />
+    <!--
+      Misafir uygulaması (modül 53) `/misafir/` altında ayrı bir pakettir. Sunucu derin bağlantıyı (`/misafir/p/...`)
+      tanımayıp panelin sayfasını verirse misafir, panel kodu yüklenmeden misafir uygulamasına yollanır.
+    -->
+    <script>
+      // Gerçek dosyaya (index.html) yollanır: sunucu dizin isteğini panele düşürse de döngü olmaz.
+      if (location.pathname.indexOf('/misafir/') === 0 && location.pathname !== '/misafir/index.html') location.replace('/misafir/index.html?p=' + encodeURIComponent(location.pathname + location.search));
+    </script>
     <title>FlexHotel</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <!-- Yazının ilk boyamada yedek fonttan sıçramaması için ana dosya önden yüklenir. -->

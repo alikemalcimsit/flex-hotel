@@ -9,6 +9,7 @@ import { prisma } from '../../db.js';
 import { recordAudit } from '../../lib/audit.js';
 import { getBusinessDate } from '../../lib/business-date.js';
 import {
+  bulkItemFailure,
   ConflictError,
   InUseError,
   NotFoundError,
@@ -1891,20 +1892,25 @@ export async function changeRoom(hotelId, reservationId, roomId, { reason = null
  * Oda atanmayı bekleyen rezervasyonlar.
  *
  * Modül 4'ün rezervasyon detay ekranı gelene kadar atama işinin yapıldığı yer
- * burası; o ekran geldiğinde aynı API oradan da kullanılacak. Konaklaması
- * bitmiş (gece kapanışı işlenmemiş) kayıtlar listelenmez — onlara oda atamak
- * anlamsız, ele alınması modül 18'in işi.
+ * burası; o ekran geldiğinde aynı API oradan da kullanılacak.
+ *
+ * İki görünüm, gün sınırı `assertAssignable` ile aynı (tarihler saatli saklanır: giriş günü + giriş saati):
+ * - `UPCOMING`: girişi bugün ya da sonra — atanabilir.
+ * - `LATE`: giriş günü geçmiş, giriş yapılmamış. Konaklaması sürüyorsa geç gelen misafire oda verilir; çıkış günü
+ *   gelmiş/geçmişse (`stayEnded`) oda verilemez, yalnız "gelmedi" işaretlenir. Gece kapanışı (modül 18) bunları
+ *   kendisi "gelmedi"ye çekene kadar listeyi temizlemenin yolu bu görünüm; eskiden çıkışı bugün olan kayıt listede
+ *   görünüp "tarihleri geçmiş" hatasıyla takılı kalıyordu.
  *
  * @param {string} hotelId
- * @param {{ page: number, pageSize: number, search?: string }} query
+ * @param {{ page: number, pageSize: number, search?: string, view?: 'UPCOMING' | 'LATE' }} query
  */
 export async function listUnassignedReservations(hotelId, query) {
   const businessDate = await getBusinessDate(hotelId);
+  const late = query.view === 'LATE';
+  const base = { hotelId, roomId: null, status: { in: ASSIGNABLE_STATUSES } };
   const where = {
-    hotelId,
-    roomId: null,
-    status: { in: ASSIGNABLE_STATUSES },
-    checkOut: { gt: businessDate },
+    ...base,
+    checkIn: late ? { lt: businessDate } : { gte: businessDate },
     ...(query.search
       ? {
           OR: [
@@ -1925,13 +1931,42 @@ export async function listUnassignedReservations(hotelId, query) {
         room: { select: { number: true } },
       },
       // Girişi en yakın olan en acildir.
-      orderBy: [{ checkIn: 'asc' }],
+      orderBy: [{ checkIn: 'asc' }, { id: 'asc' }],
       ...toSkipTake(query),
     }),
     prisma.reservation.count({ where }),
   ]);
+  const lateCount = late ? total : await prisma.reservation.count({ where: { ...base, checkIn: { lt: businessDate } } });
 
-  return buildPage(items.map(toReservationSummaryDto), total, query);
+  const page = buildPage(
+    items.map((row) => ({
+      ...toReservationSummaryDto(row),
+      late: row.checkIn.getTime() < businessDate.getTime(),
+      stayEnded: toUtcDayStart(row.checkOut) <= businessDate.getTime(),
+    })),
+    total,
+    query,
+  );
+  return { ...page, meta: { ...page.meta, lateCount } };
+}
+
+/**
+ * Toplu otomatik atama: seçilen rezervasyonlar sırayla, tek tek atamanın kuralıyla (`autoAssignRoom`). Biri
+ * başarısız olursa (oda yok, bu arada atanmış, durum değişti) diğerleri sürer; sonuç kayıt kayıt döner.
+ *
+ * @param {string} hotelId @param {string[]} reservationIds
+ */
+export async function autoAssignBatch(hotelId, reservationIds) {
+  const results = [];
+  for (const reservationId of [...new Set(reservationIds)]) {
+    try {
+      const result = await autoAssignRoom(hotelId, reservationId);
+      results.push({ id: reservationId, ok: result.assigned, room: result.room?.number ?? null, message: result.assigned ? null : result.alreadyAssigned ? `Bu arada ${result.room?.number ?? ''} numaralı oda atanmış` : result.reason ?? 'Uygun oda bulunamadı' });
+    } catch (error) {
+      results.push({ ...bulkItemFailure(reservationId, error), room: null });
+    }
+  }
+  return { results, assigned: results.filter((row) => row.ok).length, failed: results.filter((row) => !row.ok).length };
 }
 
 /**

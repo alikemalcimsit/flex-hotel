@@ -81,6 +81,16 @@ describe('misafir çıkışı', () => {
     assert.match(calls.activity.at(-1).message, /zaten var/);
   });
 
+  it('erken çıkış: açık konaklama temizliği çıkış temizliğine çevrilir (yeni görev açılmaz)', async () => {
+    const { worker, calls } = makeHarness({
+      service: { createCleaningTask: async () => ({ created: false, upgraded: true, task: { id: TASK } }) },
+    });
+    await worker.handle({ hotelId: HOTEL, roomId: ROOM }, envelope('guest.checked_out'));
+
+    assert.equal(calls.activity.at(-1).level, 'INFO');
+    assert.match(calls.activity.at(-1).message, /çıkış temizliğine çevrildi/);
+  });
+
   it('çıkış geri alınınca açık çıkış temizliği iptal edilir', async () => {
     const { worker, calls } = makeHarness();
     await worker.handle(

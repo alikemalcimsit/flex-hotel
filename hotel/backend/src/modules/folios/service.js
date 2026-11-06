@@ -25,6 +25,7 @@ import { findActiveStaffByEmail } from '../../lib/staff.js';
 import { writeWithEvents } from '../../lib/write.js';
 import { requestApproval } from '../approvals/service.js';
 import { raiseStaffAlert } from '../notifications/staff-alerts.js';
+import { releaseFolioInvoices } from '../invoicing/guards.js';
 import { stayPaymentStatus } from '../payments/service.js';
 import { guestFullName } from '../reservations/guests.js';
 import { getActiveTaxes, getHotelSettings } from '../settings/service.js';
@@ -1368,7 +1369,7 @@ export async function closeFolioIfSettled(hotelId, folioId) {
 
 /**
  * Kapanmış folyoyu yeniden aç (yetkiliyle, gerekçeli): geç gelen harcama,
- * yanlış kapanış. Fatura modülü (16) faturası kesilmiş folyoyu burada durduracak.
+ * yanlış kapanış. Faturası kesilmiş folyo açılmaz (önce fatura iptal edilir; `releaseFolioInvoices`).
  *
  * @param {string} hotelId
  * @param {string} folioId
@@ -1390,6 +1391,8 @@ export async function reopenFolio(hotelId, folioId, { reason }) {
  * @param {{ hotelId: string, folio: any, reason: string }} input
  */
 async function reopenLocked(tx, stage, { hotelId, folio, reason }) {
+  // Faturalı folyo açılmaz; taslağı silinir (modül 16 / 49). Bütün yeniden açma yolları buradan geçer.
+  await releaseFolioInvoices(tx, stage, { hotelId, folioIds: [folio.id] });
   await tx.folio.update({ where: { id: folio.id }, data: { status: 'OPEN', closedAt: null, closedBy: null } });
   await recordAudit(tx, {
     hotelId,

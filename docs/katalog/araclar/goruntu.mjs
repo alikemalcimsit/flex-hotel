@@ -146,10 +146,13 @@ export async function openBrowser({ base, email, password }) {
      * @param {string} outDir
      */
     async shoot(spec, outDir) {
-      // `bul`: kimliği önceden bilinmeyen sayfa — uygulamanın kendi API istemcisiyle (oturumlu) yol bulunur.
+      // `bul`: kimliği önceden bilinmeyen sayfa — uygulamanın kendi API istemcisiyle (oturumlu) yol bulunur. Önceki
+      // görüntü başka bir uygulamadaysa (misafir uygulaması, modül 53) önce panele dönülür: API istemcisi orada.
+      if (spec.bul && (await evaluate('location.origin')) !== new URL(base).origin) await navigate(`${base}/`, 900);
       const route = spec.bul ? await evaluate(`(async () => { const { api } = await import('/src/lib/api.js'); ${spec.bul} })()`) : spec.yol;
       if (!route) throw new Error(`${spec.dosya}: sayfa bulunamadı (demo verisi yüklü mü?)`);
-      await navigate(`${base}${route}`, spec.yukseklik ?? 900, spec.genislik ?? WIDTH);
+      // Tam adres (http…) başka bir uygulamanın sayfasıdır (misafir portalı); diğerleri panelin yolu.
+      await navigate(/^https?:\/\//.test(route) ? route : `${base}${route}`, spec.yukseklik ?? 900, spec.genislik ?? WIDTH);
       if (!(await waitFor(spec.bekle))) throw new Error(`${spec.dosya}: sayfa hazır olmadı ya da hata gösterdi (${route}${spec.bekle ? `, beklenen: ${spec.bekle}` : ''})`);
       if (spec.eylem) {
         await evaluate(`(async () => { ${spec.eylem} })()`);

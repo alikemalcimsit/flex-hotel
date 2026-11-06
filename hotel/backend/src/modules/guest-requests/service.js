@@ -491,6 +491,19 @@ export async function createRequest(hotelId, input) {
 }
 
 /**
+ * Misafir portalından istek (modül 53): içerideki konaklamanın odası ve misafiri; öncelik kategorinin varsayılanı.
+ * Çağıran (portal) konaklamanın içeride olduğunu denetler ve kendi işleminde çağırır.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {(name: string, payload: object) => Promise<void>} stage
+ * @param {string} hotelId
+ * @param {{ reservationId: string, guestId: string, roomId: string, category: string, title: string, description: string }} input
+ */
+export function insertPortalRequest(tx, stage, hotelId, input) {
+  return insertRequest(tx, stage, hotelId, { ...input, source: 'PORTAL', priority: null, scheduledFor: null, assignedToId: null });
+}
+
+/**
  * Konuşmadan istek: misafir ve konaklama konuşmadan alınır.
  *
  * @param {string} hotelId

@@ -11,7 +11,7 @@
     ("Böl, birleştir, aktar", "Kalemleri yeni pencereye böl (ödeyen + yönlendirme), grup hesabını tek folyoda topla, kalemi başka konaklamanın folyosuna aktar."),
     ("Yönlendirme", "\"Oda ücreti şirkete, restoran misafire\": tip → pencere kuralı; sistem kalemleri kurala uyar."),
     ("Gece oda ücreti", "Gün dönünce içerideki bütün konaklamaların eksik geceleri işlenir; fiyat sonradan değişirse fark kalemi; sunucu kapalıyken geçen geceler telafi edilir."),
-    ("Güvenli kapatma", "Bakiye sıfır ve bekleyen iptal yoksa kapanır; yeniden açma yetkiyle ve gerekçeyle."),
+    ("Güvenli kapatma", "Bakiye sıfır ve bekleyen iptal yoksa kapanır; yeniden açma yetkiyle ve gerekçeyle. Faturası kesilmiş folyo yeniden açılmaz."),
   ),
   neden: [Kasa açığının en sık iki kaynağı — silinen kalem ve işlenmeyen gece — yapısal olarak kapalıdır: kalem silinmez, iptal başka bir göze gider; gece ücreti tek anahtarla bir kez yazılır.],
   rol: (([Resepsiyon, müdür, muhasebe], [Harcama ekler, aktarır, böler.]), ([Müdür, muhasebe], [İndirim, yeniden açma.]), ([Görüntüleyen], [Folyoyu görür; kat hizmeti görmez.])),
@@ -41,5 +41,5 @@
     ("Yeni otomatik kalem kaynağı", "`FolioItemSource` enum + migration, aktörde olay işleyicisi, `posting.js` üzerinden yazım; kaynak anahtarı tekil olmalı (tekrar gelen olay ikinci kalem yazmasın)."),
     ("Vergi kuralı", "Ayarlardaki vergi tanımı ve \"uygulandığı kalem\"; hesap `folios/rules.js` (birim testli). Rezervasyon ekranının dökümüyle aynı formül korunmalı."),
   ),
-  devir: ("Fatura (modül 16): `folio.closed`'u dinler; satırlar kalemlerden, alıcı varsayılanı `payerName`. Faturası kesilmiş folyonun yeniden açılması orada durdurulmalı.", "Gece kapanışı (18): `runRoomCharges(hotelId, { night })` günü kapatmadan önce o geceyi işlemek için hazır."),
+  devir: ("Fatura (49'da kuruldu): `folio.closed` taslak açar, satırlar kalemlerin vergi dökümünden; faturası kesilmiş folyonun yeniden açılmasını `releaseFolioInvoices` bekçisi durdurur.", "Gece kapanışı (18): `runRoomCharges(hotelId, { night })` günü kapatmadan önce o geceyi işlemek için hazır."),
 )

@@ -69,6 +69,7 @@ class BillingWorker extends BaseWorker {
    *   recordCheckInDeposit: (hotelId: string, reservationId: string) => Promise<{ skipped?: string, status?: string, amount?: string, currency?: string }>,
    *   reverseCheckInDeposits: (hotelId: string, reservationId: string, input: { reason: string, occurredAt: Date }) => Promise<{ reversed: number, withdrawn: number }>,
    *   closeFolioIfSettled: (hotelId: string, folioId: string) => Promise<{ closed: boolean, reason?: string, balance?: string }>,
+   *   createFolioInvoiceDraft: (hotelId: string, folioId: string) => Promise<{ created: boolean, skipped?: string, invoiceId?: string }>,
    * }} service
    * @param {object} deps BaseWorker bağımlılıkları
    */
@@ -215,6 +216,14 @@ class BillingWorker extends BaseWorker {
             },
           ]),
         ),
+        /**
+         * Folyo kapandı: fatura taslağı (modül 16 / 49). Ayar yoksa / otomatik taslak kapalıysa iş yapmaz;
+         * personel faturayı Faturalar → Faturalanacaklar'dan açar.
+         */
+        'folio.closed': async (payload) => {
+          const result = await run(() => service.createFolioInvoiceDraft(payload.hotelId, payload.folioId));
+          return { message: result.created ? 'Fatura taslağı açıldı' : `Fatura taslağı açılmadı: ${(result.skipped ?? '').toLocaleLowerCase('tr')}`, meta: result };
+        },
       },
       deps,
     );
@@ -273,6 +282,8 @@ class BillingWorker extends BaseWorker {
       case 'payment.refunded':
       case 'payment.voided':
         return 'Ödemeden sonra bakiye sıfırsa folyo kapatılacak (Folyo → Folyoyu kapat)';
+      case 'folio.closed':
+        return 'Kapanan folyonun faturası kesilecek (Faturalar → Faturalanacaklar)';
       default:
         return super.describeFallback(eventName, payload);
     }

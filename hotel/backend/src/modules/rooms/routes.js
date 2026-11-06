@@ -12,6 +12,8 @@ import {
   setHousekeepingStatusSchema,
   stayAvailabilityQuerySchema,
   updateRoomSchema,
+  autoAssignBatchSchema,
+  pendingAssignmentsQuerySchema,
 } from '@hotelos/hotel-contracts';
 import { PERMISSIONS, requirePermission } from '../../lib/permissions.js';
 import { withHotelContext } from '../../lib/tenant.js';
@@ -118,11 +120,18 @@ export async function roomsRoutes(app) {
 
   app.get(
     '/assignments/pending',
-    { ...view, schema: { querystring: listQuerySchema } },
+    { ...view, schema: { querystring: pendingAssignmentsQuerySchema } },
     async (request) => ({
       success: true,
       data: await service.listUnassignedReservations(request.hotelId, request.query),
     }),
+  );
+
+  /* Toplu otomatik atama (seçilenler; tek tek atamanın kuralıyla). Tekli `/:reservationId/auto`'dan önce. */
+  app.post(
+    '/assignments/auto-batch',
+    { ...operate, schema: { body: autoAssignBatchSchema } },
+    async (request) => ({ success: true, data: await service.autoAssignBatch(request.hotelId, request.body.reservationIds) }),
   );
 
   app.get(

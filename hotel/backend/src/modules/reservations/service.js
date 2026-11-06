@@ -15,7 +15,7 @@ import { prisma } from '../../db.js';
 import { recordAudit } from '../../lib/audit.js';
 import { getBusinessDate } from '../../lib/business-date.js';
 import { encodeCursor, olderThan, parseCursor } from '../../lib/cursor.js';
-import { AppError, ConflictError, NotFoundError, StaleWriteError, ValidationError, rethrowPrismaError } from '../../lib/errors.js';
+import { AppError, bulkItemFailure, ConflictError, NotFoundError, StaleWriteError, ValidationError, rethrowPrismaError } from '../../lib/errors.js';
 import { LIVE_SCOPES, liveVersion } from '../../lib/live-version.js';
 import { lockAgencies, lockReservations, lockRoomTypes, lockWaitlistEntries } from '../../lib/locks.js';
 import { buildPage, toSkipTake } from '../../lib/pagination.js';
@@ -1518,6 +1518,25 @@ async function cancelLocked(tx, stage, { hotelId, reservationId, input, hotel, b
   });
   await stage('reservation.cancelled', stayPayload(updated));
   return { id: current.id, fee };
+}
+
+/**
+ * Toplu gelmedi: seçilenler sırayla, tek tek işlemin kuralıyla (durum, giriş günü, sürüm, ücret). Biri başarısız
+ * olursa diğerleri sürer; sonuç kayıt kayıt döner.
+ *
+ * @param {string} hotelId @param {Array<{ id: string, expectedUpdatedAt: Date }>} items @param {{ waiveFee: boolean }} options
+ */
+export async function markNoShowBatch(hotelId, items, { waiveFee = false } = {}) {
+  const results = [];
+  for (const item of items) {
+    try {
+      await markNoShow(hotelId, item.id, { expectedUpdatedAt: item.expectedUpdatedAt, waiveFee });
+      results.push({ id: item.id, ok: true, message: null });
+    } catch (error) {
+      results.push(bulkItemFailure(item.id, error));
+    }
+  }
+  return { results, succeeded: results.filter((row) => row.ok).length, failed: results.filter((row) => !row.ok).length };
 }
 
 /**

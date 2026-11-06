@@ -58,6 +58,18 @@ export function formatMultiplier(value) {
   return `${String(value).replace('.', ',')}×`;
 }
 
+const dateTimeFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+/**
+ * Tarih ve saat ("03 Kas 2026 14:05"; tarayıcının saat diliminde).
+ * @param {string | Date | null | undefined} value ISO zaman
+ */
+export function formatDateTime(value) {
+  if (!value) return '—';
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? '—' : dateTimeFormatter.format(date);
+}
+
 /**
  * @param {string | Date | null | undefined} value ISO tarih
  */

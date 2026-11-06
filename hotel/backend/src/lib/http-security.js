@@ -9,7 +9,8 @@ import proxyAddr from '@fastify/proxy-addr';
  */
 
 /** Geliştirme ortamında panelin adresi (Vite). */
-const DEV_ALLOWED_ORIGINS = Object.freeze(['http://localhost:5173', 'http://127.0.0.1:5173']);
+// Panel (5173) ve misafir uygulaması (5176, modül 53) geliştirme sunucuları.
+const DEV_ALLOWED_ORIGINS = Object.freeze(['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:5176', 'http://127.0.0.1:5176']);
 
 /** Üretimde kabul edilecek en kısa JWT anahtarı. */
 const MIN_JWT_SECRET_LENGTH = 32;
@@ -161,11 +162,11 @@ export function rateLimitKey(request) {
 }
 
 /**
- * Yolunda sır taşıyan oturumsuz uçlar: misafirin oda servisi bağlantısı (modül 41) ve kanalın okuduğu iCal takvimi
- * (modül 33). Belirteç bağlantının kendisidir; istek günlüğüne açık yazılırsa günlüğü okuyan misafir adına sipariş
+ * Yolunda sır taşıyan oturumsuz uçlar: misafirin oda servisi bağlantısı (modül 41), misafir portalı bağlantısı
+ * (modül 53) ve kanalın okuduğu iCal takvimi (modül 33). Belirteç bağlantının kendisidir; istek günlüğüne açık yazılırsa günlüğü okuyan misafir adına sipariş
  * verebilir / takvimi okuyabilirdi.
  */
-const SECRET_PATHS = Object.freeze([/^(\/public\/room-service\/)[^/?#]+/, /^(\/channel-ical\/)[^/?#]+/]);
+const SECRET_PATHS = Object.freeze([/^(\/public\/room-service\/)[^/?#]+/, /^(\/public\/portal\/)[^/?#]+/, /^(\/channel-ical\/)[^/?#]+/]);
 
 /**
  * İstek adresindeki belirteci maskeler ("/public/room-service/***\/orders").

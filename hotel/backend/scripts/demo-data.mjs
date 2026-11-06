@@ -63,12 +63,14 @@ const { resetRoomServiceDemo, seedRoomServiceDemo } = await import('./demo-room-
 const { resetBanquetFnbDemo, seedBanquetFnbDemo } = await import('./demo-banquet-fnb.mjs');
 const { resetPurchasingDemo, seedPurchasingDemo } = await import('./demo-purchasing.mjs');
 const { resetAccountingDemo, seedAccountingDemo } = await import('./demo-accounting.mjs');
+const { resetInvoicingDemo, seedInvoicingDemo } = await import('./demo-invoicing.mjs');
+const { resetPayrollDemo, seedPayrollDemo } = await import('./demo-payroll.mjs');
+const { resetGuestPortalDemo, seedGuestPortalDemo } = await import('./demo-guest-portal.mjs');
 
 const HISTORY_DAYS = 400;
 const FUTURE_DAYS = 75;
 const CODE_PREFIX = 'DMO-';
 const ACTOR = 'demo@hotel.local';
-const TAX_DIVISOR = 1.1;
 const CHUNK = 2000;
 const GUEST_COUNT = 1000;
 
@@ -96,10 +98,17 @@ const existingDemo =
   (await prisma.posOutlet.count({ where: { hotelId, createdBy: ACTOR } }));
 if (process.argv.includes('--reset')) {
   let banquetFiles = [];
+  let portalFiles = [];
   await prisma.$transaction(
     async (tx) => {
+      // Demo misafir portalı (modül 53): bağlantı, online check-in ve belgeleri rezervasyona kısıtlı bağlı — en önce.
+      portalFiles = await resetGuestPortalDemo(tx, hotelId);
+      // Demo faturalar (modül 16 / 49): folyo, etkinlik, cari ve misafire kısıtlı bağlı.
+      await resetInvoicingDemo(tx, hotelId);
       // Demo ön muhasebe (modül 47): cariler acente / tedarikçi / etkinlik müşterisine kısıtlı bağlı, ödemeler cariye — önce.
       await resetAccountingDemo(tx, hotelId);
+      // Demo personel ve bordro (modül 51): personel carileri ön muhasebeyle gitti; bordrolar, kesintiler, kartlar.
+      await resetPayrollDemo(tx, hotelId);
       // Demo banket (modül 37): etkinlikler ödemeleri, onayları, belgeleriyle; salon, ekipman, müşteri.
       banquetFiles = await resetBanquetDemo(tx, hotelId, ACTOR);
       // Demo satın alma ve stok (modül 45): sipariş / mal kabul / hareket malzeme kartına bağlı; F&B'den önce.
@@ -184,6 +193,8 @@ if (process.argv.includes('--reset')) {
   // Belge PDF'leri diskte: kayıtlar gittikten sonra silinir (silinemeyen yetim kalır, log'a yazılır).
   const leftover = await removeFiles(banquetFiles);
   if (leftover.length) console.error(`${leftover.length} banket belgesi diskten silinemedi`);
+  const portalLeftover = await removeFiles(portalFiles);
+  if (portalLeftover.length) console.error(`${portalLeftover.length} online check-in belgesi diskten silinemedi`);
   console.log('Önceki demo veri silindi.');
 } else if (existingDemo > 0) {
   console.error('Demo veri zaten var; silip yeniden üretmek için --reset ile çalıştırın.');
@@ -319,17 +330,17 @@ const CONTRACT_BOARDS = ['BB', 'HB', 'AI'];
 const agencyNightPrice = (seed, type, board, iso) => Math.round((Number(type.basePrice) * PRICE[monthOf(iso)] * BOARD_FACTOR[board] * seed.discount) / 10) * 10;
 
 const AGENCY_SEEDS = [
-  { code: 'ATLAS', name: 'Atlas Tur Seyahat', contactName: 'Selin Aksoy', commissionPct: '12', paymentTermDays: 30, discount: 0.82, weight: 24, stopSales: [{ from: 30, to: 33, reason: 'Kongre haftası: kontenjan yok' }] },
-  { code: 'EGE', name: 'Ege Turizm ve Seyahat', contactName: 'Mert Yalçın', commissionPct: '10', paymentTermDays: 15, discount: 0.85, weight: 18, stopSales: [] },
-  { code: 'AKDENIZ', name: 'Akdeniz Tatil Acentesi', contactName: 'Gül Demirtaş', commissionPct: '15', paymentTermDays: 45, discount: 0.8, weight: 16, stopSales: [{ from: 52, to: 54, reason: 'Toplu etkinlik' }] },
-  { code: 'ROTA', name: 'Rota Travel', contactName: 'Kaan Özbek', commissionPct: '8', paymentTermDays: 30, discount: 0.88, weight: 10, stopSales: [] },
-  { code: 'MAVIYOL', name: 'Mavi Yol Turizm', contactName: 'Hande Işık', commissionPct: '12.5', paymentTermDays: 30, discount: 0.83, weight: 10, stopSales: [] },
+  { code: 'ATLAS', taxNumber: '0710023451', taxOffice: 'Kavaklıdere', name: 'Atlas Tur Seyahat', contactName: 'Selin Aksoy', commissionPct: '12', paymentTermDays: 30, discount: 0.82, weight: 24, stopSales: [{ from: 30, to: 33, reason: 'Kongre haftası: kontenjan yok' }] },
+  { code: 'EGE', taxNumber: '3250044172', taxOffice: 'Karşıyaka', name: 'Ege Turizm ve Seyahat', contactName: 'Mert Yalçın', commissionPct: '10', paymentTermDays: 15, discount: 0.85, weight: 18, stopSales: [] },
+  { code: 'AKDENIZ', taxNumber: '0120033893', taxOffice: 'Antalya Kurumlar', name: 'Akdeniz Tatil Acentesi', contactName: 'Gül Demirtaş', commissionPct: '15', paymentTermDays: 45, discount: 0.8, weight: 16, stopSales: [{ from: 52, to: 54, reason: 'Toplu etkinlik' }] },
+  { code: 'ROTA', taxNumber: '7350061202', taxOffice: 'Beşiktaş', name: 'Rota Travel', contactName: 'Kaan Özbek', commissionPct: '8', paymentTermDays: 30, discount: 0.88, weight: 10, stopSales: [] },
+  { code: 'MAVIYOL', taxNumber: '6120055745', taxOffice: 'Muratpaşa', name: 'Mavi Yol Turizm', contactName: 'Hande Işık', commissionPct: '12.5', paymentTermDays: 30, discount: 0.83, weight: 10, stopSales: [] },
   { code: 'NORDIC', name: 'Nordic Sun Holidays (İsveç)', contactName: 'Anna Lindqvist', commissionPct: '18', paymentTermDays: 60, discount: 0.78, weight: 8, stopSales: [{ from: 40, to: 41, reason: 'Bakım: üst kat kapalı' }] },
   { code: 'SUNWAY', name: 'Sunway Reisen (Almanya)', contactName: 'Jonas Becker', commissionPct: '16', paymentTermDays: 60, discount: 0.8, weight: 8, stopSales: [] },
   { code: 'BALTIC', name: 'Baltic Trips (Polonya)', contactName: 'Marta Nowak', commissionPct: '15', paymentTermDays: 45, discount: 0.8, weight: 4, stopSales: [] },
-  { code: 'KARDELEN', name: 'Kardelen Kurumsal Seyahat', contactName: 'Emre Kaplan', commissionPct: '5', paymentTermDays: 15, discount: 0.9, weight: 2, stopSales: [] },
+  { code: 'KARDELEN', taxNumber: '4800077165', taxOffice: 'Çankaya', name: 'Kardelen Kurumsal Seyahat', contactName: 'Emre Kaplan', commissionPct: '5', paymentTermDays: 15, discount: 0.9, weight: 2, stopSales: [] },
   // Anlaşması bitmiş, pasif acente: durumların nasıl göründüğü için.
-  { code: 'POYRAZ', name: 'Poyraz Turizm', contactName: 'Tuncay Ateş', commissionPct: '10', paymentTermDays: 30, discount: 0.86, weight: 0, stopSales: [], ended: true },
+  { code: 'POYRAZ', taxNumber: '7020019480', taxOffice: 'Konak', name: 'Poyraz Turizm', contactName: 'Tuncay Ateş', commissionPct: '10', paymentTermDays: 30, discount: 0.86, weight: 0, stopSales: [], ended: true },
 ];
 
 const agenciesService = await import('../src/modules/agencies/service.js');
@@ -351,8 +362,8 @@ for (const seed of AGENCY_SEEDS) {
       phone: null,
       email: `rezervasyon@${seed.code.toLowerCase()}.example.com`,
       address: null,
-      taxOffice: null,
-      taxNumber: null,
+      taxOffice: seed.taxOffice ?? null,
+      taxNumber: seed.taxNumber ?? null,
       commissionPct: seed.commissionPct,
       paymentTermDays: seed.paymentTermDays,
       notes: null,
@@ -582,13 +593,31 @@ for (let index = 0; index < lostCount; index += 1) {
   });
 }
 
+// ── Vergiler: Türkiye'deki otel düzeni (fiyatlar vergi dahil; kalemde net / vergi ayrımı, faturada GİB koduyla) ──
+// Oda: KDV %10 + konaklama vergisi %2 (ikisi de KDV hariç bedel üzerinden); yiyecek-içecek KDV %10; minibar,
+// çamaşır, spa ve diğer KDV %20. Seed'in tek "KDV" satırı yeniden adlandırılır (kimliği korunur).
+const DEMO_TAXES = [
+  { name: 'KDV %10', previous: 'KDV', rate: '10', appliesTo: ['ROOM', 'FNB'] },
+  { name: 'Konaklama vergisi', rate: '2', appliesTo: ['ROOM'] },
+  { name: 'KDV %20', rate: '20', appliesTo: ['MINIBAR', 'LAUNDRY', 'SPA', 'OTHER'] },
+];
+for (const tax of DEMO_TAXES) {
+  const existing = await prisma.tax.findFirst({ where: { hotelId, deletedAt: null, name: { in: [tax.name, tax.previous].filter(Boolean) } }, select: { id: true } });
+  const data = { name: tax.name, rate: tax.rate, isIncluded: true, appliesTo: tax.appliesTo };
+  if (existing) await prisma.tax.update({ where: { id: existing.id }, data });
+  else await prisma.tax.create({ data: { hotelId, ...data } });
+}
+
 // ── Folyo, kalemler, ödemeler ───────────────────────────────────────────
+// Kalemin vergisi folyo servisinin formülüyle (otelin vergi ayarı, kalemin kategorisi): vergi dökümü
+// (`taxLines`) faturaya (modül 16 / 49) ve gelir raporuna aynen gider.
+const { chargeLine } = await import('../src/modules/folios/rules.js');
+const hotelTaxes = (await prisma.tax.findMany({ where: { hotelId }, select: { id: true, name: true, rate: true, isIncluded: true, appliesTo: true } })).map((tax) => ({ ...tax, rate: String(tax.rate) }));
 const folios = [];
 const items = [];
 const payments = [];
 const addItem = (folio, reservationId, fields) => {
-  const amount = Number(fields.amount);
-  const net = Math.round((amount / TAX_DIVISOR) * 100) / 100;
+  const line = chargeLine({ amount: money(fields.amount), quantity: 1, taxCategory: fields.taxCategory ?? null, taxes: hotelTaxes });
   items.push({
     id: randomUUID(),
     hotelId,
@@ -599,13 +628,14 @@ const addItem = (folio, reservationId, fields) => {
     postedAt: at(fields.serviceDate, 3),
     sourceKey: `demo:${randomUUID()}`,
     ...fields,
-    amount: money(amount),
-    netAmount: money(net),
-    taxAmount: money(amount - net),
-    total: money(amount),
+    amount: line.amount,
+    netAmount: line.netAmount,
+    taxAmount: line.taxAmount,
+    total: line.total,
+    taxLines: line.taxLines,
     serviceDate: midnight(fields.serviceDate),
   });
-  folio.charges += amount;
+  folio.charges += Number(line.total);
 };
 const METHODS = [['CARD', 52], ['CASH', 16], ['TRANSFER', 10], ['VIRTUAL_POS', 12], ['AGENCY', 10]];
 const pay = (folio, reservationId, amount, day, method) => {
@@ -921,6 +951,30 @@ try {
   console.error(`Ön muhasebe adımı tamamlanamadı: ${error.message}`);
 }
 
+// ── Faturalar (modül 16 / 49): ayar, test mükellefleri, folyo / etkinlik / serbest faturalar, e-belge sonuçları ──
+let invoiceSummary = null;
+try {
+  invoiceSummary = await seedInvoicingDemo({ prisma, core, contracts, hotelId, today, actor: ACTOR });
+} catch (error) {
+  console.error(`Fatura adımı tamamlanamadı: ${error.message}`);
+}
+
+// ── Personel ve bordro (modül 51): kartlar, yılın bordroları (onaylı, ödenmiş), fark bordrosu, içinde bulunulan ay ──
+let payrollSummary = null;
+try {
+  if (accountingSummary) payrollSummary = await seedPayrollDemo({ prisma, core, contracts, hotelId, today, actor: ACTOR });
+} catch (error) {
+  console.error(`Bordro adımı tamamlanamadı: ${error.message}`);
+}
+
+// ── Misafir portalı (modül 53): yakın varışlara bağlantı ve davet, online check-in'ler (bekleyen / onaylı / düzeltme / tamam) ──
+let portalSummary = null;
+try {
+  portalSummary = await seedGuestPortalDemo({ prisma, core, contracts, hotelId, today, actor: ACTOR });
+} catch (error) {
+  console.error(`Misafir portalı adımı tamamlanamadı: ${error.message}`);
+}
+
 // Odaların anlık durumu: içeride kimse varsa dolu, boşların bir kısmı kirli.
 const inHouse = new Set(reservations.filter((entry) => entry.row.status === 'CHECKED_IN').map((entry) => entry.row.roomId));
 await prisma.room.updateMany({ where: { hotelId, id: { in: [...inHouse] } }, data: { occupancy: 'OCCUPIED' } });
@@ -985,7 +1039,9 @@ console.log(
       ? `, ${purchasingSummary.suppliers} tedarikçi, ${purchasingSummary.warehouses} depo, ${purchasingSummary.rounds} teklif turu, ${purchasingSummary.orders} sipariş (${purchasingSummary.pendingApproval} onay bekliyor), ${purchasingSummary.receipts} mal kabul, ${purchasingSummary.belowMin} minimum altı malzeme`
       : '') +
     (accountingSummary
-      ? `, ${accountingSummary.accounts} cari, ${accountingSummary.treasury} kasa / banka, ${accountingSummary.vouchers} fiş, ${accountingSummary.instruments} çek / senet, ${accountingSummary.posted} otomatik kayıt (başlangıç ${accountingSummary.startDate}${accountingSummary.failed ? `, ${accountingSummary.failed} işlenemedi` : ''}).`
-      : '.'),
+      ? `, ${accountingSummary.accounts} cari, ${accountingSummary.treasury} kasa / banka, ${accountingSummary.vouchers} fiş, ${accountingSummary.instruments} çek / senet, ${accountingSummary.posted} otomatik kayıt (başlangıç ${accountingSummary.startDate}${accountingSummary.failed ? `, ${accountingSummary.failed} işlenemedi` : ''})${invoiceSummary ? `, ${invoiceSummary.issued} fatura (${invoiceSummary.eFatura} e-Fatura, ${invoiceSummary.eArsiv} e-Arşiv; test ortamı), ${invoiceSummary.drafts} taslak${invoiceSummary.skipped ? `, ${invoiceSummary.skipped} kesilemedi` : ''}` : ''}.`
+      : '.') +
+    (payrollSummary ? ` Bordro: ${payrollSummary.employees} personel, ${payrollSummary.runs} bordro (${payrollSummary.approved} onaylı, ${payrollSummary.supplementary} fark), ${payrollSummary.paid} ödeme, ${payrollSummary.terminated} işten çıkış, ${payrollSummary.posted} muhasebe kaydı.` : ''),
+    (portalSummary ? ` Misafir portalı: ${portalSummary.links} bağlantı, ${portalSummary.checkins} online check-in, ${portalSummary.documents} belge fotoğrafı.` : ''),
 );
 await prisma.$disconnect();

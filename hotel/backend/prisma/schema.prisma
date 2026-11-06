@@ -104,13 +104,6 @@ enum FolioItemSource {
   REVERSAL
 }
 
-enum InvoiceStatus {
-  DRAFT
-  ISSUED
-  SENT
-  CANCELLED
-}
-
 enum PaymentMethod {
   CASH
   CARD
@@ -189,6 +182,7 @@ enum NotificationSource {
   CHECKED_IN
   CHECKED_OUT
   CHANNEL_TEST
+  CHECKIN_INVITE
 }
 
 /// Şablonu olan olaylar.
@@ -197,6 +191,7 @@ enum NotificationTrigger {
   ROOM_ASSIGNED
   CHECKED_IN
   CHECKED_OUT
+  CHECKIN_INVITE
 }
 
 /// Personel uyarısı türleri (üst bardaki zil).
@@ -228,6 +223,10 @@ enum StaffAlertKind {
   BANQUET
   /// Restoran POS: kasa farkı, uzun açık kalan vardiya / adisyon, odaya yazılamayan adisyon — modül 39.
   POS
+  /// Fatura / e-belge: gönderilemedi, GİB reddetti — modül 16 / 49.
+  INVOICE
+  /// Online check-in incelemesi bekliyor (modül 53): resepsiyona.
+  ONLINE_CHECKIN
 }
 
 /// Rezervasyon fiyatının kaynağı (modül 4): sistem hesabı ya da yetkili
@@ -656,6 +655,7 @@ enum GuestRequestSource {
   FRONT_DESK
   STAFF
   AI
+  PORTAL
 }
 
 enum LogLevel {
@@ -715,109 +715,122 @@ model Hotel {
   updatedAt                     DateTime          @updatedAt
   deletedAt                     DateTime?
 
-  users                 User[]
-  refreshTokens         RefreshToken[]
-  rolePermissions       RolePermission[]
-  aiSettings            AiSettings?
-  messagingChannels     MessagingChannel[]
-  conversationAiStates  ConversationAiState[]
-  eventLogs             EventLog[]
-  processedEvents       ProcessedEvent[]
-  actorSettings         ActorSetting[]
-  activityLogs          ActivityLog[]
-  auditLogs             AuditLog[]
-  approvals             Approval[]
-  pendingActions        PendingAction[]
-  manualTasks           ManualTask[]
-  llmUsages             LlmUsage[]
-  llmUsageDaily         LlmUsageDaily[]
-  notifications         Notification[]
-  notificationTemplates NotificationTemplate[]
-  notificationChannels  NotificationChannelConfig[]
-  staffAlerts           StaffAlert[]
-  roomTypes             RoomType[]
-  rooms                 Room[]
-  roomBlocks            RoomBlock[]
-  roomStaySegments      RoomStaySegment[]
-  guests                Guest[]
-  reservations          Reservation[]
-  reservationGuests     ReservationGuest[]
-  ratePlans             RatePlan[]
-  seasons               Season[]
-  taxes                 Tax[]
-  conversations         Conversation[]
-  messages              Message[]
-  guestRequests         GuestRequest[]
-  folios                Folio[]
-  folioItems            FolioItem[]
-  folioRoutes           FolioRoute[]
-  roomChargeRuns        RoomChargeRun[]
-  invoices              Invoice[]
-  payments              Payment[]
-  exchangeRates         ExchangeRate[]
-  minibarItems          MinibarItem[]
-  minibarConsumptions   MinibarConsumption[]
-  laundryItems          LaundryItem[]
-  laundryOrders         LaundryOrder[]
-  nightAudits           NightAudit[]
-  housekeepingTasks     HousekeepingTask[]
-  maintenanceTickets    MaintenanceTicket[]
-  lostItems             LostItem[]
-  lostItemPhotos        LostItemPhoto[]
-  lostItemNotes         LostItemNote[]
-  revenueDayStats       RevenueDayStat[]
-  revenueStatDays       RevenueStatDay[]
-  budgets               Budget[]
-  budgetLines           BudgetLine[]
-  budgetExpenseItems    BudgetExpenseItem[]
-  budgetExpenseActuals  BudgetExpenseActual[]
-  budgetCommentaries    BudgetCommentary[]
-  reservationGroups     ReservationGroup[]
-  reservationNights     ReservationNight[]
-  waitlistEntries       WaitlistEntry[]
-  agencies              Agency[]
-  contracts             Contract[]
-  contractRates         ContractRate[]
-  contractStopSales     ContractStopSale[]
-  promotions            Promotion[]
-  coupons               Coupon[]
-  channels              Channel[]
-  agencyBonusRules      AgencyBonusRule[]
-  agencyBonuses         AgencyBonus[]
-  venues                Venue[]
-  eventEquipment        EventEquipment[]
-  eventClients          EventClient[]
-  eventSettings         EventSettings?
-  events                Event[]
-  eventPayments         EventPayment[]
-  eventDocuments        EventDocument[]
-  posOutlets            PosOutlet[]
-  menuCategories        MenuCategory[]
-  menuItems             MenuItem[]
-  posSettings           PosSettings?
-  posShifts             PosShift[]
-  roomServiceOrders     RoomServiceOrder[]
-  roomServiceLinks      RoomServiceLink[]
-  posChecks             PosCheck[]
-  posPayments           PosPayment[]
-  stockItems            StockItem[]
-  recipes               Recipe[]
-  banquetMenus          BanquetMenu[]
-  purchaseRequests      PurchaseRequest[]
-  suppliers             Supplier[]
-  purchaseSettings      PurchaseSettings?
-  purchaseRounds        PurchaseRound[]
-  purchaseOrders        PurchaseOrder[]
-  goodsReceipts         GoodsReceipt[]
-  warehouses            Warehouse[]
-  accountingSettings    AccountingSettings?
-  ledgerAccounts        LedgerAccount[]
-  ledgerEntries         LedgerEntry[]
-  treasuryAccounts      TreasuryAccount[]
-  treasuryMovements     TreasuryMovement[]
-  treasuryMappings      TreasuryMapping[]
-  accountingVouchers    AccountingVoucher[]
-  instruments           Instrument[]
+  users                  User[]
+  refreshTokens          RefreshToken[]
+  rolePermissions        RolePermission[]
+  aiSettings             AiSettings?
+  messagingChannels      MessagingChannel[]
+  conversationAiStates   ConversationAiState[]
+  eventLogs              EventLog[]
+  processedEvents        ProcessedEvent[]
+  actorSettings          ActorSetting[]
+  activityLogs           ActivityLog[]
+  auditLogs              AuditLog[]
+  approvals              Approval[]
+  pendingActions         PendingAction[]
+  manualTasks            ManualTask[]
+  llmUsages              LlmUsage[]
+  llmUsageDaily          LlmUsageDaily[]
+  notifications          Notification[]
+  notificationTemplates  NotificationTemplate[]
+  notificationChannels   NotificationChannelConfig[]
+  staffAlerts            StaffAlert[]
+  roomTypes              RoomType[]
+  rooms                  Room[]
+  roomBlocks             RoomBlock[]
+  roomStaySegments       RoomStaySegment[]
+  guests                 Guest[]
+  reservations           Reservation[]
+  reservationGuests      ReservationGuest[]
+  ratePlans              RatePlan[]
+  seasons                Season[]
+  taxes                  Tax[]
+  conversations          Conversation[]
+  messages               Message[]
+  guestRequests          GuestRequest[]
+  folios                 Folio[]
+  folioItems             FolioItem[]
+  folioRoutes            FolioRoute[]
+  roomChargeRuns         RoomChargeRun[]
+  invoices               Invoice[]
+  invoiceSettings        InvoiceSettings?
+  invoiceTaxCodes        InvoiceTaxCode[]
+  departments            Department[]
+  employees              Employee[]
+  payrollSettings        PayrollSettings?
+  guestPortalSettings    GuestPortalSettings?
+  guestPortalLinks       GuestPortalLink[]
+  onlineCheckins         OnlineCheckin[]
+  onlineCheckinDocuments OnlineCheckinDocument[]
+  payrollParameterSets   PayrollParameterSet[]
+  payElements            PayElement[]
+  payrollRuns            PayrollRun[]
+  testTaxpayers          TestTaxpayer[]
+  payments               Payment[]
+  exchangeRates          ExchangeRate[]
+  minibarItems           MinibarItem[]
+  minibarConsumptions    MinibarConsumption[]
+  laundryItems           LaundryItem[]
+  laundryOrders          LaundryOrder[]
+  nightAudits            NightAudit[]
+  housekeepingTasks      HousekeepingTask[]
+  maintenanceTickets     MaintenanceTicket[]
+  lostItems              LostItem[]
+  lostItemPhotos         LostItemPhoto[]
+  lostItemNotes          LostItemNote[]
+  revenueDayStats        RevenueDayStat[]
+  revenueStatDays        RevenueStatDay[]
+  budgets                Budget[]
+  budgetLines            BudgetLine[]
+  budgetExpenseItems     BudgetExpenseItem[]
+  budgetExpenseActuals   BudgetExpenseActual[]
+  budgetCommentaries     BudgetCommentary[]
+  reservationGroups      ReservationGroup[]
+  reservationNights      ReservationNight[]
+  waitlistEntries        WaitlistEntry[]
+  agencies               Agency[]
+  contracts              Contract[]
+  contractRates          ContractRate[]
+  contractStopSales      ContractStopSale[]
+  promotions             Promotion[]
+  coupons                Coupon[]
+  channels               Channel[]
+  agencyBonusRules       AgencyBonusRule[]
+  agencyBonuses          AgencyBonus[]
+  venues                 Venue[]
+  eventEquipment         EventEquipment[]
+  eventClients           EventClient[]
+  eventSettings          EventSettings?
+  events                 Event[]
+  eventPayments          EventPayment[]
+  eventDocuments         EventDocument[]
+  posOutlets             PosOutlet[]
+  menuCategories         MenuCategory[]
+  menuItems              MenuItem[]
+  posSettings            PosSettings?
+  posShifts              PosShift[]
+  roomServiceOrders      RoomServiceOrder[]
+  roomServiceLinks       RoomServiceLink[]
+  posChecks              PosCheck[]
+  posPayments            PosPayment[]
+  stockItems             StockItem[]
+  recipes                Recipe[]
+  banquetMenus           BanquetMenu[]
+  purchaseRequests       PurchaseRequest[]
+  suppliers              Supplier[]
+  purchaseSettings       PurchaseSettings?
+  purchaseRounds         PurchaseRound[]
+  purchaseOrders         PurchaseOrder[]
+  goodsReceipts          GoodsReceipt[]
+  warehouses             Warehouse[]
+  accountingSettings     AccountingSettings?
+  ledgerAccounts         LedgerAccount[]
+  ledgerEntries          LedgerEntry[]
+  treasuryAccounts       TreasuryAccount[]
+  treasuryMovements      TreasuryMovement[]
+  treasuryMappings       TreasuryMapping[]
+  accountingVouchers     AccountingVoucher[]
+  instruments            Instrument[]
 }
 
 model User {
@@ -844,6 +857,8 @@ model User {
   assignedHousekeepingTasks  HousekeepingTask[] @relation("HousekeepingAssignee")
   completedHousekeepingTasks HousekeepingTask[] @relation("HousekeepingCompleter")
   inspectedHousekeepingTasks HousekeepingTask[] @relation("HousekeepingInspector")
+
+  employee Employee?
 }
 
 model RefreshToken {
@@ -1455,6 +1470,7 @@ model Guest {
   lostItems         LostItem[]
   notifications     Notification[]
   waitlistEntries   WaitlistEntry[]
+  invoices          Invoice[]
 
   @@index([phone])
   @@index([email])
@@ -1539,33 +1555,36 @@ model Reservation {
   updatedAt           DateTime             @updatedAt
   deletedAt           DateTime?
 
-  hotel               Hotel                @relation(fields: [hotelId], references: [id])
-  guest               Guest                @relation(fields: [guestId], references: [id])
-  roomType            RoomType             @relation(fields: [roomTypeId], references: [id])
-  room                Room?                @relation(fields: [roomId], references: [id])
-  group               ReservationGroup?    @relation(fields: [groupId], references: [id])
-  agency              Agency?              @relation(fields: [agencyId], references: [id], onDelete: Restrict)
-  promotion           Promotion?           @relation(fields: [promotionId], references: [id], onDelete: Restrict)
-  coupon              Coupon?              @relation(fields: [couponId], references: [id], onDelete: Restrict)
-  channelBooking      ChannelBooking?      @relation(fields: [channelBookingId], references: [id], onDelete: Restrict)
-  nights              ReservationNight[]
-  waitlistEntries     WaitlistEntry[]
-  reservationGuests   ReservationGuest[]
-  folios              Folio[]
-  folioItems          FolioItem[]
-  folioRoutes         FolioRoute[]
-  payments            Payment[]
-  lostItems           LostItem[]
-  minibarConsumptions MinibarConsumption[]
-  laundryOrders       LaundryOrder[]
-  roomSegments        RoomStaySegment[]
-  conversations       Conversation[]
-  guestRequests       GuestRequest[]
-  notifications       Notification[]
-  agencyBonusLines    AgencyBonusLine[]
-  posRoomCharges      PosRoomCharge[]
-  roomServiceOrders   RoomServiceOrder[]
-  roomServiceLinks    RoomServiceLink[]
+  hotel                  Hotel                   @relation(fields: [hotelId], references: [id])
+  guest                  Guest                   @relation(fields: [guestId], references: [id])
+  roomType               RoomType                @relation(fields: [roomTypeId], references: [id])
+  room                   Room?                   @relation(fields: [roomId], references: [id])
+  group                  ReservationGroup?       @relation(fields: [groupId], references: [id])
+  agency                 Agency?                 @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  promotion              Promotion?              @relation(fields: [promotionId], references: [id], onDelete: Restrict)
+  coupon                 Coupon?                 @relation(fields: [couponId], references: [id], onDelete: Restrict)
+  channelBooking         ChannelBooking?         @relation(fields: [channelBookingId], references: [id], onDelete: Restrict)
+  nights                 ReservationNight[]
+  waitlistEntries        WaitlistEntry[]
+  reservationGuests      ReservationGuest[]
+  folios                 Folio[]
+  folioItems             FolioItem[]
+  folioRoutes            FolioRoute[]
+  payments               Payment[]
+  lostItems              LostItem[]
+  minibarConsumptions    MinibarConsumption[]
+  laundryOrders          LaundryOrder[]
+  roomSegments           RoomStaySegment[]
+  conversations          Conversation[]
+  guestRequests          GuestRequest[]
+  notifications          Notification[]
+  agencyBonusLines       AgencyBonusLine[]
+  posRoomCharges         PosRoomCharge[]
+  roomServiceOrders      RoomServiceOrder[]
+  roomServiceLinks       RoomServiceLink[]
+  guestPortalLinks       GuestPortalLink[]
+  onlineCheckin          OnlineCheckin?
+  onlineCheckinDocuments OnlineCheckinDocument[]
 
   // Müsaitlik sorgusunun sıcak yolu: "şu otelde, şu oda tipinde, şu tarihlerde
   // envanteri tüketen rezervasyonlar". Dolu bir otelde saniyede onlarca kez çalışır.
@@ -1778,7 +1797,8 @@ model Tax {
   updatedAt  DateTime  @updatedAt
   deletedAt  DateTime?
 
-  hotel Hotel @relation(fields: [hotelId], references: [id])
+  hotel       Hotel           @relation(fields: [hotelId], references: [id])
+  invoiceCode InvoiceTaxCode?
 
   @@index([hotelId, deletedAt])
 }
@@ -2096,25 +2116,6 @@ model RoomChargeRun {
   hotel Hotel @relation(fields: [hotelId], references: [id])
 
   @@unique([hotelId, night])
-}
-
-model Invoice {
-  id           String        @id @default(uuid())
-  hotelId      String
-  folioId      String
-  number       String        @unique
-  issuedAt     DateTime      @default(now())
-  totalAmount  Decimal       @db.Decimal(12, 2)
-  taxAmount    Decimal       @default(0) @db.Decimal(12, 2)
-  currency     String        @default("TRY")
-  status       InvoiceStatus @default(DRAFT)
-  eInvoiceUuid String?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  deletedAt    DateTime?
-
-  hotel Hotel @relation(fields: [hotelId], references: [id])
-  folio Folio @relation(fields: [folioId], references: [id])
 }
 
 /// Ödeme satırı (modül 17). Silinmez: hatalı giriş iptal kaydıyla (`REVERSAL`,
@@ -3695,6 +3696,7 @@ model Event {
   installments         EventInstallment[]
   payments             EventPayment[]
   documents            EventDocument[]
+  invoices             Invoice[]
   menus                EventMenu[]
   purchaseRequestLines PurchaseRequestLine[]
 
@@ -5133,6 +5135,7 @@ enum LedgerAccountType {
   COMPANY
   PERSON
   OTHER
+  EMPLOYEE
 }
 
 /// Cari hareketin kaynağı (otomatik kayıt ya da fiş).
@@ -5146,6 +5149,9 @@ enum LedgerSource {
   VOUCHER
   INSTRUMENT
   INVOICE
+  PAYROLL
+  PAYROLL_PAYMENT
+  EMPLOYEE_ADVANCE
 }
 
 enum TreasuryKind {
@@ -5161,6 +5167,8 @@ enum TreasurySource {
   POS_PAYMENT
   VOUCHER
   INSTRUMENT
+  PAYROLL_PAYMENT
+  EMPLOYEE_ADVANCE
 }
 
 /// Otomatik tahsilatın geldiği yer: yöntem → kasa / banka eşlemesi bunun üstüne kurulur.
@@ -5264,6 +5272,8 @@ model LedgerAccount {
   agencyId        String?           @unique
   supplierId      String?           @unique
   eventClientId   String?           @unique
+  /// Personel carisi (modül 51): net ücret borcumuz, avans ve maaş ödemesi.
+  employeeId      String?           @unique
   taxOffice       String?
   taxNumber       String?
   contactName     String?
@@ -5287,8 +5297,10 @@ model LedgerAccount {
   agency            Agency?             @relation(fields: [agencyId], references: [id], onDelete: Restrict)
   supplier          Supplier?           @relation(fields: [supplierId], references: [id], onDelete: Restrict)
   eventClient       EventClient?        @relation(fields: [eventClientId], references: [id], onDelete: Restrict)
+  employee          Employee?           @relation(fields: [employeeId], references: [id], onDelete: Restrict)
   entries           LedgerEntry[]
   vouchers          AccountingVoucher[]
+  invoices          Invoice[]
   instruments       Instrument[]        @relation("InstrumentAccount")
   endorsements      Instrument[]        @relation("InstrumentEndorsee")
   treasuryMovements TreasuryMovement[]
@@ -5303,25 +5315,27 @@ model LedgerAccount {
 
 /// Cari hareket (ekstre satırı): borç ya da alacak; kaynağı tekil — aynı belge iki kez yazılmaz. Düzeltme ters kayıtla.
 model LedgerEntry {
-  id           String       @id @default(uuid())
-  hotelId      String
-  accountId    String
+  id            String       @id @default(uuid())
+  hotelId       String
+  accountId     String
   /// Belge günü (ekstre sırası) ve vade (yaşlandırma).
-  date         DateTime     @db.Date
-  dueDate      DateTime?    @db.Date
-  debit        Decimal      @default(0) @db.Decimal(14, 2)
-  credit       Decimal      @default(0) @db.Decimal(14, 2)
-  description  String
-  reference    String?
-  sourceType   LedgerSource
-  sourceId     String
+  date          DateTime     @db.Date
+  dueDate       DateTime?    @db.Date
+  debit         Decimal      @default(0) @db.Decimal(14, 2)
+  credit        Decimal      @default(0) @db.Decimal(14, 2)
+  description   String
+  reference     String?
+  /// Bağlı faturanın numarası (modül 16 / 49): folyo aktarımı ve etkinlik bedeli alacağına fatura kesilince yazılır, iptalde silinir.
+  invoiceNumber String?
+  sourceType    LedgerSource
+  sourceId      String
   /// Tekrar işleme anahtarı (otel başına tekil): "PAYMENT:<id>", "GOODS_RECEIPT:<id>", "EVENT:<id>:<n>"…
-  sourceKey    String
-  voucherId    String?
-  instrumentId String?
-  reversalOfId String?      @unique
-  createdBy    String
-  createdAt    DateTime     @default(now())
+  sourceKey     String
+  voucherId     String?
+  instrumentId  String?
+  reversalOfId  String?      @unique
+  createdBy     String
+  createdAt     DateTime     @default(now())
 
   hotel      Hotel              @relation(fields: [hotelId], references: [id])
   account    LedgerAccount      @relation(fields: [accountId], references: [id], onDelete: Restrict)
@@ -5571,4 +5585,1000 @@ model InstrumentMovement {
   instrument Instrument @relation(fields: [instrumentId], references: [id], onDelete: Restrict)
 
   @@index([instrumentId, createdAt])
+}
+
+/**
+ * ─────────────── Fatura ve e-belge (modül 16 çekirdeği + 49) ───────────────
+ */
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  CANCEL_PENDING
+  CANCELLED
+}
+
+/// Faturanın kaynağı: kapanmış folyo, gerçekleşmiş / iptal bedelli etkinlik, cariye serbest fatura.
+enum InvoiceSource {
+  FOLIO
+  EVENT
+  MANUAL
+}
+
+/// Kesimde alıcının GİB kaydına göre: kayıtlı mükellef → e-Fatura, değilse e-Arşiv.
+enum InvoiceDocumentType {
+  E_FATURA
+  E_ARSIV
+}
+
+enum InvoiceBuyerType {
+  PERSON
+  COMPANY
+  FOREIGN
+  /// Yurt dışındaki tüzel kişi (tur operatörü): GİB kimliği 2222222222, e-Arşiv.
+  FOREIGN_COMPANY
+}
+
+/// e-belgenin entegratör / GİB yolculuğu.
+enum EDocumentState {
+  QUEUED
+  SENDING
+  SENT
+  DELIVERED
+  REJECTED
+  FAILED
+  CANCELLED
+}
+
+/// Test ortamı mükellefinin davranışı (GİB benzetimi).
+enum TestTaxpayerBehavior {
+  ACCEPT
+  REJECT
+  NO_MAILBOX
+  UNAVAILABLE
+}
+
+/// Fatura (modül 16 çekirdeği + 49). Taslak düzenlenir; kesimde numara (seri + yıl + 9 hane), belge türü
+/// (e-Fatura / e-Arşiv), alıcı ve UBL belgesi donar — kesilmiş fatura değişmez, iptal onay kuyruğundan.
+/// Folyo ve etkinlik başına en fazla bir geçerli (iptal edilmemiş) fatura: kısmi tekil index'ler migration'da.
+/// Alıcının bütün bilgisi `buyer`da (JSON); liste ve arama için ad ve vergi no ayrıca.
+model Invoice {
+  id                String               @id @default(uuid())
+  hotelId           String
+  source            InvoiceSource
+  status            InvoiceStatus        @default(DRAFT)
+  /// ETTN (evrensel tekil tanımlama numarası): taslakta verilir, kesimde değişmez.
+  uuid              String               @unique @default(uuid())
+  number            String?
+  documentType      InvoiceDocumentType?
+  folioId           String?
+  eventId           String?
+  ledgerAccountId   String?
+  guestId           String?
+  currency          String
+  exchangeRate      Decimal?             @db.Decimal(12, 6)
+  issueDate         DateTime?            @db.Date
+  issuedAt          DateTime?
+  issuedBy          String?
+  /// Hizmet dönemi (yasal 7 günlük süre ve faturadaki dönem notu).
+  serviceFrom       DateTime?            @db.Date
+  serviceTo         DateTime?            @db.Date
+  buyerType         InvoiceBuyerType?
+  buyerName         String?
+  buyerTaxNumber    String?
+  buyer             Json                 @default("{}")
+  note              String?
+  grossTotal        Decimal              @default(0) @db.Decimal(14, 2)
+  discountTotal     Decimal              @default(0) @db.Decimal(14, 2)
+  netTotal          Decimal              @default(0) @db.Decimal(14, 2)
+  taxTotal          Decimal              @default(0) @db.Decimal(14, 2)
+  total             Decimal              @default(0) @db.Decimal(14, 2)
+  /// Vergi dökümü (kod × oran: matrah, tutar, muafiyet kodu).
+  taxes             Json                 @default("[]")
+  edocState         EDocumentState?
+  edocProvider      String?
+  edocEnvironment   String?
+  edocAttempts      Int                  @default(0)
+  edocNextAttemptAt DateTime?
+  edocLockedAt      DateTime?
+  edocSentAt        DateTime?
+  edocCompletedAt   DateTime?
+  edocCheckedAt     DateTime?
+  edocChecks        Int                  @default(0)
+  edocProviderRef   String?
+  edocStatusCode    String?
+  edocMessage       String?
+  /// e-Faturada alıcının posta kutusu etiketi (urn:mail:…).
+  receiverAlias     String?
+  cancelReason      String?
+  /// e-Faturada GİB portalındaki iptal / itiraz referansı.
+  cancelReference   String?
+  cancelRequestedAt DateTime?
+  cancelRequestedBy String?
+  cancelApprovalId  String?
+  cancelledAt       DateTime?
+  cancelledBy       String?
+  /// LOCAL (GİB'e ulaşmadan), INTEGRATOR (e-Arşiv iptali), PORTAL (e-Fatura, GİB portalında).
+  cancelMethod      String?
+  createdBy         String
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  hotel         Hotel            @relation(fields: [hotelId], references: [id])
+  folio         Folio?           @relation(fields: [folioId], references: [id], onDelete: Restrict)
+  event         Event?           @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  ledgerAccount LedgerAccount?   @relation(fields: [ledgerAccountId], references: [id], onDelete: Restrict)
+  guest         Guest?           @relation(fields: [guestId], references: [id], onDelete: Restrict)
+  lines         InvoiceLine[]
+  document      InvoiceDocument?
+  logs          InvoiceLog[]
+
+  @@unique([hotelId, number])
+  // Fatura listesi: kesim günü (yeniden eskiye), aynı gün kesim anı.
+  @@index([hotelId, issueDate(sort: Desc), issuedAt(sort: Desc), id])
+  // Taslaklar ve durum süzgeci.
+  @@index([hotelId, status, createdAt])
+  // GİB durumu süzgeci.
+  @@index([hotelId, edocState, issueDate])
+  @@index([hotelId, buyerTaxNumber])
+  @@index([folioId])
+  @@index([eventId])
+  @@index([ledgerAccountId, issueDate])
+  // Misafirin önceki faturasından alıcı bilgisi.
+  @@index([guestId, issuedAt])
+  @@index([buyerName(ops: raw("gin_trgm_ops"))], map: "Invoice_buyerName_trgm_idx", type: Gin)
+}
+
+/// Fatura satırı: folyo faturasında gelir grubu, etkinlikte kalem, serbest faturada girilen satır.
+/// Eksi satır yoktur (ters kayıt grubun içinde, indirim satır iskontosu).
+model InvoiceLine {
+  id             String    @id @default(uuid())
+  hotelId        String
+  invoiceId      String
+  sortOrder      Int
+  description    String
+  quantity       Decimal   @db.Decimal(12, 2)
+  unitCode       String
+  unitPrice      Decimal   @db.Decimal(14, 2)
+  grossAmount    Decimal   @db.Decimal(14, 2)
+  discountAmount Decimal   @default(0) @db.Decimal(14, 2)
+  netAmount      Decimal   @db.Decimal(14, 2)
+  taxAmount      Decimal   @db.Decimal(14, 2)
+  total          Decimal   @db.Decimal(14, 2)
+  taxes          Json      @default("[]")
+  serviceFrom    DateTime? @db.Date
+  serviceTo      DateTime? @db.Date
+  /// Elle girilen satır (serbest fatura, iptal bedeli): vergi kategorisi ve birim tutar (dahil vergiler içinde).
+  taxCategory    String?
+  unitAmount     Decimal?  @db.Decimal(14, 2)
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId, sortOrder])
+}
+
+/// Kesimde donan UBL-TR belgesi (gönderim ve tekrar gönderim bunu kullanır).
+model InvoiceDocument {
+  invoiceId String   @id
+  hotelId   String
+  xml       String
+  sha256    String
+  createdAt DateTime @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+/// Faturanın zaman çizelgesi: kesim, sıraya girme, gönderim, GİB cevabı, yeniden deneme, iptal.
+model InvoiceLog {
+  id        String          @id @default(uuid())
+  hotelId   String
+  invoiceId String
+  kind      String
+  state     EDocumentState?
+  code      String?
+  message   String?
+  actor     String
+  createdAt DateTime        @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId, createdAt])
+}
+
+/// Fatura ayarları: satıcı (otelin işletmesi), seriler, entegratör ve ortam.
+model InvoiceSettings {
+  hotelId         String   @id
+  legalName       String
+  taxNumber       String
+  taxOffice       String
+  mersisNo        String?
+  tradeRegistryNo String?
+  street          String
+  district        String
+  city            String
+  postalCode      String?
+  country         String   @default("Türkiye")
+  phone           String?
+  email           String?
+  website         String?
+  eFaturaPrefix   String
+  eArsivPrefix    String
+  provider        String   @default("TEST")
+  environment     String   @default("TEST")
+  senderAlias     String?
+  /// Faturalama başlangıcı (otelin takvim günü): öncesinde kapanan folyo / etkinlik önceki sistemde faturalanmış
+  /// sayılır, "faturalanacaklar"a girmez.
+  startDate       DateTime @db.Date
+  /// Folyo kapanınca fatura taslağı açılır (folyo aktörü).
+  autoDraft       Boolean  @default(true)
+  footerNote      String?
+  bankInfo        String?
+  updatedBy       String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+}
+
+/// Otelin vergi satırı → GİB vergi kodu (KDV 0015, konaklama vergisi 0059).
+model InvoiceTaxCode {
+  hotelId   String
+  taxId     String   @unique
+  code      String
+  updatedAt DateTime @updatedAt
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+  tax   Tax   @relation(fields: [taxId], references: [id], onDelete: Cascade)
+
+  @@id([hotelId, taxId])
+}
+
+/// Seri × yıl sırası (kesimde satır kilidi altında artar; boşluk bırakmaz).
+model InvoiceSequence {
+  hotelId String
+  prefix  String
+  year    Int
+  last    Int
+
+  @@id([hotelId, prefix, year])
+}
+
+/// Test ortamının "kayıtlı kullanıcı listesi": burada olan vergi no e-Fatura mükellefi sayılır.
+model TestTaxpayer {
+  id        String               @id @default(uuid())
+  hotelId   String
+  taxNumber String
+  title     String
+  alias     String
+  behavior  TestTaxpayerBehavior @default(ACCEPT)
+  createdBy String
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+
+  @@unique([hotelId, taxNumber])
+}
+
+/// Mükellef sorgusunun önbelleği (entegratör başına; süresi `TAXPAYER_CHECK_TTL_MS`).
+model TaxpayerLookup {
+  hotelId    String
+  provider   String
+  taxNumber  String
+  registered Boolean
+  title      String?
+  aliases    String[] @default([])
+  checkedAt  DateTime
+
+  @@id([hotelId, provider, taxNumber])
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Modül 51: Personel ve bordro
+// ═══════════════════════════════════════════════════════════════
+
+enum EmployeeStatus {
+  ACTIVE
+  TERMINATED
+}
+
+/// Ücretin anlaşma türü: brüt ya da net (netten anlaşılan ücret her ay brüte çevrilir).
+enum PayBasis {
+  GROSS
+  NET
+}
+
+/// Tüm sigorta kolları ya da emekli çalışan (sosyal güvenlik destek primi).
+enum InsuranceType {
+  NORMAL
+  RETIRED
+}
+
+enum EmployeePaymentMethod {
+  BANK
+  CASH
+}
+
+enum PayrollRunKind {
+  MONTHLY
+  SUPPLEMENTARY
+}
+
+enum PayrollRunStatus {
+  DRAFT
+  CALCULATED
+  PENDING_APPROVAL
+  APPROVED
+}
+
+enum PayElementKind {
+  EARNING
+  DEDUCTION
+}
+
+enum PayElementExemption {
+  NONE
+  MEAL
+  TRANSPORT
+}
+
+enum PayrollItemSource {
+  MANUAL
+  SERVICE_CHARGE
+  TERMINATION
+}
+
+enum IncentiveMethod {
+  TREASURY_POINTS
+  MIN_WAGE_EMPLOYER_SHARE
+  FIXED_AMOUNT
+}
+
+enum GarnishmentType {
+  ICRA
+  NAFAKA
+}
+
+enum GarnishmentStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum AdvanceStatus {
+  OPEN
+  SETTLED
+  CANCELLED
+}
+
+enum NoticeMode {
+  NONE
+  EMPLOYER_PAYS
+  EMPLOYEE_PAYS
+}
+
+enum ServiceChargeMethod {
+  POINTS
+  EQUAL
+}
+
+enum ServiceChargeStatus {
+  DRAFT
+  DISTRIBUTED
+}
+
+enum PayrollLineKind {
+  EARNING
+  DEDUCTION
+}
+
+model Department {
+  id        String   @id @default(uuid())
+  hotelId   String
+  code      String
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  hotel     Hotel      @relation(fields: [hotelId], references: [id])
+  employees Employee[]
+
+  @@unique([hotelId, code])
+}
+
+/// Personel kartı. Kullanıcı hesabından ayrı; isteyen bir hesaba bağlanır. Aynı kişinin aynı otelde tek aktif kaydı
+/// olur (kısmi tekil indeks migration'da); yeniden işe giriş yeni kayıttır (kıdem yeniden başlar).
+model Employee {
+  id                  String                @id @default(uuid())
+  hotelId             String
+  /// Sicil no (otel içinde tekil): "P-0001".
+  code                String
+  firstName           String
+  lastName            String
+  nationality         String                @default("TR")
+  nationalId          String
+  birthDate           DateTime?             @db.Date
+  phone               String?
+  email               String?
+  address             String?
+  departmentId        String
+  position            String
+  hireDate            DateTime              @db.Date
+  terminationDate     DateTime?             @db.Date
+  status              EmployeeStatus        @default(ACTIVE)
+  payBasis            PayBasis              @default(GROSS)
+  /// Aylık ücret (brüt ya da net, `payBasis`).
+  salary              Decimal               @default(0) @db.Decimal(14, 2)
+  insuranceType       InsuranceType         @default(NORMAL)
+  disabilityDegree    Int?
+  paymentMethod       EmployeePaymentMethod @default(BANK)
+  iban                String?
+  besEnrolled         Boolean               @default(false)
+  /// Boşsa parametre setindeki oran.
+  besRate             Decimal?              @db.Decimal(6, 5)
+  besOptOutOn         DateTime?             @db.Date
+  serviceChargePoints Decimal               @default(0) @db.Decimal(8, 2)
+  userId              String?               @unique
+  notes               String?
+  createdBy           String
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  hotel         Hotel                @relation(fields: [hotelId], references: [id])
+  department    Department           @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  user          User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
+  ledgerAccount LedgerAccount?
+  incentives    EmployeeIncentive[]
+  advances      EmployeeAdvance[]
+  garnishments  Garnishment[]
+  attendances   PayrollAttendance[]
+  items         PayrollItem[]
+  termination   EmployeeTermination?
+  entries       PayrollEntry[]
+  openings      PayrollOpening[]
+
+  @@unique([hotelId, code])
+  @@index([hotelId, status, lastName, firstName])
+  @@index([hotelId, departmentId, status])
+  @@index([hotelId, nationalId])
+  // Ayın bordrosuna girenler: işe giriş ≤ ay sonu ve (çıkış yok ya da ≥ ay başı).
+  @@index([hotelId, hireDate, terminationDate])
+  @@index([firstName(ops: raw("gin_trgm_ops"))], map: "Employee_firstName_trgm_idx", type: Gin)
+  @@index([lastName(ops: raw("gin_trgm_ops"))], map: "Employee_lastName_trgm_idx", type: Gin)
+}
+
+/// Çalışan bazında teşvik (SGK işveren payından düşüm). Teşvikli ayda Hazine indirimi ayrıca uygulanmaz.
+model EmployeeIncentive {
+  id         String          @id @default(uuid())
+  hotelId    String
+  employeeId String
+  code       String
+  label      String
+  method     IncentiveMethod
+  points     Decimal?        @db.Decimal(5, 2)
+  amount     Decimal?        @db.Decimal(14, 2)
+  validFrom  DateTime        @db.Date
+  validTo    DateTime?       @db.Date
+  createdBy  String
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId, validFrom])
+  @@index([hotelId, validFrom])
+}
+
+/// Maaş avansı: ödendiği gün (kasadan / bankadan) personel carisine borç; bordrolarda taksitle mahsup edilir.
+model EmployeeAdvance {
+  id                String        @id @default(uuid())
+  hotelId           String
+  employeeId        String
+  amount            Decimal       @db.Decimal(14, 2)
+  installments      Int
+  installmentAmount Decimal       @db.Decimal(14, 2)
+  firstYear         Int
+  firstMonth        Int
+  paidOn            DateTime      @db.Date
+  treasuryAccountId String?
+  /// Onaylı bordrolarda mahsup edilen toplam.
+  deducted          Decimal       @default(0) @db.Decimal(14, 2)
+  status            AdvanceStatus @default(OPEN)
+  note              String?
+  createdBy         String
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  @@index([hotelId, employeeId, status])
+  @@index([hotelId, status])
+}
+
+/// İcra ya da nafaka kesintisi. İcra dosyaları bildirim sırasıyla kesilir (aynı anda yalnız ilki); nafaka önce gelir.
+model Garnishment {
+  id              String            @id @default(uuid())
+  hotelId         String
+  employeeId      String
+  type            GarnishmentType
+  fileNumber      String
+  authority       String
+  creditor        String
+  notifiedOn      DateTime          @db.Date
+  totalAmount     Decimal?          @db.Decimal(14, 2)
+  monthlyAmount   Decimal?          @db.Decimal(14, 2)
+  rate            Decimal?          @db.Decimal(6, 5)
+  /// Onaylı bordrolarda kesilen toplam.
+  deducted        Decimal           @default(0) @db.Decimal(14, 2)
+  status          GarnishmentStatus @default(ACTIVE)
+  /// Kesintinin aktarılacağı cari (icra dairesi / nafaka alacaklısı).
+  ledgerAccountId String?
+  note            String?
+  createdBy       String
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  @@index([hotelId, employeeId, status, notifiedOn])
+}
+
+/// İşyeri ve muhasebe bağları (otel başına bir satır).
+model PayrollSettings {
+  hotelId            String   @id
+  workplaceName      String?
+  sgkWorkplaceNo     String?
+  taxOffice          String?
+  taxNumber          String?
+  /// İşyerinin sektörü: Hazine indirimi puanı (imalat dışı / imalat).
+  sector             String   @default("GENERAL")
+  /// 5510 sayılı Kanun Hazine indirimi uygulanır mı (teşviksiz çalışanlara).
+  treasuryDiscount   Boolean  @default(true)
+  sgkLedgerAccountId String?
+  taxLedgerAccountId String?
+  besLedgerAccountId String?
+  updatedBy          String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+}
+
+/// Yürürlük tarihli yasal parametre seti. Ay, ayın son günü yürürlükte olan setle hesaplanır.
+model PayrollParameterSet {
+  id         String    @id @default(uuid())
+  hotelId    String
+  validFrom  DateTime  @db.Date
+  label      String
+  values     Json
+  sources    Json      @default("[]")
+  /// FlexAI kataloğundan geldiyse anahtarı ("2026-01").
+  catalogKey String?
+  /// Bir yetkili resmî metinle teyit etti mi; teyitsiz setle hesaplanan bordro onaya gidemez.
+  verifiedBy String?
+  verifiedAt DateTime?
+  createdBy  String
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+
+  @@unique([hotelId, validFrom])
+}
+
+/// Ödeme / kesinti kalemi. Sistem kalemleri kanunun davranışıyla gelir ve değişmez; otel kendi kalemini ekler.
+model PayElement {
+  id        String              @id @default(uuid())
+  hotelId   String
+  code      String
+  name      String
+  kind      PayElementKind
+  system    Boolean             @default(false)
+  sgk       Boolean
+  gv        Boolean
+  dv        Boolean
+  exemption PayElementExemption @default(NONE)
+  isActive  Boolean             @default(true)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  hotel Hotel         @relation(fields: [hotelId], references: [id])
+  items PayrollItem[]
+
+  @@unique([hotelId, code])
+}
+
+/// Aylık puantaj: eksik gün (SGK nedeni), fazla çalışma, bayram ve hafta tatili çalışması. Modül 52 gelince
+/// puantajdan dolar (source TIMESHEET).
+model PayrollAttendance {
+  id             String   @id @default(uuid())
+  hotelId        String
+  employeeId     String
+  year           Int
+  month          Int
+  missingDays    Int      @default(0)
+  missingReason  String?
+  /// Fiilen çalışılan gün (yemek / yol istisnası); boşsa ücretli gün.
+  workedDays     Int?
+  overtimeHours  Decimal  @default(0) @db.Decimal(6, 2)
+  holidayDays    Decimal  @default(0) @db.Decimal(4, 1)
+  weeklyRestDays Decimal  @default(0) @db.Decimal(4, 1)
+  source         String   @default("MANUAL")
+  note           String?
+  updatedBy      String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, year, month])
+  @@index([hotelId, year, month])
+}
+
+/// Bir aya girilen ek ödeme / kesinti. `runId` boşsa ayın aylık bordrosuna, doluysa o fark bordrosuna aittir.
+model PayrollItem {
+  id         String            @id @default(uuid())
+  hotelId    String
+  employeeId String
+  year       Int
+  month      Int
+  elementId  String
+  amount     Decimal           @db.Decimal(14, 2)
+  isNet      Boolean           @default(false)
+  source     PayrollItemSource @default(MANUAL)
+  sourceId   String?
+  runId      String?
+  note       String?
+  createdBy  String
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  employee Employee   @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  element  PayElement @relation(fields: [elementId], references: [id], onDelete: Restrict)
+
+  @@index([hotelId, year, month, employeeId])
+  @@index([hotelId, source, sourceId])
+  @@index([runId])
+}
+
+/// İşten çıkış ve hesaplanan hakları (kıdem, ihbar, kullanılmayan izin). Tutarlar çıkış ayının kalemlerine yazılır.
+model EmployeeTermination {
+  id                String     @id @default(uuid())
+  hotelId           String
+  employeeId        String     @unique
+  terminationDate   DateTime   @db.Date
+  reasonCode        String
+  severanceEligible Boolean
+  noticeMode        NoticeMode
+  noticeWeeks       Int
+  unusedLeaveDays   Decimal    @default(0) @db.Decimal(5, 1)
+  severanceBase     Decimal    @db.Decimal(14, 2)
+  severanceCeiling  Decimal    @db.Decimal(14, 2)
+  serviceYears      Int
+  serviceMonths     Int
+  serviceDays       Int
+  severanceAmount   Decimal    @default(0) @db.Decimal(14, 2)
+  noticeAmount      Decimal    @default(0) @db.Decimal(14, 2)
+  leaveAmount       Decimal    @default(0) @db.Decimal(14, 2)
+  overrideReason    String?
+  createdBy         String
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  @@index([hotelId, terminationDate])
+}
+
+/// Bordro (ay × tür). Aylık bordro ayda bir tanedir (sequence 1); fark bordroları sırayla numaralanır.
+model PayrollRun {
+  id                        String           @id @default(uuid())
+  hotelId                   String
+  year                      Int
+  month                     Int
+  kind                      PayrollRunKind
+  sequence                  Int
+  /// "B-2026-01" / "B-2026-01-F1"
+  number                    String
+  status                    PayrollRunStatus @default(DRAFT)
+  parameterSetId            String?
+  /// Girdisi (puantaj, kalem, kart) hesaplamadan sonra değişti: yeniden hesaplanmadan onaya gidemez.
+  stale                     Boolean          @default(false)
+  employeeCount             Int              @default(0)
+  grossTotal                Decimal          @default(0) @db.Decimal(16, 2)
+  netTotal                  Decimal          @default(0) @db.Decimal(16, 2)
+  deductionTotal            Decimal          @default(0) @db.Decimal(16, 2)
+  payableTotal              Decimal          @default(0) @db.Decimal(16, 2)
+  employeeSgkTotal          Decimal          @default(0) @db.Decimal(16, 2)
+  employeeUnemploymentTotal Decimal          @default(0) @db.Decimal(16, 2)
+  employerSgkTotal          Decimal          @default(0) @db.Decimal(16, 2)
+  employerUnemploymentTotal Decimal          @default(0) @db.Decimal(16, 2)
+  discountTotal             Decimal          @default(0) @db.Decimal(16, 2)
+  gvTotal                   Decimal          @default(0) @db.Decimal(16, 2)
+  dvTotal                   Decimal          @default(0) @db.Decimal(16, 2)
+  costTotal                 Decimal          @default(0) @db.Decimal(16, 2)
+  paidTotal                 Decimal          @default(0) @db.Decimal(16, 2)
+  calculatedAt              DateTime?
+  calculatedBy              String?
+  submittedAt               DateTime?
+  submittedBy               String?
+  approvalId                String?          @unique
+  approvedAt                DateTime?
+  approvedBy                String?
+  note                      String?
+  createdBy                 String
+  createdAt                 DateTime         @default(now())
+  updatedAt                 DateTime         @updatedAt
+
+  hotel    Hotel            @relation(fields: [hotelId], references: [id])
+  entries  PayrollEntry[]
+  payments PayrollPayment[]
+
+  @@unique([hotelId, year, month, kind, sequence])
+  @@unique([hotelId, number])
+  @@index([hotelId, year, month])
+  @@index([hotelId, status])
+}
+
+/// Bir çalışanın bir bordrodaki sonucu (fark bordrosunda tutarlar fark, eksi olabilir) ve hesap izi.
+model PayrollEntry {
+  id                   String                @id @default(uuid())
+  hotelId              String
+  runId                String
+  employeeId           String
+  departmentId         String
+  employeeName         String
+  payBasis             PayBasis
+  insuranceType        InsuranceType
+  sgkDays              Int
+  workedDays           Int
+  missingDays          Int                   @default(0)
+  missingReason        String?
+  gross                Decimal               @db.Decimal(14, 2)
+  sgkSubject           Decimal               @db.Decimal(14, 2)
+  pek                  Decimal               @db.Decimal(14, 2)
+  employeeSgk          Decimal               @db.Decimal(14, 2)
+  employeeUnemployment Decimal               @db.Decimal(14, 2)
+  gvBase               Decimal               @db.Decimal(14, 2)
+  gvBefore             Decimal               @db.Decimal(16, 2)
+  gvComputed           Decimal               @db.Decimal(14, 2)
+  minWageGvExemption   Decimal               @db.Decimal(14, 2)
+  gvPayable            Decimal               @db.Decimal(14, 2)
+  dvComputed           Decimal               @db.Decimal(14, 2)
+  minWageDvExemption   Decimal               @db.Decimal(14, 2)
+  dvPayable            Decimal               @db.Decimal(14, 2)
+  minWageBase          Decimal               @db.Decimal(14, 2)
+  minWageBefore        Decimal               @db.Decimal(16, 2)
+  net                  Decimal               @db.Decimal(14, 2)
+  deductionTotal       Decimal               @db.Decimal(14, 2)
+  payable              Decimal               @db.Decimal(14, 2)
+  employerSgk          Decimal               @db.Decimal(14, 2)
+  employerUnemployment Decimal               @db.Decimal(14, 2)
+  treasuryDiscount     Decimal               @db.Decimal(14, 2)
+  incentiveDiscount    Decimal               @db.Decimal(14, 2)
+  employerCost         Decimal               @db.Decimal(14, 2)
+  incentiveCode        String?
+  paymentMethod        EmployeePaymentMethod
+  iban                 String?
+  paymentId            String?
+  paidAt               DateTime?
+  trace                Json                  @default("{}")
+  createdAt            DateTime              @default(now())
+
+  run      PayrollRun    @relation(fields: [runId], references: [id], onDelete: Cascade)
+  employee Employee      @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  lines    PayrollLine[]
+
+  @@unique([runId, employeeId])
+  @@index([hotelId, employeeId])
+  @@index([runId, departmentId])
+  @@index([runId, paymentId])
+}
+
+model PayrollLine {
+  id        String          @id @default(uuid())
+  hotelId   String
+  entryId   String
+  kind      PayrollLineKind
+  code      String
+  label     String
+  amount    Decimal         @db.Decimal(14, 2)
+  quantity  String?
+  isNet     Boolean         @default(false)
+  /// Kesintinin kaynağı (avans / icra kaydı) ya da kalem kaydı.
+  refId     String?
+  sortOrder Int
+
+  entry PayrollEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  @@index([entryId, sortOrder])
+  @@index([hotelId, refId])
+}
+
+/// Maaş ödemesi (bir bordronun seçili satırları, tek hesaptan tek günde).
+model PayrollPayment {
+  id                String                @id @default(uuid())
+  hotelId           String
+  runId             String
+  date              DateTime              @db.Date
+  method            EmployeePaymentMethod
+  treasuryAccountId String
+  amount            Decimal               @db.Decimal(16, 2)
+  count             Int
+  createdBy         String
+  createdAt         DateTime              @default(now())
+
+  run PayrollRun @relation(fields: [runId], references: [id], onDelete: Restrict)
+
+  @@index([runId])
+}
+
+/// Servis payı havuzu (ay başına bir): puan ya da eşit payla dağıtılıp ayın kalemlerine yazılır.
+model ServiceChargePool {
+  id            String              @id @default(uuid())
+  hotelId       String
+  year          Int
+  month         Int
+  amount        Decimal             @db.Decimal(14, 2)
+  method        ServiceChargeMethod
+  daysWeighted  Boolean             @default(true)
+  departmentIds String[]            @default([])
+  status        ServiceChargeStatus @default(DRAFT)
+  distributedAt DateTime?
+  note          String?
+  createdBy     String
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@unique([hotelId, year, month])
+}
+
+/// Yıl içinde bu işverende birikmiş matrahlar (sisteme yıl ortasında geçişte devir).
+model PayrollOpening {
+  id                String   @id @default(uuid())
+  hotelId           String
+  employeeId        String
+  year              Int
+  gvCumulative      Decimal  @db.Decimal(16, 2)
+  minWageCumulative Decimal  @db.Decimal(16, 2)
+  note              String?
+  createdBy         String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, year])
+  @@index([hotelId, year])
+}
+
+model PayrollSequence {
+  hotelId String
+  kind    String
+  last    Int    @default(0)
+
+  @@id([hotelId, kind])
+}
+
+/**
+ * ══════════════════ Temassız uygulamalar (modül 53) ══════════════════
+ */
+
+/// Misafir portalı ayarı (otel başına bir satır; yoksa varsayılanlar).
+model GuestPortalSettings {
+  hotelId               String   @id
+  enabled               Boolean  @default(true)
+  /// Girişten kaç gün önce otomatik davet (0: yalnız elle).
+  inviteDaysBefore      Int      @default(3)
+  /// Online check-in girişten kaç gün önce açılır.
+  checkinOpenDays       Int      @default(7)
+  /// Belge fotoğrafları çıkıştan (gelmeyen / iptalde giriş gününden) kaç gün sonra silinir (KVKK).
+  documentRetentionDays Int      @default(7)
+  /// Davet bağlantısının tabanı ("https://hotel.flexai.tr"); boşsa otomatik davet gönderilmez.
+  publicBaseUrl         String?
+  /// Misafire gösterilen metinler: { tr: { welcome, houseRules, privacyNotice }, en: …, de: …, ru: … }.
+  texts                 Json     @default("{}")
+  updatedBy             String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+}
+
+/// Misafir portalı bağlantısı: rezervasyona bağlı, imzalı (`/misafir/p/<kimlik>.<imza>`). Rezervasyonda tek geçerli
+/// bağlantı (kısmi tekil index); yenilemek eskisini öldürür.
+model GuestPortalLink {
+  id            String    @id @default(uuid())
+  hotelId       String
+  reservationId String
+  /// İmzaya giren rastgele değer: veritabanı sızsa da bağlantı imza anahtarı olmadan üretilemez.
+  nonce         String
+  createdBy     String
+  createdAt     DateTime  @default(now())
+  revokedAt     DateTime?
+  revokedBy     String?
+  lastUsedAt    DateTime?
+  /// Son davetin gönderildiği an (otomatik ya da elle).
+  invitedAt     DateTime?
+
+  hotel       Hotel       @relation(fields: [hotelId], references: [id])
+  reservation Reservation @relation(fields: [reservationId], references: [id], onDelete: Restrict)
+
+  @@index([hotelId, reservationId])
+}
+
+enum OnlineCheckinStatus {
+  SUBMITTED
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
+/// Online check-in (rezervasyon başına bir kayıt; misafir düzeltip yeniden gönderir). Kimlik bilgileri girişte
+/// personelin penceresini doldurur; belge fotoğrafları ayrı tabloda ve diskte, saklama süresi sonunda silinir.
+model OnlineCheckin {
+  id                String              @id @default(uuid())
+  hotelId           String
+  reservationId     String              @unique
+  status            OnlineCheckinStatus
+  /// Rezervasyonun giriş günü (liste sırası ve süzgeci; rezervasyon tarihi değişince `reservation.updated` ile eşitlenir).
+  arrivalDate       DateTime            @db.Date
+  /// Personel aramasının metni: onay kodu, rezervasyon sahibinin ve refakatçilerin adları (gönderimde yazılır; trigram indeksli).
+  searchText        String
+  /// Rezervasyon sahibinin kimliği: { firstName, lastName, idType, idNumber, nationality, birthDate }.
+  guest             Json
+  /// Refakatçiler: [{ firstName, lastName, isChild, idType, idNumber, nationality, birthDate }].
+  companions        Json                @default("[]")
+  vehiclePlate      String?
+  /// Tahmini varış saati ("SS:DD").
+  arrivalTime       String?
+  paymentPreference String
+  note              String?
+  language          String
+  /// Onaylar ve anları: { privacyAt, rulesAt, documentPhotosAt, marketing }.
+  consents          Json
+  /// İmza (PNG) disk anahtarı.
+  signatureKey      String
+  submittedAt       DateTime
+  submitCount       Int                 @default(1)
+  reviewedAt        DateTime?
+  reviewedBy        String?
+  rejectReason      String?
+  completedAt       DateTime?
+  documentsPurgedAt DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  hotel       Hotel                   @relation(fields: [hotelId], references: [id])
+  reservation Reservation             @relation(fields: [reservationId], references: [id], onDelete: Restrict)
+  documents   OnlineCheckinDocument[]
+
+  @@index([hotelId, arrivalDate, submittedAt, id])
+  @@index([hotelId, status, arrivalDate, submittedAt, id])
+  @@index([searchText(ops: raw("gin_trgm_ops"))], map: "OnlineCheckin_searchText_trgm_idx", type: Gin)
+}
+
+/// Belge fotoğrafı (disk: `online-checkin/<otel>/<kimlik>.jpg` + önizleme). Yüklenince gönderime bağlanmamış
+/// (`onlineCheckinId` boş) bekler; bağlanmayan 48 saat sonra, bağlanan saklama süresi sonunda silinir.
+model OnlineCheckinDocument {
+  id              String    @id @default(uuid())
+  hotelId         String
+  reservationId   String
+  onlineCheckinId String?
+  /// 0: rezervasyon sahibi, 1…: refakatçi sırası (gönderimde yazılır).
+  person          Int?
+  contentType     String
+  sizeBytes       Int
+  thumbBytes      Int
+  createdAt       DateTime  @default(now())
+  purgedAt        DateTime?
+
+  hotel         Hotel          @relation(fields: [hotelId], references: [id])
+  reservation   Reservation    @relation(fields: [reservationId], references: [id], onDelete: Restrict)
+  onlineCheckin OnlineCheckin? @relation(fields: [onlineCheckinId], references: [id], onDelete: Restrict)
+
+  @@index([hotelId, reservationId])
+  @@index([onlineCheckinId])
+  @@index([createdAt])
 }

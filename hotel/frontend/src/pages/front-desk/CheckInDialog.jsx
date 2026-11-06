@@ -5,6 +5,7 @@ import { Alert, Badge, Button, Checkbox, Icon, Input, Select, Spinner } from '@h
 import { Modal } from '../../components/Modal.jsx';
 import { api, apiPost } from '../../lib/api.js';
 import { DEPOSIT_OPTIONS, READINESS, frontDeskKeys } from '../../lib/front-desk.js';
+import { guestPortalKeys } from '../../lib/guestPortal.js';
 import { formatDate, formatMoney } from '../../lib/format.js';
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 import { reservationKeys } from '../../lib/reservations.js';
@@ -33,7 +34,18 @@ const emptyCompanion = () => ({ key: globalThis.crypto.randomUUID(), firstName: 
  */
 export function CheckInDialog({ reservationId, onClose, onDone }) {
   const queryClient = useQueryClient();
-  const canAssignRoom = useCan()(PERMISSIONS.ROOMS_OPERATE);
+  const can = useCan();
+  const canAssignRoom = can(PERMISSIONS.ROOMS_OPERATE);
+  // Online check-in (modül 53): misafir gönderdiyse form onun verisiyle dolu açılır; personel belgeyi görüp doğrular.
+  const canSeeOnline = can(PERMISSIONS.GUEST_PORTAL_VIEW);
+  const online = useQuery({
+    queryKey: guestPortalKeys.byReservation(reservationId),
+    queryFn: () => api(`/guest-portal/online-checkins/by-reservation/${reservationId}`),
+    enabled: canSeeOnline,
+    staleTime: 0,
+  });
+  const onlineCheckin = online.data?.onlineCheckin && online.data.onlineCheckin.status !== 'COMPLETED' ? online.data.onlineCheckin : null;
+  const onlineSettled = !canSeeOnline || !online.isPending;
   const preview = useQuery({
     queryKey: frontDeskKeys.checkIn(reservationId),
     queryFn: () => api(`/front-desk/stays/${reservationId}/check-in`),
@@ -57,16 +69,19 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
   // Form önizleme ilk geldiğinde doldurulur; sonraki tazelemeler yazılanı silmez.
   const initialized = useRef(false);
   useEffect(() => {
-    if (!data || initialized.current) return;
+    if (!data || !onlineSettled || initialized.current) return;
     initialized.current = true;
-    setGuest(toIdentityForm(data.guest, data.guest.nationality));
-    // Refakatçide yaş tutulmaz; belgesiz kaydedilebilen yalnızca çocuktur.
+    const fromOnline = onlineCheckin?.checkInValues ?? null;
+    setGuest(toIdentityForm(fromOnline ? { ...data.guest, ...fromOnline.guest } : data.guest, data.guest.nationality));
+    // Refakatçide yaş tutulmaz; belgesiz kaydedilebilen yalnızca çocuktur (online check-in'de misafir işaretler).
     setCompanions(
-      data.companions.map((companion) => ({ ...emptyCompanion(), ...companion, isChild: !companion.idNumber, identity: toIdentityForm(companion) })),
+      fromOnline
+        ? fromOnline.companions.map((companion) => ({ ...emptyCompanion(), firstName: companion.firstName, lastName: companion.lastName, isChild: companion.isChild, identity: toIdentityForm(companion) }))
+        : data.companions.map((companion) => ({ ...emptyCompanion(), ...companion, isChild: !companion.idNumber, identity: toIdentityForm(companion) })),
     );
-    setPlate(data.reservation.vehiclePlate ?? '');
+    setPlate(fromOnline?.vehiclePlate ?? data.reservation.vehiclePlate ?? '');
     setChoosingRoom(!data.room && canAssignRoom);
-  }, [data]);
+  }, [data, onlineSettled]);
 
   const mutation = useMutation({
     mutationFn: (body) => apiPost(`/front-desk/stays/${reservationId}/check-in`, body),
@@ -89,7 +104,7 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
   });
   const busy = mutation.isPending;
 
-  if (preview.isPending) {
+  if (preview.isPending || !onlineSettled) {
     return (
       <Modal open size="lg" title="Check-in" onClose={onClose}>
         <Spinner label="Konaklama yükleniyor…" className="py-10" />
@@ -198,6 +213,16 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
           </div>
         </div>
 
+        {onlineCheckin && (
+          <Alert tone={onlineCheckin.status === 'APPROVED' ? 'info' : 'warning'} title="Online check-in'den dolduruldu">
+            {onlineCheckin.status === 'APPROVED'
+              ? `Bilgiler ${onlineCheckin.reviewedBy ?? 'resepsiyon'} tarafından onaylandı. Misafirin belgesini görüp girişi tamamlayın.`
+              : onlineCheckin.status === 'REJECTED'
+                ? 'Online check-in\'de misafirden düzeltme istendi: bilgileri misafirin belgesinden doğrulayın.'
+                : 'Online check-in henüz incelenmedi: misafirin belgesini görüp bilgileri doğrulayın.'}
+            {onlineCheckin.arrivalTime ? ` Tahmini varış ${onlineCheckin.arrivalTime}.` : ''}
+          </Alert>
+        )}
         {serverError && (
           <Alert tone={serverError.code === 'FEE_CHANGED' || serverError.code === 'ROOM_NOT_READY' ? 'warning' : 'danger'} title="Giriş yapılmadı">
             {serverError.message}
