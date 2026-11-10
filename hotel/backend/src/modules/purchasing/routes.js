@@ -51,13 +51,13 @@ import * as suppliers from './suppliers.js';
  * @param {import('fastify').FastifyInstance} app
  */
 export async function purchasingRoutes(app) {
-  const guard = (permission) => ({ preHandler: [withHotelContext, requirePermission(permission)] });
+  const guard = (permission) => ({ preValidation: [withHotelContext, requirePermission(permission)] });
   const view = guard(PERMISSIONS.PURCHASING_VIEW);
   const request = guard(PERMISSIONS.PURCHASING_REQUEST);
   const manage = guard(PERMISSIONS.PURCHASING_MANAGE);
   const receive = guard(PERMISSIONS.PURCHASING_RECEIVE);
   // Talep açan da önerileri ve tedarikçi listesini görür (talep formu); teklif ekranı yönetimde.
-  const requestOrManage = { preHandler: [withHotelContext, requireAnyPermission(PERMISSIONS.PURCHASING_REQUEST, PERMISSIONS.PURCHASING_MANAGE)] };
+  const requestOrManage = { preValidation: [withHotelContext, requireAnyPermission(PERMISSIONS.PURCHASING_REQUEST, PERMISSIONS.PURCHASING_MANAGE)] };
   const ok = (data) => ({ success: true, data });
 
   /* ── Talep ── */

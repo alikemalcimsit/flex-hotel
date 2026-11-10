@@ -36,9 +36,9 @@ const DISCOUNT_DENIED = 'İndirim uygulama yetkiniz yok; yöneticiye ya da muhas
  * @param {import('fastify').FastifyInstance} app
  */
 export async function folioRoutes(app) {
-  const view = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.FOLIO_VIEW)] };
-  const post = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.FOLIO_POST)] };
-  const adjust = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.FOLIO_ADJUST)] };
+  const view = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.FOLIO_VIEW)] };
+  const post = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.FOLIO_POST)] };
+  const adjust = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.FOLIO_ADJUST)] };
 
   /* ── Liste ve gece çalışması ── */
 

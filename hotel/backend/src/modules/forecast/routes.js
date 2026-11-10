@@ -12,8 +12,8 @@ import * as service from './service.js';
  * @param {import('fastify').FastifyInstance} app
  */
 export async function forecastRoutes(app) {
-  const view = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.DASHBOARD_VIEW)] };
-  const manage = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.FORECAST_MANAGE)] };
+  const view = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.DASHBOARD_VIEW)] };
+  const manage = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.FORECAST_MANAGE)] };
 
   app.get('/', { ...view, schema: { querystring: forecastQuerySchema } }, async (request) => ({
     success: true,

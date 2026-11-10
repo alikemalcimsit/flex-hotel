@@ -46,11 +46,11 @@ import * as vouchers from './vouchers.js';
  * @param {import('fastify').FastifyInstance} app
  */
 export async function accountingRoutes(app) {
-  const guard = (permission) => ({ preHandler: [withHotelContext, requirePermission(permission)] });
+  const guard = (permission) => ({ preValidation: [withHotelContext, requirePermission(permission)] });
   const view = guard(PERMISSIONS.ACCOUNTING_VIEW);
   const manage = guard(PERMISSIONS.ACCOUNTING_MANAGE);
   const setup = guard(PERMISSIONS.ACCOUNTING_SETUP);
-  const picker = { preHandler: [withHotelContext, requireAnyPermission(PERMISSIONS.ACCOUNTING_VIEW, PERMISSIONS.PAYMENT_RECEIVE, PERMISSIONS.PAYMENT_REFUND)] };
+  const picker = { preValidation: [withHotelContext, requireAnyPermission(PERMISSIONS.ACCOUNTING_VIEW, PERMISSIONS.PAYMENT_RECEIVE, PERMISSIONS.PAYMENT_REFUND)] };
   const ok = (data) => ({ success: true, data });
 
   /* ── Cari ── */

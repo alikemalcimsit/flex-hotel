@@ -150,6 +150,27 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 - [x] Ekran: Rol → izin matrisi (satır rol, sütun izin, checkbox)
 - [x] Frontend: sidebar menüleri ve butonlar izne göre gizlenir
 
+> **📌 Ali'ye not (guard sırası, 10 Kasım 2026 — Ahmet):** kimlik/izin guard'ları artık route'un
+> **`preValidation`**'ında, `preHandler`'ında değil. Sebep: Fastify şema doğrulamasını `preHandler`'dan
+> önce yapıyor; token'sız ve bozuk gövdeli istek 401 yerine 400 + alan listesi alıyordu (canlıda
+> `POST /lost-items {}` → 400, `GET /reports/revenue` → 400) — korumalı ucun şeması herkese görünüyordu.
+> Şimdi anonim → 401, izinsiz rol → 403, ikisi de doğrulamadan önce; izni olan kişi bozuk girdide yine 400 alır.
+>
+> - **Değişen:** tüm modüllerin `routes.js`'inde `{ preHandler: [withHotelContext, requirePermission(...)] }`
+>   → `{ preValidation: [...] }` (seninkiler dahil; yalnız anahtar adı, guard'lar ve izinler aynı).
+>   `/auth/me` ve `/auth/logout`'taki `requireAuth` da öyle. İç fonksiyon adları `permissionGuard` /
+>   `anyPermissionGuard` oldu (katalog aracı `docs/katalog/araclar/olgular.mjs` buna göre okuyor).
+> - **Yeni kural:** guard'ı `preHandler`'a yazarsan uygulama **açılmaz** — `app.js`'teki `onRoute`
+>   denetimi (`assertGuardsBeforeValidation`, `lib/permissions.js`) route adıyla "preValidation'a taşıyın"
+>   hatası verir. flex-ali'de bu değişiklikten önce başlanmış bir modülde eski kalıp varsa
+>   `preHandler:` → `preValidation:` yeter. Yeni guard yazarsan `markAuthGuard(...)` ile işaretle.
+> - **Değişmeyen:** gövdeye bağlı ek izin (`assertRequestPermission`) handler içinde, doğrulanmış gövdeyle
+>   çalışıyor; guard olmayan `preHandler`'lar orada kalabilir. `request.requiredPermission` aynı şekilde set ediliyor.
+>   Bozuk JSON (ayrıştırma hatası) hâlâ 400 — ayrıştırma `preValidation`'dan önce, şema bilgisi sızdırmaz.
+> - **Testler:** `app.test.js` (anonim bozuk gövde/sorgu/yol → 401, açık uçlar doğrulamayı sürdürür;
+>   doğrulama testleri artık ADMIN token'ıyla), `lib/permissions.test.js`, `rbac.integration.test.js`
+>   (anonim 401 / yetkisiz 403 / yetkili 400).
+
 ### 3. Oda tipi müsaitlik & oda atama — arkadaşın
 **Gün sonu:** "15-18 Ekim'de kaç Standart boş?" sorusuna sistem cevap veriyor; rezervasyona uygun oda otomatik veya elle atanıyor.
 - [x] Backend: `checkAvailability(checkIn, checkOut, roomTypeId)` servisi (rezervasyonlar + bloke odalar düşülür)

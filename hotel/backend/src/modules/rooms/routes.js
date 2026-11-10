@@ -38,9 +38,9 @@ const reservationParamSchema = z.object({
  * @param {import('fastify').FastifyInstance} app
  */
 export async function roomsRoutes(app) {
-  const view = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.ROOMS_VIEW)] };
-  const manage = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.ROOMS_MANAGE)] };
-  const operate = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.ROOMS_OPERATE)] };
+  const view = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.ROOMS_VIEW)] };
+  const manage = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.ROOMS_MANAGE)] };
+  const operate = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.ROOMS_OPERATE)] };
 
   /* ── Oda envanteri ── */
 

@@ -28,8 +28,8 @@ const roomContextQuerySchema = z.object({
  * @param {import('fastify').FastifyInstance} app
  */
 export async function guestRequestRoutes(app) {
-  const view = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.REQUESTS_VIEW)] };
-  const manage = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.REQUESTS_MANAGE)] };
+  const view = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.REQUESTS_VIEW)] };
+  const manage = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.REQUESTS_MANAGE)] };
 
   app.get('/', { ...view, schema: { querystring: guestRequestListQuerySchema } }, async (request) => ({
     success: true,

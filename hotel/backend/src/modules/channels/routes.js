@@ -16,8 +16,8 @@ import { handleWhatsAppWebhook, verifyWhatsAppWebhook } from './whatsapp.js';
  * @param {import('fastify').FastifyInstance} app
  */
 export async function messagingChannelRoutes(app) {
-  const view = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.SETTINGS_VIEW)] };
-  const manage = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.SETTINGS_MANAGE)] };
+  const view = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.SETTINGS_VIEW)] };
+  const manage = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.SETTINGS_MANAGE)] };
 
   app.get('/', view, async (request) => ({
     success: true,

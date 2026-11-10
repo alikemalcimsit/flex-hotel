@@ -11,6 +11,8 @@ import { after, before, describe, it } from 'node:test';
 
 /** @type {import('fastify').FastifyInstance} */
 let app;
+/** Doğrulama testleri için oturum: ADMIN izinleri DB'ye gitmeden çözülür. */
+let asAdmin;
 
 before(async () => {
   // db.js import anında PrismaClient kuruyor; bağlanmayacak ama adres şart.
@@ -18,9 +20,18 @@ before(async () => {
 
   const { buildApp } = await import('./app.js');
   // Diğer testler kotayı tüketmesin diye bu örnekte sınır yüksek; hız sınırı
-  // kendi testinde ayrı bir örnekle sınanıyor.
+  // kendi testinde ayrı bir örnekle sınanıyor. Açılış, her route kaydında
+  // guard'ın preHandler'da kalmadığını da denetler (`assertGuardsBeforeValidation`).
   app = await buildApp({ logger: false, rateLimitMax: 10_000 });
   await app.ready();
+
+  const token = app.jwt.sign({
+    userId: '00000000-0000-4000-8000-0000000000aa',
+    email: 'admin@test.local',
+    hotelId: '00000000-0000-4000-8000-0000000000bb',
+    role: 'ADMIN',
+  });
+  asAdmin = { authorization: `Bearer ${token}` };
 });
 
 after(async () => {
@@ -108,9 +119,9 @@ describe('CORS', () => {
   });
 });
 
-describe('girdi doğrulama', () => {
+describe('girdi doğrulama (oturumlu istek — anonim istek doğrulamaya varmaz)', () => {
   it('eksik gövdeyi alan bazlı Türkçe mesajlarla reddeder', async () => {
-    const response = await app.inject({ method: 'POST', url: '/settings/room-types', payload: {} });
+    const response = await app.inject({ method: 'POST', url: '/settings/room-types', headers: asAdmin, payload: {} });
     const body = response.json();
 
     assert.equal(response.statusCode, 400);
@@ -124,6 +135,7 @@ describe('girdi doğrulama', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/settings/seasons',
+      headers: asAdmin,
       payload: { name: '', multiplier: 'çok' },
     });
     const body = response.json();
@@ -135,15 +147,64 @@ describe('girdi doğrulama', () => {
   });
 
   it('sayfa boyutu üst sınırını reddeder', async () => {
-    const response = await app.inject({ method: 'GET', url: '/settings/room-types?pageSize=999' });
+    const response = await app.inject({ method: 'GET', url: '/settings/room-types?pageSize=999', headers: asAdmin });
     assert.equal(response.statusCode, 400);
     assert.match(response.json().fields.pageSize, /en fazla 200/);
   });
 
   it('geçersiz uuid parametresini reddeder', async () => {
-    const response = await app.inject({ method: 'DELETE', url: '/settings/taxes/uuid-degil' });
+    const response = await app.inject({ method: 'DELETE', url: '/settings/taxes/uuid-degil', headers: asAdmin });
     assert.equal(response.statusCode, 400);
     assert.equal(response.json().fields.id, 'Geçersiz kayıt kimliği');
+  });
+});
+
+describe('kimlik denetimi şema doğrulamasından önce', () => {
+  /**
+   * Korumalı uca anonim istek, girdi ne kadar bozuk olursa olsun 401 alır:
+   * 400 + alan listesi dönseydi korumalı ucun şeması herkese görünürdü
+   * (canlıda 2026-11-10'da POST /lost-items {} → 400 böyle yakalandı).
+   * @param {import('light-my-request').Response} response
+   */
+  const assertUnauthorized = (response) => {
+    assert.equal(response.statusCode, 401);
+    const body = response.json();
+    assert.equal(body.code, 'UNAUTHORIZED');
+    assert.equal(body.fields, undefined, 'anonim isteğe doğrulama alanları sızmamalı');
+  };
+
+  it('bozuk gövdeli anonim POST 401 döner, 400 değil', async () => {
+    assertUnauthorized(await app.inject({ method: 'POST', url: '/lost-items', payload: {} }));
+    assertUnauthorized(await app.inject({ method: 'POST', url: '/settings/room-types', payload: {} }));
+  });
+
+  it('zorunlu sorgu parametresi eksik anonim GET 401 döner', async () => {
+    assertUnauthorized(await app.inject({ method: 'GET', url: '/reports/revenue' }));
+    assertUnauthorized(await app.inject({ method: 'GET', url: '/settings/room-types?pageSize=999' }));
+  });
+
+  it('bozuk yol parametreli anonim istek 401 döner', async () => {
+    assertUnauthorized(await app.inject({ method: 'DELETE', url: '/settings/taxes/uuid-degil' }));
+  });
+
+  it('geçersiz token anonim sayılır: bozuk gövdeyle de 401', async () => {
+    assertUnauthorized(
+      await app.inject({ method: 'POST', url: '/lost-items', headers: { authorization: 'Bearer sahte.token.degeri' }, payload: {} }),
+    );
+  });
+
+  it('yalnız oturum isteyen uç (requireAuth) da doğrulamadan önce 401 verir', async () => {
+    assertUnauthorized(await app.inject({ method: 'POST', url: '/auth/logout', payload: {} }));
+  });
+
+  it('herkese açık uçlar anonim istekte doğrulamayı sürdürür', async () => {
+    const login = await app.inject({ method: 'POST', url: '/auth/login', payload: {} });
+    assert.equal(login.statusCode, 400);
+    assert.equal(login.json().code, 'VALIDATION');
+
+    const survey = await app.inject({ method: 'GET', url: '/public/survey/gecersiz-baglanti' });
+    assert.equal(survey.statusCode, 400);
+    assert.equal(survey.json().code, 'VALIDATION');
   });
 });
 
@@ -174,8 +235,8 @@ describe('hız sınırı', () => {
     await limitedApp.ready();
 
     try {
-      // Doğrulamada takılan bir uç seçildi: hız sınırı `onRequest`'te çalıştığı
-      // için sayılır, ama istek veritabanına inmediğinden test hızlı biter.
+      // Kimlik denetiminde (401) takılan bir uç seçildi: hız sınırı `onRequest`'te
+      // çalıştığı için sayılır, ama istek veritabanına inmediğinden test hızlı biter.
       const responses = [];
       for (let i = 0; i < 5; i += 1) {
         responses.push(await limitedApp.inject({ method: 'GET', url: '/settings/room-types?pageSize=999' }));

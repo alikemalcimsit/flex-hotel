@@ -70,13 +70,13 @@ import * as shifts from './shifts.js';
  * @param {import('fastify').FastifyInstance} app
  */
 export async function posRoutes(app) {
-  const guard = (permission) => ({ preHandler: [withHotelContext, requirePermission(permission)] });
+  const guard = (permission) => ({ preValidation: [withHotelContext, requirePermission(permission)] });
   const operate = guard(PERMISSIONS.POS_OPERATE);
   const supervise = guard(PERMISSIONS.POS_SUPERVISE);
   const configure = guard(PERMISSIONS.POS_SETUP);
   const report = guard(PERMISSIONS.POS_REPORT);
   /** Okuma: garson ya da raporcu (muhasebe kapanmış adisyonu ve vardiya raporunu görür). */
-  const read = { preHandler: [withHotelContext, requireAnyPermission(PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT)] };
+  const read = { preValidation: [withHotelContext, requireAnyPermission(PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT)] };
   const ok = (data) => ({ success: true, data });
   /** @param {any} request */
   const has = (request, permission) => Boolean(request.auth?.permissions?.includes(permission));
@@ -214,7 +214,7 @@ export async function posRoutes(app) {
   /* ── Tanımlar ── */
 
   /** Satış noktası listesi süzgeçlerde de kullanılır (garson, raporcu, tanımcı). */
-  app.get('/outlets', { preHandler: [withHotelContext, requireAnyPermission(PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT, PERMISSIONS.POS_SETUP)] }, async (request) =>
+  app.get('/outlets', { preValidation: [withHotelContext, requireAnyPermission(PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT, PERMISSIONS.POS_SETUP)] }, async (request) =>
     ok(await setup.listOutlets(request.hotelId)),
   );
 

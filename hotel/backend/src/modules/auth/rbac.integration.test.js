@@ -100,6 +100,25 @@ describe('RBAC (entegrasyon)', { skip }, () => {
     assert.ok(Array.isArray(allowed.json().data.items));
   });
 
+  it('kimlik ve izin şema doğrulamasından önce: bozuk gövdeyle anonim 401, yetkisiz 403, yetkili 400', async () => {
+    // Doğrulamaya varan istek 400 + `fields` alırdı; korumalı ucun şeması
+    // anonim/yetkisiz kişiye görünmemeli.
+    const anonymous = await app.inject({ method: 'POST', url: '/users', payload: {} });
+    assert.equal(anonymous.statusCode, 401);
+    assert.equal(anonymous.json().code, 'UNAUTHORIZED');
+    assert.equal(anonymous.json().fields, undefined);
+
+    const forbidden = await app.inject({ method: 'POST', url: '/users', headers: bearer(await asToken('resepsiyon@test.local')), payload: {} });
+    assert.equal(forbidden.statusCode, 403);
+    assert.equal(forbidden.json().code, 'FORBIDDEN');
+    assert.equal(forbidden.json().fields, undefined);
+
+    const invalid = await app.inject({ method: 'POST', url: '/users', headers: bearer(await asToken('admin@test.local')), payload: {} });
+    assert.equal(invalid.statusCode, 400);
+    assert.equal(invalid.json().code, 'VALIDATION');
+    assert.ok(invalid.json().fields.email, 'izni olan kişi alan bazlı hatayı görür');
+  });
+
   it('kullanıcı eklenir, pasife alınınca giriş yapamaz', async () => {
     const token = await asToken('admin@test.local');
     const created = await app.inject({

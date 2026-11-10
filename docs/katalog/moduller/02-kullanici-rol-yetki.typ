@@ -19,9 +19,9 @@
 
 #let teknik(veri) = teknik-bolum(
   veri,
-  mimari: [İzin kataloğu tek yerde: `hotel/contracts/permissions.js` (değer, etiket, grup, rol varsayılanları). Sunucuda `lib/permissions.js` → `requirePermission(izin)` / `requireAnyPermission(...izinler)` Fastify preHandler'ları; gövdeye bağlı ek yetki `assertRequestPermission`. Aktif otel ve personel kimliği JWT'den çözülür (`lib/tenant.js`). Ön yüzde `lib/permissions.js` → `useCan()` menü ve düğmeleri gizler. Yeni bir modülün izni kataloğa (değer, etiket, grup, rol varsayılanı) eklenir; matrisi kaydetmiş otellerde `Hotel.permissionCatalog` sayesinde varsayılana düşer.],
+  mimari: [İzin kataloğu tek yerde: `hotel/contracts/permissions.js` (değer, etiket, grup, rol varsayılanları). Sunucuda `lib/permissions.js` → `requirePermission(izin)` / `requireAnyPermission(...izinler)` Fastify preValidation guard'ları (şema doğrulamasından önce); gövdeye bağlı ek yetki `assertRequestPermission`. Aktif otel ve personel kimliği JWT'den çözülür (`lib/tenant.js`). Ön yüzde `lib/permissions.js` → `useCan()` menü ve düğmeleri gizler. Yeni bir modülün izni kataloğa (değer, etiket, grup, rol varsayılanı) eklenir; matrisi kaydetmiş otellerde `Hotel.permissionCatalog` sayesinde varsayılana düşer.],
   kural: (
-    ("İzin denetimi sunucuda", "Ekrandaki gizleme kolaylıktır; güvenlik sınırı rotanın preHandler'ıdır. İzin yoksa 403, kimlik yoksa 401."),
+    ("İzin denetimi sunucuda", "Ekrandaki gizleme kolaylıktır; güvenlik sınırı rotanın preValidation guard'ıdır. İzin yoksa 403, kimlik yoksa 401 — gövde doğrulanmadan önce, bozuk istekte de."),
     ("Rol matrisi + katalog", "Otel matrisi kaydettiğinde o anki izin kataloğu da saklanır; sonradan eklenen izin rol varsayılanından gelir."),
     ("Pasif kullanıcı", "Pasif kullanıcı giriş yapamaz, yenileme anahtarı reddedilir."),
   ),
