@@ -1,5 +1,6 @@
 import { actorRegistry } from '@hotelos/actor-kit';
 import { budgetAgentManifest, createBudgetAgent } from '@hotelos/budget-agent';
+import { createInsightAgent, insightAgentManifest } from '@hotelos/insight-agent';
 import { conciergeAgentManifest, createConciergeAgent } from '@hotelos/concierge-agent';
 import {
   NOTIFICATION_CHANNEL_LABELS,
@@ -22,6 +23,7 @@ import { prismaUnfiltered } from '../db.js';
 import { webchatGatewayService, webchatTransport } from '../modules/channels/webchat.js';
 import { whatsappGatewayService } from '../modules/channels/whatsapp.js';
 import { completeCommentary, explainVariance } from '../modules/budget/variance.js';
+import { analysisInput, completeAnalysis, completeInsight, insightInput } from '../modules/surveys/responses.js';
 import { createLlmDeps } from '../modules/concierge/llm.js';
 import { getAiSettingsCached } from '../modules/concierge/settings.js';
 import { conciergeService, routerService } from '../modules/concierge/service.js';
@@ -178,7 +180,20 @@ const OPTIONAL_ACTORS = Object.freeze([
   { manifest: routerAgentManifest, reason: 'Sunucuda OPENAI_API_KEY tanımlı değil; ajan çalışmıyor' },
   { manifest: conciergeAgentManifest, reason: 'Sunucuda OPENAI_API_KEY tanımlı değil; ajan çalışmıyor' },
   { manifest: budgetAgentManifest, reason: 'Sunucuda OPENAI_API_KEY tanımlı değil; ajan çalışmıyor' },
+  { manifest: insightAgentManifest, reason: 'Sunucuda OPENAI_API_KEY tanımlı değil; ajan çalışmıyor' },
 ]);
+
+/**
+ * Geri bildirim ajanının servisi (modül 55): anket yorumunun etiketi ve dönem özeti. Model otelin ana modeli.
+ */
+const insightAgentService = {
+  model: async (hotelId) => (await getAiSettingsCached(hotelId)).conciergeModel || null,
+  sentiments: ['POSITIVE', 'NEUTRAL', 'NEGATIVE', 'MIXED'],
+  analysisInput,
+  completeAnalysis,
+  insightInput,
+  completeInsight,
+};
 
 /**
  * Bütçe yorum ajanının servisi (modül 27). Model otelin ana modeli
@@ -346,6 +361,7 @@ export function registerAiAgents({ client } = {}) {
   actorRegistry.register(createConciergeAgent(conciergeService, { ...deps, llm, parseArguments: parseToolArguments }));
   registerAutoResponder({ name: 'concierge-agent' });
   actorRegistry.register(createBudgetAgent(budgetAgentService, { ...deps, llm }));
+  actorRegistry.register(createInsightAgent(insightAgentService, { ...deps, llm }));
   // Sonradan (testte) kaydedildiyse de bus'a bağlansın; bağlama tekrar edilebilir.
   actorRegistry.bindAll(eventBus);
   return true;

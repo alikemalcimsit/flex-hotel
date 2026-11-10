@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { ConflictError, NotFoundError } from '../../lib/errors.js';
 import { lockReservations } from '../../lib/locks.js';
 import { writeWithEvents } from '../../lib/write.js';
-import { enqueueTriggerNotifications, ensureTriggerTemplates } from '../notifications/service.js';
+import { enqueueTriggerNotifications, ensureTriggerTemplates, triggerReachability } from '../notifications/service.js';
 import { ensurePortalLinkInTx, getPortalLink, portalPath } from './links.js';
 import { PORTAL_SYSTEM_ACTOR, absoluteUrl, loadPortalSettings, portalContext, prisma } from './shared.js';
 
@@ -69,20 +69,8 @@ async function inviteReservation(hotelId, reservationId, { baseUrl, manual }) {
  * Davetin gidebileceği kanallara göre misafir kartı denetimi (açık kanal + etkin `CHECKIN_INVITE` şablonu). Hiçbiri
  * yoksa boş: otomatik tur başlamaz, davet harcanmaz (kanal açılınca penceredeki bütün varışlara gider).
  * @param {string} hotelId
- * @returns {Promise<((guest: { email: string | null, phone: string | null }) => boolean) | null>}
  */
-async function inviteReachable(hotelId) {
-  const [configs, templates] = await Promise.all([
-    prisma.notificationChannelConfig.findMany({ where: { hotelId, enabled: true }, select: { channel: true } }),
-    prisma.notificationTemplate.findMany({ where: { hotelId, key: 'CHECKIN_INVITE', isActive: true }, select: { channel: true } }),
-  ]);
-  const withTemplate = new Set(templates.map((template) => template.channel));
-  const open = new Set(configs.map((config) => config.channel).filter((channel) => withTemplate.has(channel)));
-  const byEmail = open.has('EMAIL');
-  const byPhone = open.has('SMS') || open.has('WHATSAPP');
-  if (!byEmail && !byPhone) return null;
-  return (guest) => Boolean((byEmail && guest.email?.trim()) || (byPhone && guest.phone?.trim()));
-}
+const inviteReachable = (hotelId) => triggerReachability(hotelId, 'CHECKIN_INVITE');
 
 /**
  * Personelin elle gönderdiği davet.

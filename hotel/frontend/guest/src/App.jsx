@@ -9,6 +9,7 @@ import { FolioPage } from './pages/FolioPage.jsx';
 import { HomePage } from './pages/HomePage.jsx';
 import { RequestsPage } from './pages/RequestsPage.jsx';
 import { RoomServicePage } from './pages/RoomServicePage.jsx';
+import { SurveyPage } from './pages/SurveyPage.jsx';
 import { useLoad } from './useLoad.js';
 
 /**
@@ -35,6 +36,8 @@ export function App() {
             {PORTAL_PAGES.map(({ key, path, Component }) => (path ? <Route key={key} path={path} element={<Component />} /> : <Route key={key} index element={<Component />} />))}
           </Route>
           <Route path="oda-servisi/:token" element={<RoomServicePage />} />
+          {/* Anket (modül 55): çıkış sonrası ve ara anket. */}
+          <Route path="a/:token" element={<SurveyPage />} />
           <Route path="*" element={<FullPageMessage code="NOT_FOUND" />} />
         </Routes>
       </BrowserRouter>

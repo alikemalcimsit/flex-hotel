@@ -33,6 +33,7 @@ const KIND_ICONS = Object.freeze({
   POS: 'utensils',
   INVOICE: 'fileText',
   ONLINE_CHECKIN: 'user',
+  SURVEY_LOW_SCORE: 'star',
 });
 
 const SEVERITY_TONES = Object.freeze({

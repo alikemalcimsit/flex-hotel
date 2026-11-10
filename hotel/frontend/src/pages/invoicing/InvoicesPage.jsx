@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -10,8 +10,11 @@ import {
   INVOICE_SOURCES,
   INVOICE_SOURCE_LABELS,
   INVOICE_STATUS_LABELS,
+  MAX_BULK_INVOICES,
 } from '@hotelos/hotel-contracts';
 import { Badge, Button, Input, Select } from '@hotelos/ui';
+import { BulkResultAlert, useBatchRunner, useRowSelection } from '../../components/BulkSelection.jsx';
+import { ConfirmDialog } from '../../components/ConfirmDialog.jsx';
 import { DataTable } from '../../components/DataTable.jsx';
 import { SummaryTile } from '../../components/SummaryTile.jsx';
 import { Toolbar } from '../../components/Toolbar.jsx';
@@ -24,11 +27,23 @@ import { toastError, toastSuccess } from '../../store/toast.js';
 import { ManualInvoiceDialog } from './ManualInvoiceDialog.jsx';
 
 const PAGE_SIZE = 25;
+/** Taslaklar bir iş kuyruğu: sayfa toplu kesimin sınırı kadar (bir sayfa tek turda kesilir). */
+const DRAFT_PAGE_SIZE = MAX_BULK_INVOICES;
+const itemId = (item) => item.id;
+
+/** Seçilenlerin toplamı, para birimi başına ("12.400,00 ₺ · 300,00 €"). @param {any[]} rows */
+const totalsOf = (rows) => {
+  const sums = new Map();
+  for (const row of rows) sums.set(row.currency, (sums.get(row.currency) ?? 0) + Number(row.total));
+  return [...sums].map(([currency, sum]) => formatMoney(sum.toFixed(2), currency)).join(' · ');
+};
 
 /**
  * Faturalar (modül 16 / 49): kesilenler (varsayılan) ya da taslaklar. Kesilenlerde belge türü, GİB durumu, kaynak,
  * dönem ve arama süzgeci; dikkat isteyen e-belgeler üstte sayılır (gönderilemedi / reddedildi / bekleyen).
- * Gönderilemeyen ya da reddedilen e-belge satırdan yeniden gönderilir.
+ * Gönderilemeyen ya da reddedilen e-belge satırdan yeniden gönderilir. Taslaklarda toplu kesim: alıcısı tamam
+ * taslaklar seçilip birlikte kesilir (her biri tek kesimin kuralıyla, açılış sırasıyla; süre dolunca kalanlar
+ * kendiliğinden yeniden gönderilir).
  *
  * @param {{ drafts?: boolean }} props
  */
@@ -49,7 +64,7 @@ export function InvoicesPage({ drafts = false }) {
   useEffect(() => setPage(1), [search, documentType, edocState, status, source, period.from, period.to, drafts]);
 
   const filters = drafts
-    ? { status: 'DRAFT', search: search || undefined, source: source || undefined, page, pageSize: PAGE_SIZE }
+    ? { status: 'DRAFT', search: search || undefined, source: source || undefined, page, pageSize: DRAFT_PAGE_SIZE }
     : {
         status: status || undefined,
         documentType: documentType || undefined,
@@ -63,6 +78,33 @@ export function InvoicesPage({ drafts = false }) {
       };
   const list = useQuery({ queryKey: invoiceKeys.list(filters), queryFn: () => api(withQuery('/invoices', filters)), placeholderData: keepPreviousData });
   const counts = list.data?.counts;
+  const rows = list.data?.items ?? [];
+
+  // Toplu kesim (taslaklar): yalnız alıcısı kesime yeten taslak seçilir; seçim sayfa / süzgeç değişince temizlenir.
+  const selection = useRowSelection();
+  const { clear } = selection;
+  useEffect(() => clear(), [search, source, page, drafts, clear]);
+  const [confirmIssue, setConfirmIssue] = useState(false);
+  const [issueResult, setIssueResult] = useState(null);
+  const issuable = (row) => row.status === 'DRAFT' && (row.buyerProblems?.length ?? 0) === 0;
+  const selectedRows = rows.filter((row) => selection.selected.has(row.id)).sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+  const sendIssue = useCallback((items) => apiPost('/invoices/batch-issue', { items }), []);
+  const issueRunner = useBatchRunner(sendIssue, itemId);
+  const bulkIssue = useMutation({
+    mutationFn: async (picked) => {
+      const labels = new Map(picked.map((row) => [row.id, `${row.buyerName ?? 'Alıcısız taslak'} · ${formatMoney(row.total, row.currency)}`]));
+      const result = await issueRunner.run(picked.map((row) => ({ id: row.id, expectedUpdatedAt: row.updatedAt })));
+      return { ...result, labels };
+    },
+    onSuccess: (data) => {
+      setIssueResult(data);
+      setConfirmIssue(false);
+      clear();
+    },
+    onError: (error) => toastError(error.message),
+    // Yarıda kesilse de kesilenler kalıcıdır: liste her durumda tazelenir.
+    onSettled: () => queryClient.invalidateQueries({ queryKey: invoiceKeys.all }),
+  });
 
   const resend = useMutation({
     mutationFn: (row) => apiPost(`/invoices/${row.id}/resend`, {}),
@@ -74,6 +116,7 @@ export function InvoicesPage({ drafts = false }) {
   });
 
   const columns = [
+    ...(drafts && canIssue ? [selection.column(rows, issuable, 'Alıcı bilgisi eksik: taslağı açıp tamamlayın')] : []),
     {
       key: 'number',
       header: drafts ? 'Taslak' : 'Fatura',
@@ -95,6 +138,11 @@ export function InvoicesPage({ drafts = false }) {
         <span className="block">
           <span className="block font-semibold text-ink">{row.buyerName ?? '—'}</span>
           {row.buyerTaxNumber && <span className="block text-xs text-ink-muted tabular-nums">{row.buyerTaxNumber}</span>}
+          {row.buyerProblems?.length > 0 && (
+            <span className="mt-1 block" title={row.buyerProblems.join(' · ')}>
+              <Badge tone="warning">Alıcı eksik: {row.buyerProblems[0]}{row.buyerProblems.length > 1 ? ` +${row.buyerProblems.length - 1}` : ''}</Badge>
+            </span>
+          )}
         </span>
       ),
     },
@@ -169,6 +217,32 @@ export function InvoicesPage({ drafts = false }) {
           </>
         )}
       </Toolbar>
+      {drafts && issueResult && (
+        <BulkResultAlert
+          title="Toplu kesim"
+          result={issueResult}
+          labelOf={(id) => issueResult.labels.get(id) ?? id}
+          hint="Kesilemeyenleri açıp kontrol edin: alıcı bilgisi, kaynağın taslaktan sonra değişmesi ya da başkasının aynı anda düzenlemesi."
+          onClose={() => setIssueResult(null)}
+        >
+          {issueResult.succeeded > 0 && <p className="mt-1 text-xs">Kesilenler GİB gönderim sırasına girdi; durumları Kesilenler sekmesinde.</p>}
+        </BulkResultAlert>
+      )}
+      {drafts && canIssue && selection.count > 0 && (
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <span className="text-sm text-ink-muted">
+            {selection.count} taslak seçili · {totalsOf(selectedRows)}
+          </span>
+          <Button type="button" icon="send" disabled={bulkIssue.isPending || selection.count > MAX_BULK_INVOICES} onClick={() => setConfirmIssue(true)}>
+            Seçilenleri kes ({selection.count})
+          </Button>
+        </div>
+      )}
+      {drafts && canIssue && selection.count === 0 && rows.length > 0 && (
+        <p className="text-xs text-ink-muted">
+          Toplu kesim: alıcısı tamam taslakları seçip birlikte kesebilirsiniz ({rows.filter(issuable).length} / {rows.length} seçilebilir). Alıcısı eksik olanı açıp tamamlayın.
+        </p>
+      )}
       <DataTable
         columns={columns}
         rows={list.data?.items}
@@ -182,6 +256,17 @@ export function InvoicesPage({ drafts = false }) {
         emptyHint={drafts ? 'Kapanan folyonun taslağı kendiliğinden açılır; etkinlik ve serbest fatura taslağı Faturalanacaklar ve "Serbest fatura"dan.' : undefined}
       />
       {manual && <ManualInvoiceDialog onClose={() => setManual(false)} />}
+      <ConfirmDialog
+        open={confirmIssue}
+        title={`${selection.count} taslağı kes`}
+        message={`Toplam ${totalsOf(selectedRows)}. Her taslak tek kesimin kuralıyla işlenir: kaynak yeniden okunur, mükellef sorgusuyla e-Fatura / e-Arşiv belirlenir, numara açılış sırasıyla verilir. Kesilen fatura değiştirilemez, yalnız iptal edilebilir. Kesilemeyen (kaynağı değişmiş, başkası düzenlemiş) atlanıp listelenir.`}
+        confirmLabel={issueRunner.progress ? `Kesiliyor ${issueRunner.progress.done} / ${issueRunner.progress.total}…` : 'Faturaları kes'}
+        confirmVariant="primary"
+        confirmIcon="send"
+        isPending={bulkIssue.isPending}
+        onConfirm={() => bulkIssue.mutate(selectedRows)}
+        onClose={() => !bulkIssue.isPending && setConfirmIssue(false)}
+      />
     </div>
   );
 }
