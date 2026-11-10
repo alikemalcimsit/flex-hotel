@@ -31,12 +31,12 @@ import * as settings from './settings.js';
  * @param {import('fastify').FastifyInstance} app
  */
 export async function invoiceRoutes(app) {
-  const guard = (permission) => ({ preHandler: [withHotelContext, requirePermission(permission)] });
+  const guard = (permission) => ({ preValidation: [withHotelContext, requirePermission(permission)] });
   const view = guard(PERMISSIONS.INVOICES_VIEW);
   const issue = guard(PERMISSIONS.INVOICES_ISSUE);
   const manage = guard(PERMISSIONS.INVOICES_MANAGE);
   const setup = guard(PERMISSIONS.INVOICES_SETUP);
-  const draftEditors = { preHandler: [withHotelContext, requireAnyPermission(PERMISSIONS.INVOICES_ISSUE, PERMISSIONS.INVOICES_MANAGE)] };
+  const draftEditors = { preValidation: [withHotelContext, requireAnyPermission(PERMISSIONS.INVOICES_ISSUE, PERMISSIONS.INVOICES_MANAGE)] };
   const ok = (data) => ({ success: true, data });
 
   /* ── Ayarlar ── */

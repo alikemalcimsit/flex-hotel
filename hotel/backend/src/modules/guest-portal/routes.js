@@ -35,7 +35,7 @@ import * as service from './service.js';
  * @param {import('fastify').FastifyInstance} app
  */
 export async function guestPortalRoutes(app) {
-  const guard = (permission) => ({ preHandler: [withHotelContext, requirePermission(permission)] });
+  const guard = (permission) => ({ preValidation: [withHotelContext, requirePermission(permission)] });
   const view = guard(PERMISSIONS.GUEST_PORTAL_VIEW);
   const manage = guard(PERMISSIONS.GUEST_PORTAL_MANAGE);
   const setup = guard(PERMISSIONS.GUEST_PORTAL_SETUP);

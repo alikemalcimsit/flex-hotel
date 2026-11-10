@@ -7,6 +7,7 @@ import { enterContext } from '@hotelos/core';
 import { checkDb, disconnectDb } from './db.js';
 import { asBusyError } from './lib/errors.js';
 import { applyGuestIpCeiling } from './lib/guest-rate-limit.js';
+import { assertGuardsBeforeValidation } from './lib/permissions.js';
 import { cache } from './lib/cache.js';
 import { actorRegistry, registerActors, setActorLogger } from './lib/actors.js';
 import { registerCoreSubscribers, setEventLogger } from './lib/events.js';
@@ -183,6 +184,11 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
 
+  // Kimlik/yetki guard'ı `preHandler`'a yazılmış route kaydedilemez: orada
+  // şema doğrulamasından sonra çalışır, anonim istek 401 yerine 400 + alan
+  // listesi alır. Hook route'lardan önce eklenir ki tüm alt eklentilere geçsin.
+  app.addHook('onRoute', assertGuardsBeforeValidation);
+
   const origins = allowedOrigins();
   // socket.io aynı listeyi kullansın diye (bkz. server.js).
   app.decorate('allowedOrigins', origins);
@@ -219,7 +225,10 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
    * (`{ userId, email, hotelId, role, permissions }`) dolar ve `actor` kullanıcının
    * e-postası olur. Token yoksa/geçersizse istek anonim kalır (throw etmeyiz —
    * `/auth/login`, `/auth/refresh` ve `/health` herkese açık olmalı); korumalı
-   * route'ları `withHotelContext`/`requirePermission` preHandler'ları 401/403 yapar.
+   * route'ları `withHotelContext`/`requirePermission` guard'ları 401/403 yapar.
+   * Guard'lar `preValidation`'dadır: anonim/yetkisiz istek şema doğrulamasına
+   * hiç varmaz, bozuk gövdeyle de 400 + alan listesi değil 401/403 alır
+   * (bkz. aşağıdaki `onRoute` denetimi ve `lib/permissions.js`).
    *
    * Bundan sonra servis katmanındaki audit kaydı ve yayınlanan event'ler bu
    * kimliği kendiliğinden taşır (modül 10 zincir ekranı bunun üstüne kurulacak).

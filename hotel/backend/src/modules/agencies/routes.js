@@ -35,10 +35,10 @@ import * as service from './service.js';
  * @param {import('fastify').FastifyInstance} app
  */
 export async function agencyRoutes(app) {
-  const guard = (permission) => ({ preHandler: [withHotelContext, requirePermission(permission)] });
+  const guard = (permission) => ({ preValidation: [withHotelContext, requirePermission(permission)] });
   const view = guard(PERMISSIONS.AGENCIES_VIEW);
   const manage = guard(PERMISSIONS.AGENCIES_MANAGE);
-  const picker = { preHandler: [withHotelContext, requireAnyPermission(PERMISSIONS.RESERVATIONS_MANAGE, PERMISSIONS.AGENCIES_VIEW)] };
+  const picker = { preValidation: [withHotelContext, requireAnyPermission(PERMISSIONS.RESERVATIONS_MANAGE, PERMISSIONS.AGENCIES_VIEW)] };
   const ok = (data) => ({ success: true, data });
 
   /* ── Seçici ve liste (statik yollar parametreli yollardan önce) ── */

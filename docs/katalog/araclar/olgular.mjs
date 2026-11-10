@@ -57,12 +57,13 @@ export async function collectRoutes() {
   const result = [];
   for (const route of routes) {
     const methods = [route.method].flat().filter((method) => method !== 'HEAD');
-    const handlers = [route.preHandler, route.onRequest].flat().filter(Boolean);
+    // Guard'lar `preValidation`'da (şema doğrulamasından önce); `preHandler` eski kayıtlar için.
+    const handlers = [route.onRequest, route.preValidation, route.preHandler].flat().filter(Boolean);
     const permissions = [];
     let any = false;
     for (const handler of handlers) {
-      if (!['permissionPreHandler', 'anyPermissionPreHandler'].includes(handler.name)) continue;
-      any ||= handler.name === 'anyPermissionPreHandler';
+      if (!['permissionGuard', 'anyPermissionGuard'].includes(handler.name)) continue;
+      any ||= handler.name === 'anyPermissionGuard';
       // Sahte istek: izin listesi her soruyu kaydeder ve "yok" der; denetim 403 atar, sorulanlar elde kalır.
       const asked = [];
       const request = { auth: { permissions: { includes: (permission) => (asked.push(permission), false) } } };
@@ -70,7 +71,8 @@ export async function collectRoutes() {
       permissions.push(...asked);
     }
     // Erişim: izin(ler) / yalnız oturum (`requireAuth`) / izin denetimi yok (giriş, herkese açık bağlantı, imzalı webhook).
-    const signedIn = handlers.some((handler) => handler.name === 'requireAuth');
+    // `withHotelContext` da token ister (yoksa 401): yalnız onu taşıyan uç (personel zili, otel bağlamı) açık değildir.
+    const signedIn = handlers.some((handler) => ['requireAuth', 'withHotelContext'].includes(handler.name));
     const access = permissions.length ? 'permission' : signedIn ? 'signed-in' : 'open';
     for (const method of methods) result.push({ method, url: route.url, permissions: [...new Set(permissions)], any, access });
   }

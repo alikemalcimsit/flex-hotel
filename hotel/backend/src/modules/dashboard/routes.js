@@ -11,7 +11,7 @@ import * as service from './service.js';
  * @param {import('fastify').FastifyInstance} app
  */
 export async function dashboardRoutes(app) {
-  const view = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.DASHBOARD_VIEW)] };
+  const view = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.DASHBOARD_VIEW)] };
 
   app.get('/today', view, async (request) => ({
     success: true,

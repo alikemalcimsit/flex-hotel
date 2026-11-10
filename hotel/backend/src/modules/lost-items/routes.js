@@ -43,10 +43,10 @@ const canSeeContact = (request) => Boolean(request.auth?.permissions.includes(PE
  * @param {import('fastify').FastifyInstance} app
  */
 export async function lostItemRoutes(app) {
-  const view = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.LOST_ITEMS_VIEW)] };
-  const record = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.LOST_ITEMS_RECORD)] };
-  const release = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.LOST_ITEMS_RELEASE)] };
-  const manage = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.LOST_ITEMS_MANAGE)] };
+  const view = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.LOST_ITEMS_VIEW)] };
+  const record = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.LOST_ITEMS_RECORD)] };
+  const release = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.LOST_ITEMS_RELEASE)] };
+  const manage = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.LOST_ITEMS_MANAGE)] };
 
   /* ── Okuma ── */
 

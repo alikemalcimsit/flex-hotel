@@ -18,8 +18,8 @@ import * as service from './service.js';
  * @param {import('fastify').FastifyInstance} app
  */
 export async function approvalRoutes(app) {
-  const view = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.APPROVALS_VIEW)] };
-  const decide = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.APPROVALS_DECIDE)] };
+  const view = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.APPROVALS_VIEW)] };
+  const decide = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.APPROVALS_DECIDE)] };
 
   app.get('/', { ...view, schema: { querystring: approvalListQuerySchema } }, async (request) => ({
     success: true,

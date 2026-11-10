@@ -37,7 +37,7 @@ import * as responses from './responses.js';
  * @param {import('fastify').FastifyInstance} app
  */
 export async function surveyRoutes(app) {
-  const guard = (permission) => ({ preHandler: [withHotelContext, requirePermission(permission)] });
+  const guard = (permission) => ({ preValidation: [withHotelContext, requirePermission(permission)] });
   const view = guard(PERMISSIONS.SURVEYS_VIEW);
   const followUp = guard(PERMISSIONS.SURVEYS_FOLLOW_UP);
   const setup = guard(PERMISSIONS.SURVEYS_SETUP);

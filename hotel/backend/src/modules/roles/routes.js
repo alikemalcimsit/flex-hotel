@@ -10,7 +10,7 @@ import * as service from './service.js';
  * @param {import('fastify').FastifyInstance} app
  */
 export async function roleRoutes(app) {
-  const manage = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.ROLES_MANAGE)] };
+  const manage = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.ROLES_MANAGE)] };
 
   app.get('/permissions', manage, async (request) => ({
     success: true,

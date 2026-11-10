@@ -1,6 +1,7 @@
 import { prisma } from '../db.js';
 import { cache } from './cache.js';
 import { AppError, UnauthorizedError } from './errors.js';
+import { markAuthGuard } from './permissions.js';
 
 /**
  * Otel bağlamı (`request.hotelId`).
@@ -43,7 +44,10 @@ export async function resolveHotelId() {
 
 /**
  * `request.hotelId` alanını giriş yapan kullanıcının token'ından dolduran
- * preHandler. Kimlik yoksa 401 — korumalı route'a token'sız gelinmiştir.
+ * guard. Kimlik yoksa 401 — korumalı route'a token'sız gelinmiştir.
+ *
+ * `preValidation`'da kullanılır (şema doğrulamasından önce): anonim istek bozuk
+ * gövdeyle de 401 alır, 400 + alan listesi değil (bkz. `lib/permissions.js`).
  * @param {import('fastify').FastifyRequest} request
  */
 export async function withHotelContext(request) {
@@ -51,3 +55,4 @@ export async function withHotelContext(request) {
   if (!hotelId) throw new UnauthorizedError();
   request.hotelId = hotelId;
 }
+markAuthGuard(withHotelContext);
