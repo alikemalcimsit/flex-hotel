@@ -171,6 +171,13 @@ export const EVENT_LABELS = Object.freeze({
   'online_checkin.changed': 'Online check-in değişti (gönderildi, onaylandı, düzeltme, giriş)',
   'guest_portal.link.changed': 'Misafir portalı bağlantısı verildi / iptal edildi / davet gönderildi',
   'guest_portal.settings.changed': 'Misafir portalı ayarı değişti',
+  'survey.response.submitted': 'Misafir anketi cevapladı',
+  'survey.analysis.requested': 'Anket yorumunun AI etiketi istendi',
+  'survey.analysis.completed': 'Anket yorumu etiketlendi',
+  'survey.insight.requested': 'Anket dönem özeti istendi',
+  'survey.insight.completed': 'Anket dönem özeti yazıldı',
+  'survey.followup.changed': 'Düşük puan takibi değişti',
+  'survey.settings.changed': 'Anket tasarımı / ayarı / davetleri değişti',
   'fnb.order.placed': 'Restoran siparişi mutfağa gitti (iş olayı)',
   'fnb.order.paid': 'Restoran adisyonu kapandı: satılanlar (iş olayı)',
 

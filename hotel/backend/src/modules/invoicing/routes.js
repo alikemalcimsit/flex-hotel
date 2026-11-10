@@ -1,7 +1,9 @@
 import {
   invoiceCancelSchema,
+  invoiceDraftBatchSchema,
   invoiceDraftCreateSchema,
   invoiceDraftUpdateSchema,
+  invoiceIssueBatchSchema,
   invoiceIssueSchema,
   invoiceListQuerySchema,
   invoiceParamSchema,
@@ -20,7 +22,7 @@ import * as settings from './settings.js';
  * Fatura ve e-belge route'ları (modül 16 çekirdeği + 49), `/invoices` altında.
  *
  * - Görmek (faturalanacaklar, faturalar, ayrıntı, PDF, ayarların özeti): `invoices.view`.
- * - Folyo / etkinlik faturası (taslak, alıcı, kesim), e-belgeyi tekrar gönderme: `invoices.issue`.
+ * - Folyo / etkinlik faturası (taslak, alıcı, kesim; toplu taslak ve toplu kesim), e-belgeyi tekrar gönderme: `invoices.issue`.
  * - Cariye serbest fatura, iptal isteği: `invoices.manage`. İptali başka bir yetkili onaylar (onay kuyruğu).
  * - Ayarlar (satıcı, seriler, vergi kodları, entegratör, test mükellefleri): `invoices.setup`.
  *
@@ -57,6 +59,9 @@ export async function invoiceRoutes(app) {
     const result = await invoices.createDraft(req.hotelId, req.body);
     return reply.status(result.created ? 201 : 200).send(ok(await invoices.getInvoice(req.hotelId, result.invoiceId)));
   });
+  // Toplu (iki adım): seçilen kaynaklara taslak, seçilen taslakları kes. Sonuç kayıt kayıt; bütçe dolunca `pending`.
+  app.post('/batch-drafts', { ...issue, schema: { body: invoiceDraftBatchSchema } }, async (req) => ok(await invoices.createDraftsBatch(req.hotelId, req.body)));
+  app.post('/batch-issue', { ...issue, schema: { body: invoiceIssueBatchSchema } }, async (req) => ok(await invoices.issueBatch(req.hotelId, req.body.items)));
   app.get('/:invoiceId', { ...view, schema: { params: invoiceParamSchema } }, async (req) => ok(await invoices.getInvoice(req.hotelId, req.params.invoiceId)));
   app.put('/:invoiceId', { ...draftEditors, schema: { params: invoiceParamSchema, body: invoiceDraftUpdateSchema } }, async (req) => {
     if (req.body.lines) assertRequestPermission(req, PERMISSIONS.INVOICES_MANAGE, 'Satır düzenlemek için yetkiniz yok');

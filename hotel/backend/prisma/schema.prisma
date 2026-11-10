@@ -183,6 +183,8 @@ enum NotificationSource {
   CHECKED_OUT
   CHANNEL_TEST
   CHECKIN_INVITE
+  SURVEY_POST_STAY
+  SURVEY_MID_STAY
 }
 
 /// Şablonu olan olaylar.
@@ -192,6 +194,8 @@ enum NotificationTrigger {
   CHECKED_IN
   CHECKED_OUT
   CHECKIN_INVITE
+  SURVEY_POST_STAY
+  SURVEY_MID_STAY
 }
 
 /// Personel uyarısı türleri (üst bardaki zil).
@@ -227,6 +231,8 @@ enum StaffAlertKind {
   INVOICE
   /// Online check-in incelemesi bekliyor (modül 53): resepsiyona.
   ONLINE_CHECKIN
+  /// Ankette düşük puan (modül 55): takip kaydı açıldı.
+  SURVEY_LOW_SCORE
 }
 
 /// Rezervasyon fiyatının kaynağı (modül 4): sistem hesabı ya da yetkili
@@ -762,6 +768,15 @@ model Hotel {
   guestPortalLinks       GuestPortalLink[]
   onlineCheckins         OnlineCheckin[]
   onlineCheckinDocuments OnlineCheckinDocument[]
+  surveySettings         SurveySettings?
+  surveys                Survey[]
+  surveyQuestions        SurveyQuestion[]
+  surveyInvitations      SurveyInvitation[]
+  surveyResponses        SurveyResponse[]
+  surveyAnswers          SurveyAnswer[]
+  surveyFollowUps        SurveyFollowUp[]
+  surveyFollowUpNotes    SurveyFollowUpNote[]
+  surveyInsights         SurveyInsight[]
   payrollParameterSets   PayrollParameterSet[]
   payElements            PayElement[]
   payrollRuns            PayrollRun[]
@@ -1466,6 +1481,8 @@ model Guest {
   reservationGuests ReservationGuest[]
   conversations     Conversation[]
   guestRequests     GuestRequest[]
+  surveyInvitations SurveyInvitation[]
+  surveyResponses   SurveyResponse[]
   folios            Folio[]
   lostItems         LostItem[]
   notifications     Notification[]
@@ -1585,6 +1602,8 @@ model Reservation {
   guestPortalLinks       GuestPortalLink[]
   onlineCheckin          OnlineCheckin?
   onlineCheckinDocuments OnlineCheckinDocument[]
+  surveyInvitations      SurveyInvitation[]
+  surveyResponses        SurveyResponse[]
 
   // Müsaitlik sorgusunun sıcak yolu: "şu otelde, şu oda tipinde, şu tarihlerde
   // envanteri tüketen rezervasyonlar". Dolu bir otelde saniyede onlarca kez çalışır.
@@ -6581,4 +6600,316 @@ model OnlineCheckinDocument {
   @@index([hotelId, reservationId])
   @@index([onlineCheckinId])
   @@index([createdAt])
+}
+
+/**
+ * ═══════════════════════ Anket ve memnuniyet (modül 55) ═══════════════════════
+ */
+
+enum SurveyKind {
+  POST_STAY
+  MID_STAY
+}
+
+enum SurveyQuestionType {
+  NPS
+  RATING
+  CHOICE
+  TEXT
+}
+
+enum NpsCategory {
+  PROMOTER
+  PASSIVE
+  DETRACTOR
+}
+
+enum SurveyInvitationStatus {
+  SENT
+  OPENED
+  RESPONDED
+}
+
+enum SurveySentiment {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+  MIXED
+}
+
+/// Açık uçlu cevabın AI etiketi: yorum yoksa / AI kapalıysa SKIPPED.
+enum SurveyAnalysisStatus {
+  PENDING
+  DONE
+  FAILED
+  SKIPPED
+}
+
+enum SurveyFollowUpStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+}
+
+enum SurveyFollowUpOutcome {
+  APOLOGIZED
+  COMPENSATED
+  ISSUE_FIXED
+  EXPLAINED
+  NO_CONTACT
+  OTHER
+}
+
+enum SurveyFollowUpNoteKind {
+  NOTE
+  CONTACT
+}
+
+enum SurveyInsightStatus {
+  PENDING
+  READY
+  FAILED
+}
+
+/// Otelin anket ayarı. Satır yoksa varsayılanlar (anketler kapalı). Bağlantı tabanı misafir portalı ayarındaki adres.
+model SurveySettings {
+  hotelId               String   @id
+  postStayEnabled       Boolean  @default(false)
+  /// Çıkış gününden kaç gün sonra (0: aynı gün).
+  postStayDelayDays     Int      @default(1)
+  /// Otel saatiyle gönderim saati.
+  postStaySendHour      Int      @default(11)
+  midStayEnabled        Boolean  @default(false)
+  midStaySendHour       Int      @default(18)
+  /// Ara anket bu kadar geceden kısa konaklamaya gitmez.
+  midStayMinNights      Int      @default(2)
+  /// Aynı misafire aynı tür anket en az bu kadar gün arayla (sık gelen misafir).
+  minDaysBetweenSurveys Int      @default(30)
+  /// Bağlantının geçerlilik süresi (gün).
+  linkValidDays         Int      @default(14)
+  /// NPS bu değer ve altı düşük sayılır (takip açılır).
+  lowNpsThreshold       Int      @default(6)
+  /// Herhangi bir 1–5 puan bu değer ve altıysa düşük.
+  lowRatingThreshold    Int      @default(2)
+  googleReviewUrl       String?
+  tripadvisorReviewUrl  String?
+  updatedBy             String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+}
+
+/// Otelin anketi (tür başına bir tane). `version`: soru ekleme / düzenleme / sıralama / arşivin iyimser kilidi.
+model Survey {
+  id        String     @id @default(uuid())
+  hotelId   String
+  kind      SurveyKind
+  version   Int        @default(0)
+  updatedBy String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  hotel       Hotel              @relation(fields: [hotelId], references: [id])
+  questions   SurveyQuestion[]
+  invitations SurveyInvitation[]
+  responses   SurveyResponse[]
+
+  @@unique([hotelId, kind])
+}
+
+/// Soru. Cevaplanmış soru silinmez, arşive kalkar (geçmiş cevaplar raporda durur); tipi değişmez.
+model SurveyQuestion {
+  id         String             @id @default(uuid())
+  hotelId    String
+  surveyId   String
+  position   Int
+  type       SurveyQuestionType
+  /// { tr, en, de, ru }
+  text       Json
+  /// Konu (sözleşmedeki `SURVEY_TOPICS`): bölüm raporu bununla gruplanır.
+  topic      String             @default("OVERALL")
+  required   Boolean            @default(false)
+  /// Seçenekli soruda birden çok seçenek.
+  multiple   Boolean            @default(false)
+  /// [{ id, label: { tr, en, de, ru } }]
+  options    Json               @default("[]")
+  archivedAt DateTime?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  hotel   Hotel          @relation(fields: [hotelId], references: [id])
+  survey  Survey         @relation(fields: [surveyId], references: [id], onDelete: Restrict)
+  answers SurveyAnswer[]
+
+  @@index([surveyId, archivedAt, position])
+  @@index([hotelId])
+}
+
+/// Anket daveti: rezervasyon × tür başına bir tane. Bağlantı `/misafir/a/<id>.<imza>` (imza = HMAC(id.nonce)).
+model SurveyInvitation {
+  id            String                 @id @default(uuid())
+  hotelId       String
+  surveyId      String
+  kind          SurveyKind
+  reservationId String
+  guestId       String
+  nonce         String
+  /// Misafirin dili (uyruktan); sayfa açılınca misafir değiştirebilir.
+  language      String
+  status        SurveyInvitationStatus @default(SENT)
+  sentAt        DateTime               @default(now())
+  expiresAt     DateTime
+  openedAt      DateTime?
+  respondedAt   DateTime?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+
+  hotel       Hotel           @relation(fields: [hotelId], references: [id])
+  survey      Survey          @relation(fields: [surveyId], references: [id], onDelete: Restrict)
+  reservation Reservation     @relation(fields: [reservationId], references: [id], onDelete: Restrict)
+  guest       Guest           @relation(fields: [guestId], references: [id], onDelete: Restrict)
+  response    SurveyResponse?
+
+  @@unique([reservationId, kind])
+  // Cevap oranı: dönemde gönderilen / açılan / cevaplanan (yalnız indeksten okunur).
+  @@index([hotelId, kind, sentAt, openedAt, respondedAt])
+  // Aynı misafire aynı tür anket en az N gün arayla.
+  @@index([hotelId, guestId, kind, sentAt])
+}
+
+/// Misafirin cevabı (davet başına bir tane). Özet alanları (NPS, ortalama, düşük, yorum) cevapta donar; rapor bunları okur.
+model SurveyResponse {
+  id             String               @id @default(uuid())
+  hotelId        String
+  invitationId   String               @unique
+  surveyId       String
+  kind           SurveyKind
+  reservationId  String
+  guestId        String
+  language       String
+  submittedAt    DateTime             @default(now())
+  npsScore       Int?
+  npsCategory    NpsCategory?
+  ratingAverage  Decimal?             @db.Decimal(3, 2)
+  lowScore       Boolean              @default(false)
+  /// Açık uçlu cevapların birleşimi (personele ve AI'a).
+  commentText    String?
+  /// Arama: onay kodu, misafirin adı, yorum (trigram).
+  searchText     String
+  sentiment      SurveySentiment?
+  topics         String[]             @default([])
+  aiSummary      String?
+  analysisStatus SurveyAnalysisStatus @default(SKIPPED)
+  analysisModel  String?
+  analyzedAt     DateTime?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  hotel       Hotel            @relation(fields: [hotelId], references: [id])
+  invitation  SurveyInvitation @relation(fields: [invitationId], references: [id], onDelete: Restrict)
+  survey      Survey           @relation(fields: [surveyId], references: [id], onDelete: Restrict)
+  reservation Reservation      @relation(fields: [reservationId], references: [id], onDelete: Restrict)
+  guest       Guest            @relation(fields: [guestId], references: [id], onDelete: Restrict)
+  answers     SurveyAnswer[]
+  followUp    SurveyFollowUp?
+
+  // Liste ve rapor: tür + dönem (yeniden eskiye, imleçli).
+  @@index([hotelId, kind, submittedAt, id])
+  @@index([hotelId, submittedAt, id])
+  @@index([hotelId, lowScore, submittedAt])
+  @@index([searchText(ops: raw("gin_trgm_ops"))], map: "SurveyResponse_searchText_trgm_idx", type: Gin)
+  @@index([topics], type: Gin)
+}
+
+/// Tek sorunun cevabı. Rapor soru başına ortalama ve dağılımı bunlardan alır (tür + gün + soru indeksli).
+model SurveyAnswer {
+  id          String     @id @default(uuid())
+  hotelId     String
+  responseId  String
+  questionId  String
+  kind        SurveyKind
+  submittedAt DateTime
+  score       Int?
+  choiceIds   String[]   @default([])
+  text        String?
+
+  hotel    Hotel          @relation(fields: [hotelId], references: [id])
+  response SurveyResponse @relation(fields: [responseId], references: [id], onDelete: Restrict)
+  question SurveyQuestion @relation(fields: [questionId], references: [id], onDelete: Restrict)
+
+  @@unique([responseId, questionId])
+  // Rapor: dönemde soru başına puan dökümü yalnız indeksten okunur (cevap satırına gidilmez).
+  @@index([hotelId, kind, submittedAt, questionId, score])
+  @@index([questionId])
+}
+
+/// Düşük puanın takibi (cevap başına bir tane): kim ilgileniyor, görüşmeler, nasıl kapandı.
+model SurveyFollowUp {
+  id            String                 @id @default(uuid())
+  hotelId       String
+  responseId    String                 @unique
+  reservationId String
+  kind          SurveyKind
+  status        SurveyFollowUpStatus   @default(OPEN)
+  assignedTo    String?
+  /// Hedef süre: içerideki misafirde 2 saat, çıkmışta 48 saat.
+  dueAt         DateTime
+  outcome       SurveyFollowUpOutcome?
+  resolution    String?
+  resolvedAt    DateTime?
+  resolvedBy    String?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+
+  hotel    Hotel                @relation(fields: [hotelId], references: [id])
+  response SurveyResponse       @relation(fields: [responseId], references: [id], onDelete: Restrict)
+  notes    SurveyFollowUpNote[]
+
+  // Açık takipler: hedef süreye göre (geciken önce).
+  @@index([hotelId, status, dueAt, id])
+  @@index([hotelId, assignedTo, status])
+  @@index([hotelId, resolvedAt, id])
+}
+
+/// Takibin notu ya da misafirle görüşme kaydı (değişmez).
+model SurveyFollowUpNote {
+  id         String                 @id @default(uuid())
+  hotelId    String
+  followUpId String
+  kind       SurveyFollowUpNoteKind @default(NOTE)
+  text       String
+  createdBy  String
+  createdAt  DateTime               @default(now())
+
+  hotel    Hotel          @relation(fields: [hotelId], references: [id])
+  followUp SurveyFollowUp @relation(fields: [followUpId], references: [id], onDelete: Restrict)
+
+  @@index([followUpId, createdAt])
+}
+
+/// Dönemin AI tema özeti (insight-agent). Aynı dönem için bekleyen tek istek (kısmi tekil index).
+model SurveyInsight {
+  id            String              @id @default(uuid())
+  hotelId       String
+  kind          SurveyKind
+  fromDay       DateTime            @db.Date
+  toDay         DateTime            @db.Date
+  status        SurveyInsightStatus @default(PENDING)
+  responseCount Int                 @default(0)
+  commentCount  Int                 @default(0)
+  summary       String?
+  /// [{ title, sentiment, share, quote }]
+  themes        Json                @default("[]")
+  /// [ "öneri", ... ]
+  actions       Json                @default("[]")
+  model         String?
+  failureReason String?
+  requestedBy   String
+  requestedAt   DateTime            @default(now())
+  completedAt   DateTime?
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+
+  @@index([hotelId, kind, requestedAt])
 }

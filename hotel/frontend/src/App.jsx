@@ -217,6 +217,13 @@ const ArrivalsTab = lazy(() => import('./pages/front-desk/ArrivalsTab.jsx').then
 const DeparturesTab = lazy(() => import('./pages/front-desk/DeparturesTab.jsx').then((m) => ({ default: m.DeparturesTab })));
 const OnlineCheckinTab = lazy(() => import('./pages/guest-portal/OnlineCheckinTab.jsx').then((m) => ({ default: m.OnlineCheckinTab })));
 const GuestPortalSettingsPage = lazy(() => import('./pages/guest-portal/GuestPortalSettingsPage.jsx').then((m) => ({ default: m.GuestPortalSettingsPage })));
+const SurveysLayout = lazy(() => import('./pages/surveys/SurveysLayout.jsx').then((m) => ({ default: m.SurveysLayout })));
+const SurveyReportPage = lazy(() => import('./pages/surveys/SurveyReportPage.jsx').then((m) => ({ default: m.SurveyReportPage })));
+const SurveyResponsesPage = lazy(() => import('./pages/surveys/SurveyResponsesPage.jsx').then((m) => ({ default: m.SurveyResponsesPage })));
+const FollowUpsPage = lazy(() => import('./pages/surveys/FollowUpsPage.jsx').then((m) => ({ default: m.FollowUpsPage })));
+const FollowUpPage = lazy(() => import('./pages/surveys/FollowUpPage.jsx').then((m) => ({ default: m.FollowUpPage })));
+const SurveyDesignPage = lazy(() => import('./pages/surveys/SurveyDesignPage.jsx').then((m) => ({ default: m.SurveyDesignPage })));
+const SurveySettingsPage = lazy(() => import('./pages/surveys/SurveySettingsPage.jsx').then((m) => ({ default: m.SurveySettingsPage })));
 const InHouseTab = lazy(() => import('./pages/front-desk/InHouseTab.jsx').then((m) => ({ default: m.InHouseTab })));
 const ApprovalsPage = lazy(() => import('./pages/approvals/ApprovalsPage.jsx').then((m) => ({ default: m.ApprovalsPage })));
 const ApprovalsPendingTab = lazy(() => import('./pages/approvals/PendingTab.jsx').then((m) => ({ default: m.PendingTab })));
@@ -854,6 +861,23 @@ export default function App() {
                 </RequirePermission>
               }
             />
+            {/* Anket ve memnuniyet (modül 55): rapor, cevaplar, takip, sorular, ayarlar. */}
+            <Route
+              path="anketler"
+              element={
+                <RequirePermission permission={PERMISSIONS.SURVEYS_VIEW}>
+                  <SurveysLayout />
+                </RequirePermission>
+              }
+            >
+              <Route index element={<Navigate to="rapor" replace />} />
+              <Route path="rapor" element={<SurveyReportPage />} />
+              <Route path="cevaplar" element={<SurveyResponsesPage />} />
+              <Route path="takip" element={<FollowUpsPage />} />
+              <Route path="takip/:followUpId" element={<FollowUpPage />} />
+              <Route path="tasarim" element={<SurveyDesignPage />} />
+              <Route path="ayarlar" element={<SurveySettingsPage />} />
+            </Route>
             {/* Faturalar (modül 16 çekirdeği + 49): faturalanacaklar, taslaklar, kesilenler, ayarlar; fatura ekranı. */}
             <Route
               path="faturalar"

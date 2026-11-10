@@ -202,6 +202,12 @@ export const PERMISSIONS = Object.freeze({
   GUEST_PORTAL_MANAGE: 'guest_portal.manage',
   /** Portal ayarları: davet ve açılış günleri, belge saklama süresi, misafire gösterilen metinler. */
   GUEST_PORTAL_SETUP: 'guest_portal.setup',
+  /** Anket cevapları, NPS raporu, takip kayıtları, AI özetleri (modül 55). */
+  SURVEYS_VIEW: 'surveys.view',
+  /** Düşük puanın takibi: üstlen, misafirle görüşmeyi yaz, kapat. */
+  SURVEYS_FOLLOW_UP: 'surveys.follow_up',
+  /** Anket tasarımı (sorular), gönderim ayarları, yorum bağlantıları; AI dönem özeti isteme. */
+  SURVEYS_SETUP: 'surveys.setup',
 
   /** Kanal yönetimi (modül 33): kanallar, eşleştirme, senkron logu, kanal rezervasyonları. */
   CHANNEL_MANAGER_VIEW: 'channel_manager.view',
@@ -307,6 +313,9 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.GUEST_PORTAL_VIEW]: 'Online check-in\'leri ve belge fotoğraflarını gör, misafir portalı bağlantısını gör',
   [PERMISSIONS.GUEST_PORTAL_MANAGE]: 'Online check-in onayla / düzeltme iste; portal bağlantısı ver, iptal et, davet gönder',
   [PERMISSIONS.GUEST_PORTAL_SETUP]: 'Misafir portalı ayarları: davet ve açılış günleri, belge saklama süresi, metinler',
+  [PERMISSIONS.SURVEYS_VIEW]: 'Anket cevaplarını, NPS raporunu, takipleri ve AI özetlerini gör',
+  [PERMISSIONS.SURVEYS_FOLLOW_UP]: 'Düşük puan takibi: üstlen, görüşme / not yaz, kapat',
+  [PERMISSIONS.SURVEYS_SETUP]: 'Anket soruları, gönderim ayarları ve yorum bağlantıları; AI dönem özeti iste',
   [PERMISSIONS.CHANNEL_MANAGER_VIEW]: 'Kanalları, senkron logunu ve kanal rezervasyonlarını görüntüle',
   [PERMISSIONS.CHANNEL_MANAGER_MANAGE]: 'Kanal bağla, eşleştir, stop-sale koy, elle senkronla',
   [PERMISSIONS.ACTORS_VIEW]: 'Aktör panelini görüntüle',
@@ -412,6 +421,7 @@ export const PERMISSION_GROUPS = Object.freeze([
   { key: 'employees', label: 'Personel', permissions: [PERMISSIONS.EMPLOYEES_VIEW, PERMISSIONS.EMPLOYEES_MANAGE] },
   { key: 'payroll', label: 'Bordro', permissions: [PERMISSIONS.PAYROLL_VIEW, PERMISSIONS.PAYROLL_MANAGE, PERMISSIONS.PAYROLL_PAY, PERMISSIONS.PAYROLL_SETUP] },
   { key: 'guest_portal', label: 'Misafir portalı ve online check-in', permissions: [PERMISSIONS.GUEST_PORTAL_VIEW, PERMISSIONS.GUEST_PORTAL_MANAGE, PERMISSIONS.GUEST_PORTAL_SETUP] },
+  { key: 'surveys', label: 'Anket ve memnuniyet', permissions: [PERMISSIONS.SURVEYS_VIEW, PERMISSIONS.SURVEYS_FOLLOW_UP, PERMISSIONS.SURVEYS_SETUP] },
   {
     key: 'agency_bonus',
     label: 'Acente primi',
@@ -548,6 +558,10 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.GUEST_PORTAL_VIEW,
     PERMISSIONS.GUEST_PORTAL_MANAGE,
     PERMISSIONS.GUEST_PORTAL_SETUP,
+    // Anket ve memnuniyet (modül 55): tasarım, ayar ve AI özeti dahil.
+    PERMISSIONS.SURVEYS_VIEW,
+    PERMISSIONS.SURVEYS_FOLLOW_UP,
+    PERMISSIONS.SURVEYS_SETUP,
   ]),
   FRONT_DESK: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,
@@ -587,6 +601,9 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     // Online check-in'i girişten önce resepsiyon inceler (belgeyi görür, onaylar ya da düzeltme ister); bağlantıyı verir.
     PERMISSIONS.GUEST_PORTAL_VIEW,
     PERMISSIONS.GUEST_PORTAL_MANAGE,
+    // İçerideki misafirin düşük ara anketi resepsiyona düşer: görür, ilgilenir, kapatır.
+    PERMISSIONS.SURVEYS_VIEW,
+    PERMISSIONS.SURVEYS_FOLLOW_UP,
   ]),
   HOUSEKEEPING: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,

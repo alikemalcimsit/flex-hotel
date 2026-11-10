@@ -66,6 +66,7 @@ const { resetAccountingDemo, seedAccountingDemo } = await import('./demo-account
 const { resetInvoicingDemo, seedInvoicingDemo } = await import('./demo-invoicing.mjs');
 const { resetPayrollDemo, seedPayrollDemo } = await import('./demo-payroll.mjs');
 const { resetGuestPortalDemo, seedGuestPortalDemo } = await import('./demo-guest-portal.mjs');
+const { resetSurveyDemo, seedSurveyDemo } = await import('./demo-surveys.mjs');
 
 const HISTORY_DAYS = 400;
 const FUTURE_DAYS = 75;
@@ -103,6 +104,8 @@ if (process.argv.includes('--reset')) {
     async (tx) => {
       // Demo misafir portalı (modül 53): bağlantı, online check-in ve belgeleri rezervasyona kısıtlı bağlı — en önce.
       portalFiles = await resetGuestPortalDemo(tx, hotelId);
+      // Demo anketler (modül 55): davet, cevap, takip rezervasyona kısıtlı bağlı — rezervasyondan önce.
+      await resetSurveyDemo(tx, hotelId, ACTOR);
       // Demo faturalar (modül 16 / 49): folyo, etkinlik, cari ve misafire kısıtlı bağlı.
       await resetInvoicingDemo(tx, hotelId);
       // Demo ön muhasebe (modül 47): cariler acente / tedarikçi / etkinlik müşterisine kısıtlı bağlı, ödemeler cariye — önce.
@@ -975,6 +978,14 @@ try {
   console.error(`Misafir portalı adımı tamamlanamadı: ${error.message}`);
 }
 
+// ── Anket (modül 55): son 60 günün çıkışlarına anket, cevaplar, ara anket, düşük puan takipleri, dönem özeti ──
+let surveySummary = null;
+try {
+  surveySummary = await seedSurveyDemo({ prisma, core, contracts, hotelId, today, actor: ACTOR });
+} catch (error) {
+  console.error(`Anket adımı tamamlanamadı: ${error.message}`);
+}
+
 // Odaların anlık durumu: içeride kimse varsa dolu, boşların bir kısmı kirli.
 const inHouse = new Set(reservations.filter((entry) => entry.row.status === 'CHECKED_IN').map((entry) => entry.row.roomId));
 await prisma.room.updateMany({ where: { hotelId, id: { in: [...inHouse] } }, data: { occupancy: 'OCCUPIED' } });
@@ -1042,6 +1053,7 @@ console.log(
       ? `, ${accountingSummary.accounts} cari, ${accountingSummary.treasury} kasa / banka, ${accountingSummary.vouchers} fiş, ${accountingSummary.instruments} çek / senet, ${accountingSummary.posted} otomatik kayıt (başlangıç ${accountingSummary.startDate}${accountingSummary.failed ? `, ${accountingSummary.failed} işlenemedi` : ''})${invoiceSummary ? `, ${invoiceSummary.issued} fatura (${invoiceSummary.eFatura} e-Fatura, ${invoiceSummary.eArsiv} e-Arşiv; test ortamı), ${invoiceSummary.drafts} taslak${invoiceSummary.skipped ? `, ${invoiceSummary.skipped} kesilemedi` : ''}` : ''}.`
       : '.') +
     (payrollSummary ? ` Bordro: ${payrollSummary.employees} personel, ${payrollSummary.runs} bordro (${payrollSummary.approved} onaylı, ${payrollSummary.supplementary} fark), ${payrollSummary.paid} ödeme, ${payrollSummary.terminated} işten çıkış, ${payrollSummary.posted} muhasebe kaydı.` : ''),
-    (portalSummary ? ` Misafir portalı: ${portalSummary.links} bağlantı, ${portalSummary.checkins} online check-in, ${portalSummary.documents} belge fotoğrafı.` : ''),
+    (portalSummary ? ` Misafir portalı: ${portalSummary.links} bağlantı, ${portalSummary.checkins} online check-in, ${portalSummary.documents} belge fotoğrafı.` : '') +
+    (surveySummary ? ` Anket: ${surveySummary.invitations} davet, ${surveySummary.responses} cevap, ${surveySummary.followUps} takip (${surveySummary.open} açık).` : ''),
 );
 await prisma.$disconnect();

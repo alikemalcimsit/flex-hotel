@@ -3055,6 +3055,13 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 > **Canlıya alırken:** 5 migration + `npm install` (`qrcode-generator`); her otel ayarlarda satıcı ve faturalama başlangıcını girmeli
 > (girene kadar kuyruk boş).
 
+> **Modül 55 döneminden not (10 Kasım 2026 — Ahmet):** **toplu fatura** (kullanıcı kararı: iki adım). Faturalanacaklardan seçilenlere
+> toplu taslak (`POST /invoices/batch-drafts`; alıcısı eksik taslak işaretlenir), taslaklardan alıcısı tamam olanlara toplu kesim
+> (`POST /invoices/batch-issue`; her taslak tek kesimin kuralıyla, açılış sırasıyla numara). En fazla 100 kayıt; istek 20 sn bütçeyle
+> durur, kalanlar `pending` döner, ekran ilerleme göstererek kendiliğinden devam eder (`useBatchRunner`). Taslak listesi alıcı eksiklerini
+> döner (`buyerProblems`), sayfa 100 satır. Entegrasyon testleri: sıra, alıcı eksik, bayat sürüm, bütçe, çift seçim; toplu taslakta
+> kapanmamış / olmayan folyo.
+
 ### 50. Sanal POS / ödeme geçidi — Ali Kemal
 **Gün sonu:** Misafire ödeme linki gönderiliyor veya widget'ta kartla ödeme yapılıyor; sonuç otomatik folyoya düşüyor.
 - [ ] Backend: PaymentGatewayConfig, PaymentTransaction tabloları; sağlayıcı adaptörü (iyzico veya PayTR)
@@ -3241,14 +3248,69 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 > **FlexAI 2.0'dan not (3 Kasım 2026 — Ahmet):** insight-agent'ın çıktısını şemalı yaz (duygu puanı, konu, departman, dil):
 > 80 (tercih çıkarma), 81 (konaklama içi duygu) ve 102 (kalite skoru) aynı ajanı ve şemayı kullanacak.
+>
+> **Modül 55'ten not (10 Kasım 2026 — Ahmet):** `shared/agents/insight-agent` kuruldu (55'in anket yorumları için): şemalı JSON çıktı
+> (ton `POSITIVE/NEUTRAL/NEGATIVE/MIXED`, konu `SURVEY_TOPICS` listesinden en fazla 5, tek cümle Türkçe özet; dönem özetinde tema / pay /
+> alıntı / öneri), ayrıştırma listeyle sınırlı (`prompt.js`: `parseAnalysis`, `parseInsight`), kişisel veri istemde yok. Yorum siteleri için
+> yeni olay adıyla (`review.analysis.requested` gibi) handler eklenir; istemler kaynaktan bağımsız. Konu listesi `contracts/surveys.js`.
 
 ### 55. Anket & memnuniyet — arkadaşın
 **Gün sonu:** Check-out'tan 1 gün sonra anket gidiyor; cevaplar toplanıyor; NPS ve AI özeti görünüyor.
-- [ ] Backend: Survey, SurveyQuestion, SurveyResponse tabloları + API; public cevap sayfası
-- [ ] Backend: `guest.checked_out` + 1 gün → notification-worker anket linki gönderir
-- [ ] Ekran: Anket tasarımı (sorular, tip: puan / çoktan seçmeli / açık)
-- [ ] Ekran: Cevaplar listesi + NPS skoru
-- [ ] insight-agent özeti (açık uçlu cevapların ana temaları)
+- [x] Backend: Survey, SurveyQuestion, SurveyResponse tabloları + API; public cevap sayfası — **+ SurveyInvitation, SurveyAnswer, SurveyFollowUp(+Note), SurveyInsight, SurveySettings**; misafir sayfası `/misafir/a/:token` (53'ün misafir uygulamasında)
+- [x] Backend: `guest.checked_out` + 1 gün → notification-worker anket linki gönderir — **zamanlanmış iş (15 dk) + 9'un kanalları; kullanıcı kararı: ara anket de (girişin ertesi günü)**
+- [x] Ekran: Anket tasarımı (sorular, tip: puan / çoktan seçmeli / açık) — **+ NPS, dört dil, sıralama, arşiv**
+- [x] Ekran: Cevaplar listesi + NPS skoru — **+ NPS raporu (eğilim, soru / bölüm puanı, cevap oranı) ve takip ekranları**
+- [x] insight-agent özeti (açık uçlu cevapların ana temaları) — **+ her yoruma ton / konu etiketi**
+
+> **✅ Modül 55 tamamlandı (10 Kasım 2026 — Ahmet).** Kararlar (kullanıcı): **çıkış sonrası + kısa ara anket**; düşük puanda **uyarı +
+> takip kaydı**; yorum bağlantıları **herkese** (yalnız memnunlara göstermek Google kurallarına aykırı).
+>
+> **Anketler:** otelde tür başına bir anket (çıkış sonrası, ara anket), ilk okunuşta dört dilde varsayılan sorularla kurulur. Soru tipleri NPS
+> (tek), 1–5 puan, seçenekli (tekli / çoklu), açık uçlu; konu (rapordaki bölüm), zorunluluk, dört dilde metin (eksik dil Türkçeye düşer,
+> ekranda uyarı). Tasarım anketin `version`'ıyla iyimser kilitli; cevaplanmış soru silinmez (arşiv), tipi değişmez, cevaplanmış seçenek
+> kaldırılamaz. Soru başına cevap sayısı tasarım ekranında 1.000'de kesilir ("1.000+").
+>
+> **Gönderim:** zamanlanmış iş 15 dk'da bir; çıkış sonrası çıkış anının otel günü + `postStayDelayDays`, saat `postStaySendHour`'dan
+> (en fazla 2 gün geç); ara anket girişin ertesi günü `midStaySendHour`'dan, en az `midStayMinNights` gece, ayrılış gününe değil. Aynı
+> misafire aynı tür `minDaysBetweenSurveys` günden sık değil, aynı turda aynı misafirin iki odası tek anket. Davet bir kanala satır
+> açılınca "gitti" sayılır (iletişimsiz / kanal kapalıysa silinir, sonraki turda yeniden); kanal + şablon ya da portal adresi yoksa tur
+> başlamaz. Zaman gerçek saat (gece kapanışına bağlı değil). Bildirim tetikleyicileri `SURVEY_POST_STAY` / `SURVEY_MID_STAY`
+> (`{anketLinki}`; TR / EN e-posta + SMS şablonu; kurulmuş otelde ilk turda yüklenir).
+>
+> **Misafir:** `/misafir/a/<kimlik>.<imza>` (HMAC, anket bağlamı; anket ekranları personele göstermez, giden iletinin metni bildirim geçmişinde durur);
+> bağlantı `linkValidDays` gün. Dört dil, uyruğa göre. Davet başına tek cevap (tekil kısıt); zorunlu / aralık / seçenek denetimi alan alan;
+> anket bu arada değiştiyse sorular yenilenir. Bitince puandan bağımsız Google / TripAdvisor bağlantısı. Açık anket portal (53) ana
+> sayfasında kutu. Uçlar bağlantı başına hız sınırlı (okuma 30, yazma 5 / dk) + ortak IP tavanı, belirteç günlükte maskeli.
+>
+> **Düşük puan:** NPS ≤ `lowNpsThreshold` (6) ya da bir puan ≤ `lowRatingThreshold` (2) → cevapla aynı işlemde takip kaydı + zil
+> (`SURVEY_LOW_SCORE`; ara ankette kritik). Hedef içeride 2, çıkmışta 48 saat; üstlen / devret / bırak, görüşme ve not (değişmez),
+> sonuç + açıklamayla kapanış (veritabanı kısıtı), yeniden aç. İşlem kaydına yorum metni yazılmaz.
+>
+> **Rapor:** NPS ve dağılımı, cevap oranı (davet / açılan / cevaplanan), puan ortalaması, haftalık / aylık eğilim (cevap sayısıyla), soru
+> başına ortalama + dağılım, seçenek sayıları, bölüm puanları, AI konu / ton dökümü, takip özeti.
+>
+> **AI (insight-agent, `shared/agents/insight-agent`):** yorumlu cevap AI açıksa ton + en fazla 5 konu + tek cümle (şemalı JSON, listeyle
+> sınırlanır, yalnız bekleyen cevaba yazılır, 30 dk'da yazılmazsa "etiketlenemedi"); dönem özeti (en yeni 150 yorum; tema, pay, alıntı, en
+> fazla 3 öneri; aynı dönem için bekleyen tek istek; `surveys.setup`). Model ad, onay kodu, iletişim görmez. Otelin ana modeli
+> (`conciergeModel`); AI kapalıysa her şey AI'sız çalışır.
+>
+> **API ve izinler:** `/surveys` — `settings`, `design/:kind` (+ `questions`, `order`, `remove`, `restore`), `responses`, `report`,
+> `insights`, `follow-ups` (+ `assignees`, `assign`, `notes`, `resolve`, `reopen`); `/public/survey/:token`. İzinler
+> `surveys.view` / `.follow_up` (müdür, ön büro), `surveys.setup` (müdür). Olaylar `survey.*`; kanal `surveys.changed`.
+>
+> **Ölçüm** (`scripts/perf-surveys.mjs`; 2 yıl: 150.000 davet, 60.000 cevap, 534.000 cevap satırı): rapor 30 gün / 1 yıl 151 / 183 ms,
+> listeler 9–18 ms, ayrıntı 9 ms, takip 15 ms, tasarım 7 ms, misafir formu 9 ms, gönderim 86 ms, AI girdisi 193 ms, davet turu 400 çıkışta
+> 19 sn (arka planda). Ölçümle düzeltilen: **1 yıllık rapor 0,4–0,6 sn → 0,18 sn** (puan dökümü ve davet sayımı yalnız indeksten,
+> seçenek dökümü yalnız seçenekli soruların satırlarından), **tasarım 0,2 sn → 7 ms** (sayım 1.000'de kesilir).
+>
+> **Testler:** entegrasyon tam suite 691 / 691 (anket 9), backend birim 660, sözleşme 543, ön yüz 83, insight-agent 8.
+>
+> **Demo** (`scripts/demo-surveys.mjs`, `demo-data.mjs` çağırır): son 60 günün çıkışlarına davet, ~%34 cevap (lüks otel NPS dağılımı),
+> dört dilde yorumlar ve `demo` modelli AI etiketleri, son günlerin ara anketleri, takipler (kapanmış / ilgilenilen / açık), dönem özeti.
+>
+> **Canlıya alırken:** 2 migration (`20261110090000_surveys`, `20261110100000_survey_report_indexes`); yeni çalışma alanı paketi
+> `@hotelos/insight-agent` → `npm install`; otel anket ayarından anketleri açar (bağlantı tabanı portal adresi, kanal + şablon gerekir);
+> demo için yeniden yükleme.
 
 ### 56. Sadakat programı — Ali Kemal
 **Gün sonu:** Misafir her konaklamada puan kazanıyor, seviyesi yükseliyor, puanla indirim alıyor.
@@ -3582,6 +3644,7 @@ veri envanterine (71) saklama süresiyle; 5 sn'den uzun iş uzun iş çerçevesi
 **Önkoşul:** 7, 8, 11, 14, 15, 20, 55, 80 (varsa) · **Aktör:** guest-experience-worker (sinyal kuralları) + insight-agent (duygu)
 - [ ] Rol `GUEST_RELATIONS` (Misafir ilişkileri); izinler `recovery.view`, `recovery.manage`
 - [ ] Sinyaller: konaklama içi mesajda olumsuz duygu (insight-agent), aynı istek ikinci kez, istek süresi aşıldı (7), arıza çözülmedi (20), ara anket ≤ 3 (55), oda değişikliği isteği; her sinyal ayrı kural, ayrı açılıp kapanır
+  - *55'ten hazır (10 Kasım 2026):* `survey.response.submitted` (`kind`, `npsScore`, `lowScore`), ara anket (girişin ertesi günü) ve düşük puan takibi (`SurveyFollowUp`: üstlenen, görüşme notları, sonuç); olay kaydı bu takiple birleştirilmeli (iki ayrı iş listesi olmasın).
 - [ ] Backend: `GuestIncident` (konaklama, kategori, departman, ciddiyet, durum, sorumlu, süre), `IncidentAction`, `Compensation` (tür, tutar ve maliyet, folyo kalemi bağlantısı)
 - [ ] Telafi: folyoya indirim / ikram (15'in düzeltme yolu), oda yükseltme (3), ücretsiz hizmet; eşik üstü tutar onay türü `SERVICE_RECOVERY` (dört göz)
 - [ ] Kapanış: misafire takip mesajı (8), memnuniyet sorusu; açık olayla çıkışta ön büroya uyarı

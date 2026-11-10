@@ -13,6 +13,7 @@ import {
   INVOICE_EVENTS,
   PAYROLL_EVENTS,
   GUEST_PORTAL_EVENTS,
+  SURVEY_EVENTS,
   PROMOTION_EVENTS,
   CHANNEL_EVENTS as CHANNEL_MANAGER_EVENTS,
   EXTRAS_EVENTS,
@@ -143,6 +144,9 @@ export const PAYROLL_CHANNEL = 'payroll.changed';
 /** Misafir portalı ve online check-in (modül 53). */
 export const GUEST_PORTAL_CHANNEL = 'guest-portal.changed';
 
+/** Anket ve memnuniyet (modül 55). */
+export const SURVEY_CHANNEL = 'surveys.changed';
+
 /** Promosyon ve kupon (modül 31): promosyon, kupon üretimi / kapatma. */
 export const PROMOTION_CHANNEL = 'promotions.changed';
 
@@ -187,6 +191,7 @@ const CHANNEL_EVENTS = Object.freeze({
   [INVOICES_CHANNEL]: INVOICE_EVENTS,
   [PAYROLL_CHANNEL]: PAYROLL_EVENTS,
   [GUEST_PORTAL_CHANNEL]: GUEST_PORTAL_EVENTS,
+  [SURVEY_CHANNEL]: SURVEY_EVENTS,
   [PROMOTION_CHANNEL]: PROMOTION_EVENTS,
   [CHANNEL_MANAGER_CHANNEL]: CHANNEL_MANAGER_EVENTS,
 });

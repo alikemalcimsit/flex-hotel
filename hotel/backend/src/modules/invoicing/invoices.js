@@ -18,7 +18,7 @@ import {
 } from '@hotelos/hotel-contracts';
 import { prismaUnfiltered } from '../../db.js';
 import { recordAudit } from '../../lib/audit.js';
-import { ConflictError, NotFoundError, StaleWriteError, ValidationError } from '../../lib/errors.js';
+import { ConflictError, NotFoundError, StaleWriteError, ValidationError, bulkItemFailure } from '../../lib/errors.js';
 import { lockEvents, lockFolios, lockInvoices } from '../../lib/locks.js';
 import { buildPage, toSkipTake } from '../../lib/pagination.js';
 import { PERMISSIONS } from '../../lib/permissions.js';
@@ -127,8 +127,10 @@ export async function listInvoices(hotelId, query) {
     where.OR = [{ number: { startsWith: search.toUpperCase() } }, { buyerName: { contains: search, mode: 'insensitive' } }, ...(/^\d+$/.test(digits) ? [{ buyerTaxNumber: { startsWith: digits } }] : [])];
   }
   const orderBy = query.status === 'DRAFT' ? [{ createdAt: 'desc' }, { id: 'desc' }] : [{ issueDate: 'desc' }, { issuedAt: 'desc' }, { id: 'desc' }];
+  // Taslakta alıcının kesime yeterliliği de döner (toplu kesimde eksik alıcılı taslak seçilemez).
+  const drafts = query.status === 'DRAFT';
   const [rows, total, counts] = await Promise.all([
-    prisma.invoice.findMany({ where, select: INVOICE_LIST_SELECT, orderBy, ...toSkipTake(query) }),
+    prisma.invoice.findMany({ where, select: drafts ? { ...INVOICE_LIST_SELECT, buyer: true } : INVOICE_LIST_SELECT, orderBy, ...toSkipTake(query) }),
     prisma.invoice.count({ where }),
     prisma.$queryRaw`
       SELECT
@@ -138,7 +140,8 @@ export async function listInvoices(hotelId, query) {
         (SELECT count(*)::int FROM "Invoice" WHERE "hotelId" = ${hotelId} AND "edocState" IN ('QUEUED', 'SENDING', 'SENT')) AS "pending",
         (SELECT count(*)::int FROM "Invoice" WHERE "hotelId" = ${hotelId} AND "status" = 'CANCEL_PENDING') AS "cancelPending"`,
   ]);
-  return { ...buildPage(rows.map(invoiceListView), total, query), counts: /** @type {any[]} */ (counts)[0] };
+  const view = drafts ? (/** @type {any} */ row) => ({ ...invoiceListView(row), buyerProblems: Object.values(invoiceBuyerProblems(row.buyer)) }) : invoiceListView;
+  return { ...buildPage(rows.map(view), total, query), counts: /** @type {any[]} */ (counts)[0] };
 }
 
 /**
@@ -497,6 +500,16 @@ export async function deleteDraft(hotelId, invoiceId) {
  * @param {string} hotelId @param {string} invoiceId @param {{ expectedUpdatedAt: string }} input
  */
 export async function issueInvoice(hotelId, invoiceId, input) {
+  await issueDraft(hotelId, invoiceId, input);
+  return getInvoice(hotelId, invoiceId);
+}
+
+/**
+ * Kesimin kendisi (tekli ve toplu kesim ortak).
+ * @param {string} hotelId @param {string} invoiceId @param {{ expectedUpdatedAt: string | Date }} input
+ * @returns {Promise<{ number: string }>}
+ */
+async function issueDraft(hotelId, invoiceId, input) {
   const context = await hotelContext(hotelId);
   assertTryHotel(context);
   const settings = await requireSettings(hotelId);
@@ -635,7 +648,69 @@ export async function issueInvoice(hotelId, invoiceId, input) {
     throw new ConflictError(`Kaynak taslaktan sonra değişti (${outcome.refreshed.from} → ${outcome.refreshed.to}); taslak yenilendi, kontrol edip yeniden kesin`, 'INVOICE_SOURCE_CHANGED');
   }
   kickEdocDispatcher();
-  return getInvoice(hotelId, invoiceId);
+  return { number: /** @type {string} */ (outcome.number) };
+}
+
+/* ═══════════════ Toplu: taslak ve kesim ═══════════════ */
+
+/** Toplu isteğin süre bütçesi: aşılınca kalan kayıtlar işlenmeden `pending` döner (kesim dış servise gider). */
+const BULK_BUDGET_MS = 20_000;
+
+/**
+ * Kayıtları sırayla, her birini kendi işleminde işler; beklenen hata kayda yazılır (diğerleri durmaz), beklenmeyen
+ * hata merkezi işleyiciye gider. Bütçe dolunca kalanlar `pending`.
+ * @template T @param {T[]} items @param {(item: T) => string} idOf @param {(item: T) => Promise<object>} work @param {number} budgetMs
+ */
+async function runBatch(items, idOf, work, budgetMs) {
+  const started = Date.now();
+  const results = [];
+  const pending = [];
+  for (const item of items) {
+    if (Date.now() - started > budgetMs) {
+      pending.push(idOf(item));
+      continue;
+    }
+    try {
+      results.push({ id: idOf(item), ok: true, message: null, ...(await work(item)) });
+    } catch (error) {
+      results.push(bulkItemFailure(idOf(item), error));
+    }
+  }
+  return { results, pending, succeeded: results.filter((row) => row.ok).length, failed: results.filter((row) => !row.ok).length };
+}
+
+/**
+ * Toplu taslak (faturalanacaklardan seçilenler): her kaynak tek taslağın kuralıyla; taslağı olanın taslağı döner.
+ * Alıcısı kesime yetmeyen taslak (VKN / TCKN, ünvan eksik) açılır ama sonuçta işaretlenir: kesimden önce tamamlanır.
+ * @param {string} hotelId @param {{ kind: 'FOLIO' | 'EVENT', ids: string[] }} input @param {{ budgetMs?: number }} [options]
+ */
+export async function createDraftsBatch(hotelId, { kind, ids }, { budgetMs = BULK_BUDGET_MS } = {}) {
+  const batch = await runBatch(
+    ids,
+    (id) => id,
+    async (id) => {
+      const { invoiceId, created } = await createDraft(hotelId, kind === 'FOLIO' ? { source: 'FOLIO', folioId: id } : { source: 'EVENT', eventId: id });
+      return { invoiceId, created, message: created ? null : 'Taslağı zaten vardı' };
+    },
+    budgetMs,
+  );
+  const invoiceIds = batch.results.filter((row) => row.ok).map((row) => /** @type {any} */ (row).invoiceId);
+  const drafts = invoiceIds.length ? await prisma.invoice.findMany({ where: { hotelId, id: { in: invoiceIds } }, select: { id: true, buyer: true } }) : [];
+  const problems = new Map(drafts.map((draft) => [draft.id, Object.values(invoiceBuyerProblems(/** @type {any} */ (draft.buyer)))]));
+  for (const row of /** @type {any[]} */ (batch.results)) {
+    if (row.ok) row.buyerProblems = problems.get(row.invoiceId)?.length ? problems.get(row.invoiceId) : null;
+  }
+  return { ...batch, needsBuyer: batch.results.filter((row) => /** @type {any} */ (row).buyerProblems).length };
+}
+
+/**
+ * Toplu kesim (taslaklardan seçilenler), seçim sırasıyla: her taslak tek kesimin kuralıyla (sürüm, alıcı, kaynağın
+ * yeniden okunması, mükellef sorgusu, boşluksuz numara). Kesilemeyen sebebiyle döner; bütçe dolunca kalanlar
+ * `pending` (ekran aynı sürümlerle yeniden ister).
+ * @param {string} hotelId @param {Array<{ id: string, expectedUpdatedAt: string | Date }>} items @param {{ budgetMs?: number }} [options]
+ */
+export async function issueBatch(hotelId, items, { budgetMs = BULK_BUDGET_MS } = {}) {
+  return runBatch(items, (item) => item.id, (item) => issueDraft(hotelId, item.id, item), budgetMs);
 }
 
 /* ═══════════════ Tekrar gönderim ═══════════════ */

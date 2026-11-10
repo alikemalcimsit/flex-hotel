@@ -188,6 +188,13 @@ export const NAV_SECTIONS = Object.freeze([
         badge: 'requests',
         permission: PERMISSIONS.REQUESTS_VIEW,
       },
+      // Anket ve memnuniyet (modül 55): NPS, cevaplar, düşük puan takibi.
+      {
+        label: 'Anketler',
+        to: '/anketler',
+        icon: 'star',
+        permission: PERMISSIONS.SURVEYS_VIEW,
+      },
       // Mutfak (modül 43): şef reçete ve malzeme maliyetini yönetir, muhasebe maliyeti izler.
       {
         label: 'Mutfak',

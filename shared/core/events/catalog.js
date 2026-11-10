@@ -516,6 +516,7 @@ export const EVENT_CATALOG = Object.freeze({
       'POS',
       'INVOICE',
       'ONLINE_CHECKIN',
+      'SURVEY_LOW_SCORE',
     ]),
     userId: z.string().uuid().nullable(),
     permission: z.string().nullable(),
@@ -907,6 +908,20 @@ export const EVENT_CATALOG = Object.freeze({
   /** Portal bağlantısı verildi / iptal edildi ya da davet gönderildi. */
   'guest_portal.link.changed': hotelScoped.extend({ reservationId: z.string().uuid(), change: z.enum(['ISSUED', 'REVOKED', 'INVITED']) }),
   'guest_portal.settings.changed': hotelScoped,
+
+  /* ── Anket ve memnuniyet (modül 55) ── */
+  /** Misafir anketi cevapladı (kişisel veri taşımaz). Düşük puan takibi açıldıysa `lowScore`. */
+  'survey.response.submitted': hotelScoped.extend({ responseId: z.string().uuid(), reservationId: z.string().uuid(), kind: z.enum(['POST_STAY', 'MID_STAY']), npsScore: z.number().int().min(0).max(10).nullable(), lowScore: z.boolean() }),
+  /** Açık uçlu cevabın AI etiketi istendi (insight-agent) / yazıldı. */
+  'survey.analysis.requested': hotelScoped.extend({ responseId: z.string().uuid() }),
+  'survey.analysis.completed': hotelScoped.extend({ responseId: z.string().uuid(), status: z.enum(['DONE', 'FAILED']) }),
+  /** Dönemin tema özeti istendi (insight-agent) / yazıldı. */
+  'survey.insight.requested': hotelScoped.extend({ insightId: z.string().uuid() }),
+  'survey.insight.completed': hotelScoped.extend({ insightId: z.string().uuid(), status: z.enum(['READY', 'FAILED']) }),
+  /** Takip açıldı / üstlenildi / not eklendi / kapandı / yeniden açıldı. */
+  'survey.followup.changed': hotelScoped.extend({ followUpId: z.string().uuid(), change: z.enum(['OPENED', 'ASSIGNED', 'NOTED', 'RESOLVED', 'REOPENED']) }),
+  /** Ekran olayı: anket tasarımı, ayar ya da davetler değişti. */
+  'survey.settings.changed': hotelScoped.extend({ area: z.enum(['SETTINGS', 'QUESTIONS', 'INVITATIONS']) }),
 
   /* ── Restoran POS (modül 39) ──
      Masa planı, adisyon ekranı ve mutfak ekranı (modül 40) bunlarla canlı tazelenir
@@ -1386,6 +1401,9 @@ export const PAYROLL_EVENTS = Object.freeze(['employee.changed', 'payroll.run.ch
 
 /** Misafir portalı ve online check-in (modül 53): ekranlar bunlarla tazelenir (`guest-portal.changed` kanalı). */
 export const GUEST_PORTAL_EVENTS = Object.freeze(['online_checkin.changed', 'guest_portal.link.changed', 'guest_portal.settings.changed']);
+
+/** Anket ve memnuniyet (modül 55): ekranlar bunlarla tazelenir (`surveys.changed` kanalı). */
+export const SURVEY_EVENTS = Object.freeze(['survey.response.submitted', 'survey.analysis.completed', 'survey.insight.requested', 'survey.insight.completed', 'survey.followup.changed', 'survey.settings.changed']);
 
 /** Acente bonusu (modül 35): ekranlar bunlarla tazelenir (`agency-bonus.changed` kanalı). */
 export const AGENCY_BONUS_EVENTS = Object.freeze([
