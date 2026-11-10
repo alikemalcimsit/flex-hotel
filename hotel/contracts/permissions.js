@@ -212,6 +212,11 @@ export const PERMISSIONS = Object.freeze({
   ACTORS_VIEW: 'actors.view',
   /** Aktörü bu otelde açmak / kapatmak (kapalı aktörün işi personele düşer). */
   ACTORS_MANAGE: 'actors.manage',
+
+  /** Gün kapanış (modül 18): kapanış durumu, önizleme, kapanış geçmişi ve günlük özet. */
+  NIGHT_AUDIT_VIEW: 'night_audit.view',
+  /** Günü kapatmak: gelmeyenleri düş, oda ücretlerini bas, kasayı say, günü ilerlet. */
+  NIGHT_AUDIT_CLOSE: 'night_audit.close',
 });
 
 /** Tüm izinlerin düz listesi (doğrulama ve "ADMIN her şeyi görür" için). */
@@ -298,6 +303,8 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.INVOICES_ISSUE]: 'Folyo / etkinlik faturası kes (taslak, alıcı, kesim), e-belgeyi tekrar gönder',
   [PERMISSIONS.INVOICES_MANAGE]: 'Cariye serbest fatura kes, fatura iptali iste (onay kuyruğu)',
   [PERMISSIONS.INVOICES_SETUP]: 'Fatura ayarları: satıcı bilgileri, seriler, faturalama başlangıcı, vergi kodları, entegratör, test mükellefleri',
+  [PERMISSIONS.NIGHT_AUDIT_VIEW]: 'Gün kapanışını ve günlük özeti görüntüle',
+  [PERMISSIONS.NIGHT_AUDIT_CLOSE]: 'Günü kapat (night audit)',
   [PERMISSIONS.EMPLOYEES_VIEW]: 'Personel listesini ve kartlarını görüntüle (ücret hariç)',
   [PERMISSIONS.EMPLOYEES_MANAGE]: 'Personel kartı ekle / düzenle, işten çıkış yap',
   [PERMISSIONS.PAYROLL_VIEW]: 'Ücretleri, bordroları, pusulaları ve çıktıları görüntüle',
@@ -387,6 +394,7 @@ export const PERMISSION_GROUPS = Object.freeze([
     permissions: [PERMISSIONS.LOST_ITEMS_VIEW, PERMISSIONS.LOST_ITEMS_RECORD, PERMISSIONS.LOST_ITEMS_RELEASE, PERMISSIONS.LOST_ITEMS_MANAGE],
   },
   { key: 'reports', label: 'Raporlar', permissions: [PERMISSIONS.REPORTS_VIEW] },
+  { key: 'night_audit', label: 'Gün kapanış', permissions: [PERMISSIONS.NIGHT_AUDIT_VIEW, PERMISSIONS.NIGHT_AUDIT_CLOSE] },
   { key: 'budget', label: 'Bütçe', permissions: [PERMISSIONS.BUDGET_VIEW, PERMISSIONS.BUDGET_MANAGE, PERMISSIONS.BUDGET_APPROVE] },
   { key: 'agencies', label: 'Acente ve kontrat', permissions: [PERMISSIONS.AGENCIES_VIEW, PERMISSIONS.AGENCIES_MANAGE] },
   { key: 'promotions', label: 'Promosyon ve kupon', permissions: [PERMISSIONS.PROMOTIONS_VIEW, PERMISSIONS.PROMOTIONS_MANAGE] },
@@ -495,6 +503,9 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.LOST_ITEMS_MANAGE,
     PERMISSIONS.REPORTS_VIEW,
     PERMISSIONS.FORECAST_MANAGE,
+    // Gün kapanışı (night audit) gece müdürünün / yönetimin işi.
+    PERMISSIONS.NIGHT_AUDIT_VIEW,
+    PERMISSIONS.NIGHT_AUDIT_CLOSE,
     // Bütçeyi müdür onaylar.
     PERMISSIONS.BUDGET_VIEW,
     PERMISSIONS.BUDGET_MANAGE,
@@ -587,6 +598,9 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     // Online check-in'i girişten önce resepsiyon inceler (belgeyi görür, onaylar ya da düzeltme ister); bağlantıyı verir.
     PERMISSIONS.GUEST_PORTAL_VIEW,
     PERMISSIONS.GUEST_PORTAL_MANAGE,
+    // Gece vardiyasında günü resepsiyon kapatır (night audit).
+    PERMISSIONS.NIGHT_AUDIT_VIEW,
+    PERMISSIONS.NIGHT_AUDIT_CLOSE,
   ]),
   HOUSEKEEPING: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,

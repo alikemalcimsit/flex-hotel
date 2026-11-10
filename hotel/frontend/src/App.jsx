@@ -91,6 +91,8 @@ const HousekeepingFloorMapTab = lazy(() =>
 );
 const LostItemDetailPage = lazy(() => import('./pages/lost-items/LostItemDetailPage.jsx').then((m) => ({ default: m.LostItemDetailPage })));
 const RevenueReportPage = lazy(() => import('./pages/reports/RevenueReportPage.jsx').then((m) => ({ default: m.RevenueReportPage })));
+const NightAuditPage = lazy(() => import('./pages/night-audit/NightAuditPage.jsx').then((m) => ({ default: m.NightAuditPage })));
+const ClosureHistoryPage = lazy(() => import('./pages/night-audit/ClosureHistoryPage.jsx').then((m) => ({ default: m.ClosureHistoryPage })));
 const BudgetPage = lazy(() => import('./pages/budget/BudgetPage.jsx').then((m) => ({ default: m.BudgetPage })));
 const AgenciesPage = lazy(() => import('./pages/agencies/AgenciesPage.jsx').then((m) => ({ default: m.AgenciesPage })));
 const AgencyPage = lazy(() => import('./pages/agencies/AgencyPage.jsx').then((m) => ({ default: m.AgencyPage })));
@@ -480,6 +482,22 @@ export default function App() {
               element={
                 <RequirePermission permission={PERMISSIONS.REPORTS_VIEW}>
                   <RevenueReportPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="gun-kapanis"
+              element={
+                <RequirePermission permission={PERMISSIONS.NIGHT_AUDIT_VIEW}>
+                  <NightAuditPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="gun-kapanis/gecmis"
+              element={
+                <RequirePermission permission={PERMISSIONS.NIGHT_AUDIT_VIEW}>
+                  <ClosureHistoryPage />
                 </RequirePermission>
               }
             />

@@ -56,6 +56,8 @@ describe('manifest', () => {
       'payment.received',
       'payment.refunded',
       'payment.voided',
+      'payroll.run.approved',
+      'payroll.run.changed',
       'pos.payment.changed',
       'purchase.goods.received',
     ]);

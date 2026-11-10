@@ -75,6 +75,10 @@ export const EVENT_LABELS = Object.freeze({
   'folio.charge.posted': 'Folyoya kalem işlendi',
   'folio.room_charges.due': 'Gecenin oda ücretleri işlenecek',
   'folio.room_charges.posted': 'Oda ücretleri işlendi',
+
+  'night.audit.started': 'Gece kapanışı başladı',
+  'night.audit.closed': 'Gece kapanışı tamamlandı',
+
   'folio.item.void_requested': 'Folyo kalemi için iptal istendi',
   'folio.item.voided': 'Folyo kalemi iptal edildi',
   'folio.item.void_declined': 'Folyo kalemi iptali reddedildi',

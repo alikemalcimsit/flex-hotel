@@ -1588,13 +1588,51 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 18. Vardiya / kasa kapama (night audit) — Ali Kemal
 **Gün sonu:** Gece görevlisi sihirbazı adım adım geçip günü kapatıyor; oda ücretleri işleniyor, no-show'lar düşülüyor, kasa farkı raporlanıyor.
-- [ ] Backend: NightAudit, ShiftReport tabloları; `startNightAudit`, `closeDay` servisleri
-- [ ] Backend: gelmeyen rezervasyonları NO_SHOW yapma, tüm dolu odalara oda ücreti basma
-- [ ] Backend: günlük özet (gelir, doluluk, tahsilat) DailyStats tablosuna yazılır
-- [ ] Ekran: Night audit sihirbazı (1. gelmeyenler → 2. oda ücretleri → 3. kasa sayımı → 4. fark → 5. kapat)
-- [ ] Ekran: Vardiya devir formu (kasa sayımı, not) + devir raporu PDF
-- [ ] Ekran: Kapanış geçmişi
-- [ ] Aktör: billing-worker'a `night.audit.started` kuralı
+- [x] Backend: NightAudit, ShiftReport tabloları; `startNightAudit`, `closeDay` servisleri
+- [x] Backend: gelmeyen rezervasyonları NO_SHOW yapma, tüm dolu odalara oda ücreti basma
+- [x] Backend: günlük özet (gelir, doluluk, tahsilat) DailyStats tablosuna yazılır
+- [x] Ekran: Night audit sihirbazı (1. gelmeyenler → 2. oda ücretleri → 3. kasa sayımı → 4. fark → 5. kapat)
+- [x] Ekran: Vardiya devir formu (kasa sayımı, not) + devir raporu PDF
+- [x] Ekran: Kapanış geçmişi
+- [x] Aktör: billing-worker'a `night.audit.started` kuralı
+
+> **📌 Modül 18 tamamlandı (10 Kasım 2026 — Ali Kemal).**
+>
+> **İş günü artık `NightAudit`'ten okunuyor.** `lib/business-date.js` → `getBusinessDate`
+> son CLOSED günün ertesini döndürür (cache'li, kapanışta tazelenir); hiç kapanış
+> yoksa takvim günü (geriye uyumlu). **Gün kapatılmadan iş günü ilerlemez** — her
+> yer buradan okuduğu için başka yere dokunmayın. Takvimden ileri gün kapatılamaz
+> (`DAY_NOT_ARRIVED`), aynı gün iki kez kapatılamaz (`ALREADY_CLOSED`).
+>
+> **Veri** (`20261109120000_night_audit`): `NightAudit` iskeleti durumlu hale geldi
+> (`status` IN_PROGRESS/CLOSED, `startedBy`, `closedAt/By`, kapanış özeti); kasa
+> sayımı `ShiftReport`'a taşındı (yöntem bazında beklenen/sayılan/fark, `counts` JSON,
+> devir notu). `DailyStats` (`hotelId, day` tekil): doluluk, oda geliri, ADR, RevPAR,
+> tahsilat — **göstergeler modül 23'ün tanımlarıyla** (`reports/queries.js` → `loadSellable`
+> yeniden kullanıldı; satılan gece, satılabilir = oda − arıza).
+>
+> **Kapanış orkestrasyonu** (`modules/night-audit/service.js` → `closeDay`): gelmeyenleri
+> `reservations.markNoShowBatch` ile düşer → o gecenin oda ücretlerini
+> `folios.runRoomCharges(hotelId, { night, allowCurrent: true })` ile basar (kapanış
+> geceyi "bitti" sayar; yeni `allowCurrent` seçeneği) → `DailyStats`, `ShiftReport`,
+> `NightAudit` CLOSED'u tek transaction'da yazar → `night.audit.closed` yayınlar →
+> commit sonrası iş gününü tazeler. Her adım idempotent (oda ücreti `sourceKey`,
+> gelmedi tek tek). **`startNightAudit`** IN_PROGRESS işaretler (iki görevli aynı anda
+> kapatamaz), günü ilerletmez.
+>
+> **Olaylar** (katalog + etiket): `night.audit.started` (billing-worker dinler →
+> kapanış öncesi tamamlanmış gecelerin ücretini önceden basar), `night.audit.closed`
+> (FlexAI 2.0'da 87 gece müdürü, 92 kârlılık, 96 dış muhasebe dinleyecek — `businessDay`
+> + özet payload).
+>
+> **API** (`/night-audit`, izin `night_audit.view` / `night_audit.close`; resepsiyon +
+> müdür alır): `GET /status` (sihirbaz önizlemesi: gelmeyenler, içeride, beklenen kasa),
+> `POST /start`, `POST /close`, `GET /closures` (sayfalı), `GET /closures/:day`,
+> `GET /closures/:day/report.pdf` (vardiya devir raporu).
+>
+> **Modül 23'e not:** `DailyStats` kapanış anındaki özet; `RevenueDayStat` (zamanlanmış,
+> daha ayrıntılı kırılım) ayrı durur — ikisi de aynı satılan-gece / satılabilir tanımını
+> kullanır. **FlexAI 2.0'a not:** gece müdürü ve patron uygulaması `DailyStats`'i okur.
 
 > **Modül 3'ten not (16 Eylül 2026 — Ahmet):**
 >

@@ -172,6 +172,21 @@ class BillingWorker extends BaseWorker {
           return { message: result.reversed ? `${result.reversed} ücret kalemi ters kayıtla düşüldü` : 'Düşülecek ücret yoktu' };
         },
 
+        /**
+         * Gün kapanışı başladı (modül 18): kapanıştan önce tamamlanmış gecelerin
+         * (düne kadar) oda ücretleri işlenir — kapanış yalnız o geceyi ekler.
+         * Tekrar işlemez (işlenmiş gece atlanır); kapanış da aynı işi yapar.
+         */
+        'night.audit.started': async (payload) => {
+          const summary = await run(() => service.runRoomCharges(payload.hotelId));
+          return {
+            message: summary.items
+              ? `Kapanış öncesi ${dotted(summary.night)} gecesine kadar ${summary.stays} konaklamaya ${summary.items} oda ücreti kalemi işlendi (${summary.total})`
+              : 'Kapanış öncesi işlenecek yeni gece yoktu',
+            meta: summary,
+          };
+        },
+
         /** Gün döndü: gecenin oda ücretleri işlenir. */
         'folio.room_charges.due': async (payload) => {
           const summary = await run(() => service.runRoomCharges(payload.hotelId, { night: payload.night }));
@@ -272,6 +287,8 @@ class BillingWorker extends BaseWorker {
         return 'Rezervasyon geri alındı: iptal / gelmedi ücreti folyodan düşülecek';
       case 'folio.room_charges.due':
         return `${dotted(payload.night)} gecesinin oda ücretleri işlenecek (Folyolar → Oda ücretlerini işle)`;
+      case 'night.audit.started':
+        return 'Gün kapanışı öncesi tamamlanmış gecelerin oda ücretleri işlenecek (Folyolar → Oda ücretlerini işle)';
       case 'fnb.order.charged':
         return `Restoran siparişi ${payload.reference} folyoya elle işlenecek`;
       case 'minibar.consumed':

@@ -65,6 +65,7 @@ describe('manifest', () => {
         'guest.checked_out',
         'laundry.charged',
         'minibar.consumed',
+        'night.audit.started',
         'payment.received',
         'payment.refunded',
         'payment.voided',

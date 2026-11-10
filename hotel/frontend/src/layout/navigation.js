@@ -117,6 +117,16 @@ export const NAV_SECTIONS = Object.freeze([
         icon: 'chart',
         permission: PERMISSIONS.REPORTS_VIEW,
       },
+      // Gün kapanış / night audit (modül 18): gece görevlisi günü kapatır, günlük özet çıkar.
+      {
+        label: 'Gün kapanış',
+        icon: 'alarm',
+        permission: PERMISSIONS.NIGHT_AUDIT_VIEW,
+        children: [
+          { label: 'Kapanış', to: '/gun-kapanis', icon: 'checkCircle', end: true },
+          { label: 'Geçmiş', to: '/gun-kapanis/gecmis', icon: 'list' },
+        ],
+      },
       // Bütçe ve sapma (modül 27): müdür ve muhasebe.
       {
         label: 'Bütçe',

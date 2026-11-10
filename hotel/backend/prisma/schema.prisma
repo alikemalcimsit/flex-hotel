@@ -773,6 +773,8 @@ model Hotel {
   laundryItems           LaundryItem[]
   laundryOrders          LaundryOrder[]
   nightAudits            NightAudit[]
+  shiftReports           ShiftReport[]
+  dailyStats             DailyStats[]
   housekeepingTasks      HousekeepingTask[]
   maintenanceTickets     MaintenanceTicket[]
   lostItems              LostItem[]
@@ -2393,22 +2395,84 @@ model LaundryOrderLine {
   @@index([itemId])
 }
 
+/// Gün kapanış durumu (modül 18). İş günü ("bugün") bu tablodan okunur:
+/// son CLOSED günün ertesi (`lib/business-date.js`). Hiç kapanış yoksa takvim
+/// günü. Bir gün yalnızca IN_PROGRESS → CLOSED yürür; aynı güne iki satır açılmaz
+/// (kısıt) — iki görevli aynı anda kapatamaz.
+enum NightAuditStatus {
+  IN_PROGRESS
+  CLOSED
+}
+
 model NightAudit {
-  id           String    @id @default(uuid())
-  hotelId      String
-  date         DateTime  @db.Date
-  closedBy     String
-  cashCounted  Decimal   @default(0) @db.Decimal(12, 2)
-  cashExpected Decimal   @default(0) @db.Decimal(12, 2)
-  difference   Decimal   @default(0) @db.Decimal(12, 2)
-  notes        String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  deletedAt    DateTime?
+  id              String           @id @default(uuid())
+  hotelId         String
+  /// Kapatılan iş günü (UTC gün başı).
+  date            DateTime         @db.Date
+  status          NightAuditStatus @default(IN_PROGRESS)
+  startedAt       DateTime         @default(now())
+  startedBy       String
+  closedAt        DateTime?
+  closedBy        String?
+  /// Kapanışın yaptığı işin özeti (denetim; kaynak veriyi değiştirmez).
+  noShowCount     Int              @default(0)
+  roomChargeStays Int              @default(0)
+  roomChargeTotal Decimal          @default(0) @db.Decimal(14, 2)
+  notes           String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  deletedAt       DateTime?
+
+  hotel       Hotel        @relation(fields: [hotelId], references: [id])
+  shiftReport ShiftReport?
+
+  @@unique([hotelId, date])
+  @@index([hotelId, status])
+}
+
+/// Vardiya devri / kasa sayımı (modül 18). Kapanışta yöntem bazında beklenen
+/// (sistem) ve sayılan tutar, fark, devralan. `counts`: `[{ method, expected,
+/// counted, variance }]`. Devir raporu (PDF) bundan üretilir.
+model ShiftReport {
+  id            String   @id @default(uuid())
+  hotelId       String
+  nightAuditId  String   @unique
+  date          DateTime @db.Date
+  counts        Json     @default("[]")
+  expectedTotal Decimal  @default(0) @db.Decimal(14, 2)
+  countedTotal  Decimal  @default(0) @db.Decimal(14, 2)
+  variance      Decimal  @default(0) @db.Decimal(14, 2)
+  note          String?
+  handedOverBy  String
+  createdAt     DateTime @default(now())
+
+  hotel      Hotel      @relation(fields: [hotelId], references: [id])
+  nightAudit NightAudit @relation(fields: [nightAuditId], references: [id])
+
+  @@index([hotelId, date])
+}
+
+/// Günlük özet (modül 18 → 23 / 75 / 87): kapanan günün doluluğu, oda geliri,
+/// ADR, RevPAR ve tahsilatı. Göstergeler modül 23 tanımlarıyla (satılan gece,
+/// satılabilir = oda − arıza). Kaynak veri değişmez; kapanış anındaki özettir.
+/// FlexAI 2.0'da gece müdürü (87) ve patron uygulaması (75) bunu okur.
+model DailyStats {
+  id            String   @id @default(uuid())
+  hotelId       String
+  day           DateTime @db.Date
+  currency      String
+  roomsSellable Int
+  roomsSold     Int
+  occupancyPct  Decimal  @db.Decimal(5, 2)
+  roomRevenue   Decimal  @db.Decimal(14, 2)
+  adr           Decimal  @db.Decimal(14, 2)
+  revpar        Decimal  @db.Decimal(14, 2)
+  collections   Decimal  @db.Decimal(14, 2)
+  closedAt      DateTime @default(now())
 
   hotel Hotel @relation(fields: [hotelId], references: [id])
 
-  @@unique([hotelId, date])
+  @@unique([hotelId, day])
 }
 
 // ───────────── KAT HİZMETLERİ / BAKIM ─────────────

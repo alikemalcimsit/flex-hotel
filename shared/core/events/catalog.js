@@ -590,6 +590,19 @@ export const EVENT_CATALOG = Object.freeze({
     items: z.number().int().min(0),
     total: moneyText,
   }),
+
+  /** Gün kapanışı (modül 18) başladı: görevli günü kapatmaya başladı (iş günü henüz ilerlemedi). */
+  'night.audit.started': hotelScoped.extend({ businessDay: isoDay }),
+  /**
+   * Gün kapandı: iş günü ilerledi. FlexAI 2.0'da gece müdürü (87), kârlılık (92)
+   * ve dış muhasebe (96) bunu dinler. Kapanışın yaptığı iş özeti payload'da.
+   */
+  'night.audit.closed': hotelScoped.extend({
+    businessDay: isoDay,
+    noShows: z.number().int().min(0),
+    roomChargeStays: z.number().int().min(0),
+    roomChargeTotal: moneyText,
+  }),
   /** Kalem iptali onaya gitti. */
   'folio.item.void_requested': folioEvent.extend({ itemId: z.string().uuid(), approvalId: z.string().uuid() }),
   /** Kalem iptal edildi (ters kayıt işlendi). Onaylı iptalde `approvalId` dolu; sistemin geri alması boş. */
