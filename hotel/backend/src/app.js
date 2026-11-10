@@ -65,6 +65,7 @@ import { extrasRoutes } from './modules/extras/routes.js';
 import { lostItemRoutes } from './modules/lost-items/routes.js';
 import { reportRoutes } from './modules/reports/routes.js';
 import { nightAuditRoutes } from './modules/night-audit/routes.js';
+import { maintenanceRoutes } from './modules/maintenance/routes.js';
 import { reportCacheStats } from './modules/reports/service.js';
 import { registerPaymentSubscribers } from './modules/payments/subscribers.js';
 import { authRoutes } from './modules/auth/routes.js';
@@ -348,6 +349,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   await app.register(extrasRoutes, { prefix: '/extras' });
   await app.register(housekeepingRoutes, { prefix: '/housekeeping' });
   await app.register(lostItemRoutes, { prefix: '/lost-items' });
+  await app.register(maintenanceRoutes, { prefix: '/maintenance' });
   await app.register(reportRoutes, { prefix: '/reports' });
   await app.register(nightAuditRoutes, { prefix: '/night-audit' });
   await app.register(forecastRoutes, { prefix: '/forecast' });

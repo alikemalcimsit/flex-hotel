@@ -93,6 +93,11 @@ const LostItemDetailPage = lazy(() => import('./pages/lost-items/LostItemDetailP
 const RevenueReportPage = lazy(() => import('./pages/reports/RevenueReportPage.jsx').then((m) => ({ default: m.RevenueReportPage })));
 const NightAuditPage = lazy(() => import('./pages/night-audit/NightAuditPage.jsx').then((m) => ({ default: m.NightAuditPage })));
 const ClosureHistoryPage = lazy(() => import('./pages/night-audit/ClosureHistoryPage.jsx').then((m) => ({ default: m.ClosureHistoryPage })));
+const MaintenancePage = lazy(() => import('./pages/maintenance/MaintenancePage.jsx').then((m) => ({ default: m.MaintenancePage })));
+const TicketFormPage = lazy(() => import('./pages/maintenance/TicketFormPage.jsx').then((m) => ({ default: m.TicketFormPage })));
+const TechnicianPage = lazy(() => import('./pages/maintenance/TechnicianPage.jsx').then((m) => ({ default: m.TechnicianPage })));
+const PlansPage = lazy(() => import('./pages/maintenance/PlansPage.jsx').then((m) => ({ default: m.PlansPage })));
+const TicketDetailPage = lazy(() => import('./pages/maintenance/TicketDetailPage.jsx').then((m) => ({ default: m.TicketDetailPage })));
 const BudgetPage = lazy(() => import('./pages/budget/BudgetPage.jsx').then((m) => ({ default: m.BudgetPage })));
 const AgenciesPage = lazy(() => import('./pages/agencies/AgenciesPage.jsx').then((m) => ({ default: m.AgenciesPage })));
 const AgencyPage = lazy(() => import('./pages/agencies/AgencyPage.jsx').then((m) => ({ default: m.AgencyPage })));
@@ -501,6 +506,11 @@ export default function App() {
                 </RequirePermission>
               }
             />
+            <Route path="teknik-servis" element={<RequirePermission permission={PERMISSIONS.MAINTENANCE_VIEW}><MaintenancePage /></RequirePermission>} />
+            <Route path="teknik-servis/yeni" element={<RequirePermission permission={PERMISSIONS.MAINTENANCE_OPERATE}><TicketFormPage /></RequirePermission>} />
+            <Route path="teknik-servis/benim" element={<RequirePermission permission={PERMISSIONS.MAINTENANCE_VIEW}><TechnicianPage /></RequirePermission>} />
+            <Route path="teknik-servis/planlama" element={<RequirePermission permission={PERMISSIONS.MAINTENANCE_MANAGE}><PlansPage /></RequirePermission>} />
+            <Route path="teknik-servis/:id" element={<RequirePermission permission={PERMISSIONS.MAINTENANCE_VIEW}><TicketDetailPage /></RequirePermission>} />
             <Route path="butce" element={<Navigate to="/butce/plan" replace />} />
             <Route
               path="butce/plan"

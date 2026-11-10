@@ -227,6 +227,8 @@ enum StaffAlertKind {
   INVOICE
   /// Online check-in incelemesi bekliyor (modül 53): resepsiyona.
   ONLINE_CHECKIN
+  /// Yeni / acil arıza bileti teknik servise (modül 20).
+  MAINTENANCE
 }
 
 /// Rezervasyon fiyatının kaynağı (modül 4): sistem hesabı ya da yetkili
@@ -777,6 +779,8 @@ model Hotel {
   dailyStats             DailyStats[]
   housekeepingTasks      HousekeepingTask[]
   maintenanceTickets     MaintenanceTicket[]
+  maintenancePhotos      MaintenancePhoto[]
+  maintenancePlans       MaintenancePlan[]
   lostItems              LostItem[]
   lostItemPhotos         LostItemPhoto[]
   lostItemNotes          LostItemNote[]
@@ -1401,6 +1405,7 @@ model Room {
   guestRequests       GuestRequest[]
   housekeepingTasks   HousekeepingTask[]
   maintenanceTickets  MaintenanceTicket[]
+  maintenancePlans    MaintenancePlan[]
   lostItems           LostItem[]
   minibarConsumptions MinibarConsumption[]
   laundryOrders       LaundryOrder[]
@@ -2534,23 +2539,116 @@ model HousekeepingTask {
   @@index([hotelId, assignedToId, status])
 }
 
+/// Arıza / bakım türü (modül 20). Oda kapatma kararını da besler: su basması /
+/// elektrik ağır iştir (OUT_OF_ORDER önerilir), kozmetik iş kısa.
+enum MaintenanceCategory {
+  ELECTRICAL
+  PLUMBING
+  HVAC
+  FURNITURE
+  APPLIANCE
+  STRUCTURAL
+  SAFETY
+  OTHER
+}
+
+/// Teknik servis / arıza-bakım bileti (modül 20). İskeletten genişletildi:
+/// yaşam döngüsü (PENDING→IN_PROGRESS→DONE/CANCELLED, `TaskStatus`), kaynak
+/// (personel, kat görevlisi bildirimi, misafir isteği, periyodik plan), oda
+/// kapatıldıysa `roomBlockId` (çözülünce kaldırılır) ve fotoğraflar.
 model MaintenanceTicket {
-  id          String     @id @default(uuid())
+  id          String              @id @default(uuid())
   hotelId     String
+  /// Oda arızası; oda dışı iş (lobi, asansör) için `locationText` (biri, kısıt).
   roomId      String?
+  locationText String?
+  category    MaintenanceCategory @default(OTHER)
   title       String
   description String
-  status      TaskStatus @default(PENDING)
-  priority    Int        @default(3)
+  status      TaskStatus          @default(PENDING)
+  /// 1 en acil, 5 en düşük (kat hizmeti görevleriyle aynı ölçek).
+  priority    Int                 @default(3)
+  /// Kim açtı ve nasıl: `staff` | `housekeeping` (kat görevlisi bildirimi) |
+  /// `guest` (misafir isteği) | `plan` (periyodik bakım).
+  source      String              @default("staff")
   reportedBy  String
   assignedTo  String?
+  assignedAt  DateTime?
+  startedAt   DateTime?
   resolvedAt  DateTime?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  resolvedBy  String?
+  resolutionNote String?
+  cancelReason String?
+  /// Oda kapatıldıysa açılan arıza kaydı (RoomBlock); çözülünce kaldırılır.
+  roomBlockId String?
+  /// Kat görevlisi "sorun var" bildiriminden doğduysa (housekeeping.issue.reported).
+  housekeepingTaskId String?
+  /// Misafir isteğinden doğduysa (modül 7); bilet durumu isteğe yansır.
+  guestRequestId String?
+  /// Periyodik bakım planından üretildiyse.
+  planId      String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
   deletedAt   DateTime?
 
-  hotel Hotel @relation(fields: [hotelId], references: [id])
-  room  Room? @relation(fields: [roomId], references: [id])
+  hotel  Hotel              @relation(fields: [hotelId], references: [id])
+  room   Room?              @relation(fields: [roomId], references: [id])
+  plan   MaintenancePlan?   @relation(fields: [planId], references: [id])
+  photos MaintenancePhoto[]
+
+  @@index([hotelId, status, priority])
+  @@index([hotelId, roomId, status])
+  @@index([hotelId, assignedTo, status])
+  @@index([hotelId, guestRequestId])
+}
+
+/// Arıza fotoğrafı (modül 20; LostItemPhoto ile aynı desen). İçerik dosya
+/// deposunda; burada yalnızca üstveri. İstemci yüklemeden önce küçültür.
+model MaintenancePhoto {
+  id          String   @id @default(uuid())
+  hotelId     String
+  ticketId    String
+  contentType String
+  sizeBytes   Int
+  thumbBytes  Int
+  createdBy   String
+  createdAt   DateTime @default(now())
+  deletedAt   DateTime?
+
+  hotel  Hotel             @relation(fields: [hotelId], references: [id])
+  ticket MaintenanceTicket @relation(fields: [ticketId], references: [id])
+
+  @@index([ticketId, createdAt])
+}
+
+/// Periyodik bakım planı (modül 20): aylık kontrol listeleri. Zamanlanmış iş
+/// her periyotta (`intervalDays`) plandan bir MaintenanceTicket üretir.
+model MaintenancePlan {
+  id           String              @id @default(uuid())
+  hotelId      String
+  title        String
+  description  String?
+  category     MaintenanceCategory @default(OTHER)
+  /// Belirli oda ya da genel otel işi (oda yoksa `locationText`).
+  roomId       String?
+  locationText String?
+  /// Periyot (gün): 30 ≈ aylık. Bir sonraki üretim = `lastRunOn` + bu.
+  intervalDays Int
+  priority     Int                 @default(3)
+  /// Kontrol listesi maddeleri (string dizisi).
+  checklist    Json                @default("[]")
+  active       Boolean             @default(true)
+  /// En son görev üretilen gün; boşsa ilk turda hemen üretilir.
+  lastRunOn    DateTime?           @db.Date
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  deletedAt    DateTime?
+
+  hotel   Hotel               @relation(fields: [hotelId], references: [id])
+  room    Room?               @relation(fields: [roomId], references: [id])
+  tickets MaintenanceTicket[]
+
+  @@index([hotelId, active])
 }
 
 /// Bulunan eşya (modül 21). Etiket no (`LF-XXXXXX`) poşetin üstüne yazılır;

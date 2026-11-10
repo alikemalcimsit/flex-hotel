@@ -516,6 +516,7 @@ export const EVENT_CATALOG = Object.freeze({
       'POS',
       'INVOICE',
       'ONLINE_CHECKIN',
+      'MAINTENANCE',
     ]),
     userId: z.string().uuid().nullable(),
     permission: z.string().nullable(),
@@ -603,6 +604,27 @@ export const EVENT_CATALOG = Object.freeze({
     roomChargeStays: z.number().int().min(0),
     roomChargeTotal: moneyText,
   }),
+
+  /** Arıza bileti açıldı (modül 20). Oda kapatıldıysa `roomBlockId` dolu. */
+  'maintenance.ticket.created': hotelScoped.extend({
+    ticketId: z.string().uuid(),
+    roomId: z.string().uuid().nullable().default(null),
+    priority: z.number().int().min(1).max(5),
+    source: z.string(),
+    roomBlockId: z.string().uuid().nullable().default(null),
+  }),
+  /** Bilete teknisyen atandı (ya da atama kaldırıldı). */
+  'maintenance.ticket.assigned': hotelScoped.extend({
+    ticketId: z.string().uuid(),
+    assignedTo: z.string().uuid().nullable().default(null),
+  }),
+  /** Bilet çözüldü; oda kapatılmışsa açıldı. */
+  'maintenance.ticket.resolved': hotelScoped.extend({
+    ticketId: z.string().uuid(),
+    roomId: z.string().uuid().nullable().default(null),
+  }),
+  /** Bilet iptal edildi. */
+  'maintenance.ticket.cancelled': hotelScoped.extend({ ticketId: z.string().uuid() }),
   /** Kalem iptali onaya gitti. */
   'folio.item.void_requested': folioEvent.extend({ itemId: z.string().uuid(), approvalId: z.string().uuid() }),
   /** Kalem iptal edildi (ters kayıt işlendi). Onaylı iptalde `approvalId` dolu; sistemin geri alması boş. */

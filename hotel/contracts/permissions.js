@@ -217,6 +217,13 @@ export const PERMISSIONS = Object.freeze({
   NIGHT_AUDIT_VIEW: 'night_audit.view',
   /** Günü kapatmak: gelmeyenleri düş, oda ücretlerini bas, kasayı say, günü ilerlet. */
   NIGHT_AUDIT_CLOSE: 'night_audit.close',
+
+  /** Teknik servis (modül 20): arıza listesi, bilet ayrıntısı, bakım planı. */
+  MAINTENANCE_VIEW: 'maintenance.view',
+  /** Arıza bileti aç, başla, çöz, fotoğraf ekle (teknisyen / bildiren personel). */
+  MAINTENANCE_OPERATE: 'maintenance.operate',
+  /** Bilete teknisyen ata, iptal et, odayı arızaya al, periyodik bakım planı. */
+  MAINTENANCE_MANAGE: 'maintenance.manage',
 });
 
 /** Tüm izinlerin düz listesi (doğrulama ve "ADMIN her şeyi görür" için). */
@@ -305,6 +312,9 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.INVOICES_SETUP]: 'Fatura ayarları: satıcı bilgileri, seriler, faturalama başlangıcı, vergi kodları, entegratör, test mükellefleri',
   [PERMISSIONS.NIGHT_AUDIT_VIEW]: 'Gün kapanışını ve günlük özeti görüntüle',
   [PERMISSIONS.NIGHT_AUDIT_CLOSE]: 'Günü kapat (night audit)',
+  [PERMISSIONS.MAINTENANCE_VIEW]: 'Arıza / bakım taleplerini görüntüle',
+  [PERMISSIONS.MAINTENANCE_OPERATE]: 'Arıza bileti aç, başla, çöz, fotoğraf ekle',
+  [PERMISSIONS.MAINTENANCE_MANAGE]: 'Arıza atama / iptal, odayı arızaya alma, bakım planı',
   [PERMISSIONS.EMPLOYEES_VIEW]: 'Personel listesini ve kartlarını görüntüle (ücret hariç)',
   [PERMISSIONS.EMPLOYEES_MANAGE]: 'Personel kartı ekle / düzenle, işten çıkış yap',
   [PERMISSIONS.PAYROLL_VIEW]: 'Ücretleri, bordroları, pusulaları ve çıktıları görüntüle',
@@ -395,6 +405,7 @@ export const PERMISSION_GROUPS = Object.freeze([
   },
   { key: 'reports', label: 'Raporlar', permissions: [PERMISSIONS.REPORTS_VIEW] },
   { key: 'night_audit', label: 'Gün kapanış', permissions: [PERMISSIONS.NIGHT_AUDIT_VIEW, PERMISSIONS.NIGHT_AUDIT_CLOSE] },
+  { key: 'maintenance', label: 'Teknik servis', permissions: [PERMISSIONS.MAINTENANCE_VIEW, PERMISSIONS.MAINTENANCE_OPERATE, PERMISSIONS.MAINTENANCE_MANAGE] },
   { key: 'budget', label: 'Bütçe', permissions: [PERMISSIONS.BUDGET_VIEW, PERMISSIONS.BUDGET_MANAGE, PERMISSIONS.BUDGET_APPROVE] },
   { key: 'agencies', label: 'Acente ve kontrat', permissions: [PERMISSIONS.AGENCIES_VIEW, PERMISSIONS.AGENCIES_MANAGE] },
   { key: 'promotions', label: 'Promosyon ve kupon', permissions: [PERMISSIONS.PROMOTIONS_VIEW, PERMISSIONS.PROMOTIONS_MANAGE] },
@@ -506,6 +517,10 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     // Gün kapanışı (night audit) gece müdürünün / yönetimin işi.
     PERMISSIONS.NIGHT_AUDIT_VIEW,
     PERMISSIONS.NIGHT_AUDIT_CLOSE,
+    // Teknik servisin tüm akışı yöneticide: bilet, atama, oda kapatma, bakım planı.
+    PERMISSIONS.MAINTENANCE_VIEW,
+    PERMISSIONS.MAINTENANCE_OPERATE,
+    PERMISSIONS.MAINTENANCE_MANAGE,
     // Bütçeyi müdür onaylar.
     PERMISSIONS.BUDGET_VIEW,
     PERMISSIONS.BUDGET_MANAGE,
@@ -601,6 +616,9 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     // Gece vardiyasında günü resepsiyon kapatır (night audit).
     PERMISSIONS.NIGHT_AUDIT_VIEW,
     PERMISSIONS.NIGHT_AUDIT_CLOSE,
+    // Resepsiyon arızayı görür ve bilet açar (teknisyene gider).
+    PERMISSIONS.MAINTENANCE_VIEW,
+    PERMISSIONS.MAINTENANCE_OPERATE,
   ]),
   HOUSEKEEPING: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,
@@ -624,6 +642,9 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     // Eşyayı en çok oda temizliğinde kat görevlisi bulur; sahibine teslim resepsiyonun işi.
     PERMISSIONS.LOST_ITEMS_VIEW,
     PERMISSIONS.LOST_ITEMS_RECORD,
+    // Arızayı temizlikte görür ve bilet açar / teknisyense çözer.
+    PERMISSIONS.MAINTENANCE_VIEW,
+    PERMISSIONS.MAINTENANCE_OPERATE,
   ]),
   ACCOUNTING: Object.freeze([
     PERMISSIONS.SETTINGS_VIEW,

@@ -1,14 +1,15 @@
-import { createManualTaskForActor } from '../../lib/actors.js';
+import { runWithContext } from '@hotelos/core';
 import { eventBus } from '../../lib/events.js';
+import { createTicketFromIssue } from '../maintenance/service.js';
 
 /**
  * Kat hizmetlerinin olay dinleyicisi (modül 14): "Sorun var" bildirimi.
  *
  * Görevli temizlik sırasında arıza görünce (kırık duş başlığı, çalışmayan
- * klima) işi teknik servise taşır. Arıza-bakım modülü (20) henüz yok; o gelene
- * dek bildirim **manuel görev** olarak `rooms.operate` yetkilisinin önüne
- * düşer — arıza kaydını (`blockRoom`, modül 3) o açar. Modül 20 geldiğinde bu
- * dinleyici MaintenanceTicket açacak; olay sözleşmesi değişmez.
+ * klima) işi teknik servise taşır. Modül 20 (teknik servis) geldiğinde bu
+ * dinleyici artık **MaintenanceTicket** açıyor (eskiden `rooms.operate`
+ * yetkilisine manuel görev düşerdi); olay sözleşmesi değişmedi. Aynı kat
+ * hizmeti görevinden ikinci kez bilet açılmaz (idempotent).
  *
  * Aktöre bağlı değildir: aktör kapalıyken de sorun bildirimi kaybolmaz.
  */
@@ -18,26 +19,16 @@ let unsubscribers = [];
 
 /**
  * @param {{ hotelId: string, taskId: string, roomId: string, roomNumber: string, note: string }} payload
- * @param {{ id: string, name: string, correlationId?: string }} envelope
  */
-export function onHousekeepingIssue(payload, envelope) {
-  return createManualTaskForActor({
-    hotelId: payload.hotelId,
-    module: 'Teknik servis',
-    title: `${payload.roomNumber} odasında sorun: ${payload.note}`,
-    description: 'Kat görevlisi temizlik sırasında bildirdi. Gerekirse odayı arızaya alın (Odalar → arıza kaydı).',
-    originalEvent: { id: envelope.id, name: envelope.name, payload },
-    correlationId: envelope.correlationId ?? null,
-  });
+export function onHousekeepingIssue(payload) {
+  return runWithContext({ actor: 'sistem:kat-hizmetleri' }, () => createTicketFromIssue(payload));
 }
 
 /** İdempotent: `buildApp()` birden fazla kez çağrılabilir. */
 export function registerHousekeepingSubscribers() {
   stopHousekeepingSubscribers();
   unsubscribers = [
-    eventBus.subscribe('housekeeping.issue.reported', 'housekeeping:issue-to-maintenance', (payload, envelope) =>
-      onHousekeepingIssue(payload, envelope),
-    ),
+    eventBus.subscribe('housekeeping.issue.reported', 'housekeeping:issue-to-maintenance', (payload) => onHousekeepingIssue(payload)),
   ];
   return stopHousekeepingSubscribers;
 }

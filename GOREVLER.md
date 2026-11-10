@@ -1730,12 +1730,48 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 > göreve çeviriyor (izin eşlemesi `rooms.operate`). Bu modül gelince aynı
 > dinleyici MaintenanceTicket açmalı ve manuel görev yolu kaldırılmalı —
 > olay sözleşmesi hazır, yükte `taskId, roomId, roomNumber, note` var.
-- [ ] Backend: MaintenanceTicket, MaintenancePlan tabloları + API
-- [ ] Backend: arıza "oda kullanılamaz" işaretliyse odaya arıza kaydı (`RoomBlock`) aç — `blockRoom`, bitince `removeBlock`
-- [ ] Ekran: Arıza listesi (oda, başlık, öncelik, durum, atanan, süre)
-- [ ] Ekran: Yeni arıza formu (oda/alan, açıklama, fotoğraf, öncelik, odayı kapat mı)
-- [ ] Ekran: Teknisyen görünümü (bana atananlar, başla / bitti)
-- [ ] Ekran: Periyodik bakım planı (aylık kontrol listeleri, otomatik görev üretimi)
+- [x] Backend: MaintenanceTicket, MaintenancePlan tabloları + API
+- [x] Backend: arıza "oda kullanılamaz" işaretliyse odaya arıza kaydı (`RoomBlock`) aç — `blockRoom`, bitince `removeBlock`
+- [x] Ekran: Arıza listesi (oda, başlık, öncelik, durum, atanan, süre)
+- [x] Ekran: Yeni arıza formu (oda/alan, açıklama, fotoğraf, öncelik, odayı kapat mı)
+- [x] Ekran: Teknisyen görünümü (bana atananlar, başla / bitti)
+- [x] Ekran: Periyodik bakım planı (aylık kontrol listeleri, otomatik görev üretimi)
+
+> **📌 Modül 20 tamamlandı (10 Kasım 2026 — Ali Kemal).**
+>
+> **Veri** (`20261110090000_maintenance`): `MaintenanceTicket` iskeleti genişletildi
+> (kategori, kaynak, atama/başlama/çözüm izi, `roomBlockId`, `housekeepingTaskId`,
+> `guestRequestId`, `planId`); `MaintenancePhoto` (modül 21 foto deseni) ve
+> `MaintenancePlan` (periyodik, kontrol listeli) eklendi. `StaffAlertKind`'a
+> `MAINTENANCE` (Prisma + olay kataloğu + `STAFF_ALERT_KINDS` + etiket).
+>
+> **Servis** (`modules/maintenance/`): bilet yaşam döngüsü (aç → ata → başla →
+> çöz / iptal), `TaskStatus` ile. **Oda kapatma modül 3'e devrediliyor**:
+> `createTicket({ closeRoom })` önce `blockRoom` çağırır (dolu odada 409 → ekran
+> "misafiri taşı" der, bilet açılmaz), `roomBlockId` saklar; çözümde
+> `removeBlock` (süren kayıt sonlanır/iptal olur, oda serbest). **Oda durumunu
+> doğrudan yazmaz** — tek yazıcı rooms servisidir.
+>
+> **Entegrasyon:** `housekeeping.issue.reported` dinleyicisi artık **MaintenanceTicket
+> açıyor** (eski manuel-görev yolu kaldırıldı; aynı `housekeeping:issue-to-maintenance`
+> aboneliği, idempotent — görev başına tek açık bilet). Misafir isteğine bağlı bilet
+> (`guestRequestId`) açılışta isteği IN_PROGRESS, çözümde DONE yapar
+> (`applyRequestStatus`, geçersiz geçişi yutar). Yeni/atanan bilet personel uyarısı
+> (`raiseStaffAlert`, kind MAINTENANCE, link `/teknik-servis/:id`).
+>
+> **Zamanlanmış iş** (`modules/maintenance/jobs.js`, server.js'te
+> `startMaintenanceModuleJobs` — altyapının `startMaintenanceJobs`'uyla karışmasın):
+> 6 saatte bir süresi gelen planlardan bilet üretir (plan başına tek açık bilet,
+> `lastRunOn` iş gününe çekilir); günde bir kapanmış bilet fotoğraflarını siler.
+>
+> **Olaylar:** `maintenance.ticket.created/assigned/resolved/cancelled`.
+> **İzinler:** `maintenance.view` / `operate` (bilet aç/çöz/foto) / `manage`
+> (atama, iptal, oda kapatma, plan). Roller: müdür hepsi; resepsiyon + kat
+> hizmetleri view+operate.
+>
+> **API** (`/maintenance`): `tickets` (liste `?view=OPEN|MINE|ALL`, ayrıntı, aç,
+> güncelle, ata, başla, çöz, iptal), `tickets/:id/photos`, `plans` (CRUD).
+> **Modül 14 notu:** kat görevlisinin "Sorun var" bildirimi artık bu modüle gider.
 
 > **Modül 3'ten not (16 Eylül 2026 — Ahmet):** "MAINTENANCE" durumu kaldırıldı;
 > arıza artık **tarihli kayıt** (`RoomBlock`). Odalar ekranında "Arıza kayıtları"

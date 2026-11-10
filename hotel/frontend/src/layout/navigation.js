@@ -111,6 +111,17 @@ export const NAV_SECTIONS = Object.freeze([
         icon: 'package',
         permission: PERMISSIONS.LOST_ITEMS_VIEW,
       },
+      // Teknik servis / arıza-bakım (modül 20): arıza bileti, teknisyen, periyodik bakım.
+      {
+        label: 'Teknik servis',
+        icon: 'wrench',
+        permission: PERMISSIONS.MAINTENANCE_VIEW,
+        children: [
+          { label: 'Arızalar', to: '/teknik-servis', icon: 'list', end: true },
+          { label: 'Bana atananlar', to: '/teknik-servis/benim', icon: 'user' },
+          { label: 'Planlama', to: '/teknik-servis/planlama', icon: 'calendar', permission: PERMISSIONS.MAINTENANCE_MANAGE },
+        ],
+      },
       {
         label: 'Gelir raporları',
         to: '/raporlar/gelir',

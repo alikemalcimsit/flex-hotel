@@ -456,6 +456,7 @@ export const STAFF_ALERT_KINDS = Object.freeze([
   'POS',
   'INVOICE',
   'ONLINE_CHECKIN',
+  'MAINTENANCE',
 ]);
 
 export const STAFF_ALERT_KIND_LABELS = Object.freeze({
@@ -478,6 +479,7 @@ export const STAFF_ALERT_KIND_LABELS = Object.freeze({
   POS: 'Restoran POS (vardiya, adisyon, odaya yaz)',
   INVOICE: 'Fatura / e-belge (gönderilemedi, reddedildi)',
   ONLINE_CHECKIN: 'Online check-in (inceleme bekliyor)',
+  MAINTENANCE: 'Arıza / teknik servis',
 });
 
 export const STAFF_ALERT_SEVERITIES = Object.freeze(['INFO', 'WARNING', 'CRITICAL']);

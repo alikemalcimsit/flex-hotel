@@ -79,6 +79,11 @@ export const EVENT_LABELS = Object.freeze({
   'night.audit.started': 'Gece kapanışı başladı',
   'night.audit.closed': 'Gece kapanışı tamamlandı',
 
+  'maintenance.ticket.created': 'Arıza bileti açıldı',
+  'maintenance.ticket.assigned': 'Arıza biletine teknisyen atandı',
+  'maintenance.ticket.resolved': 'Arıza bileti çözüldü',
+  'maintenance.ticket.cancelled': 'Arıza bileti iptal edildi',
+
   'folio.item.void_requested': 'Folyo kalemi için iptal istendi',
   'folio.item.voided': 'Folyo kalemi iptal edildi',
   'folio.item.void_declined': 'Folyo kalemi iptali reddedildi',
