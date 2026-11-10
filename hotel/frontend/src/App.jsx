@@ -98,6 +98,8 @@ const TicketFormPage = lazy(() => import('./pages/maintenance/TicketFormPage.jsx
 const TechnicianPage = lazy(() => import('./pages/maintenance/TechnicianPage.jsx').then((m) => ({ default: m.TechnicianPage })));
 const PlansPage = lazy(() => import('./pages/maintenance/PlansPage.jsx').then((m) => ({ default: m.PlansPage })));
 const TicketDetailPage = lazy(() => import('./pages/maintenance/TicketDetailPage.jsx').then((m) => ({ default: m.TicketDetailPage })));
+const GuestsPage = lazy(() => import('./pages/guests/GuestsPage.jsx').then((m) => ({ default: m.GuestsPage })));
+const GuestCardPage = lazy(() => import('./pages/guests/GuestCardPage.jsx').then((m) => ({ default: m.GuestCardPage })));
 const BudgetPage = lazy(() => import('./pages/budget/BudgetPage.jsx').then((m) => ({ default: m.BudgetPage })));
 const AgenciesPage = lazy(() => import('./pages/agencies/AgenciesPage.jsx').then((m) => ({ default: m.AgenciesPage })));
 const AgencyPage = lazy(() => import('./pages/agencies/AgencyPage.jsx').then((m) => ({ default: m.AgencyPage })));
@@ -511,6 +513,8 @@ export default function App() {
             <Route path="teknik-servis/benim" element={<RequirePermission permission={PERMISSIONS.MAINTENANCE_VIEW}><TechnicianPage /></RequirePermission>} />
             <Route path="teknik-servis/planlama" element={<RequirePermission permission={PERMISSIONS.MAINTENANCE_MANAGE}><PlansPage /></RequirePermission>} />
             <Route path="teknik-servis/:id" element={<RequirePermission permission={PERMISSIONS.MAINTENANCE_VIEW}><TicketDetailPage /></RequirePermission>} />
+            <Route path="misafirler" element={<RequirePermission permission={PERMISSIONS.GUESTS_VIEW}><GuestsPage /></RequirePermission>} />
+            <Route path="misafirler/:id" element={<RequirePermission permission={PERMISSIONS.GUESTS_VIEW}><GuestCardPage /></RequirePermission>} />
             <Route path="butce" element={<Navigate to="/butce/plan" replace />} />
             <Route
               path="butce/plan"

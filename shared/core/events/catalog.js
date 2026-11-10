@@ -625,6 +625,15 @@ export const EVENT_CATALOG = Object.freeze({
   }),
   /** Bilet iptal edildi. */
   'maintenance.ticket.cancelled': hotelScoped.extend({ ticketId: z.string().uuid() }),
+
+  /** Misafir kartı güncellendi (iletişim, kimlik, etiket) — modül 22. */
+  'guest.card.updated': hotelScoped.extend({ guestId: z.string().uuid() }),
+  /** İki misafir kartı birleştirildi (kaynak silindi, kayıtları hedefe taşındı). */
+  'guest.card.merged': hotelScoped.extend({ sourceId: z.string().uuid(), targetId: z.string().uuid() }),
+  /** Misafir tercihi eklendi / değişti / silindi. */
+  'guest.preference.updated': hotelScoped.extend({ guestId: z.string().uuid() }),
+  /** Misafir kartına not eklendi. */
+  'guest.note.added': hotelScoped.extend({ guestId: z.string().uuid() }),
   /** Kalem iptali onaya gitti. */
   'folio.item.void_requested': folioEvent.extend({ itemId: z.string().uuid(), approvalId: z.string().uuid() }),
   /** Kalem iptal edildi (ters kayıt işlendi). Onaylı iptalde `approvalId` dolu; sistemin geri alması boş. */

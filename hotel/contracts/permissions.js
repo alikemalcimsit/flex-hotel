@@ -224,6 +224,13 @@ export const PERMISSIONS = Object.freeze({
   MAINTENANCE_OPERATE: 'maintenance.operate',
   /** Bilete teknisyen ata, iptal et, odayı arızaya al, periyodik bakım planı. */
   MAINTENANCE_MANAGE: 'maintenance.manage',
+
+  /** CRM (modül 22): misafir listesi, kart, geçmiş, tercih ve notlar. */
+  GUESTS_VIEW: 'guests.view',
+  /** Misafir kartını düzenle, tercih / not / etiket ekle. */
+  GUESTS_MANAGE: 'guests.manage',
+  /** Mükerrer kartları birleştir (geri alınamaz). */
+  GUESTS_MERGE: 'guests.merge',
 });
 
 /** Tüm izinlerin düz listesi (doğrulama ve "ADMIN her şeyi görür" için). */
@@ -315,6 +322,9 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.MAINTENANCE_VIEW]: 'Arıza / bakım taleplerini görüntüle',
   [PERMISSIONS.MAINTENANCE_OPERATE]: 'Arıza bileti aç, başla, çöz, fotoğraf ekle',
   [PERMISSIONS.MAINTENANCE_MANAGE]: 'Arıza atama / iptal, odayı arızaya alma, bakım planı',
+  [PERMISSIONS.GUESTS_VIEW]: 'Misafir kartlarını görüntüle (CRM)',
+  [PERMISSIONS.GUESTS_MANAGE]: 'Misafir kartı düzenle, tercih / not / etiket',
+  [PERMISSIONS.GUESTS_MERGE]: 'Mükerrer misafir kartlarını birleştir',
   [PERMISSIONS.EMPLOYEES_VIEW]: 'Personel listesini ve kartlarını görüntüle (ücret hariç)',
   [PERMISSIONS.EMPLOYEES_MANAGE]: 'Personel kartı ekle / düzenle, işten çıkış yap',
   [PERMISSIONS.PAYROLL_VIEW]: 'Ücretleri, bordroları, pusulaları ve çıktıları görüntüle',
@@ -406,6 +416,7 @@ export const PERMISSION_GROUPS = Object.freeze([
   { key: 'reports', label: 'Raporlar', permissions: [PERMISSIONS.REPORTS_VIEW] },
   { key: 'night_audit', label: 'Gün kapanış', permissions: [PERMISSIONS.NIGHT_AUDIT_VIEW, PERMISSIONS.NIGHT_AUDIT_CLOSE] },
   { key: 'maintenance', label: 'Teknik servis', permissions: [PERMISSIONS.MAINTENANCE_VIEW, PERMISSIONS.MAINTENANCE_OPERATE, PERMISSIONS.MAINTENANCE_MANAGE] },
+  { key: 'guests', label: 'Misafir CRM', permissions: [PERMISSIONS.GUESTS_VIEW, PERMISSIONS.GUESTS_MANAGE, PERMISSIONS.GUESTS_MERGE] },
   { key: 'budget', label: 'Bütçe', permissions: [PERMISSIONS.BUDGET_VIEW, PERMISSIONS.BUDGET_MANAGE, PERMISSIONS.BUDGET_APPROVE] },
   { key: 'agencies', label: 'Acente ve kontrat', permissions: [PERMISSIONS.AGENCIES_VIEW, PERMISSIONS.AGENCIES_MANAGE] },
   { key: 'promotions', label: 'Promosyon ve kupon', permissions: [PERMISSIONS.PROMOTIONS_VIEW, PERMISSIONS.PROMOTIONS_MANAGE] },
@@ -521,6 +532,10 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.MAINTENANCE_VIEW,
     PERMISSIONS.MAINTENANCE_OPERATE,
     PERMISSIONS.MAINTENANCE_MANAGE,
+    // Misafir CRM: kart, tercih, not, birleştirme.
+    PERMISSIONS.GUESTS_VIEW,
+    PERMISSIONS.GUESTS_MANAGE,
+    PERMISSIONS.GUESTS_MERGE,
     // Bütçeyi müdür onaylar.
     PERMISSIONS.BUDGET_VIEW,
     PERMISSIONS.BUDGET_MANAGE,
@@ -619,6 +634,10 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     // Resepsiyon arızayı görür ve bilet açar (teknisyene gider).
     PERMISSIONS.MAINTENANCE_VIEW,
     PERMISSIONS.MAINTENANCE_OPERATE,
+    // Misafir kartı resepsiyonun işi: tercih, not, mükerrer birleştirme.
+    PERMISSIONS.GUESTS_VIEW,
+    PERMISSIONS.GUESTS_MANAGE,
+    PERMISSIONS.GUESTS_MERGE,
   ]),
   HOUSEKEEPING: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,

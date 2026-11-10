@@ -742,6 +742,8 @@ model Hotel {
   roomBlocks             RoomBlock[]
   roomStaySegments       RoomStaySegment[]
   guests                 Guest[]
+  guestPreferences       GuestPreference[]
+  guestNotes             GuestNote[]
   reservations           Reservation[]
   reservationGuests      ReservationGuest[]
   ratePlans              RatePlan[]
@@ -1449,6 +1451,33 @@ model RoomBlock {
   @@index([hotelId, deletedAt])
 }
 
+/// Misafir tercihinin kategorisi (modül 22). ALLERGY değerleri 43'ün alerjen
+/// kodlarıyla aynı (contracts `ALLERGEN_CODES`).
+enum GuestPreferenceCategory {
+  FLOOR
+  BED
+  PILLOW
+  DIET
+  ALLERGY
+  ROOM_FEATURE
+  TRANSPORT
+  OCCASION
+  OTHER
+}
+
+/// Tercihi kim söyledi (modül 22; FlexAI 2.0'da 80 misafir tanıma kullanır).
+enum PreferenceSource {
+  STAFF
+  GUEST
+  AI
+}
+
+enum PreferenceConfidence {
+  LOW
+  MEDIUM
+  HIGH
+}
+
 model Guest {
   id          String          @id @default(uuid())
   hotelId     String
@@ -1478,6 +1507,8 @@ model Guest {
   notifications     Notification[]
   waitlistEntries   WaitlistEntry[]
   invoices          Invoice[]
+  preferenceEntries GuestPreference[]
+  noteEntries       GuestNote[]
 
   @@index([phone])
   @@index([email])
@@ -1487,6 +1518,48 @@ model Guest {
   // `Guest_hotelId_email_lower_idx` (lower(email)) migration'da.
   @@index([firstName(ops: raw("gin_trgm_ops"))], map: "Guest_firstName_trgm_idx", type: Gin)
   @@index([lastName(ops: raw("gin_trgm_ops"))], map: "Guest_lastName_trgm_idx", type: Gin)
+}
+
+/// Misafir tercihi (modül 22): kategori + değer + kaynak + güven + son teyit.
+/// Serbest metin değil yapılandırılmış; birleştirmede (`mergeGuests`) hedef
+/// misafire taşınır. VIP / sorunlu gibi işaretler `Guest.tags` üzerinde.
+model GuestPreference {
+  id              String                  @id @default(uuid())
+  hotelId         String
+  guestId         String
+  category        GuestPreferenceCategory
+  value           String
+  source          PreferenceSource        @default(STAFF)
+  confidence      PreferenceConfidence    @default(MEDIUM)
+  lastConfirmedAt DateTime?
+  createdBy       String
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  deletedAt       DateTime?
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+  guest Guest @relation(fields: [guestId], references: [id])
+
+  @@index([hotelId, guestId])
+  @@index([guestId, category])
+}
+
+/// Misafir notu (modül 22): tarihli, yazarlı; sabitlenen not kartın üstünde.
+model GuestNote {
+  id        String   @id @default(uuid())
+  hotelId   String
+  guestId   String
+  body      String
+  pinned    Boolean  @default(false)
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+  guest Guest @relation(fields: [guestId], references: [id])
+
+  @@index([hotelId, guestId, pinned])
 }
 
 model Reservation {

@@ -1861,13 +1861,37 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 22. CRM & misafir kartı — Ali Kemal
 **Gün sonu:** Her misafirin tek profili var: geçmiş konaklamalar, tercihler, toplam harcama, notlar; mükerrer kayıtlar birleştirilebiliyor.
-- [ ] Backend: Guest genişletme (GuestPreference, GuestNote tabloları), `mergeGuests` servisi
-- [ ] Backend: misafir özeti API'si (konaklama sayısı, toplam harcama, son konaklama)
-- [ ] Ekran: Misafir listesi + arama (ad, telefon, e-posta, etiket)
-- [ ] Ekran: Misafir kartı (iletişim, kimlik, tercihler: kat / yastık / alerji; etiketler: VIP / sorunlu)
-- [ ] Ekran: Konaklama geçmişi sekmesi, harcama sekmesi, notlar sekmesi
-- [ ] Ekran: Birleştirme (iki kaydı seç, hangi alanlar kalacak)
-- [ ] Rezervasyon formuna misafir kartı önizlemesi (tercihler görünsün)
+- [x] Backend: Guest genişletme (GuestPreference, GuestNote tabloları), `mergeGuests` servisi
+- [x] Backend: misafir özeti API'si (konaklama sayısı, toplam harcama, son konaklama)
+- [x] Ekran: Misafir listesi + arama (ad, telefon, e-posta, etiket)
+- [x] Ekran: Misafir kartı (iletişim, kimlik, tercihler: kat / yastık / alerji; etiketler: VIP / sorunlu)
+- [x] Ekran: Konaklama geçmişi sekmesi, harcama sekmesi, notlar sekmesi
+- [x] Ekran: Birleştirme (iki kaydı seç, hangi alanlar kalacak)
+- [x] Rezervasyon formuna misafir kartı önizlemesi (tercihler görünsün)
+
+> **📌 Modül 22 tamamlandı (10 Kasım 2026 — Ali Kemal).**
+>
+> **Veri** (`20261110140000_guest_crm`): `Guest` zaten `tags[]`/`preferences` JSON/`notes`
+> taşıyordu; yapılandırılmış **`GuestPreference`** (kategori + değer + kaynak
+> STAFF/GUEST/AI + güven + son teyit) ve **`GuestNote`** (tarihli, sabitlenebilir)
+> eklendi. ALLERGY tercihleri **modül 43'ün alerjen kodlarını** kullanır
+> (`ALLERGENS`/`ALLERGEN_LABELS`, recipes.js — yeniden tanımlanmadı).
+>
+> **Servis** (`modules/guests/`): misafir listesi+arama (mevcut
+> `reservations/guests.js` → `searchGuests` yeniden kullanıldı), kart, **özet**
+> (tamamlanmış konaklama sayısı, toplam harcama = folyo borçları, ilk/son
+> konaklama — tek sorgu seti), tercih/not CRUD. **`mergeGuests(hotelId,
+> {sourceId, targetId, keep})`** kaynağın 9 tablodaki kaydını hedefe taşır
+> (Reservation, ReservationGuest [çakışma temizlenerek], Conversation,
+> GuestRequest, Folio, LostItem, Invoice, WaitlistEntry, Notification + tercih/not),
+> etiketleri birleştirir (düz `toLowerCase` — "VIP" Türkçe I→ı bozulmasın),
+> `keep` alanlarını hedefe yazar, kaynağı soft-delete eder. **Modül 69 (göç) de
+> bu fonksiyonu kullanacak** — dışa açık.
+>
+> **Olaylar** `guest.card.updated/merged`, `guest.preference.updated`,
+> `guest.note.added`. **İzinler** `guests.view/manage/merge` (müdür + resepsiyon).
+> **API** `/guests` (liste, `search` [rezervasyon önizlemesi], kart, `:id/stays`,
+> `:id/spend`, tercih/not CRUD, `merge`).
 
 > **Modül 7'den not (17 Eylül 2026 — Ahmet):** gelen WhatsApp mesajı misafir kartını
 > telefondan buluyor (`Guest_phone_match_idx` ifade dizini + `phoneMatchScore`;
