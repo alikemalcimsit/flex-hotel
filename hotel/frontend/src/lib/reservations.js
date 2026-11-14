@@ -32,6 +32,8 @@ export const reservationKeys = Object.freeze({
   waitlist: (filters) => ['reservations', 'waitlist', filters],
   /** @param {string} id */
   waitlistEntry: (id) => ['reservations', 'waitlist-entry', id],
+  /** Yayındaki paketler (modül 28): rezervasyon formu seçici. */
+  activePackages: ['reservations', 'active-packages'],
 });
 
 /** Durum → rozet tonu. */

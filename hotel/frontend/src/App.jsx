@@ -29,6 +29,8 @@ const HotelInfoTab = lazy(() => import('./pages/settings/HotelInfoTab.jsx').then
 const RoomTypesTab = lazy(() => import('./pages/settings/RoomTypesTab.jsx').then((m) => ({ default: m.RoomTypesTab })));
 const TaxesTab = lazy(() => import('./pages/settings/TaxesTab.jsx').then((m) => ({ default: m.TaxesTab })));
 const SeasonsTab = lazy(() => import('./pages/settings/SeasonsTab.jsx').then((m) => ({ default: m.SeasonsTab })));
+const RatePlansTab = lazy(() => import('./pages/settings/RatePlansTab.jsx').then((m) => ({ default: m.RatePlansTab })));
+const PackagesTab = lazy(() => import('./pages/settings/PackagesTab.jsx').then((m) => ({ default: m.PackagesTab })));
 const GeneralTab = lazy(() => import('./pages/settings/GeneralTab.jsx').then((m) => ({ default: m.GeneralTab })));
 const UsersTab = lazy(() => import('./pages/settings/UsersTab.jsx').then((m) => ({ default: m.UsersTab })));
 const RolePermissionsTab = lazy(() =>
@@ -1176,6 +1178,8 @@ export default function App() {
               <Route path="oda-tipleri" element={<RoomTypesTab />} />
               <Route path="vergiler" element={<TaxesTab />} />
               <Route path="sezonlar" element={<SeasonsTab />} />
+              <Route path="fiyat-planlari" element={<RatePlansTab />} />
+              <Route path="paketler" element={<PackagesTab />} />
               <Route path="genel" element={<GeneralTab />} />
               <Route
                 path="kullanicilar"

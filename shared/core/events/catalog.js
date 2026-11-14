@@ -115,6 +115,14 @@ export const EVENT_CATALOG = Object.freeze({
   'settings.season.created': settingsEntity,
   'settings.season.updated': settingsEntity.extend({ changedFields: z.array(z.string()).default([]) }),
   'settings.season.deleted': settingsEntity,
+  /** Modül 28: fiyat planı (oda tipi × pansiyon × dönem). */
+  'settings.rate_plan.created': settingsEntity,
+  'settings.rate_plan.updated': settingsEntity.extend({ changedFields: z.array(z.string()).default([]) }),
+  'settings.rate_plan.deleted': settingsEntity,
+  /** Modül 28: paket (oda + ek hizmet demeti). */
+  'settings.package.created': settingsEntity,
+  'settings.package.updated': settingsEntity.extend({ changedFields: z.array(z.string()).default([]) }),
+  'settings.package.deleted': settingsEntity,
 
   /* ── Oda envanteri (modül 3) ── */
 

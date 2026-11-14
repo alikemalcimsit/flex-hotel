@@ -2116,12 +2116,57 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 28. Paket / pansiyon tipleri — Ali Kemal
 **Gün sonu:** RO/BB/HB/FB/AI pansiyon tipleri ve tarih bazlı fiyat planları tanımlı; rezervasyon fiyatı bunlardan hesaplanıyor.
-- [ ] Backend: RatePlan genişletme (oda tipi × pansiyon × tarih aralığı × fiyat, min. gece, kişi başı ek), Package tablosu
-- [ ] Backend: fiyat hesaplama servisini RatePlan'a bağla (sezon çarpanı yerine plan fiyatı)
-- [ ] Ekran: Pansiyon tipi tanımları
-- [ ] Ekran: Fiyat planı tablosu (satır oda tipi, sütun tarih aralığı, hücre fiyat; toplu düzenleme)
-- [ ] Ekran: Paket tanımı (oda + SPA + transfer gibi bileşenler, toplam fiyat)
-- [ ] Rezervasyon formuna pansiyon ve paket seçimi
+- [x] Backend: RatePlan genişletme (oda tipi × pansiyon × tarih aralığı × fiyat, min. gece, kişi başı ek), Package tablosu
+- [x] Backend: fiyat hesaplama servisini RatePlan'a bağla (sezon çarpanı yerine plan fiyatı)
+- [x] Ekran: Pansiyon tipi tanımları (pansiyon tipleri sabit enum — `BOARD_TYPES`; plan ve paket ekranlarında seçilir)
+- [x] Ekran: Fiyat planı tablosu (oda tipi × pansiyon × dönem; fiyat + kişi başı ek)
+- [x] Ekran: Paket tanımı (oda + ek hizmet bileşenleri, gecelik fiyat)
+- [x] Rezervasyon formuna pansiyon ve paket seçimi
+
+> **📌 Modül 28 tamamlandı (14 Kasım 2026 — Ali Kemal).** `flex-ali` dalı.
+>
+> **Kararlar:** Pansiyon tipleri **sabit enum** (`BOARD_TYPES`: RO/BB/HB/FB/AI/UAI — Türk otelciliği + kanal/acente ile ortak);
+> kullanıcı tanımlı değil. **Fiyat planı** = oda tipi × pansiyon × tarih aralığında sabit gecelik fiyat; bir geceye düşerse
+> **sezon çarpanının yerine geçer** (çarpan uygulanmaz), yoksa eski sezon davranışı birebir korunur (geriye uyumlu).
+> Fiyat `baseOccupancy` kişi içindir; fazla yetişkin `extraAdultRate`, çocuk `childRate` ile eklenir (kişi başı ek).
+> **Paket** = oda + ek hizmet (SPA, transfer...) demeti, **sabit gecelik fiyat**; seçilince pansiyon paketten gelir ve
+> gece fiyatı paketin gecelik fiyatıdır (sezon/plan/kişi farkı uygulanmaz). Bileşenler (`components`) bilgi amaçlı (ayrı
+> folyo satırı değil — folyoya yansıması ileride). Fiyat **önceliği**: elle > acente kontratı > **paket** > **fiyat planı** >
+> sezon × taban. Paket acente/elle fiyat/kuponla **birleşmez** (net demet fiyatı; sözleşme ve servis reddeder).
+>
+> **Veri** (migration `20261114090000_rate_plans_packages`): mevcut `RatePlan` genişletildi (`baseOccupancy`,
+> `extraAdultRate`, `childRate` + lookup index); **aynı oda tipi + pansiyonda yayındaki planların dönemleri çakışmaz**
+> (`RatePlan_no_overlap` EXCLUDE, silinmiş plan hariç). Yeni `Package` (kod otel içinde tekil — kısmi unique, silinince
+> yeniden kullanılır; `nightlyPrice`, `components` JSON, soft-delete). `Reservation.packageId` (FK restrict; `boardType`
+> paketliyse paketten). CHECK'ler: pozitif fiyat, geçerli dönem, kişi farkı ≥ 0.
+>
+> **Fiyat kuralları** (`reservations/rules.js`): `priceStay` artık opsiyonel `ratePlans` + `roomTypeId` + `boardType` +
+> `occupancy` alır (gece gece: plan varsa plan fiyatı + kişi başı ek, çarpan `null`, `seasonName` = plan adı; yoksa sezon).
+> `findRatePlanForNight`, `ratePlanNightAmount`, `pricePackageStay` eklendi. Servis (`reservations/service.js`):
+> `loadContext` planları (`getActiveRatePlans`, cache'li) yükler; `priceRoomLine`/`priceRooms`/`repriceFor`/`quote`
+> plan + paket farkında; `applyPackages` (açma) ve `resolvePackageForEdit` (düzenleme) paketi oda satırına uygular.
+> Paketli oda promosyon/kupon almaz (`priceRooms`/`rediscount`). Acente yolu (modül 29) **dokunulmadı** — kontrat fiyatı
+> ayrı kalır.
+>
+> **Modül** `backend/src/modules/pricing/` (yeni): `service.js` (plan + paket CRUD + sıcak okumalar), `rules.js`
+> (çakışma), `routes.js` (`/pricing/rate-plans`, `/pricing/packages`, `/packages/active` seçici). Olaylar
+> `settings.rate_plan.*` / `settings.package.*` (prefix sayesinde ayar cache'i + canlı sürüm otomatik geçersiz kılınır) +
+> `rate.changed` (kanal senkronu/modül 33). İzinler: yönetim `settings.view`/`settings.manage` (sezon gibi); paket seçici
+> `reservations.manage` ya da `settings.view`. Oda tipi silme koruması zaten fiyat planını sayıyordu.
+>
+> **Ekran:** `/ayarlar/fiyat-planlari` (plan tablosu), `/ayarlar/paketler` (paket tanımı); rezervasyon formuna paket
+> seçici (paket seçilince pansiyon sabit, fiyat notu), rezervasyon detayında paket adı.
+>
+> **Test:** kurallar 35 birim (`rules.test.js`: plan bulma, kişi başı ek, plan→sezon düşüş, paket sabit fiyat);
+> entegrasyon 7 (`pricing/service.integration.test.js`: plan CRUD, çakışma reddi, rezervasyonun plan fiyatı + kişi ek,
+> sezon geriye uyumu, paket CRUD, paketli rezervasyon pansiyon/fiyat, pasif paket reddi). Rezervasyon entegrasyonu 29/30
+> (kalan tek test — bekleme listesi "zil" zamanlaması — yalnız koşunca geçiyor; M28 ile ilgisiz flake).
+>
+> **Devir:** Gelen kanal rezervasyonu (`channel-manager/bookings.js` → `createReservation`) plan fiyatını otomatik alır.
+> OTA'lara **giden** ARI fiyatı (`channel-manager/ari.js`) hâlâ **sezon-bazlı** (board-başına plan farkı ARI'nin oda-tipi
+> düzeyindeki tek fiyat yapısını değiştirmeyi gerektirir — **modül 33 işi**). Paket bileşenlerinin folyoya ayrı kalem
+> olarak yansıması ve fiyat planı ekranında "toplu/satır-sütun" düzenleme ileride. Modül 34 (dinamik fiyat) plan fiyatını
+> giriş noktası alabilir.
 
 ### 29. Kontrat & acente yönetimi — arkadaşın
 **Gün sonu:** Acenteler kayıtlı, kontrat fiyatları girili; acente adına açılan rezervasyon kontrat fiyatını otomatik alıyor.

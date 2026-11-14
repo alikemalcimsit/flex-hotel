@@ -82,7 +82,7 @@ export function NewReservationTab() {
   const [mode, setMode] = useState('single');
   const [checkIn, setCheckIn] = useState(() => (validDay(params.get('giris')) ? params.get('giris') : today));
   const [checkOut, setCheckOut] = useState(() => (validDay(params.get('cikis')) ? params.get('cikis') : addDaysIso(validDay(params.get('giris')) ? params.get('giris') : today, 1)));
-  const [single, setSingle] = useState({ roomTypeId: params.get('tip') ?? '', adults: '2', children: '0', boardType: '' });
+  const [single, setSingle] = useState({ roomTypeId: params.get('tip') ?? '', adults: '2', children: '0', boardType: '', packageId: '' });
   const [groupName, setGroupName] = useState('');
   const [lines, setLines] = useState(() => [newLine('')]);
   const [status, setStatus] = useState('CONFIRMED');
@@ -127,15 +127,25 @@ export function NewReservationTab() {
     setCheckIn(entry.checkIn);
     setCheckOut(entry.checkOut);
     setMode('single');
-    setSingle({ roomTypeId: entry.roomType.id, adults: String(entry.adults), children: String(entry.children), boardType: entry.boardType });
+    setSingle({ roomTypeId: entry.roomType.id, adults: String(entry.adults), children: String(entry.children), boardType: entry.boardType, packageId: '' });
     if (entry.notes) setNotes(entry.notes);
   }, [waitlistQuery.data]);
+
+  // Paketler (modül 28): yayındaki paketler seçicide; paket seçilince pansiyon ve
+  // oda gece fiyatı paketten gelir. Acente / elle fiyatla birleşmez.
+  const packagesQuery = useQuery({
+    queryKey: reservationKeys.activePackages,
+    queryFn: () => api('/pricing/packages/active'),
+  });
+  const packages = packagesQuery.data ?? [];
+  const packagesDisabled = Boolean(agency) || source === 'AGENCY' || manual.enabled;
+  const selectedPackage = !packagesDisabled ? packages.find((pkg) => pkg.id === single.packageId) ?? null : null;
 
   const stayValid = validDay(checkIn) && validDay(checkOut) && checkOut > checkIn;
   const agencyId = agency?.id ?? null;
   // Pansiyon önizlemeye girer: acente kontratı pansiyona göre fiyatlar, promosyonun
-  // pansiyon koşulu da (modül 31) ona bakar.
-  const quoteBoard = board(single.boardType);
+  // pansiyon koşulu da (modül 31) ona bakar. Paket seçiliyse pansiyon paketten.
+  const quoteBoard = selectedPackage ? selectedPackage.boardType : board(single.boardType);
   // Kupon yalnızca doğrudan satışta ve sistem fiyatında (elle fiyatta indirim yok).
   const couponUsable = !agency && source !== 'AGENCY' && !(mode === 'single' && manual.enabled);
   const activeCoupon = couponUsable ? couponCode : null;
@@ -227,7 +237,9 @@ export function NewReservationTab() {
       roomTypeId: single.roomTypeId,
       adults: single.adults,
       children: single.children,
-      boardType: board(single.boardType),
+      // Paket seçiliyse pansiyon paketten gelir (modül 28).
+      boardType: selectedPackage ? selectedPackage.boardType : board(single.boardType),
+      packageId: selectedPackage ? selectedPackage.id : null,
       roomId: prefillRoomId ?? null,
       manualTotal: manual.enabled ? manual.total : null,
       priceNote: manual.enabled ? manual.note : null,
@@ -505,8 +517,35 @@ export function NewReservationTab() {
                 <div className="flex flex-wrap gap-3">
                   <Input label="Yetişkin" name="adults" type="number" min={1} max={20} value={single.adults} onChange={(e) => setSingle((c) => ({ ...c, adults: e.target.value }))} error={errors.adults} disabled={busy} className="w-28" />
                   <Input label="Çocuk" name="children" type="number" min={0} max={20} value={single.children} onChange={(e) => setSingle((c) => ({ ...c, children: e.target.value }))} error={errors.children} disabled={busy} className="w-28" />
-                  <Select label="Pansiyon" name="boardType" value={board(single.boardType)} onChange={(e) => setSingle((c) => ({ ...c, boardType: e.target.value }))} options={BOARD_OPTIONS} disabled={busy} className="w-full sm:w-64" />
+                  <Select
+                    label="Pansiyon"
+                    name="boardType"
+                    value={quoteBoard}
+                    onChange={(e) => setSingle((c) => ({ ...c, boardType: e.target.value }))}
+                    options={BOARD_OPTIONS}
+                    disabled={busy || Boolean(selectedPackage)}
+                    className="w-full sm:w-64"
+                  />
+                  {packages.length > 0 && (
+                    <Select
+                      label="Paket"
+                      name="packageId"
+                      value={single.packageId}
+                      onChange={(e) => setSingle((c) => ({ ...c, packageId: e.target.value }))}
+                      options={[{ value: '', label: 'Paket yok' }, ...packages.map((pkg) => ({ value: pkg.id, label: `${pkg.name} — ${BOARD_TYPE_LABELS[pkg.boardType]}` }))]}
+                      disabled={busy || packagesDisabled}
+                      className="w-full sm:w-72"
+                    />
+                  )}
                 </div>
+                {packagesDisabled && single.packageId && (
+                  <p className="text-xs text-ink-muted">Acente satışında ya da elle fiyatta paket kullanılmaz; paket seçimi yok sayılır.</p>
+                )}
+                {selectedPackage && (
+                  <Alert tone="info" title={`Paket: ${selectedPackage.name}`}>
+                    Fiyat paketten gelir: {formatMoney(selectedPackage.nightlyPrice, quoteData?.currency)}/gece ({BOARD_TYPE_LABELS[selectedPackage.boardType]}). Pansiyon ve oda gece fiyatı paketten; promosyon / kupon uygulanmaz.
+                  </Alert>
+                )}
                 {selectedQuote && single.adults && Number(single.adults) > selectedQuote.capacityAdults && (
                   <Alert tone="warning" title="Kişi sayısı bu tipe sığmıyor">
                     {selectedQuote.name} en fazla {selectedQuote.capacityAdults} yetişkin alır. Başka tip seçin ya da grup olarak birden fazla oda açın.

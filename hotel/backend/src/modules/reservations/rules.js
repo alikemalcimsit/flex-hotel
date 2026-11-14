@@ -63,24 +63,81 @@ export function generateConfirmationCode(hotelCode, randomBytes) {
  */
 
 /**
- * Konaklamanın gece gece fiyatı: **oda tipinin taban fiyatı × o geceye düşen
- * sezon çarpanı**. Sezonu olmayan gece taban fiyattır. Her gece kuruşa
- * yuvarlanır; toplam, yuvarlanmış gecelerin toplamıdır (gece tablosu ile
- * toplam hiçbir zaman ayrışmaz).
+ * Bir geceye düşen yayındaki (silinmemiş, aktif) fiyat planı (modül 28):
+ * oda tipi + pansiyon eşleşir ve gün planın dönemindedir. Çakışma veritabanı
+ * EXCLUDE kısıtıyla engellendiği için en fazla bir plan döner.
  *
- * Fiyat oda başınadır: kişi sayısı ve pansiyon fiyatı değiştirmez (pansiyon
- * farkı ve kişi başı fiyat modül 28'in işi).
+ * @param {Array<{ roomTypeId: string, boardType: string, startDate: Date | string, endDate: Date | string, price: string, baseOccupancy?: number, extraAdultRate?: string, childRate?: string, isActive?: boolean, deletedAt?: Date | null, name?: string }>} ratePlans
+ * @param {{ roomTypeId: string, boardType: string, date: Date | string }} query
+ */
+export function findRatePlanForNight(ratePlans, { roomTypeId, boardType, date }) {
+  const day = toUtcDayStart(date);
+  return (
+    ratePlans.find(
+      (plan) =>
+        plan.roomTypeId === roomTypeId &&
+        plan.boardType === boardType &&
+        plan.isActive !== false &&
+        !plan.deletedAt &&
+        toUtcDayStart(plan.startDate) <= day &&
+        toUtcDayStart(plan.endDate) >= day,
+    ) ?? null
+  );
+}
+
+/**
+ * Fiyat planının bir geceye düşen tutarı: plan fiyatı (`baseOccupancy` kişi için)
+ * + fazla yetişkin × `extraAdultRate` + çocuk × `childRate`.
+ *
+ * @param {{ price: string, baseOccupancy?: number, extraAdultRate?: string, childRate?: string }} plan
+ * @param {{ adults?: number, children?: number }} occupancy
+ * @returns {string}
+ */
+export function ratePlanNightAmount(plan, occupancy = {}) {
+  const base = toDecimal(plan.price);
+  const baseOccupancy = plan.baseOccupancy ?? 2;
+  const extraAdults = Math.max(0, (occupancy.adults ?? 0) - baseOccupancy);
+  const children = Math.max(0, occupancy.children ?? 0);
+  const extra = toDecimal(plan.extraAdultRate ?? '0')
+    .times(extraAdults)
+    .plus(toDecimal(plan.childRate ?? '0').times(children));
+  return toMoneyString(base.plus(extra));
+}
+
+/**
+ * Konaklamanın gece gece fiyatı. Öncelik sırası her gece için:
+ * 1. **Fiyat planı (modül 28):** oda tipi + pansiyon + tarihe düşen plan varsa
+ *    plan fiyatı (kişi başı ekle); sezon çarpanı uygulanmaz.
+ * 2. **Sezon:** plan yoksa oda tipinin taban fiyatı × o geceye düşen çarpan.
+ *
+ * Her gece kuruşa yuvarlanır; toplam yuvarlanmış gecelerin toplamıdır (gece
+ * tablosu ile toplam hiçbir zaman ayrışmaz). `ratePlans` verilmezse davranış
+ * eski sezon-yalnızca haliyle aynıdır.
  *
  * @param {{
  *   basePrice: string,
  *   seasons: Array<{ name: string, startDate: Date | string, endDate: Date | string, multiplier: string }>,
  *   checkIn: Date | string,
  *   checkOut: Date | string,
+ *   ratePlans?: Parameters<typeof findRatePlanForNight>[0],
+ *   roomTypeId?: string,
+ *   boardType?: string,
+ *   occupancy?: { adults?: number, children?: number },
  * }} input
  * @returns {{ nights: PricedNight[], total: string }}
  */
-export function priceStay({ basePrice, seasons, checkIn, checkOut }) {
+export function priceStay({ basePrice, seasons, checkIn, checkOut, ratePlans = [], roomTypeId, boardType, occupancy }) {
   const nights = eachNight(checkIn, checkOut).map((date) => {
+    const plan = ratePlans.length > 0 && roomTypeId ? findRatePlanForNight(ratePlans, { roomTypeId, boardType, date }) : null;
+    if (plan) {
+      return {
+        date: toIsoDay(date),
+        amount: ratePlanNightAmount(plan, occupancy),
+        baseRate: toMoneyString(plan.price),
+        multiplier: null,
+        seasonName: plan.name ?? null,
+      };
+    }
     const season = findSeasonForDate(seasons, date);
     const multiplier = season?.multiplier ?? '1';
     return {
@@ -91,6 +148,28 @@ export function priceStay({ basePrice, seasons, checkIn, checkOut }) {
       seasonName: season?.name ?? null,
     };
   });
+  return { nights, total: totalOf(nights) };
+}
+
+/**
+ * Paketli konaklamanın gece fiyatı (modül 28): oda gece fiyatı paketin sabit
+ * gecelik fiyatıdır (sezon / plan / kişi farkı uygulanmaz; paket her şey dahil
+ * bir demet fiyatıdır). Her gece aynı tutar.
+ *
+ * @param {{ nightlyPrice: string, name: string }} pkg
+ * @param {Date | string} checkIn
+ * @param {Date | string} checkOut
+ * @returns {{ nights: PricedNight[], total: string }}
+ */
+export function pricePackageStay(pkg, checkIn, checkOut) {
+  const amount = toMoneyString(toDecimal(pkg.nightlyPrice));
+  const nights = eachNight(checkIn, checkOut).map((date) => ({
+    date: toIsoDay(date),
+    amount,
+    baseRate: amount,
+    multiplier: null,
+    seasonName: pkg.name,
+  }));
   return { nights, total: totalOf(nights) };
 }
 
@@ -276,6 +355,7 @@ const TRACKED_FIELDS = Object.freeze([
   'adults',
   'children',
   'boardType',
+  'packageId',
   'notes',
   'totalPrice',
   'priceMode',

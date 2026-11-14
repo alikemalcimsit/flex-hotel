@@ -224,6 +224,13 @@ export function ReservationDetailPage() {
               </Field>
               <Field label="Kişi">{partyLabel(detail.adults, detail.children)}</Field>
               <Field label="Pansiyon">{boardLong(detail.boardType)}</Field>
+              {/* Paket (modül 28): seçiliyse pansiyon ve fiyat paketten gelir. */}
+              {detail.package && (
+                <Field label="Paket">
+                  <span className="font-semibold">{detail.package.name}</span>
+                  <span className="ml-2 font-mono text-xs text-ink-muted">{detail.package.code}</span>
+                </Field>
+              )}
               <Field label="Kaynak">{sourceLabel(detail.source)}</Field>
               {detail.agency && (
                 <Field label="Acente">

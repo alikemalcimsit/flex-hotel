@@ -294,12 +294,14 @@ export const guestInputSchema = z
     message: 'Misafire ulaşmak için telefon ya da e-posta girin',
   });
 
-/** Konaklama satırı: oda tipi, kişi, pansiyon. */
+/** Konaklama satırı: oda tipi, kişi, pansiyon, (opsiyonel) paket. */
 const lineShape = {
   roomTypeId: uuid('Oda tipi seçin'),
   adults: adultsField,
   children: childrenField.default(0),
   boardType: boardField,
+  /** Paket (modül 28): seçilirse pansiyon ve oda gece fiyatı paketten gelir. */
+  packageId: uuid('Geçersiz paket').nullish(),
 };
 
 /**
@@ -333,6 +335,26 @@ const manualPriceShape = {
 function refineManualPrice(value, ctx) {
   if (value.manualTotal !== null && value.manualTotal !== undefined && !value.priceNote) {
     ctx.addIssue({ code: 'custom', path: ['priceNote'], message: 'Elle fiyat için gerekçe yazın (ör. "kurumsal anlaşma")' });
+  }
+}
+
+/**
+ * Paket (modül 28) acente kontrat fiyatı ve elle fiyatla birleşmez: acente
+ * satışında fiyat kontrattan, elle fiyatta personelden gelir; paketin gecelik
+ * fiyatı bunların yerini alamaz.
+ * @param {{ packageId?: string | null, agencyId?: string | null, manualTotal?: unknown }} value
+ * @param {import('zod').RefinementCtx} ctx
+ */
+function refinePackage(value, ctx) {
+  if (!value.packageId) return;
+  if (value.agencyId) {
+    ctx.addIssue({ code: 'custom', path: ['packageId'], message: 'Acente satışında paket seçilemez (fiyat kontrattan gelir)' });
+  }
+  if (value.manualTotal !== null && value.manualTotal !== undefined) {
+    ctx.addIssue({ code: 'custom', path: ['packageId'], message: 'Elle fiyat girilen rezervasyonda paket seçilemez' });
+  }
+  if (value.couponCode) {
+    ctx.addIssue({ code: 'custom', path: ['packageId'], message: 'Pakette kupon kullanılmaz (paket fiyatı her şey dahildir)' });
   }
 }
 
@@ -402,6 +424,7 @@ export const createReservationSchema = z
   .superRefine(refineStay)
   .superRefine(refineAgencySource)
   .superRefine(refineManualPrice)
+  .superRefine(refinePackage)
   .superRefine(refineCoupon);
 
 const groupLineSchema = z.object({
@@ -431,6 +454,15 @@ export const createGroupReservationSchema = z
   .superRefine(refineStay)
   .superRefine(refineAgencySource)
   .superRefine(refineCoupon)
+  .superRefine((value, ctx) => {
+    if (value.agencyId) {
+      value.lines.forEach((line, index) => {
+        if (line.packageId) {
+          ctx.addIssue({ code: 'custom', path: ['lines', index, 'packageId'], message: 'Acente satışında paket seçilemez (fiyat kontrattan gelir)' });
+        }
+      });
+    }
+  })
   .superRefine((value, ctx) => {
     const rooms = value.lines.reduce((total, line) => total + line.quantity, 0);
     if (rooms < 2) {
@@ -462,6 +494,8 @@ const updateShape = {
    * Değişince geceler yeni kaynağın fiyatıyla yeniden hesaplanır.
    */
   agencyId: uuid('Geçersiz acente').nullable().optional(),
+  /** Paket (modül 28): verilmezse değişmez, `null` paketi kaldırır. */
+  packageId: uuid('Geçersiz paket').nullable().optional(),
   price: z
     .discriminatedUnion('mode', [
       z.object({ mode: z.literal('CALCULATED') }),
@@ -506,9 +540,17 @@ function refineUpdateDiscount(value, ctx) {
   }
 }
 
+/** Düzenlemede paket ve acente aynı istekte birlikte verilemez (modül 28). */
+function refineUpdatePackage(value, ctx) {
+  if (value.packageId && value.agencyId) {
+    ctx.addIssue({ code: 'custom', path: ['packageId'], message: 'Acente satışında paket seçilemez (fiyat kontrattan gelir)' });
+  }
+}
+
 export const updateReservationSchema = z
   .object({ expectedUpdatedAt, ...updateShape })
   .superRefine(refineStay)
+  .superRefine(refineUpdatePackage)
   .superRefine(refineUpdateDiscount);
 
 /**
