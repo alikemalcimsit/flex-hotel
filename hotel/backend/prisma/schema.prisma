@@ -748,6 +748,7 @@ model Hotel {
   reservationGuests      ReservationGuest[]
   ratePlans              RatePlan[]
   packages               Package[]
+  allotments             Allotment[]
   seasons                Season[]
   taxes                  Tax[]
   conversations          Conversation[]
@@ -1374,6 +1375,7 @@ model RoomType {
   contractRates     ContractRate[]
   contractStopSales ContractStopSale[]
   channelMappings   ChannelRoomMapping[]
+  allotments        Allotment[]
 
   // Benzersizlik kısmi (partial) unique index ile veritabanında tanımlı:
   // `RoomType_hotelId_code_active_key ... WHERE "deletedAt" IS NULL`.
@@ -3160,6 +3162,7 @@ model Agency {
   bonusRules    AgencyBonusRule[]
   bonuses       AgencyBonus[]
   ledgerAccount LedgerAccount?
+  allotments    Allotment[]
 
   // Kod otel içinde tekil. Ad tekilliği (büyük / küçük harf duyarsız) ve arama (trigram): migration.
   @@unique([hotelId, code])
@@ -3243,6 +3246,38 @@ model ContractStopSale {
 
   @@index([contractId, startDate, endDate])
   @@index([hotelId, roomTypeId])
+}
+
+/// Allotment (modül 30): acenteye dönem boyunca gecelik ayrılan oda kotası.
+/// Release tarihine (giriş gecesi − `releaseDays`) kadar kullanılmamış kota
+/// genel satışa kapalıdır; o günden itibaren genel havuza döner. Kota bir
+/// **garantidir, tavan değil**: dolunca acente genel havuzdan satmaya devam
+/// eder. Kullanım ayrı bağla tutulmaz — acentenin o oda tipi + geceyi kapsayan
+/// geçerli rezervasyonları kotaya mahsup edilir (türetilir).
+model Allotment {
+  id          String    @id @default(uuid())
+  hotelId     String
+  agencyId    String
+  roomTypeId  String
+  startDate   DateTime  @db.Date
+  endDate     DateTime  @db.Date
+  /// Dönemdeki her gece için ayrılan oda adedi.
+  quantity    Int
+  /// Giriş gecesinden kaç gün önce kullanılmamış kota serbest kalır (0 = giriş gününe kadar tutulur).
+  releaseDays Int       @default(0)
+  notes       String?
+  createdBy   String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  hotel    Hotel    @relation(fields: [hotelId], references: [id])
+  agency   Agency   @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  roomType RoomType @relation(fields: [roomTypeId], references: [id], onDelete: Restrict)
+
+  // Müsaitlik hesabı her satışta "bu tip + pencereye düşen kotalar" sorgular; sıcak yol.
+  @@index([hotelId, roomTypeId, startDate, endDate])
+  @@index([hotelId, agencyId, deletedAt])
 }
 
 /// Promosyon (modül 31): koşulu tutan doğrudan satışa kendiliğinden (`requiresCoupon = false`)

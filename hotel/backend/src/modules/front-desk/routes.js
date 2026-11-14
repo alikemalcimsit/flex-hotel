@@ -6,6 +6,7 @@ import {
   inHouseQuerySchema,
   revertStaySchema,
   stayParamSchema,
+  checkInBatchSchema,
   checkOutBatchSchema,
 } from '@hotelos/hotel-contracts';
 import { PERMISSIONS, assertRequestPermission, requirePermission } from '../../lib/permissions.js';
@@ -76,6 +77,12 @@ export async function frontDeskRoutes(app) {
   app.post('/stays/check-out-batch', { ...manage, schema: { body: checkOutBatchSchema } }, async (request) => ({
     success: true,
     data: await service.checkOutBatch(request.hotelId, request.body.items),
+  }));
+
+  /* Toplu giriş (modül 30, grup dosyası): odası atanmış, ayrıntı gerektirmeyen rezervasyonlar; diğerleri sebebiyle atlanır. */
+  app.post('/stays/check-in-batch', { ...manage, schema: { body: checkInBatchSchema } }, async (request) => ({
+    success: true,
+    data: await service.checkInBatch(request.hotelId, request.body.items),
   }));
 
   app.post('/stays/:reservationId/check-out', { ...manage, schema: { ...params, body: checkOutSchema } }, async (request) => {

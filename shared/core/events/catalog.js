@@ -786,6 +786,15 @@ export const EVENT_CATALOG = Object.freeze({
     contractId: z.string().uuid(),
     change: z.enum(['ADDED', 'REMOVED']),
   }),
+  /** Allotment / kota açıldı, düzenlendi ya da silindi (modül 30; müsaitliği hemen etkiler). */
+  'agency.allotment.changed': hotelScoped.extend({
+    agencyId: z.string().uuid(),
+    allotmentId: z.string().uuid(),
+    roomTypeId: z.string().uuid(),
+    from: isoDay,
+    to: isoDay,
+    change: z.enum(['CREATED', 'UPDATED', 'DELETED']),
+  }),
 
   /* ── Banket / etkinlik (modül 37) ──
      Salon takvimi, etkinlik dosyası ve kasa bunlarla canlı tazelenir
@@ -1278,6 +1287,9 @@ export const INVENTORY_CHANGED_EVENTS = Object.freeze([
   'guest.checked_out',
   'guest.check_in_reverted',
   'guest.check_out_reverted',
+  // Allotment (modül 30): kota değişikliği satılabilir oda sayısını değiştirir
+  // (kanal senkronu ve canlı ekranlar tazelenir).
+  'agency.allotment.changed',
 ]);
 
 /**
@@ -1293,6 +1305,8 @@ export const INVENTORY_RELEASING_EVENTS = Object.freeze([
   'reservation.cancelled',
   'reservation.no_show',
   'guest.checked_out',
+  // Kota azaltma / silme genel havuza yer açabilir (iki yöne gidebilen değişiklik).
+  'agency.allotment.changed',
 ]);
 
 /**
@@ -1401,7 +1415,7 @@ export const BUDGET_EVENTS = Object.freeze([
 ]);
 
 /** Acente ve kontrat (modül 29): ekranlar bunlarla tazelenir (`agencies.changed` kanalı). */
-export const AGENCY_EVENTS = Object.freeze(['agency.changed', 'agency.contract.changed', 'agency.stop_sale.changed']);
+export const AGENCY_EVENTS = Object.freeze(['agency.changed', 'agency.contract.changed', 'agency.stop_sale.changed', 'agency.allotment.changed']);
 
 /** Restoran POS (modül 39) ve oda servisi (41): masa planı, adisyon, vardiya, teslim panosu ve tanım ekranları (`pos.changed` kanalı). */
 export const POS_EVENTS = Object.freeze(['pos.setup.changed', 'pos.check.changed', 'pos.order.sent', 'pos.payment.changed', 'pos.shift.changed', 'pos.room_service.changed']);

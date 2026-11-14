@@ -62,6 +62,8 @@ export const NAV_SECTIONS = Object.freeze([
             permission: PERMISSIONS.RESERVATIONS_MANAGE,
           },
           { label: 'Bekleme listesi', to: '/rezervasyonlar/bekleme-listesi', icon: 'clock' },
+          // Grup dosyaları (modül 30): rooming list, toplu oda atama / giriş / çıkış.
+          { label: 'Gruplar', to: '/gruplar', icon: 'users' },
         ],
       },
       { label: 'Oda planı', to: '/oda-plani', icon: 'calendar' },

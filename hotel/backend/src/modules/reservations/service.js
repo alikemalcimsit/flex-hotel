@@ -23,6 +23,7 @@ import { createReadCache } from '../../lib/read-cache.js';
 import { containsText, isFuzzyToken, MATCH_NOTHING, matchGuestIds, matchRoomIdsByNumber, searchTokens } from '../../lib/search.js';
 import { writeWithEvents } from '../../lib/write.js';
 import { AgencySaleError, loadAgencySale, stayDays } from '../agencies/sale.js';
+import { holdsForSale } from '../agencies/allotments.js';
 import { requestApproval } from '../approvals/service.js';
 import { applyOffer, discountLabel, evaluatePromotion } from '../promotions/rules.js';
 import { PromotionError, loadPromotionSale, readCoupon } from '../promotions/sale.js';
@@ -457,11 +458,24 @@ function noShowCharge(row, nights) {
  * @param {string} hotelId
  * @param {{ roomTypeIds: string[], from: Date, to: Date, apply: (reservations: object[]) => object[] }} change
  */
-async function overbookingViolations(tx, hotelId, { roomTypeIds, from, to, apply }) {
+async function overbookingViolations(tx, hotelId, { roomTypeIds, from, to, apply, agencyId = null, businessDate }) {
   const snap = await loadInventorySnapshot(tx, hotelId, from, to, { roomTypeIds });
   const before = buildAvailabilityCalendar({ ...snap, from, to, roomTypeIds });
   const after = buildAvailabilityCalendar({ ...snap, reservations: apply(snap.reservations), from, to, roomTypeIds });
-  return findNewOverbooking(before, after, roomTypeIds);
+  // Allotment (modül 30): başka acentelere tutulan (release edilmemiş,
+  // kullanılmamış) kota bu satışa kapalı sayılır. Satışı yapan acentenin kendi
+  // kotası düşülmez; kota dolunca acente genel havuzdan devam eder (garanti,
+  // tavan değil). Kullanım anlık görüntüdeki acenteli rezervasyonlardan türetilir.
+  const holds = await holdsForSale(tx, hotelId, {
+    from,
+    to,
+    days: after.days,
+    roomTypeIds,
+    saleAgencyId: agencyId,
+    today: businessDate ?? (await getBusinessDate(hotelId)),
+    agencyStays: snap.reservations,
+  });
+  return findNewOverbooking(before, after, roomTypeIds, holds);
 }
 
 /**
@@ -475,7 +489,10 @@ function noAvailabilityError(violations, typeById) {
   const nights = new Set(violations.map((violation) => violation.day)).size;
   return new ConflictError(
     `${type?.name ?? 'Seçilen tip'} için ${dotted(first.day)} gecesi${nights > 1 ? ` (ve ${nights - 1} gece daha)` : ''} yer yok: ` +
-      `${first.sellable} satılabilir odanın hepsi dolu. Başka tip ya da tarih seçin ya da misafiri bekleme listesine alın.`,
+      `${first.sellable} satılabilir odanın hepsi dolu` +
+      // Allotment (modül 30): fiziksel oda var ama başka acenteye tutulu.
+      `${first.held > 0 ? ` (${first.held} oda acente kotasında tutulu)` : ''}. ` +
+      `Başka tip ya da tarih seçin ya da misafiri bekleme listesine alın.`,
     'NO_AVAILABILITY',
     { shortfall: shortfallDetails(violations, typeById) },
   );
@@ -693,7 +710,8 @@ async function insertReservations(tx, stage, { hotelId, hotel, input, guest, roo
     const row = await tx.reservation.create({
       data: {
         hotelId,
-        guestId: guest.id,
+        // Satır misafiri (modül 30, rooming list) varsa oda onun kartına açılır.
+        guestId: room.guestRow?.id ?? guest.id,
         roomTypeId: room.roomTypeId,
         checkIn: input.checkIn,
         checkOut: input.checkOut,
@@ -816,6 +834,8 @@ export async function createReservation(hotelId, input, options = {}) {
         from: input.checkIn,
         to: input.checkOut,
         apply: (reservations) => [...reservations, ...placeholders(rooms, input)],
+        agencyId: input.agencyId ?? null,
+        businessDate,
       });
       if (violations.length > 0 && !options.allowOverbooking) {
         if (input.roomId) throw noAvailabilityError(violations, typeById);
@@ -890,12 +910,19 @@ export async function createGroupReservation(hotelId, input, options = {}) {
       const promo = await promotionSaleFor(tx, hotelId, { businessDate, couponCode: input.couponCode, agencySale, manual: null });
       const pricing = priceRooms({ rooms: applied, typeById, stay: input, seasons, ratePlans, manual: null, agencySale, promo, source: input.source });
       const { guest } = await resolveGuest(tx, hotelId, input, hotel);
+      // Satır misafirleri (modül 30, rooming list): misafiri verilen oda kendi
+      // kartına açılır (iletişimsiz kart olabilir; iletişim grup sorumlusunda).
+      // `forceNewGuest`: isim çakışması tek odayı değil bütün grubu düşürürdü;
+      // aynı ad + iletişim yine mevcut kartı bulur.
+      const withGuests = await resolveLineGuests(tx, hotelId, applied, hotel);
 
       const violations = await overbookingViolations(tx, hotelId, {
         roomTypeIds,
         from: input.checkIn,
         to: input.checkOut,
         apply: (reservations) => [...reservations, ...placeholders(applied, input)],
+        agencyId: input.agencyId ?? null,
+        businessDate,
       });
       if (violations.length > 0 && !options.allowOverbooking) {
         if (hotel.overbookingPolicy === 'APPROVAL' && options.approvalAllowed !== false) {
@@ -932,7 +959,7 @@ export async function createGroupReservation(hotelId, input, options = {}) {
         hotel,
         input,
         guest,
-        rooms: applied,
+        rooms: withGuests,
         pricing,
         bookedOn: toIsoDay(businessDate),
         createdBy,
@@ -994,6 +1021,31 @@ async function applyPackages(tx, hotelId, rooms) {
     if (!pkg) throw new ValidationError('Seçilen paket bulunamadı ya da yayında değil', { field: 'packageId' });
     return { ...room, boardType: pkg.boardType, pkg: { nightlyPrice: pkg.nightlyPrice.toString(), name: pkg.name } };
   });
+}
+
+/**
+ * Grup satırlarının misafirlerini çözer (modül 30, rooming list): misafiri
+ * verilen satır kendi kartına açılır. İletişimsiz (yalnız ad-soyad) kart
+ * doğrudan açılır; iletişimli satırda aynı ad + iletişim mevcut kartı bulur,
+ * farklı ada kayıtlı iletişim yeni kart açar (`forceNewGuest` — isim çakışması
+ * bütün grubu düşürmesin). Misafirsiz satır grup sorumlusuna kalır.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {Array<{ guest?: object | null }>} rooms
+ * @param {{ phoneCountryCode: string }} hotel
+ */
+async function resolveLineGuests(tx, hotelId, rooms, hotel) {
+  const resolved = [];
+  for (const room of rooms) {
+    if (!room.guest) {
+      resolved.push(room);
+      continue;
+    }
+    const { guest } = await resolveGuest(tx, hotelId, { guestId: null, guest: room.guest, forceNewGuest: true }, hotel);
+    resolved.push({ ...room, guestRow: guest });
+  }
+  return resolved;
 }
 
 /**
@@ -1137,6 +1189,8 @@ export async function applyReservationUpdate(hotelId, reservationId, input, opti
                 ? { ...row, checkIn: next.checkIn, checkOut: next.checkOut, roomTypeId: next.roomTypeId, roomId: releaseRoom ? null : row.roomId }
                 : row,
             ),
+          agencyId: nextAgencyId,
+          businessDate,
         });
         if (violations.length > 0) {
           if (!options.allowOverbooking) throw noAvailabilityError(violations, typeById);
@@ -1733,6 +1787,8 @@ export async function reinstateReservation(hotelId, reservationId, { expectedUpd
           ...reservations,
           { ...current, roomId: releaseRoom ? null : current.roomId, status },
         ],
+        agencyId: current.agencyId ?? null,
+        businessDate,
       });
       if (violations.length > 0) throw noAvailabilityError(violations, typeById);
 
@@ -2123,6 +2179,17 @@ export async function quoteReservation(hotelId, input) {
     : null;
   if (!excluded) assertArrivalNotPast(input.checkIn, businessDate);
 
+  // Allotment (modül 30): başka acentelere tutulan kota teklifte de satılabilir
+  // görünmesin — form "3 boş" deyip kayıt anında reddetmesin.
+  const quoteNights = eachNight(input.checkIn, input.checkOut).map(toIsoDay);
+  const holds = await holdsForSale(prisma, hotelId, {
+    from: input.checkIn,
+    to: input.checkOut,
+    days: quoteNights,
+    saleAgencyId: input.agencyId ?? null,
+    today: businessDate,
+  });
+
   let availability;
   if (excluded) {
     const snap = await loadInventorySnapshot(prisma, hotelId, input.checkIn, input.checkOut);
@@ -2133,15 +2200,16 @@ export async function quoteReservation(hotelId, input) {
       to: input.checkOut,
       roomTypeIds: roomTypes.map((type) => type.id),
     });
-    availability = (typeId) => availabilityForStay(calendar, typeId, input.checkIn, input.checkOut);
+    availability = (typeId) => availabilityForStay(calendar, typeId, input.checkIn, input.checkOut, holds);
   } else {
     const calendar = await getAvailabilityCalendar(hotelId, { from: input.checkIn, to: input.checkOut });
     const byType = new Map(calendar.roomTypes.map((type) => [type.id, type]));
     availability = (typeId) => {
       const entry = byType.get(typeId);
       if (!entry) return 0;
-      const days = Object.values(entry.days);
-      return days.length ? Math.min(...days.map((day) => day.free)) : 0;
+      // Negatif değer korunur (overbooking göstergesi) — yalnızca tutulan kota düşülür.
+      const values = quoteNights.map((day) => (entry.days[day]?.free ?? 0) - (holds?.[typeId]?.[day] ?? 0));
+      return values.length ? Math.min(...values) : 0;
     };
   }
 

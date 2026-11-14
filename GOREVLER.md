@@ -2231,12 +2231,74 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 30. Grup & allotment — Ali Kemal
 **Gün sonu:** Acenteye ayrılan oda kotası tanımlı; müsaitlik hesabı kotayı düşüyor; rooming list yüklenip toplu check-in yapılıyor.
-- [ ] Backend: Allotment, ReservationGroup tabloları + API
-- [ ] Backend: `checkAvailability`'ye allotment düşümü; serbest bırakma tarihinde kota geri açılır
-- [ ] Backend: rooming list import (Excel: ad, soyad, oda tipi, tarih)
-- [ ] Ekran: Allotment tanımı (acente, tarih aralığı, oda tipi, adet, release günü)
-- [ ] Ekran: Kota kullanım tablosu (verilen / kullanılan / kalan)
-- [ ] Ekran: Grup dosyası (grup adı, rezervasyonlar, toplu check-in, toplu folyo)
+- [x] Backend: Allotment tablosu + API (ReservationGroup modül 4'ten vardı; grup dosyası API'si eklendi)
+- [x] Backend: müsaitliğe allotment düşümü; release tarihinde kota kendiliğinden geri açılır
+- [x] Backend: rooming list (satır misafirli grup açma; Excel parse tarayıcıda — bütçe modülü kalıbı)
+- [x] Ekran: Allotment tanımı (acente kartında sekme: oda tipi, dönem, adet, release günü)
+- [x] Ekran: Kota kullanım tablosu (gün gün verilen / kullanılan / kalan / release)
+- [x] Ekran: Grup dosyası (rezervasyonlar, toplu oda atama / check-in / check-out, folyo bakiyeleri)
+
+> **📌 Modül 30 tamamlandı (14 Kasım 2026 — Ali Kemal).** `flex-ali` dalı.
+>
+> **Kararlar (kullanıcı, 14 Kasım 2026):** Kota bir **garantidir, tavan değil** — acentenin kotası dolunca satış genel
+> havuzdan devam eder (fiziksel yer varsa açılır). **Release tarihi = giriş gecesi − `releaseDays`; o günden itibaren
+> (dahil) kullanılmamış kota genel havuza döner** (`releaseDays = 0`: gelecek geceler girişe kadar tutulur, günün gecesi
+> serbest — same-day satış herkese açık). Rooming list **ortak tarihli** (grubun giriş/çıkışı; satır başına tarih ileriki
+> sürüm); satır başına misafir adı. **Kullanım ayrı bağla tutulmaz, türetilir:** acentenin aynı oda tipinde o geceyi
+> kapsayan geçerli (PENDING/CONFIRMED/CHECKED_IN) rezervasyonları kotaya mahsup edilir — rezervasyonda allotment FK yok,
+> iptal kota hakkını kendiliğinden geri açar.
+>
+> **Veri** (migration `20261114130000_allotments`): `Allotment` (acente × oda tipi × dönem [iki uç dahil] × adet ×
+> releaseDays, soft-delete). Aynı acente + tipte yayındaki dönemler çakışmaz (EXCLUDE `Allotment_no_overlap`); CHECK'ler
+> adet 1–500, release 0–365, dönem ≤ 1100 gün. Yazmalar acenteyi **özel** kilitler (kontrat/stop-sale düzeni; kilit
+> sırası korunur: rezervasyon → oda tipi → acente). Envanter anlık görüntüsü (`loadInventorySnapshot`) artık `agencyId`
+> de döner (kullanım sayımı için).
+>
+> **Müsaitlik:** saf kurallar `agencies/allotment-rules.js` (`isNightHeld`, `allotmentHolds`, `allotmentUsage`; satış
+> bağlamı: satan acentenin kendi kotası düşülmez, diğerlerinin **kullanılmamış + release edilmemiş** kotası düşülür).
+> Tek kapı `allotments.holdsForSale` (kota yoksa null — sıfır ek yük). Tüketiciler: **rezervasyon guard'ı**
+> (`overbookingViolations` → `findNewOverbooking` opsiyonel `holds` tabanıyla; 4 çağrı noktası: açma, grup, düzenleme,
+> iptal geri alma; ihlal mesajı "N oda acente kotasında tutulu" der), **teklif** (iki dal), **bekleme listesi** (zil
+> kotalı odaya çalmaz), **oda kapısı** `getStayAvailability` (webchat/concierge), **ARI** (OTA'ya giden free'den tutulu
+> kota düşülür — kanal kotalı odayı satamaz; release olunca gündelik tam eşitleme + olay penceresi kanala açar).
+> `availabilityForStay` artık 0'a kıskaçlı (negatif dönmez).
+>
+> **Olay:** `agency.allotment.changed` (agencyId, allotmentId, roomTypeId, from/to, change) — `AGENCY_EVENTS` (acente
+> ekranı canlı), `INVENTORY_CHANGED_EVENTS` (kanal senkronu + oda planı canlı sürüm) ve `INVENTORY_RELEASING_EVENTS`
+> (kota azalınca bekleme listesi taranır) listelerine eklendi; channel-sync-worker olayın dönem penceresini hassas
+> kirletir. Kısıt mesajları `errors.js`'e işlendi (M28'in RatePlan/Package kısıtları da bu vesileyle eklendi — tabloda
+> eksiklerdi).
+>
+> **API:** `/agencies/:agencyId/allotments` (GET sayfalı, POST), `/agencies/allotments/:id` (PUT sürümlü, DELETE),
+> `/agencies/allotments/:id/usage` (gün gün verilen/kullanılan/kalan/release + özet). İzinler `agencies.view/manage`.
+>
+> **Grup dosyası** (`reservations/groups.js`): `GET /reservations/groups` (arama, sayfalı; oda sayısı, açık/içeride,
+> tarih aralığı), `GET /reservations/groups/:id` (rezervasyonlar + folyo bakiyeleri [TRANSFERRED hariç, denormalize
+> `Folio.balance`] + durum dağılımı + toplamlar — decimal toplama). **Toplu check-in** `POST /front-desk/stays/check-in-batch`
+> (en fazla 50; toplu çıkış kalıbı): kimlik ve refakatçiler **karttan okunup geri verilir** (toplu giriş kayıtlı kimliği /
+> online check-in refakatçisini silmez); odasızlık, kimlik politikası, erken giriş ücreti gibi ayrıntı isteyen kayıt
+> sebebiyle atlanır (tek tek alınır). Toplu oda atama (autoAssignBatch) ve toplu çıkış modül 51'den vardı.
+>
+> **Rooming list:** grup satırına opsiyonel `guest` (ad-soyad yeter; `groupLineGuestSchema` — iletişim zorunlu değil,
+> iletişim grup sorumlusunda; `guestInputSchema` iletişim şartı korunarak ikiye bölündü). `resolveLineGuests`: satır
+> misafiri kendi kartına açılır (`forceNewGuest` — isim çakışması bütün grubu düşürmesin; aynı ad + iletişim yine mevcut
+> kartı bulur). Excel parse **tarayıcıda** (`read-excel-file/browser`, bütçe kalıbı): şablon [Ad, Soyad, Oda tipi kodu,
+> Pansiyon, Yetişkin, Çocuk]; hatalı satırlar numarasıyla listelenir, geçerliler grup satırlarına dolar.
+>
+> **Ekran:** acente kartına "Kota" sekmesi (CRUD + kullanım tablosu), `/gruplar` + `/gruplar/:id` (grup dosyası: seçimli
+> toplu oda atama / giriş / çıkış, sonuç sebepleriyle; grup iptali), grup formuna satır misafiri + rooming list
+> import/şablon.
+>
+> **Test:** kurallar 11 birim (`allotment-rules.test.js`: release sınırları, mahsup, satış bağlamı, kota taşması);
+> entegrasyon 7 (`allotments.integration.test.js`: CRUD + çakışma, guard — genel satış kotaya takılır / acente kendi
+> kotasını kullanır / taşma genel havuzdan / release sonrası serbest, kullanım tablosu, satır misafirli acente grubu
+> [kontrat fiyatıyla], toplu check-in kısmi başarı). Rooms kuralları 74 ve rezervasyon kuralları 35 birim yeşil (holds
+> geriye uyumlu).
+>
+> **Devir:** Oda planı ekranı kota düşümünü **göstermiyor** (satış guard'ı ve ARI düşüyor; planda "boş" görünen oda
+> satışta kotaya takılabilir — kota görünürlüğü kullanım tablosunda). Grup **master folyo** (tek folyoya toplama) modül
+> 15/16'nın folyo birleştirmesiyle yapılır; grup dosyası bakiyeleri okur. Satır başına tarihli rooming list ileriki
+> sürüm. Modül 33 ARI'si artık kota-farkında; board-başına plan fiyatı devri (M28) ayrıca duruyor.
 
 ### 31. Promosyon & kupon — arkadaşın
 **Gün sonu:** "Erken rezervasyon %15", "3 gece kal 1 gece bedava" gibi kurallar tanımlanıyor; kupon kodu girilince fiyat düşüyor.

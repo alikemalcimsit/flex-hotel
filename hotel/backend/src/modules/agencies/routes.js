@@ -6,19 +6,24 @@ import {
   agencyReservationsQuerySchema,
   agencyStatusSchema,
   agencySummaryQuerySchema,
+  allotmentParamSchema,
   contractParamSchema,
   contractVersionSchema,
   createAgencySchema,
+  createAllotmentSchema,
   createContractSchema,
   endContractSchema,
+  paginationQuerySchema,
   saveContractRatesSchema,
   stopSaleParamSchema,
   updateAgencySchema,
+  updateAllotmentSchema,
   updateContractSchema,
 } from '@hotelos/hotel-contracts';
 import { PERMISSIONS, requireAnyPermission, requirePermission } from '../../lib/permissions.js';
 import { withHotelContext } from '../../lib/tenant.js';
 import * as service from './service.js';
+import * as allotments from './allotments.js';
 
 /**
  * Acente ve kontrat route'ları (modül 29).
@@ -89,6 +94,22 @@ export async function agencyRoutes(app) {
     ok(await service.removeStopSale(request.hotelId, request.params.contractId, request.params.stopSaleId)),
   );
 
+  /* ── Allotment / kota (modül 30) ── */
+
+  app.put('/allotments/:allotmentId', { ...manage, schema: { params: allotmentParamSchema, body: updateAllotmentSchema } }, async (request) =>
+    ok(await allotments.updateAllotment(request.hotelId, request.params.allotmentId, request.body)),
+  );
+
+  app.delete('/allotments/:allotmentId', { ...manage, schema: { params: allotmentParamSchema } }, async (request) => {
+    await allotments.deleteAllotment(request.hotelId, request.params.allotmentId);
+    return ok({ id: request.params.allotmentId });
+  });
+
+  /** Kota kullanım tablosu: gün gün verilen / kullanılan / kalan / release durumu. */
+  app.get('/allotments/:allotmentId/usage', { ...view, schema: { params: allotmentParamSchema } }, async (request) =>
+    ok(await allotments.getAllotmentUsage(request.hotelId, request.params.allotmentId)),
+  );
+
   /* ── Acente ── */
 
   app.get('/:agencyId', { ...view, schema: { params: agencyParamSchema } }, async (request) =>
@@ -105,6 +126,14 @@ export async function agencyRoutes(app) {
 
   app.post('/:agencyId/contracts', { ...manage, schema: { params: agencyParamSchema, body: createContractSchema } }, async (request, reply) =>
     reply.status(201).send(ok(await service.createContract(request.hotelId, request.params.agencyId, request.body))),
+  );
+
+  app.get('/:agencyId/allotments', { ...view, schema: { params: agencyParamSchema, querystring: paginationQuerySchema } }, async (request) =>
+    ok(await allotments.listAllotments(request.hotelId, request.params.agencyId, request.query)),
+  );
+
+  app.post('/:agencyId/allotments', { ...manage, schema: { params: agencyParamSchema, body: createAllotmentSchema } }, async (request, reply) =>
+    reply.status(201).send(ok(await allotments.createAllotment(request.hotelId, request.params.agencyId, request.body))),
   );
 
   app.get('/:agencyId/summary', { ...view, schema: { params: agencyParamSchema, querystring: agencySummaryQuerySchema } }, async (request) =>

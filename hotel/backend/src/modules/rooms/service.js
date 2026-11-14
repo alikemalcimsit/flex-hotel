@@ -8,6 +8,7 @@ import {
 import { prisma } from '../../db.js';
 import { recordAudit } from '../../lib/audit.js';
 import { getBusinessDate } from '../../lib/business-date.js';
+import { holdsForSale } from '../agencies/allotments.js';
 import {
   bulkItemFailure,
   ConflictError,
@@ -310,7 +311,9 @@ export async function loadInventorySnapshot(client, hotelId, from, to, { roomTyp
   const [reservations, blocks, segments] = await Promise.all([
     client.$queryRaw`
       SELECT r."id", r."roomId", r."roomTypeId", r."checkIn", r."checkOut", r."roomSince",
-             r."status"::text AS "status", r."adults", r."children"
+             r."status"::text AS "status", r."adults", r."children",
+             -- Allotment kullanımı (modül 30): acentenin rezervasyonları kotaya mahsup edilir.
+             r."agencyId"
       FROM "Reservation" r
       WHERE r."hotelId" = ${hotelId}
         AND r."deletedAt" IS NULL
@@ -1149,6 +1152,16 @@ export async function getStayAvailability(hotelId, { checkIn, checkOut, roomType
     to: checkOut,
     roomTypeIds: roomTypes.map((type) => type.id),
   });
+  // Allotment (modül 30): acentelere tutulan kota genel satışa kapalı — bu kapı
+  // acentesiz satış bağlamıdır (webchat, concierge, oda planı sorgusu).
+  const holds = await holdsForSale(client, hotelId, {
+    from: checkIn,
+    to: checkOut,
+    days: calendar.days,
+    saleAgencyId: null,
+    today: await getBusinessDate(hotelId),
+    agencyStays: snapshot.reservations,
+  });
 
   return {
     checkIn: toIsoDay(checkIn),
@@ -1158,7 +1171,7 @@ export async function getStayAvailability(hotelId, { checkIn, checkOut, roomType
       code: type.code,
       name: type.name,
       total: calendar.byRoomType[type.id]?.total ?? 0,
-      available: availabilityForStay(calendar, type.id, checkIn, checkOut),
+      available: availabilityForStay(calendar, type.id, checkIn, checkOut, holds),
     })),
   };
 }

@@ -406,6 +406,45 @@ export const addStopSaleSchema = z
     }
   });
 
+/* ─────────────── Allotment / kota (modül 30) ─────────────── */
+
+export const MAX_ALLOTMENT_QUANTITY = 500;
+export const MAX_ALLOTMENT_RELEASE_DAYS = 365;
+export const MAX_ALLOTMENT_DAYS = MAX_CONTRACT_DAYS;
+export const MAX_ALLOTMENT_NOTES_LENGTH = 500;
+
+export const allotmentParamSchema = z.object({ allotmentId: uuid('Geçersiz kota kaydı') });
+
+const allotmentBase = z.object({
+  roomTypeId: uuid('Oda tipi seçin'),
+  startDate: dateField,
+  endDate: dateField,
+  quantity: z.coerce
+    .number({ error: 'Kota adedi sayı olmalı' })
+    .int('Kota adedi tam sayı olmalı')
+    .min(1, 'Kota en az 1 oda olmalı')
+    .max(MAX_ALLOTMENT_QUANTITY, `Kota en fazla ${MAX_ALLOTMENT_QUANTITY} oda olabilir`),
+  releaseDays: z.coerce
+    .number({ error: 'Release günü sayı olmalı' })
+    .int('Release günü tam sayı olmalı')
+    .min(0, 'Release günü negatif olamaz')
+    .max(MAX_ALLOTMENT_RELEASE_DAYS, `Release günü en fazla ${MAX_ALLOTMENT_RELEASE_DAYS} olabilir`)
+    .default(0),
+  notes: optionalText(MAX_ALLOTMENT_NOTES_LENGTH, 'Not'),
+});
+
+/** Dönem denetimi: bitiş ≥ başlangıç, en fazla `MAX_ALLOTMENT_DAYS` gün (kontratla aynı emniyet). */
+function refineAllotmentPeriod(value, ctx) {
+  if (value.endDate < value.startDate) {
+    ctx.addIssue({ code: 'custom', path: ['endDate'], message: 'Bitiş tarihi başlangıçtan önce olamaz' });
+  } else if (inclusiveDays(value.startDate, value.endDate) > MAX_ALLOTMENT_DAYS) {
+    ctx.addIssue({ code: 'custom', path: ['endDate'], message: `Kota dönemi en fazla ${MAX_ALLOTMENT_DAYS} gün olabilir` });
+  }
+}
+
+export const createAllotmentSchema = allotmentBase.superRefine(refineAllotmentPeriod);
+export const updateAllotmentSchema = allotmentBase.extend({ expectedUpdatedAt }).superRefine(refineAllotmentPeriod);
+
 /* ─────────────── Sınır yardımcısı: kontrat tutarı üst sınırı ─────────────── */
 
 /** Kontrat fiyatı üst sınırı (rezervasyon toplamıyla aynı). */

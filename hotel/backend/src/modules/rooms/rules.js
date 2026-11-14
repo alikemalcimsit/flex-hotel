@@ -254,9 +254,10 @@ export function buildAvailabilityCalendar({ rooms, reservations, blocks, segment
  * @param {string} roomTypeId
  * @param {Date | string} checkIn
  * @param {Date | string} checkOut
+ * @param {Record<string, Record<string, number>> | null} [holds] allotment (modül 30): bu satışa kapalı gece gece kota
  * @returns {number}
  */
-export function availabilityForStay(calendar, roomTypeId, checkIn, checkOut) {
+export function availabilityForStay(calendar, roomTypeId, checkIn, checkOut, holds = null) {
   const entry = calendar.byRoomType[roomTypeId];
   if (!entry) return 0;
 
@@ -268,8 +269,11 @@ export function availabilityForStay(calendar, roomTypeId, checkIn, checkOut) {
     const day = entry.days[night];
     // Pencerede olmayan bir gece sorulduysa cevap veremeyiz; güvenli taraf 0.
     if (!day) return 0;
-    minimum = Math.min(minimum, day.free);
+    // Allotment (modül 30): başka acentelere tutulan kota bu satışa kapalı sayılır.
+    minimum = Math.min(minimum, day.free - (holds?.[roomTypeId]?.[night] ?? 0));
   }
+  // Negatif değer bilinçli korunur: ekranlar ve testler overbooking'i
+  // "eksi müsaitlik" olarak gösterir (0'a kıskaçlamak bunu gizlerdi).
   return minimum;
 }
 
@@ -282,13 +286,20 @@ export function availabilityForStay(calendar, roomTypeId, checkIn, checkOut) {
  * gecede aynı tipte odaya misafir yerleştirmek (net etkisi sıfır) engellenirse
  * personel mevcut sorunu çözemez hâle gelir.
  *
+ * Allotment (modül 30): `holds` verilirse başka acentelere tutulan kota o gece
+ * satılamaz sayılır — taban sıfırdan `held`e çıkar. Koşul yapısı aynı kalır
+ * ("tabanın altını büyütmesin"): taban iki tarafta da aynı olduğundan
+ * `free − held` ile karşılaştırmak ham `free` karşılaştırmasına denktir.
+ *
  * @param {ReturnType<typeof buildAvailabilityCalendar>} before
  * @param {ReturnType<typeof buildAvailabilityCalendar>} after
  * @param {string[]} roomTypeIds denetlenecek tipler
- * @returns {Array<{ roomTypeId: string, day: string, freeBefore: number, freeAfter: number, sellable: number, demand: number }>}
- *   `sellable`: değişiklikten sonra o gece satılabilir oda; `demand`: o geceyi tutan rezervasyon
+ * @param {Record<string, Record<string, number>> | null} [holds] bu satışa kapalı gece gece kota
+ * @returns {Array<{ roomTypeId: string, day: string, freeBefore: number, freeAfter: number, sellable: number, demand: number, held: number }>}
+ *   `sellable`: değişiklikten sonra o gece bu satışa satılabilir oda (tutulan kota düşülmüş);
+ *   `demand`: o geceyi tutan rezervasyon; `held`: başka acentelere tutulan kota
  */
-export function findNewOverbooking(before, after, roomTypeIds) {
+export function findNewOverbooking(before, after, roomTypeIds, holds = null) {
   const violations = [];
   for (const roomTypeId of roomTypeIds) {
     const afterDays = after.byRoomType[roomTypeId]?.days ?? {};
@@ -296,10 +307,19 @@ export function findNewOverbooking(before, after, roomTypeIds) {
     for (const day of after.days) {
       const next = afterDays[day];
       if (!next) continue;
+      const held = holds?.[roomTypeId]?.[day] ?? 0;
       const freeBefore = beforeDays[day]?.free ?? 0;
-      if (next.free < 0 && next.free < freeBefore) {
-        const sellable = next.total - next.outOfOrder;
-        violations.push({ roomTypeId, day, freeBefore, freeAfter: next.free, sellable, demand: sellable - next.free });
+      if (next.free < held && next.free < freeBefore) {
+        const physical = next.total - next.outOfOrder;
+        violations.push({
+          roomTypeId,
+          day,
+          freeBefore: freeBefore - held,
+          freeAfter: next.free - held,
+          sellable: Math.max(0, physical - held),
+          demand: physical - next.free,
+          held,
+        });
       }
     }
   }

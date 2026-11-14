@@ -34,6 +34,12 @@ export const reservationKeys = Object.freeze({
   waitlistEntry: (id) => ['reservations', 'waitlist-entry', id],
   /** Yayındaki paketler (modül 28): rezervasyon formu seçici. */
   activePackages: ['reservations', 'active-packages'],
+  /** Grup dosyaları (modül 30). */
+  groups: ['reservations', 'groups'],
+  /** @param {object} filters */
+  groupList: (filters) => ['reservations', 'groups', 'list', filters],
+  /** @param {string} id */
+  group: (id) => ['reservations', 'groups', 'detail', id],
 });
 
 /** Durum → rozet tonu. */

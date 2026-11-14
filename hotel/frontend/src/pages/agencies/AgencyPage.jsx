@@ -44,6 +44,8 @@ export function AgencyPage() {
         tabs={[
           { to: base, label: 'Genel', icon: 'building', end: true },
           { to: `${base}/kontratlar`, label: 'Kontratlar', icon: 'fileText' },
+          // Allotment / kota (modül 30): acenteye ayrılan oda kotası.
+          { to: `${base}/kota`, label: 'Kota', icon: 'layers' },
           { to: `${base}/cari`, label: 'Rezervasyonlar ve cari', icon: 'banknote' },
           // Hedef ve prim (modül 35) yalnızca prim izni olana.
           ...(can(PERMISSIONS.AGENCY_BONUS_VIEW) ? [{ to: `${base}/prim`, label: 'Prim ve hedef', icon: 'coins' }] : []),

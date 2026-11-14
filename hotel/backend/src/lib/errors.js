@@ -257,6 +257,30 @@ const CONSTRAINT_RULES = Object.freeze({
     message: 'Bu tarihlerde aynı kapsamda başka bir stop-sale zaten var.',
   },
   Reservation_agency_commission: { code: 'CONSTRAINT', message: 'Acenteli rezervasyonun komisyon oranı kayıtlı olmalı (0–100).' },
+
+  // Fiyat planı ve paket (modül 28).
+  RatePlan_price_valid: { code: 'CONSTRAINT', message: 'Plan fiyatı sıfırdan büyük olmalı.' },
+  RatePlan_period_valid: { code: 'CONSTRAINT', message: 'Plan döneminin bitişi başlangıcından önce olamaz.' },
+  RatePlan_extras_valid: { code: 'CONSTRAINT', message: 'Kişi başı ek tutarlar negatif olamaz.' },
+  RatePlan_occupancy_valid: { code: 'CONSTRAINT', message: 'Fiyata dahil kişi sayısı 1 ile 20 arasında olmalı.' },
+  RatePlan_min_stay_valid: { code: 'CONSTRAINT', message: 'En az konaklama 1 ile 365 gece arasında olmalı.' },
+  RatePlan_no_overlap: {
+    code: 'RATE_OVERLAP',
+    message: 'Aynı oda tipi ve pansiyon için fiyat planı dönemleri çakışıyor. Bir geceye tek plan düşebilir.',
+  },
+  Package_code_format: { code: 'CONSTRAINT', message: 'Paket kodu harf/rakamla başlamalı; yalnızca harf, rakam, . _ - içerebilir.' },
+  Package_name_not_blank: { code: 'CONSTRAINT', message: 'Paket adı en az 2 karakter olmalı.' },
+  Package_price_valid: { code: 'CONSTRAINT', message: 'Paketin gecelik fiyatı sıfırdan büyük olmalı.' },
+  Package_hotelId_code_active_key: { code: 'DUPLICATE', message: 'Bu kodla bir paket zaten var.' },
+
+  // Allotment / kota (modül 30).
+  Allotment_period_valid: { code: 'CONSTRAINT', message: 'Kota döneminin bitişi başlangıcından önce olamaz (en fazla 1100 gün).' },
+  Allotment_quantity_valid: { code: 'CONSTRAINT', message: 'Kota adedi 1 ile 500 arasında olmalı.' },
+  Allotment_release_valid: { code: 'CONSTRAINT', message: 'Release günü 0 ile 365 arasında olmalı.' },
+  Allotment_no_overlap: {
+    code: 'ALLOTMENT_OVERLAP',
+    message: 'Bu acentenin aynı oda tipinde bu tarihleri kapsayan başka bir kotası var. Bir geceye tek kota satırı düşebilir.',
+  },
   Promotion_hotelId_name_key: { code: 'DUPLICATE', message: 'Bu adla bir promosyon zaten var.' },
   Promotion_name_not_blank: { code: 'CONSTRAINT', message: 'Promosyon adı en az 2 karakter olmalı.' },
   Promotion_discount_valid: {

@@ -261,38 +261,45 @@ function refineStay(value, ctx) {
 }
 
 /** Yeni misafir kartı (kısa form; ayrıntılar CRM'de, modül 22). */
-export const guestInputSchema = z
-  .object({
-    firstName: z.string({ error: 'Ad zorunlu' }).trim().min(1, 'Ad zorunlu').max(100, 'Ad en fazla 100 karakter'),
-    lastName: z.string({ error: 'Soyad zorunlu' }).trim().min(1, 'Soyad zorunlu').max(100, 'Soyad en fazla 100 karakter'),
-    phone: z
-      .string()
-      .trim()
-      .max(40, 'Telefon en fazla 40 karakter')
-      .refine((value) => value === '' || /^\+?[\d\s()-]{7,}$/.test(value), { message: 'Telefon geçersiz' })
-      .refine((value) => value === '' || value.replace(/\D/g, '').length >= 7, { message: 'Telefon en az 7 rakam olmalı' })
-      .transform((value) => value || null)
-      .nullish(),
-    email: z
-      .string()
-      .trim()
-      .toLowerCase()
-      .max(200, 'E-posta en fazla 200 karakter')
-      .refine((value) => value === '' || EMAIL_PATTERN.test(value), { message: 'E-posta geçersiz' })
-      .transform((value) => value || null)
-      .nullish(),
-    nationality: z
-      .string()
-      .trim()
-      .toUpperCase()
-      .refine((value) => value === '' || /^[A-Z]{2}$/.test(value), { message: 'Uyruk iki harfli ülke kodu olmalı (TR, DE)' })
-      .transform((value) => value || null)
-      .nullish(),
-  })
-  .refine((value) => value.phone || value.email, {
-    path: ['phone'],
-    message: 'Misafire ulaşmak için telefon ya da e-posta girin',
-  });
+const guestFieldsSchema = z.object({
+  firstName: z.string({ error: 'Ad zorunlu' }).trim().min(1, 'Ad zorunlu').max(100, 'Ad en fazla 100 karakter'),
+  lastName: z.string({ error: 'Soyad zorunlu' }).trim().min(1, 'Soyad zorunlu').max(100, 'Soyad en fazla 100 karakter'),
+  phone: z
+    .string()
+    .trim()
+    .max(40, 'Telefon en fazla 40 karakter')
+    .refine((value) => value === '' || /^\+?[\d\s()-]{7,}$/.test(value), { message: 'Telefon geçersiz' })
+    .refine((value) => value === '' || value.replace(/\D/g, '').length >= 7, { message: 'Telefon en az 7 rakam olmalı' })
+    .transform((value) => value || null)
+    .nullish(),
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .max(200, 'E-posta en fazla 200 karakter')
+    .refine((value) => value === '' || EMAIL_PATTERN.test(value), { message: 'E-posta geçersiz' })
+    .transform((value) => value || null)
+    .nullish(),
+  nationality: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .refine((value) => value === '' || /^[A-Z]{2}$/.test(value), { message: 'Uyruk iki harfli ülke kodu olmalı (TR, DE)' })
+    .transform((value) => value || null)
+    .nullish(),
+});
+
+export const guestInputSchema = guestFieldsSchema.refine((value) => value.phone || value.email, {
+  path: ['phone'],
+  message: 'Misafire ulaşmak için telefon ya da e-posta girin',
+});
+
+/**
+ * Grup satırının misafiri (modül 30, rooming list): ad-soyad yeter, iletişim
+ * zorunlu değil — tur operatörünün listesinde çoğu misafirin telefonu olmaz;
+ * iletişim grup sorumlusundadır. Verilmezse oda grup sorumlusuna açılır.
+ */
+export const groupLineGuestSchema = guestFieldsSchema;
 
 /** Konaklama satırı: oda tipi, kişi, pansiyon, (opsiyonel) paket. */
 const lineShape = {
@@ -434,6 +441,8 @@ const groupLineSchema = z.object({
     .int('Adet tam sayı olmalı')
     .min(1, 'En az 1 oda')
     .max(MAX_LINE_QUANTITY, `Bir satırda en fazla ${MAX_LINE_QUANTITY} oda`),
+  /** Satırın misafiri (modül 30, rooming list). Verilmezse oda grup sorumlusuna açılır. */
+  guest: groupLineGuestSchema.nullish(),
 });
 
 export const createGroupReservationSchema = z

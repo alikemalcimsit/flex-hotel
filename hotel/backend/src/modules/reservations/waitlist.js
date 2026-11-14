@@ -9,6 +9,7 @@ import { buildPage, toSkipTake } from '../../lib/pagination.js';
 import { PERMISSIONS } from '../../lib/permissions.js';
 import { writeWithEvents } from '../../lib/write.js';
 import { raiseStaffAlert } from '../notifications/staff-alerts.js';
+import { holdsForSale } from '../agencies/allotments.js';
 import { availabilityForStay, buildAvailabilityCalendar, fitsCapacity } from '../rooms/rules.js';
 import { loadInventorySnapshot } from '../rooms/service.js';
 import { getActiveRoomTypes, getHotelSettings } from '../settings/service.js';
@@ -267,8 +268,19 @@ export async function refreshWaitlist(hotelId, { entryIds, roomTypeIds, alert = 
     const types = [...new Set(chunk.entries.map((entry) => entry.roomTypeId))];
     const snapshot = await loadInventorySnapshot(prisma, hotelId, chunk.from, chunk.to, { roomTypeIds: types });
     const calendar = buildAvailabilityCalendar({ ...snapshot, from: chunk.from, to: chunk.to, roomTypeIds: types });
+    // Allotment (modül 30): acenteye tutulan kota bekleme listesi için "yer" değildir —
+    // zil, resepsiyonun satamayacağı odaya çalmasın.
+    const holds = await holdsForSale(prisma, hotelId, {
+      from: chunk.from,
+      to: chunk.to,
+      days: calendar.days,
+      roomTypeIds: types,
+      saleAgencyId: null,
+      today: businessDate,
+      agencyStays: snapshot.reservations,
+    });
     for (const entry of chunk.entries) {
-      const free = availabilityForStay(calendar, entry.roomTypeId, entry.checkIn, entry.checkOut) >= 1;
+      const free = availabilityForStay(calendar, entry.roomTypeId, entry.checkIn, entry.checkOut, holds) >= 1;
       if (free && entry.status === 'WAITING') transitions.push({ entry, next: 'AVAILABLE' });
       if (!free && entry.status === 'AVAILABLE') transitions.push({ entry, next: 'WAITING' });
     }

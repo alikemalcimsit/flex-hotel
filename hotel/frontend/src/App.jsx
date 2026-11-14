@@ -108,7 +108,10 @@ const AgencyPage = lazy(() => import('./pages/agencies/AgencyPage.jsx').then((m)
 const AgencyOverviewTab = lazy(() => import('./pages/agencies/AgencyOverviewTab.jsx').then((m) => ({ default: m.AgencyOverviewTab })));
 const AgencyContractsTab = lazy(() => import('./pages/agencies/AgencyContractsTab.jsx').then((m) => ({ default: m.AgencyContractsTab })));
 const AgencyAccountTab = lazy(() => import('./pages/agencies/AgencyAccountTab.jsx').then((m) => ({ default: m.AgencyAccountTab })));
+const AgencyAllotmentsTab = lazy(() => import('./pages/agencies/AgencyAllotmentsTab.jsx').then((m) => ({ default: m.AgencyAllotmentsTab })));
 const AgencyBonusTab = lazy(() => import('./pages/agencies/AgencyBonusTab.jsx').then((m) => ({ default: m.AgencyBonusTab })));
+const GroupsPage = lazy(() => import('./pages/reservations/GroupsPage.jsx').then((m) => ({ default: m.GroupsPage })));
+const GroupFilePage = lazy(() => import('./pages/reservations/GroupFilePage.jsx').then((m) => ({ default: m.GroupFilePage })));
 const AgencyBonusLayout = lazy(() => import('./pages/agency-bonus/AgencyBonusLayout.jsx').then((m) => ({ default: m.AgencyBonusLayout })));
 const BonusRulesTab = lazy(() => import('./pages/agency-bonus/BonusRulesTab.jsx').then((m) => ({ default: m.BonusRulesTab })));
 const BonusSettlementsTab = lazy(() => import('./pages/agency-bonus/BonusSettlementsTab.jsx').then((m) => ({ default: m.BonusSettlementsTab })));
@@ -333,6 +336,23 @@ export default function App() {
               <Route path="bekleme-listesi" element={<WaitlistTab />} />
               <Route path=":reservationId" element={<ReservationDetailPage />} />
             </Route>
+            {/* Grup dosyaları (modül 30): rooming list, toplu oda atama / giriş / çıkış. */}
+            <Route
+              path="gruplar"
+              element={
+                <RequirePermission permission={PERMISSIONS.RESERVATIONS_VIEW}>
+                  <GroupsPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="gruplar/:groupId"
+              element={
+                <RequirePermission permission={PERMISSIONS.RESERVATIONS_VIEW}>
+                  <GroupFilePage />
+                </RequirePermission>
+              }
+            />
             <Route
               path="on-buro"
               element={
@@ -569,6 +589,7 @@ export default function App() {
             >
               <Route index element={<AgencyOverviewTab />} />
               <Route path="kontratlar" element={<AgencyContractsTab />} />
+              <Route path="kota" element={<AgencyAllotmentsTab />} />
               <Route path="cari" element={<AgencyAccountTab />} />
               <Route
                 path="prim"
