@@ -329,6 +329,12 @@ export const NAV_SECTIONS = Object.freeze([
         ],
       },
       {
+        label: 'Fiyat önerileri',
+        to: '/fiyat-onerileri',
+        icon: 'chart',
+        permission: PERMISSIONS.APPROVALS_VIEW,
+      },
+      {
         label: 'Bildirimler',
         to: '/bildirimler',
         icon: 'bell',
@@ -378,6 +384,7 @@ export const NAV_SECTIONS = Object.freeze([
           { label: 'Sezonlar', to: '/ayarlar/sezonlar', icon: 'sun' },
           { label: 'Fiyat planları', to: '/ayarlar/fiyat-planlari', icon: 'coins' },
           { label: 'Paketler', to: '/ayarlar/paketler', icon: 'package' },
+          { label: 'Dinamik fiyat', to: '/ayarlar/dinamik-fiyat', icon: 'zap' },
           { label: 'Genel parametreler', to: '/ayarlar/genel', icon: 'sliders' },
           { label: 'Kullanıcılar', to: '/ayarlar/kullanicilar', icon: 'user', permission: PERMISSIONS.USERS_VIEW },
           { label: 'Roller & İzinler', to: '/ayarlar/roller', icon: 'lock', permission: PERMISSIONS.ROLES_MANAGE },

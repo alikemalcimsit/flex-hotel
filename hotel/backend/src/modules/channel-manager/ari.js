@@ -2,6 +2,7 @@ import { calendarDateInTimeZone, toIsoDay } from '@hotelos/core';
 import { addIsoDays, channelAvailability, channelRate, encodeRestriction, windowDays } from '@hotelos/channel-sync-worker';
 import { prisma } from '../../db.js';
 import { holdsForSale } from '../agencies/allotments.js';
+import { getActiveAdjustments } from '../pricing/yield-service.js';
 import { buildAvailabilityCalendar } from '../rooms/rules.js';
 import { loadInventorySnapshot } from '../rooms/service.js';
 import { priceStay } from '../reservations/rules.js';
@@ -54,10 +55,11 @@ export async function computeRoomTypeValues({ hotelId, channel, rooms, window })
   const from = new Date(`${window.from}T00:00:00.000Z`);
   const to = new Date(`${window.to}T00:00:00.000Z`);
 
-  const [snapshot, roomTypes, seasons, stopSales, hotel] = await Promise.all([
+  const [snapshot, roomTypes, seasons, adjustments, stopSales, hotel] = await Promise.all([
     loadInventorySnapshot(prisma, hotelId, from, to, { roomTypeIds }),
     getActiveRoomTypes(hotelId),
     getActiveSeasons(hotelId),
+    getActiveAdjustments(hotelId),
     prisma.channelStopSale.findMany({
       where: { channelId: channel.id, hotelId, startDate: { lt: to }, endDate: { gte: from } },
       select: { roomTypeIds: true, startDate: true, endDate: true },
@@ -85,7 +87,8 @@ export async function computeRoomTypeValues({ hotelId, channel, rooms, window })
     const type = typeById.get(roomTypeId);
     const calendarDays = calendar.byRoomType[roomTypeId]?.days ?? {};
     // Silinmiş tip satılamaz: müsaitlik 0, fiyat yok (kanal en son fiyatı tutar; stop-sale açık).
-    const prices = type ? priceStay({ basePrice: type.basePrice, seasons, checkIn: from, checkOut: to }).nights : [];
+    // Onaylı dinamik çarpan (modül 34) kanala da yansır — misafir sitede ne görüyorsa OTA da onu satar.
+    const prices = type ? priceStay({ basePrice: type.basePrice, seasons, adjustments, roomTypeId, checkIn: from, checkOut: to }).nights : [];
     const priceByDay = new Map(prices.map((night) => [night.date, night.amount]));
     const free = {};
     const rate = {};

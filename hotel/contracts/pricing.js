@@ -118,3 +118,87 @@ export const packageListQuerySchema = listQuerySchema.extend({
   boardType: boardField.optional(),
   active: queryBoolean.optional(),
 });
+
+/* ═══════════════ Modül 34: Dinamik fiyat / yield ═══════════════ */
+
+/** Çarpan emniyet aralığı: bir onay fiyatı yarıdan aşağı indiremez, 3 katına çıkaramaz. */
+export const PRICE_MULTIPLIER_MIN = 0.5;
+export const PRICE_MULTIPLIER_MAX = 3;
+/** Öneri ufku üst sınırı (gün). */
+export const YIELD_MAX_HORIZON_DAYS = 90;
+
+export const PRICE_SUGGESTION_SOURCES = Object.freeze(['RULE', 'AGENT']);
+export const PRICE_SUGGESTION_SOURCE_LABELS = Object.freeze({
+  RULE: 'Yield kuralı',
+  AGENT: 'Fiyat ajanı (AI)',
+});
+
+export const PRICE_SUGGESTION_STATUSES = Object.freeze(['PENDING', 'APPROVED', 'REJECTED', 'EXPIRED']);
+export const PRICE_SUGGESTION_STATUS_LABELS = Object.freeze({
+  PENDING: 'Onay bekliyor',
+  APPROVED: 'Onaylandı',
+  REJECTED: 'Reddedildi',
+  EXPIRED: 'Süresi doldu',
+});
+
+/**
+ * Yield kuralları (otel ayarı, `Hotel.settings.yield`):
+ * - Doluluk ≥ `highOccupancyPct` → fiyat +`highAdjustmentPct`%.
+ * - Doluluk ≤ `lowOccupancyPct` VE girişe ≤ `lowDaysOut` gün → fiyat −`lowAdjustmentPct`%.
+ * Kapalıyken öneri üretilmez (fiyat ajanı ayrı; aktör panelinden yönetilir).
+ */
+const yieldSettingsBase = z.object({
+  enabled: z.boolean().default(false),
+  horizonDays: z.coerce
+    .number({ error: 'Ufuk sayı olmalı' })
+    .int('Ufuk tam sayı olmalı')
+    .min(1, 'Ufuk en az 1 gün')
+    .max(YIELD_MAX_HORIZON_DAYS, `Ufuk en fazla ${YIELD_MAX_HORIZON_DAYS} gün`)
+    .default(30),
+  highOccupancyPct: z.coerce.number().int().min(50, 'Yüksek doluluk eşiği en az 50').max(100, 'Eşik en fazla 100').default(80),
+  highAdjustmentPct: z.coerce.number().int().min(1, 'Artış en az %1').max(100, 'Artış en fazla %100').default(10),
+  lowOccupancyPct: z.coerce.number().int().min(0, 'Düşük doluluk eşiği negatif olamaz').max(70, 'Eşik en fazla 70').default(30),
+  lowDaysOut: z.coerce.number().int().min(1, 'Kalan gün en az 1').max(60, 'Kalan gün en fazla 60').default(7),
+  lowAdjustmentPct: z.coerce.number().int().min(1, 'İndirim en az %1').max(50, 'İndirim en fazla %50').default(15),
+});
+
+export const yieldSettingsSchema = yieldSettingsBase.superRefine((value, ctx) => {
+  if (value.lowOccupancyPct >= value.highOccupancyPct) {
+    ctx.addIssue({ code: 'custom', path: ['lowOccupancyPct'], message: 'Düşük doluluk eşiği yüksek eşikten küçük olmalı' });
+  }
+});
+
+export const updateYieldSettingsSchema = yieldSettingsBase
+  .extend({ expectedUpdatedAt })
+  .superRefine((value, ctx) => {
+    if (value.lowOccupancyPct >= value.highOccupancyPct) {
+      ctx.addIssue({ code: 'custom', path: ['lowOccupancyPct'], message: 'Düşük doluluk eşiği yüksek eşikten küçük olmalı' });
+    }
+  });
+
+/** Varsayılan yield ayarları (kayıt yoksa). */
+export const DEFAULT_YIELD_SETTINGS = Object.freeze(yieldSettingsSchema.parse({}));
+
+export const priceSuggestionListQuerySchema = listQuerySchema.extend({
+  status: z.enum(PRICE_SUGGESTION_STATUSES, { error: 'Geçersiz durum' }).optional(),
+  roomTypeId: uuid('Geçersiz oda tipi').optional(),
+});
+
+/** Onaylayan karar vermeden çarpanı düzenleyebilir (yalnız bekleyen öneride). */
+export const updatePriceSuggestionSchema = z.object({
+  multiplier: decimalField({ scale: 3, min: PRICE_MULTIPLIER_MIN, max: PRICE_MULTIPLIER_MAX, label: 'Çarpan' }),
+  expectedUpdatedAt,
+});
+
+/** Fiyat geçmişi (uygulanmış ayarlar): dönem + isteğe bağlı oda tipi. */
+export const priceHistoryQuerySchema = z
+  .object({
+    from: dateField,
+    to: dateField,
+    roomTypeId: uuid('Geçersiz oda tipi').optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.to < value.from) {
+      ctx.addIssue({ code: 'custom', path: ['to'], message: 'Bitiş başlangıçtan önce olamaz' });
+    }
+  });

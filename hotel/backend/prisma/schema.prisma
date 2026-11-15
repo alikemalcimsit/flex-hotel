@@ -749,6 +749,8 @@ model Hotel {
   ratePlans              RatePlan[]
   packages               Package[]
   allotments             Allotment[]
+  priceSuggestions       PriceSuggestion[]
+  priceAdjustments       PriceAdjustment[]
   seasons                Season[]
   taxes                  Tax[]
   conversations          Conversation[]
@@ -1052,6 +1054,7 @@ model Approval {
 
   hotel              Hotel               @relation(fields: [hotelId], references: [id])
   pendingActions     PendingAction[]
+  priceSuggestion    PriceSuggestion?
   payments           Payment[]
   agencyBonuses      AgencyBonus[]
   eventPayments      EventPayment[]
@@ -1376,6 +1379,8 @@ model RoomType {
   contractStopSales ContractStopSale[]
   channelMappings   ChannelRoomMapping[]
   allotments        Allotment[]
+  priceSuggestions  PriceSuggestion[]
+  priceAdjustments  PriceAdjustment[]
 
   // Benzersizlik kısmi (partial) unique index ile veritabanında tanımlı:
   // `RoomType_hotelId_code_active_key ... WHERE "deletedAt" IS NULL`.
@@ -1864,6 +1869,79 @@ model RatePlan {
   // Fiyat hesabı her gece "bu oda tipi + pansiyon + tarihe düşen plan" sorgular.
   @@index([hotelId, roomTypeId, boardType, startDate, endDate])
   @@index([hotelId, deletedAt])
+}
+
+enum PriceSuggestionSource {
+  RULE
+  AGENT
+}
+
+enum PriceSuggestionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+/// Modül 34: dinamik fiyat önerisi. Günlük iş (kural tabanlı) ya da
+/// pricing-agent (LLM) üretir; **hiçbir fiyat kendiliğinden değişmez** — her
+/// öneri M11 onay kuyruğuna düşer, onaylanınca dönemin her gecesine
+/// `PriceAdjustment` yazılır. Gerekçe serbest metin + yapılandırılmış girdiler
+/// (`inputs`: doluluk, kalan gün, geçen yıl... — FlexAI 2.0: 90/91 modülleri
+/// buraya alan ekleyecek).
+model PriceSuggestion {
+  id             String                @id @default(uuid())
+  hotelId        String
+  roomTypeId     String
+  startDate      DateTime              @db.Date
+  endDate        DateTime              @db.Date
+  /// Önerilen çarpan ("1.100" = +%10); onaylayan karar vermeden düzenleyebilir.
+  multiplier     Decimal               @db.Decimal(6, 3)
+  /// Gösterim: dönemin ilk gecesinde varsayılan pansiyonun mevcut / önerilen fiyatı.
+  currentPrice   Decimal               @db.Decimal(12, 2)
+  suggestedPrice Decimal               @db.Decimal(12, 2)
+  reason         String
+  inputs         Json                  @default("{}")
+  source         PriceSuggestionSource
+  status         PriceSuggestionStatus @default(PENDING)
+  approvalId     String?               @unique
+  decidedBy      String?
+  decidedAt      DateTime?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  hotel       Hotel             @relation(fields: [hotelId], references: [id])
+  roomType    RoomType          @relation(fields: [roomTypeId], references: [id], onDelete: Restrict)
+  approval    Approval?         @relation(fields: [approvalId], references: [id], onDelete: Restrict)
+  adjustments PriceAdjustment[]
+
+  // Öneri ekranı: bekleyenler tarihe göre; mükerrer üretim kontrolü tip + dönem.
+  @@index([hotelId, status, startDate])
+  @@index([hotelId, roomTypeId, startDate, endDate])
+}
+
+/// Modül 34: onaylanmış gece hassasiyetli fiyat çarpanı. Standart satış
+/// fiyatının (plan ya da sezon) üstüne uygulanır; acente kontratı, paket ve
+/// elle fiyat nettir, etkilenmez. Bir geceye tek ayar: yeni onay eskisini
+/// günceller (upsert), geçmiş denetim izinde.
+model PriceAdjustment {
+  id           String   @id @default(uuid())
+  hotelId      String
+  roomTypeId   String
+  date         DateTime @db.Date
+  multiplier   Decimal  @db.Decimal(6, 3)
+  suggestionId String?
+  createdBy    String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  hotel      Hotel            @relation(fields: [hotelId], references: [id])
+  roomType   RoomType         @relation(fields: [roomTypeId], references: [id], onDelete: Restrict)
+  suggestion PriceSuggestion? @relation(fields: [suggestionId], references: [id], onDelete: SetNull)
+
+  @@unique([hotelId, roomTypeId, date])
+  // Fiyat hesabı pencereye düşen ayarları sorgular; sıcak yol.
+  @@index([hotelId, date])
 }
 
 // Modül 28: oda + ek hizmet (SPA, transfer, ...) demeti. Rezervasyona

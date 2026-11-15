@@ -2,14 +2,19 @@ import {
   idParamSchema,
   packageInputSchema,
   packageListQuerySchema,
+  priceHistoryQuerySchema,
+  priceSuggestionListQuerySchema,
   ratePlanInputSchema,
   ratePlanListQuerySchema,
   updatePackageSchema,
+  updatePriceSuggestionSchema,
   updateRatePlanSchema,
+  updateYieldSettingsSchema,
 } from '@hotelos/hotel-contracts';
 import { PERMISSIONS, requireAnyPermission, requirePermission } from '../../lib/permissions.js';
 import { withHotelContext } from '../../lib/tenant.js';
 import * as service from './service.js';
+import * as yieldService from './yield-service.js';
 
 /**
  * Fiyatlandırma route'ları (modül 28): fiyat planları ve paketler. Yönetim
@@ -74,4 +79,41 @@ export async function pricingRoutes(app) {
     await service.deletePackage(request.hotelId, request.params.id);
     return { success: true, data: { id: request.params.id } };
   });
+
+  /* ── Dinamik fiyat / yield (modül 34) ──
+   * Öneriler onay nesneleridir: liste `approvals.view`, çarpan düzenleme
+   * `approvals.decide` (karar M11 onay uçlarından verilir). Yield kuralları
+   * otel ayarıdır: `settings.view/manage`. */
+
+  const approvalsView = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.APPROVALS_VIEW)] };
+  const approvalsDecide = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.APPROVALS_DECIDE)] };
+
+  app.get('/suggestions', { ...approvalsView, schema: { querystring: priceSuggestionListQuerySchema } }, async (request) => ({
+    success: true,
+    data: await yieldService.listSuggestions(request.hotelId, request.query),
+  }));
+
+  app.put(
+    '/suggestions/:id',
+    { ...approvalsDecide, schema: { params: idParamSchema, body: updatePriceSuggestionSchema } },
+    async (request) => ({
+      success: true,
+      data: await yieldService.updateSuggestionMultiplier(request.hotelId, request.params.id, request.body),
+    }),
+  );
+
+  app.get('/history', { ...approvalsView, schema: { querystring: priceHistoryQuerySchema } }, async (request) => ({
+    success: true,
+    data: await yieldService.getPriceHistory(request.hotelId, request.query),
+  }));
+
+  app.get('/yield-settings', view, async (request) => ({
+    success: true,
+    data: await yieldService.getYieldSettings(request.hotelId),
+  }));
+
+  app.put('/yield-settings', { ...manage, schema: { body: updateYieldSettingsSchema } }, async (request) => ({
+    success: true,
+    data: await yieldService.saveYieldSettings(request.hotelId, request.body),
+  }));
 }

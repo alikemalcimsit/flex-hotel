@@ -123,6 +123,19 @@ export const EVENT_CATALOG = Object.freeze({
   'settings.package.created': settingsEntity,
   'settings.package.updated': settingsEntity.extend({ changedFields: z.array(z.string()).default([]) }),
   'settings.package.deleted': settingsEntity,
+  /** Modül 34: yield kural parametreleri değişti. */
+  'settings.yield.updated': hotelScoped.extend({ changedFields: z.array(z.string()).default([]) }),
+  /** Modül 34: onaylanan fiyat ayarı uygulandı / geri alındı (gece hassasiyetli çarpan). */
+  'settings.price_adjustment.changed': hotelScoped.extend({
+    roomTypeIds: z.array(z.string().uuid()).max(100).default([]),
+    from: isoDay,
+    to: isoDay,
+  }),
+  /** Modül 34: günlük fiyat değerlendirmesi — pricing-agent bu olayla çalışır. */
+  'pricing.review.requested': hotelScoped.extend({
+    businessDate: isoDay,
+    horizonDays: z.number().int().min(1).max(90),
+  }),
 
   /* ── Oda envanteri (modül 3) ── */
 

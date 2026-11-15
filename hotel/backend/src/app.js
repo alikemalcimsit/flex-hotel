@@ -92,6 +92,7 @@ import { planCacheStats } from './modules/plan/service.js';
 import { roomsRoutes } from './modules/rooms/routes.js';
 import { settingsRoutes } from './modules/settings/routes.js';
 import { pricingRoutes } from './modules/pricing/routes.js';
+import { registerPricingSubscribers, setPricingSubscriberLogger } from './modules/pricing/subscribers.js';
 
 /**
  * Bir personelin (IP + kullanıcı) dakikada atabileceği istek sayısı. Canlı
@@ -169,6 +170,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   registerActors();
   registerNotificationSubscribers();
   setApprovalSubscriberLogger(app.log);
+  setPricingSubscriberLogger(app.log);
   registerApprovalSubscribers();
   setReservationSubscriberLogger(app.log);
   registerReservationSubscribers();
@@ -183,6 +185,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   registerPayrollSubscribers();
   registerGuestPortalSubscribers();
   registerHousekeepingSubscribers();
+  registerPricingSubscribers();
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);

@@ -1,5 +1,6 @@
 import { actorRegistry } from '@hotelos/actor-kit';
 import { budgetAgentManifest, createBudgetAgent } from '@hotelos/budget-agent';
+import { createPricingAgent, pricingAgentManifest } from '@hotelos/pricing-agent';
 import { conciergeAgentManifest, createConciergeAgent } from '@hotelos/concierge-agent';
 import {
   NOTIFICATION_CHANNEL_LABELS,
@@ -22,6 +23,7 @@ import { prismaUnfiltered } from '../db.js';
 import { webchatGatewayService, webchatTransport } from '../modules/channels/webchat.js';
 import { whatsappGatewayService } from '../modules/channels/whatsapp.js';
 import { completeCommentary, explainVariance } from '../modules/budget/variance.js';
+import { agentReviewInputs, createSuggestions } from '../modules/pricing/yield-service.js';
 import { createLlmDeps } from '../modules/concierge/llm.js';
 import { getAiSettingsCached } from '../modules/concierge/settings.js';
 import { conciergeService, routerService } from '../modules/concierge/service.js';
@@ -178,6 +180,7 @@ const OPTIONAL_ACTORS = Object.freeze([
   { manifest: routerAgentManifest, reason: 'Sunucuda OPENAI_API_KEY tanımlı değil; ajan çalışmıyor' },
   { manifest: conciergeAgentManifest, reason: 'Sunucuda OPENAI_API_KEY tanımlı değil; ajan çalışmıyor' },
   { manifest: budgetAgentManifest, reason: 'Sunucuda OPENAI_API_KEY tanımlı değil; ajan çalışmıyor' },
+  { manifest: pricingAgentManifest, reason: 'Sunucuda OPENAI_API_KEY tanımlı değil; ajan çalışmıyor (kural tabanlı yield çalışır)' },
 ]);
 
 /**
@@ -188,6 +191,17 @@ const budgetAgentService = {
   model: async (hotelId) => (await getAiSettingsCached(hotelId)).conciergeModel || null,
   explainVariance,
   completeCommentary,
+};
+
+/**
+ * Fiyat ajanının servisi (modül 34). Model otelin ana modeli (bütçe ajanı
+ * gibi). Öneriler kural tabanlı yield ile aynı kapıdan girer: `createSuggestions`
+ * → M11 onayı; ajan fiyatı doğrudan DEĞİŞTİREMEZ.
+ */
+const pricingAgentService = {
+  model: async (hotelId) => (await getAiSettingsCached(hotelId)).conciergeModel || null,
+  reviewInputs: agentReviewInputs,
+  submitSuggestions: (hotelId, proposals) => createSuggestions(hotelId, proposals, { requestedBy: 'pricing-agent' }),
 };
 
 /**
@@ -346,6 +360,7 @@ export function registerAiAgents({ client } = {}) {
   actorRegistry.register(createConciergeAgent(conciergeService, { ...deps, llm, parseArguments: parseToolArguments }));
   registerAutoResponder({ name: 'concierge-agent' });
   actorRegistry.register(createBudgetAgent(budgetAgentService, { ...deps, llm }));
+  actorRegistry.register(createPricingAgent(pricingAgentService, { ...deps, llm }));
   // Sonradan (testte) kaydedildiyse de bus'a bağlansın; bağlama tekrar edilebilir.
   actorRegistry.bindAll(eventBus);
   return true;

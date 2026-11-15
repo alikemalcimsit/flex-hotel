@@ -110,9 +110,14 @@ export function ratePlanNightAmount(plan, occupancy = {}) {
  *    plan fiyatı (kişi başı ekle); sezon çarpanı uygulanmaz.
  * 2. **Sezon:** plan yoksa oda tipinin taban fiyatı × o geceye düşen çarpan.
  *
+ * Üstüne **onaylı dinamik fiyat çarpanı** (modül 34, `adjustments`) uygulanır:
+ * yield kuralı ya da fiyat ajanının onaylanmış gece hassasiyetli ayarı — plan
+ * ve sezon fiyatının ikisini de ölçekler (acente / paket / elle fiyat bu
+ * fonksiyona girmez, etkilenmez).
+ *
  * Her gece kuruşa yuvarlanır; toplam yuvarlanmış gecelerin toplamıdır (gece
- * tablosu ile toplam hiçbir zaman ayrışmaz). `ratePlans` verilmezse davranış
- * eski sezon-yalnızca haliyle aynıdır.
+ * tablosu ile toplam hiçbir zaman ayrışmaz). `ratePlans` / `adjustments`
+ * verilmezse davranış eskisiyle birebir aynıdır.
  *
  * @param {{
  *   basePrice: string,
@@ -123,16 +128,22 @@ export function ratePlanNightAmount(plan, occupancy = {}) {
  *   roomTypeId?: string,
  *   boardType?: string,
  *   occupancy?: { adults?: number, children?: number },
+ *   adjustments?: Record<string, Record<string, string>> | null,
  * }} input
  * @returns {{ nights: PricedNight[], total: string }}
  */
-export function priceStay({ basePrice, seasons, checkIn, checkOut, ratePlans = [], roomTypeId, boardType, occupancy }) {
+export function priceStay({ basePrice, seasons, checkIn, checkOut, ratePlans = [], roomTypeId, boardType, occupancy, adjustments = null }) {
   const nights = eachNight(checkIn, checkOut).map((date) => {
+    const day = toIsoDay(date);
+    const adjust = (amount) => {
+      const multiplier = roomTypeId ? adjustments?.[roomTypeId]?.[day] : undefined;
+      return multiplier ? toMoneyString(toDecimal(amount).times(toDecimal(multiplier))) : amount;
+    };
     const plan = ratePlans.length > 0 && roomTypeId ? findRatePlanForNight(ratePlans, { roomTypeId, boardType, date }) : null;
     if (plan) {
       return {
-        date: toIsoDay(date),
-        amount: ratePlanNightAmount(plan, occupancy),
+        date: day,
+        amount: adjust(ratePlanNightAmount(plan, occupancy)),
         baseRate: toMoneyString(plan.price),
         multiplier: null,
         seasonName: plan.name ?? null,
@@ -141,8 +152,8 @@ export function priceStay({ basePrice, seasons, checkIn, checkOut, ratePlans = [
     const season = findSeasonForDate(seasons, date);
     const multiplier = season?.multiplier ?? '1';
     return {
-      date: toIsoDay(date),
-      amount: toMoneyString(toDecimal(basePrice).times(toDecimal(multiplier))),
+      date: day,
+      amount: adjust(toMoneyString(toDecimal(basePrice).times(toDecimal(multiplier)))),
       baseRate: toMoneyString(basePrice),
       multiplier: toDecimal(multiplier).toFixed(3),
       seasonName: season?.name ?? null,

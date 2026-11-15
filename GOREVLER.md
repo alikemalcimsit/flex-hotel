@@ -2514,12 +2514,66 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 34. Dinamik fiyat / yield — Ali Kemal
 **Gün sonu:** Sistem günde bir fiyat önerisi üretiyor, gerekçesiyle onaya düşüyor; onaylanınca fiyat değişip kanallara gidiyor.
-- [ ] Kural tabanlı yield (worker): doluluk > %80 → +%10, < %30 ve 7 gün kaldı → −%15 (parametreler ayarlardan)
-- [ ] pricing-agent paketi (günde 1 çalışır; doluluk, kalan gün, geçen yıl, etkinlik takvimi okur; öneri + gerekçe; `approval.requested`)
-- [ ] Backend: PriceSuggestion tablosu; onaylanınca RatePlan güncelle → `rate.changed`
-- [ ] Ekran: Öneriler listesi (tarih, oda tipi, mevcut, önerilen, gerekçe) + onayla / reddet / düzenle
-- [ ] Ekran: Yield kuralları ayarı
-- [ ] Ekran: Fiyat geçmişi grafiği
+- [x] Kural tabanlı yield (günlük iş): doluluk ≥ %80 → +%10, ≤ %30 ve ≤7 gün → −%15 (parametreler ayarlardan)
+- [x] pricing-agent paketi (günlük olayla çalışır; doluluk, kalan gün, geçen yıl okur; öneri + gerekçe; onaya düşer — etkinlik takvimi girdisi devirde)
+- [x] Backend: PriceSuggestion + PriceAdjustment; onaylanınca gece çarpanı uygulanır → `rate.changed` (RatePlan'a dokunulmaz — aşağıdaki karar)
+- [x] Ekran: Öneriler listesi (dönem, oda tipi, mevcut, önerilen, gerekçe + yapılandırılmış girdiler) + onayla / reddet / düzenle
+- [x] Ekran: Yield kuralları ayarı
+- [x] Ekran: Fiyat geçmişi grafiği
+
+> **📌 Modül 34 tamamlandı (15 Kasım 2026 — Ali Kemal).** `flex-ali` dalı.
+>
+> **Kararlar:** **Hiçbir fiyat kendiliğinden değişmez** — kural işi de ajan da yalnız öneri üretir; her öneri M11 onay
+> kuyruğuna düşer (`BULK_PRICE_CHANGE` tipi zaten vardı) ve karar olayını (`approval.granted/denied/expired`) pricing
+> subscriber'ı uygular. Görev metnindeki "onaylanınca RatePlan güncelle"den **bilinçli sapma:** uygulama hedefi
+> `PriceAdjustment` — **gece hassasiyetli çarpan katmanı** (tip × gece × çarpan, bir geceye tek ayar/upsert). Gerekçe:
+> yield doğası gereği gün bazlıdır; RatePlan dönemlerini bölmek EXCLUDE kısıtlarıyla kırılgandır ve pansiyon başına ayrı
+> satır gerektirirdi — çarpan tüm pansiyonlara oransal uygulanır, M28 planları bozulmaz. Çarpan plan VE sezon fiyatını
+> ölçekler; **acente kontratı, paket ve elle fiyat nettir, etkilenmez** (M29/M28 ilkeleri). Emniyet aralığı 0.5–3
+> (CHECK + sözleşme + ajan çıktı doğrulaması): hiçbir onay fiyatı yarıdan aşağı/3 katından yukarı taşıyamaz.
+>
+> **Veri** (migration `20261115090000_dynamic_pricing`): `PriceSuggestion` (tip × dönem × çarpan; gösterim için
+> mevcut/önerilen fiyat; `reason` serbest metin + **`inputs` yapılandırılmış girdiler** — FlexAI 2.0 notu gereği gün gün
+> doluluk/satılabilir/satılan/kalan gün/geçen yıl ayrı alanlar, 90/91 buraya ekleyecek; kaynak RULE|AGENT; durum
+> PENDING→APPROVED/REJECTED/EXPIRED; `approvalId` tekil). `PriceAdjustment` (`@@unique [hotel, tip, gece]`; sıcak yol
+> indeksi `[hotelId, date]`). Yield parametreleri **`Hotel.settings.yield`** (boştaki Json kolonu — yeni kolon yok).
+>
+> **Kural motoru** (`pricing/yield-rules.js`, saf, 11 birim test): eşik kararları (`evaluateDay`), **ardışık aynı-çarpanlı
+> günleri tek öneriye birleştirme** (`evaluateYield` — 2500 odalı otelde onay kuyruğu gün × tip kalemiyle boğulmasın),
+> takvim→girdi dönüşümü (`calendarToYieldDays`: satılabilir = toplam − arızalı, satılan = satılabilir − boş; geçen yıl
+> 364 gün önce = haftanın aynı günü, forecast kalıbı). Üretim (`yield-service.js` `generateSuggestions`): otel başına
+> **tek** envanter anlık görüntüsü + **tek** gruplu geçen-yıl sorgusu; idempotent (çakışan bekleyen öneri ve "zaten aynı
+> çarpan uygulanmış" dönem atlanır) — iş 6 saatte bir koşar (`pricing/jobs.js`), kuyruk şişmez, kaçan gün telafi edilir.
+>
+> **Satış yolu:** `priceStay` opsiyonel `adjustments` alır (gece → çarpan; kuruşa yuvarlama); `loadContext` cache'li
+> `getActiveAdjustments` ile besler (5 dk TTL, `settings.` olay önekiyle geçersiz). Tüketiciler: açma/grup/düzenleme/
+> teklif + **ARI** (onaylı çarpan OTA'ya da gider — misafir sitede ne görüyorsa kanal onu satar; `rate.changed` dönem
+> penceresiyle senkronu tetikler). Teklif/önizleme de aynı çarpanı gösterir.
+>
+> **pricing-agent** (`hotel/agents/pricing-agent/`, stub canlandı): budget-agent kalıbı (`BaseLlmAgent`, model =
+> `conciergeModel`, OPENAI_API_KEY yoksa kayıt olmaz — **kural tabanlı yield LLM'siz bağımsız çalışır**, kimse fiyatsız
+> kalmaz). Günlük `pricing.review.requested` olayıyla uyanır; **kompakt girdi** (`agentReviewInputs`: yalnız eşiklere
+> yakın günler, ≤120 satır — istem maliyeti sınırı; bekleyen dönemler verilir ki mükerrer önermesin). Çıktı katı JSON;
+> `parseAgentSuggestions` (4 birim test) satır satır doğrular: bilinmeyen tip / pencere dışı tarih / emniyet dışı yüzde /
+> bekleyen dönemle çakışma **yalnız o satırı** düşürür — LLM hatası onay kuyruğuna taşmaz. Öneriler kural işiyle **aynı
+> kapıdan** (`createSuggestions`) girer; ajan fiyat değiştirme yetkisine hiçbir yerde sahip değildir.
+>
+> **API** (`/pricing`): öneriler listesi + çarpan düzenleme (karar vermeden; taban öneriden türetilir), fiyat geçmişi,
+> yield ayarları. İzinler: öneri/geçmiş `approvals.view`, düzenleme `approvals.decide` (öneri bir onay nesnesidir; karar
+> M11 onay uçlarından), ayarlar `settings.view/manage`. Olaylar `settings.yield.updated`, `settings.price_adjustment.changed`
+> (+ Activity Feed Türkçe adları — bekçi test).
+>
+> **Ekran:** `/fiyat-onerileri` (süzgeçli liste, gerekçe + girdi tablosu, onayla/reddet/düzenle), fiyat geçmişi grafiği,
+> `/ayarlar` altında "Dinamik fiyat" (yield kuralları).
+>
+> **Test:** kurallar 11 + ajan çıktı doğrulama 4 birim; entegrasyon 8 (`yield.integration.test.js`): yüksek doluluk →
+> öneri + onay kaydı + idempotens, son-dakika indirimi, kapalıyken sessizlik, **onay → gece çarpanları + `rate.changed` +
+> yeni rezervasyon onaylı fiyattan** (öncesi taban fiyattan — onaysız değişmezlik testin kendisiyle kanıtlı), red →
+> sıfır yazım, düzenlenen çarpanın uygulanması, ayar kaydet/cache, geçmiş.
+>
+> **Devir:** Etkinlik takvimi (banket M37) ve no-show riski / rakip fiyatı (90/91) `inputs`'a alan olarak eklenecek —
+> yapı hazır. Öneri ekranındaki grafik uygulanmış çarpanları gösterir; "etkin satış fiyatı" eğrisi (plan+sezon+çarpan
+> bileşke) ileriki sürüm. Ajan için ayrı model/bütçe alanı gerekirse `AiSettings`'e eklenir (şimdilik otelin ana modeli).
 
 > **FlexAI 2.0'dan not (3 Kasım 2026 — Ahmet):** `PriceSuggestion`'ın gerekçesini serbest metnin yanında yapılandırılmış girdi
 > olarak da sakla (doluluk, forecast, geçen yıl… ayrı alanlar): 90 no-show riskini, 91 rakip fiyatını bu girdilere

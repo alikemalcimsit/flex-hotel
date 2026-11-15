@@ -32,6 +32,7 @@ const SeasonsTab = lazy(() => import('./pages/settings/SeasonsTab.jsx').then((m)
 const RatePlansTab = lazy(() => import('./pages/settings/RatePlansTab.jsx').then((m) => ({ default: m.RatePlansTab })));
 const PackagesTab = lazy(() => import('./pages/settings/PackagesTab.jsx').then((m) => ({ default: m.PackagesTab })));
 const GeneralTab = lazy(() => import('./pages/settings/GeneralTab.jsx').then((m) => ({ default: m.GeneralTab })));
+const YieldSettingsTab = lazy(() => import('./pages/settings/YieldSettingsTab.jsx').then((m) => ({ default: m.YieldSettingsTab })));
 const UsersTab = lazy(() => import('./pages/settings/UsersTab.jsx').then((m) => ({ default: m.UsersTab })));
 const RolePermissionsTab = lazy(() =>
   import('./pages/settings/RolePermissionsTab.jsx').then((m) => ({ default: m.RolePermissionsTab })),
@@ -233,6 +234,7 @@ const OnlineCheckinTab = lazy(() => import('./pages/guest-portal/OnlineCheckinTa
 const GuestPortalSettingsPage = lazy(() => import('./pages/guest-portal/GuestPortalSettingsPage.jsx').then((m) => ({ default: m.GuestPortalSettingsPage })));
 const InHouseTab = lazy(() => import('./pages/front-desk/InHouseTab.jsx').then((m) => ({ default: m.InHouseTab })));
 const ApprovalsPage = lazy(() => import('./pages/approvals/ApprovalsPage.jsx').then((m) => ({ default: m.ApprovalsPage })));
+const PriceSuggestionsPage = lazy(() => import('./pages/pricing/PriceSuggestionsPage.jsx').then((m) => ({ default: m.PriceSuggestionsPage })));
 const ApprovalsPendingTab = lazy(() => import('./pages/approvals/PendingTab.jsx').then((m) => ({ default: m.PendingTab })));
 const ApprovalsHistoryTab = lazy(() => import('./pages/approvals/HistoryTab.jsx').then((m) => ({ default: m.HistoryTab })));
 
@@ -1124,6 +1126,14 @@ export default function App() {
               <Route path="gecmis" element={<ApprovalsHistoryTab />} />
             </Route>
             <Route
+              path="fiyat-onerileri"
+              element={
+                <RequirePermission permission={PERMISSIONS.APPROVALS_VIEW}>
+                  <PriceSuggestionsPage />
+                </RequirePermission>
+              }
+            />
+            <Route
               path="bildirimler"
               element={
                 <RequirePermission permission={PERMISSIONS.NOTIFICATIONS_VIEW}>
@@ -1201,6 +1211,7 @@ export default function App() {
               <Route path="sezonlar" element={<SeasonsTab />} />
               <Route path="fiyat-planlari" element={<RatePlansTab />} />
               <Route path="paketler" element={<PackagesTab />} />
+              <Route path="dinamik-fiyat" element={<YieldSettingsTab />} />
               <Route path="genel" element={<GeneralTab />} />
               <Route
                 path="kullanicilar"

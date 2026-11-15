@@ -158,6 +158,26 @@ describe('priceStay — fiyat planı sezon çarpanının yerine geçer', () => {
     assert.deepEqual([nights[0].amount, nights[0].baseRate, nights[0].multiplier], ['5100.00', '3800.00', null]);
   });
 
+  it('onaylı dinamik çarpan (modül 34) plan ve sezon fiyatının ikisini de ölçekler', () => {
+    const adjustments = { STD: { '2026-07-10': '1.100', '2026-08-30': '1.100' } };
+    // Plan gecesi: 3800 × 1.10 = 4180; plansız sezon gecesi (Yaz 1.5): 1000 × 1.5 × 1.10 = 1650.
+    const planned = priceStay({
+      basePrice: '1000', seasons: SEASONS, ratePlans: PLANS, roomTypeId: 'STD', boardType: 'HB',
+      occupancy: { adults: 2, children: 0 }, adjustments, checkIn: '2026-07-10', checkOut: '2026-07-11',
+    });
+    assert.equal(planned.nights[0].amount, '4180.00');
+    const seasonal = priceStay({
+      basePrice: '1000', seasons: SEASONS, ratePlans: [], roomTypeId: 'STD', boardType: 'BB',
+      adjustments, checkIn: '2026-08-30', checkOut: '2026-08-31',
+    });
+    assert.equal(seasonal.nights[0].amount, '1650.00');
+    // Ayarı olmayan gece etkilenmez.
+    const untouched = priceStay({
+      basePrice: '1000', seasons: [], ratePlans: [], roomTypeId: 'STD', adjustments, checkIn: '2026-10-01', checkOut: '2026-10-02',
+    });
+    assert.equal(untouched.nights[0].amount, '1000.00');
+  });
+
   it('ratePlans verilmezse eski sezon davranışı birebir korunur', () => {
     const withPlans = priceStay({ basePrice: '1000', seasons: SEASONS, ratePlans: [], roomTypeId: 'STD', boardType: 'BB', checkIn: '2026-07-10', checkOut: '2026-07-12' });
     const legacy = priceStay({ basePrice: '1000', seasons: SEASONS, checkIn: '2026-07-10', checkOut: '2026-07-12' });

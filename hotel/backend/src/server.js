@@ -11,6 +11,7 @@ import { resolveHotelId } from './lib/tenant.js';
 import { startApprovalJobs } from './modules/approvals/jobs.js';
 import { startFolioJobs } from './modules/folios/jobs.js';
 import { startHousekeepingJobs } from './modules/housekeeping/jobs.js';
+import { startPricingJobs } from './modules/pricing/jobs.js';
 import { startReservationJobs } from './modules/reservations/jobs.js';
 import { startChannelJobs } from './modules/channels/jobs.js';
 import { webchatOrigins } from './modules/channels/service.js';
@@ -93,6 +94,7 @@ const stopNotificationJobs = startNotificationJobs(app.log);
 // e-belge gönderimi, GİB durum sorgusu, takılı gönderim kurtarma (modül 49).
 const stopInvoiceJobs = startInvoiceJobs(app.log);
 const stopMaintenanceJobs = startMaintenanceJobs(app.log);
+const stopPricingJobs = startPricingJobs(app.log);
 const stopApprovalJobs = startApprovalJobs(app.log);
 const stopFolioJobs = startFolioJobs(app.log);
 const stopHousekeepingJobs = startHousekeepingJobs(app.log);
@@ -114,6 +116,7 @@ app.addHook('onClose', async () => {
   stopNotificationJobs();
   stopInvoiceJobs();
   stopMaintenanceJobs();
+  stopPricingJobs();
   stopApprovalJobs();
   stopFolioJobs();
   stopHousekeepingJobs();

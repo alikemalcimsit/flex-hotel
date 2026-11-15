@@ -23,6 +23,9 @@ export const EVENT_LABELS = Object.freeze({
   'settings.package.created': 'Paket eklendi',
   'settings.package.updated': 'Paket değişti',
   'settings.package.deleted': 'Paket silindi',
+  'settings.yield.updated': 'Yield kuralları değişti',
+  'settings.price_adjustment.changed': 'Dinamik fiyat ayarı uygulandı',
+  'pricing.review.requested': 'Fiyat değerlendirmesi istendi',
 
   'inventory.room.created': 'Oda eklendi',
   'inventory.room.updated': 'Oda bilgisi değişti',
