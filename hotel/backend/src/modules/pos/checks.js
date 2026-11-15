@@ -292,7 +292,7 @@ export async function getCheck(hotelId, checkId) {
       table: { select: { id: true, name: true } },
       splitFrom: { select: { id: true, number: true } },
       roomService: { select: { id: true, number: true, status: true, roomNumber: true, guestName: true, deliverAt: true } },
-      orders: { orderBy: { seq: 'asc' }, select: { id: true, seq: true, status: true, sentAt: true, sentBy: true } },
+      orders: { orderBy: { seq: 'asc' }, select: { id: true, seq: true, status: true, sentAt: true, sentBy: true, updatedAt: true } },
       lines: {
         orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
         select: {
@@ -307,7 +307,7 @@ export async function getCheck(hotelId, checkId) {
           voidedQuantity: true,
           compedQuantity: true,
           note: true,
-          order: { select: { id: true, seq: true, status: true, sentAt: true, sentBy: true } },
+          order: { select: { id: true, seq: true, status: true, sentAt: true, sentBy: true, updatedAt: true } },
         },
       },
       adjustments: {
@@ -369,7 +369,7 @@ export async function getCheck(hotelId, checkId) {
     },
     orders: [...new Map([...row.orders, ...row.lines.map((line) => line.order)].map((order) => [order.id, order])).values()]
       .sort((a, b) => a.sentAt - b.sentAt || a.seq - b.seq)
-      .map((order) => ({ ...order, sentAt: iso(order.sentAt) })),
+      .map((order) => ({ ...order, sentAt: iso(order.sentAt), updatedAt: iso(order.updatedAt) })),
     lines: row.lines.map((line) => ({
       id: line.id,
       orderId: line.orderId,

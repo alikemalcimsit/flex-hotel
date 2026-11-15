@@ -448,3 +448,36 @@ export const movePosCheckSchema = z.object({ expectedUpdatedAt, tableId: uuid('M
 export const mergePosCheckSchema = z.object({ expectedUpdatedAt, sourceCheckId: uuid('Birleştirilecek adisyonu seçin') });
 export const transferPosCheckSchema = z.object({ expectedUpdatedAt, waiterEmail: z.string().trim().toLowerCase().email('Garson seçin') });
 export const reopenPosCheckSchema = z.object({ reason: reasonField('Gerekçe') });
+
+/* ─────────────── Mutfak ekranı / KDS (modül 40) ─────────────── */
+
+/** Mutfak turunun durumları (Prisma `PosOrderStatus` ile birebir). */
+export const KITCHEN_ORDER_STATUSES = Object.freeze(['NEW', 'PREPARING', 'READY', 'SERVED']);
+export const KITCHEN_ORDER_STATUS_LABELS = Object.freeze({
+  NEW: 'Yeni',
+  PREPARING: 'Hazırlanıyor',
+  READY: 'Hazır',
+  SERVED: 'Servis edildi',
+});
+
+/** Kart renk eşikleri (dakika): uyarı sarısı ve gecikme kırmızısı. */
+export const KDS_WARN_MINUTES = 10;
+export const KDS_LATE_MINUTES = 20;
+
+export const kitchenBoardQuerySchema = z.object({
+  outletId: z.string().uuid({ message: 'Geçersiz satış noktası' }).optional(),
+  /** Kalem süzgeci: yalnız bu istasyonun kalemleri (NONE mutfağa hiç düşmez). */
+  station: z.enum(POS_STATIONS.filter((value) => value !== 'NONE'), { error: 'Geçersiz istasyon' }).optional(),
+});
+
+export const kitchenOrderParamSchema = z.object({ orderId: z.string().uuid({ message: 'Geçersiz sipariş turu' }) });
+
+/**
+ * Durum ilerletme — yalnız ileri (NEW → PREPARING → READY → SERVED). Oda
+ * servisi turunda SERVED verilmez: teslim (yolda / teslim edildi) oda servisi
+ * panosunun işidir (modül 41), mutfak READY'de biter.
+ */
+export const advanceKitchenOrderSchema = z.object({
+  status: z.enum(['PREPARING', 'READY', 'SERVED'], { error: 'Geçersiz durum' }),
+  expectedUpdatedAt,
+});

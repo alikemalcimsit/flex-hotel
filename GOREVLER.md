@@ -2889,11 +2889,11 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 40. Mutfak ekranı (KDS) — Ali Kemal
 **Gün sonu:** Mutfaktaki tablette siparişler sırayla görünüyor, süre sayıyor, "hazır" deyince garsona haber gidiyor.
-- [ ] Backend: Order durum geçişleri (NEW → PREPARING → READY → SERVED), istasyon alanı
-- [ ] Backend: socket kanalı `kitchen`
-- [ ] Ekran: Sipariş kartları (masa, kalemler, geçen süre; renk: yeni / hazırlanıyor / gecikti)
-- [ ] Ekran: Kart butonları (Başla / Hazır), istasyon filtresi (sıcak / soğuk / bar)
-- [ ] Ekran: Garson tarafında "hazır" bildirimi
+- [x] Backend: Order durum geçişleri (NEW → PREPARING → READY → SERVED), istasyon alanı
+- [x] Backend: socket kanalı `kitchen`
+- [x] Ekran: Sipariş kartları (masa, kalemler, geçen süre; renk: yeni / hazırlanıyor / gecikti)
+- [x] Ekran: Kart butonları (Başla / Hazır), istasyon filtresi (sıcak / soğuk / bar)
+- [x] Ekran: Garson tarafında "hazır" bildirimi
 
 > **📌 Ali için not (41'den, Ahmet):** oda servisi turları da `fnb.order.placed` ile gelir; yükte yeni, isteğe bağlı iki alan var:
 > `roomNumber` (teslim edilecek oda) ve `deliverAt` (istenen teslim anı; hemen ise boş) — kartta "Oda 412 · 07:30" gösterilebilir.
@@ -2901,6 +2901,27 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 > (`NEW → PREPARING → READY`, teslimde `SERVED`); KDS de ilerletirse çakışmaz. İptal edilen oda servisi siparişinin kalemleri iptal
 > düzeltmesiyle düşer, tur durumu değişmez — KDS tamamen iptal edilmiş turu göstermemeli. Tepsi ücreti kalemi istasyonu `NONE`
 > (mutfağa gitmez). Planlı (kahvaltı) sipariş zamanı gelene kadar **tur yazılmaz**; mutfak ekranı yalnızca düşmüş turu görür.
+
+> **📌 Modül 40 tamamlandı (16 Kasım 2026 — Ali Kemal).**
+>
+> **Veri:** yeni tablo / migration yok — M39'un tur modeli (`PosOrder.status`, kalem `station`) ve mevcut pano indeksi
+> (`[hotelId, outletId, status, sentAt]`). Pano: açık adisyonların servis edilmemiş turları, en eski önde (üst sınır 300);
+> kalemde iptal düşülür, `NONE` (tepsi ücreti) ve tamamen iptal edilmiş tur görünmez.
+>
+> **Kurallar** (`pos/kitchen.js`): yalnız ileri; sürümle (iki tablet aynı kartta → bayat yazım); kapanmış adisyonda yok.
+> Salonda "hazır" → adisyonun garsonunun **ziline** (`POS`, adisyon başına tek uyarıda toplanır; hesabı kapatılmış garsona zil
+> yok). **Oda servisi turu:** KDS'de SERVED yok (teslim oda servisi panosunun); `RoomServiceOrder` aynı yalnız-ileri kuralla ve
+> **adım damgalarıyla** (`preparingAt` / `readyAt` — durum izi CHECK'i) senkronlanır; sipariş ancak mutfakta bekleyen (görünür
+> kalemli) başka tur kalmayınca "hazır" olur; yoldakine dokunulmaz. Kilit sırası M41 ile aynı (sipariş → tur).
+>
+> **Olay / kanal:** `fnb.order.status_changed` (yük: tur, durum, masa / oda); `kitchen.changed` kanalı = `fnb.order.placed` +
+> `fnb.order.status_changed` + `pos.check.changed`; POS kanalı da `fnb.order.status_changed`'i dinler (adisyon ekranı).
+>
+> **API:** `GET /pos/kitchen/board?outletId&station`, `POST /pos/kitchen/orders/:id/advance` (`pos.operate` — mutfak tableti
+> garsonla aynı izinle girer). **Ekran:** `/pos/mutfak-ekrani` (kabuksuz tam genişlik; süzgeçler adres çubuğunda), kart rengi
+> 10 dk sarı / 20 dk kırmızı / hazır yeşil, "Başla / Hazır / Servis edildi". Adisyon ekranında her turun mutfak durumu rozeti
+> ve hazır turda garsona "Servis edildi". Testler: entegrasyon 10 (pano, geçişler, zil, bayat sürüm, oda servisi senkronu,
+> çok turlu oda servisi), saf kurallar 6 (`lib/kds.test.js`).
 
 ### 41. Oda servisi — arkadaşın
 **Gün sonu:** Odaya sipariş giriliyor, mutfağa düşüyor, teslim edilince folyoya yazılıyor.

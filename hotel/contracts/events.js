@@ -168,6 +168,7 @@ export const EVENT_LABELS = Object.freeze({
   'pos.setup.changed': 'POS tanımı değişti (satış noktası, masa, menü, politika)',
   'pos.check.changed': 'Adisyon değişti',
   'pos.order.sent': 'Sipariş mutfağa gönderildi',
+  'fnb.order.status_changed': 'Mutfak sipariş durumu değişti (hazırlanıyor / hazır / servis)',
   'pos.payment.changed': 'Restoran ödemesi değişti',
   'pos.shift.changed': 'Garson vardiyası açıldı / kapandı',
   'pos.room_service.changed': 'Oda servisi siparişi değişti',

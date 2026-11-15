@@ -67,9 +67,9 @@ describe('bölme ve turlar', () => {
 
   it('kalemler tur kimliğiyle, gönderiliş sırasıyla gruplanır; aynı numaralı iki tur ayrı kalır', () => {
     const orders = [
-      { id: 'o1', seq: 1, sentAt: '2026-10-17T19:00:00Z' },
-      { id: 'x1', seq: 1, sentAt: '2026-10-17T19:30:00Z' },
-      { id: 'o2', seq: 2, sentAt: '2026-10-17T20:00:00Z' },
+      { id: 'o1', seq: 1, sentAt: '2026-10-17T19:00:00Z', status: 'SERVED' },
+      { id: 'x1', seq: 1, sentAt: '2026-10-17T19:30:00Z', status: 'READY' },
+      { id: 'o2', seq: 2, sentAt: '2026-10-17T20:00:00Z', status: 'NEW' },
     ];
     const lines = [
       { id: 1, orderId: 'o2', orderSeq: 2 },
@@ -77,10 +77,10 @@ describe('bölme ve turlar', () => {
       { id: 3, orderId: 'x1', orderSeq: 1 },
       { id: 4, orderId: 'o2', orderSeq: 2 },
     ];
-    assert.deepEqual(groupByOrder(lines, orders).map((group) => [group.orderId, group.seq, group.lines.map((line) => line.id)]), [
-      ['o1', 1, [2]],
-      ['x1', 1, [3]],
-      ['o2', 2, [1, 4]],
+    assert.deepEqual(groupByOrder(lines, orders).map((group) => [group.orderId, group.seq, group.status, group.lines.map((line) => line.id)]), [
+      ['o1', 1, 'SERVED', [2]],
+      ['x1', 1, 'READY', [3]],
+      ['o2', 2, 'NEW', [1, 4]],
     ]);
   });
 });

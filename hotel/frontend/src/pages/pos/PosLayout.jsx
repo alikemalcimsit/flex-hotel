@@ -1,13 +1,15 @@
 import { Navigate, Outlet } from 'react-router-dom';
 import { PageHeader } from '../../components/PageHeader.jsx';
 import { TabNav } from '../../components/TabNav.jsx';
+import { KDS_PATH } from '../../lib/kds.js';
 import { usePosLive } from '../../lib/pos.js';
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 
 /**
  * Restoran sayfasının kabuğu (modül 39): başlık ve yetkiye göre sekmeler — terminal (masa
- * planı), oda servisi (modül 41), adisyonlar, vardiyalar, satış raporu, tanımlar. Kanal burada dinlenir: alt
- * sekmelerin hepsi `['pos', ...]` anahtarındadır.
+ * planı), mutfak ekranı (modül 40; kabuksuz tam genişlik), oda servisi (modül 41), adisyonlar,
+ * vardiyalar, satış raporu, tanımlar. Kanal burada dinlenir: alt sekmelerin hepsi `['pos', ...]`
+ * anahtarındadır.
  */
 export function PosLayout() {
   const can = useCan();
@@ -16,6 +18,7 @@ export function PosLayout() {
   const report = can(PERMISSIONS.POS_REPORT);
   const tabs = [
     operate && { to: '/pos/masalar', label: 'Masa planı', icon: 'utensils' },
+    operate && { to: KDS_PATH, label: 'Mutfak ekranı', icon: 'bell' },
     (operate || report) && { to: '/pos/oda-servisi', label: 'Oda servisi', icon: 'bed' },
     (operate || report) && { to: '/pos/adisyonlar', label: 'Adisyonlar', icon: 'list' },
     (operate || report) && { to: '/pos/vardiyalar', label: 'Vardiyalar', icon: 'clock' },

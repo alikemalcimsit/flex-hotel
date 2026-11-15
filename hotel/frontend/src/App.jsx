@@ -138,6 +138,7 @@ const PosShiftPage = lazy(() => import('./pages/pos/ShiftPage.jsx').then((m) => 
 const PosSalesReportPage = lazy(() => import('./pages/pos/SalesReportPage.jsx').then((m) => ({ default: m.SalesReportPage })));
 const PosSetupPage = lazy(() => import('./pages/pos/SetupPage.jsx').then((m) => ({ default: m.SetupPage })));
 const PosCheckPage = lazy(() => import('./pages/pos/CheckPage.jsx').then((m) => ({ default: m.CheckPage })));
+const KitchenDisplayPage = lazy(() => import('./pages/pos/KitchenDisplayPage.jsx').then((m) => ({ default: m.KitchenDisplayPage })));
 const PosPaymentRedirect = lazy(() => import('./pages/pos/PosRedirects.jsx').then((m) => ({ default: m.PosPaymentRedirect })));
 const PosAdjustmentRedirect = lazy(() => import('./pages/pos/PosRedirects.jsx').then((m) => ({ default: m.PosAdjustmentRedirect })));
 const RoomServiceBoardPage = lazy(() => import('./pages/pos/RoomServiceBoardPage.jsx').then((m) => ({ default: m.RoomServiceBoardPage })));
@@ -798,6 +799,15 @@ export default function App() {
                 }
               />
             </Route>
+            {/* Mutfak ekranı (modül 40): mutfak tabletinde açık duran pano, kabuksuz tam genişlik. */}
+            <Route
+              path="pos/mutfak-ekrani"
+              element={
+                <RequirePermission permission={PERMISSIONS.POS_OPERATE}>
+                  <KitchenDisplayPage />
+                </RequirePermission>
+              }
+            />
             {/* Oda servisi siparişi ve formu tam genişlik; tepsi listesi POS dışında (kat hizmetleri de toplar). */}
             <Route
               path="pos/oda-servisi/yeni"

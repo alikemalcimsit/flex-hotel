@@ -89,6 +89,8 @@ export const TABLE_STATE_CLASSES = Object.freeze({
 });
 
 export const CHECK_STATUS_TONES = Object.freeze({ OPEN: 'info', CLOSED: 'success', VOID: 'neutral' });
+/** Turun mutfak durumu (modül 40 KDS): garson "hazır"ı yeşil görür. */
+export const KITCHEN_STATUS_TONES = Object.freeze({ NEW: 'info', PREPARING: 'violet', READY: 'success', SERVED: 'neutral' });
 export const ADJUSTMENT_STATUS_TONES = Object.freeze({ APPLIED: 'success', PENDING: 'violet', DECLINED: 'neutral' });
 export const SHIFT_STATUS_TONES = Object.freeze({ OPEN: 'info', CLOSED: 'neutral' });
 export const POSTING_TONES = Object.freeze({ POSTED: 'success', MANUAL: 'danger', PENDING: 'warning' });

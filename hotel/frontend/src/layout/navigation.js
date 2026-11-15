@@ -180,6 +180,7 @@ export const NAV_SECTIONS = Object.freeze([
         anyPermission: [PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT, PERMISSIONS.POS_SETUP],
         children: [
           { label: 'Masa planı', to: '/pos/masalar', icon: 'utensils', permission: PERMISSIONS.POS_OPERATE },
+          { label: 'Mutfak ekranı', to: '/pos/mutfak-ekrani', icon: 'bell', permission: PERMISSIONS.POS_OPERATE },
           { label: 'Oda servisi', to: '/pos/oda-servisi', icon: 'bed', anyPermission: [PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT] },
           { label: 'Adisyonlar', to: '/pos/adisyonlar', icon: 'list', anyPermission: [PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT] },
           { label: 'Vardiyalar', to: '/pos/vardiyalar', icon: 'clock', anyPermission: [PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT] },
