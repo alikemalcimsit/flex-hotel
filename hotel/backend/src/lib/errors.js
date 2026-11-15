@@ -273,6 +273,19 @@ const CONSTRAINT_RULES = Object.freeze({
   Package_price_valid: { code: 'CONSTRAINT', message: 'Paketin gecelik fiyatı sıfırdan büyük olmalı.' },
   Package_hotelId_code_active_key: { code: 'DUPLICATE', message: 'Bu kodla bir paket zaten var.' },
 
+  // Satış CRM (modül 36).
+  Lead_contact_present: { code: 'CONSTRAINT', message: 'Fırsatın telefonu ya da e-postası olmalı (müşteriye dönülecek).' },
+  Lead_stay_valid: { code: 'CONSTRAINT', message: 'Çıkış tarihi girişten sonra olmalı.' },
+  Lead_won_trail: { code: 'CONSTRAINT', message: 'Kazanılan fırsatın bağlı rezervasyonu olmalı (teklifi kabul edin).' },
+  Lead_lost_trail: { code: 'CONSTRAINT', message: 'Kaybedilen fırsat için sebep yazın.' },
+  CallLog_summary_not_blank: { code: 'CONSTRAINT', message: 'Arama özeti en az 3 karakter olmalı.' },
+  Quote_total_valid: { code: 'CONSTRAINT', message: 'Teklif toplamı sıfırdan büyük olmalı.' },
+  Quote_stay_valid: { code: 'CONSTRAINT', message: 'Teklifte çıkış tarihi girişten sonra olmalı.' },
+  Quote_sent_trail: { code: 'CONSTRAINT', message: 'Gönderilmemiş teklif karar alamaz.' },
+  Quote_decided_trail: { code: 'CONSTRAINT', message: 'Teklif kararı (kabul/red/süre) karar zamanıyla birlikte yazılır.' },
+  Quote_accepted_trail: { code: 'CONSTRAINT', message: 'Kabul edilen teklifin rezervasyonu olmalı.' },
+  Quote_hotelId_code_key: { code: 'DUPLICATE', message: 'Bu kodla bir teklif zaten var.' },
+
   // Allotment / kota (modül 30).
   Allotment_period_valid: { code: 'CONSTRAINT', message: 'Kota döneminin bitişi başlangıcından önce olamaz (en fazla 1100 gün).' },
   Allotment_quantity_valid: { code: 'CONSTRAINT', message: 'Kota adedi 1 ile 500 arasında olmalı.' },

@@ -229,6 +229,8 @@ enum StaffAlertKind {
   ONLINE_CHECKIN
   /// Yeni / acil arıza bileti teknik servise (modül 20).
   MAINTENANCE
+  /// Takip tarihi gelen satış fırsatları (modül 36): satış yetkisine.
+  SALES_FOLLOW_UP
 }
 
 /// Rezervasyon fiyatının kaynağı (modül 4): sistem hesabı ya da yetkili
@@ -751,6 +753,9 @@ model Hotel {
   allotments             Allotment[]
   priceSuggestions       PriceSuggestion[]
   priceAdjustments       PriceAdjustment[]
+  leads                  Lead[]
+  callLogs               CallLog[]
+  quotes                 Quote[]
   seasons                Season[]
   taxes                  Tax[]
   conversations          Conversation[]
@@ -1381,6 +1386,8 @@ model RoomType {
   allotments        Allotment[]
   priceSuggestions  PriceSuggestion[]
   priceAdjustments  PriceAdjustment[]
+  leads             Lead[]
+  quotes            Quote[]
 
   // Benzersizlik kısmi (partial) unique index ile veritabanında tanımlı:
   // `RoomType_hotelId_code_active_key ... WHERE "deletedAt" IS NULL`.
@@ -1517,6 +1524,7 @@ model Guest {
   invoices          Invoice[]
   preferenceEntries GuestPreference[]
   noteEntries       GuestNote[]
+  leads             Lead[]
 
   @@index([phone])
   @@index([email])
@@ -1554,14 +1562,14 @@ model GuestPreference {
 
 /// Misafir notu (modül 22): tarihli, yazarlı; sabitlenen not kartın üstünde.
 model GuestNote {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   hotelId   String
   guestId   String
   body      String
-  pinned    Boolean  @default(false)
+  pinned    Boolean   @default(false)
   createdBy String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
   hotel Hotel @relation(fields: [hotelId], references: [id])
@@ -1677,6 +1685,8 @@ model Reservation {
   guestPortalLinks       GuestPortalLink[]
   onlineCheckin          OnlineCheckin?
   onlineCheckinDocuments OnlineCheckinDocument[]
+  leads                  Lead[]
+  quote                  Quote?
 
   // Müsaitlik sorgusunun sıcak yolu: "şu otelde, şu oda tipinde, şu tarihlerde
   // envanteri tüketen rezervasyonlar". Dolu bir otelde saniyede onlarca kez çalışır.
@@ -1869,6 +1879,159 @@ model RatePlan {
   // Fiyat hesabı her gece "bu oda tipi + pansiyon + tarihe düşen plan" sorgular.
   @@index([hotelId, roomTypeId, boardType, startDate, endDate])
   @@index([hotelId, deletedAt])
+}
+
+enum LeadStatus {
+  NEW
+  QUOTED
+  WAITING
+  WON
+  LOST
+}
+
+enum LeadSource {
+  PHONE
+  EMAIL
+  WALK_IN
+  WEB
+  OTHER
+}
+
+enum CallChannel {
+  STAFF
+  VOICE_AI
+}
+
+enum CallDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum CallOutcome {
+  INFO
+  QUOTE_REQUESTED
+  FOLLOW_UP
+  NO_ANSWER
+  NOT_INTERESTED
+  OTHER
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+/// Satış fırsatı (modül 36): telefonla/e-postayla gelen her talep kayıtlı.
+/// Pano akışı NEW → QUOTED → WAITING → WON/LOST; WON yalnız teklif kabulüyle
+/// (`wonReservationId` dolu), LOST sebep ister. Misafir kartına bağ isteğe
+/// bağlı (M22); istenen konaklama alanları teklif formunu önceden doldurur.
+model Lead {
+  id               String     @id @default(uuid())
+  hotelId          String
+  name             String
+  company          String?
+  phone            String?
+  email            String?
+  source           LeadSource @default(PHONE)
+  status           LeadStatus @default(NEW)
+  guestId          String?
+  checkIn          DateTime?  @db.Date
+  checkOut         DateTime?  @db.Date
+  roomTypeId       String?
+  adults           Int?
+  children         Int?
+  notes            String?
+  /// Takip tarihi: "bugün aranacaklar" bu alandan beslenir.
+  followUpAt       DateTime?  @db.Date
+  wonReservationId String?
+  lostReason       String?
+  createdBy        String
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  deletedAt        DateTime?
+
+  hotel          Hotel        @relation(fields: [hotelId], references: [id])
+  guest          Guest?       @relation(fields: [guestId], references: [id], onDelete: SetNull)
+  roomType       RoomType?    @relation(fields: [roomTypeId], references: [id], onDelete: SetNull)
+  wonReservation Reservation? @relation(fields: [wonReservationId], references: [id], onDelete: SetNull)
+  calls          CallLog[]
+  quotes         Quote[]
+
+  // Pano sütunları + takip listesi sıcak yolları.
+  @@index([hotelId, status, updatedAt])
+  @@index([hotelId, followUpAt])
+  @@index([hotelId, deletedAt])
+}
+
+/// Arama kaydı (modül 36): ekle-yalnız günlük (düzenlenmez/silinmez; düzeltme
+/// yeni kayıtla). FlexAI 2.0'a hazır: `channel` SESLİ AI olabilir,
+/// `recordingRef` santral kaydını, `summary` özetini taşır (101 buraya yazar).
+model CallLog {
+  id           String        @id @default(uuid())
+  hotelId      String
+  leadId       String
+  channel      CallChannel   @default(STAFF)
+  direction    CallDirection @default(INBOUND)
+  phone        String?
+  outcome      CallOutcome
+  summary      String
+  recordingRef String?
+  calledAt     DateTime      @default(now())
+  createdBy    String
+  createdAt    DateTime      @default(now())
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+  lead  Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, calledAt])
+  @@index([hotelId, calledAt])
+}
+
+/// Teklif (modül 36): fiyat hazırlandığı anda kilitlenir — `nightsSnapshot`
+/// gece gece tutarları (M28 plan + M34 çarpan dahil o anki sistem fiyatı)
+/// taşır; sonradan fiyat değişse de teklif sözü değişmez. Kabul edilince
+/// rezervasyon bu toplamla (elle fiyat, gerekçe teklif kodu) açılır.
+model Quote {
+  id             String      @id @default(uuid())
+  hotelId        String
+  leadId         String
+  /// Okunur kod ("TKF-XXXXXX"); otel içinde tekil.
+  code           String
+  status         QuoteStatus @default(DRAFT)
+  roomTypeId     String
+  boardType      BoardType   @default(BB)
+  checkIn        DateTime    @db.Date
+  checkOut       DateTime    @db.Date
+  adults         Int
+  children       Int         @default(0)
+  /// Gece gece anlık görüntü: [{ date, amount }] — toplam bunların toplamıdır.
+  nightsSnapshot Json        @default("[]")
+  total          Decimal     @db.Decimal(12, 2)
+  currency       String      @default("TRY")
+  /// Son geçerlilik günü (dahil); geçince iş süresi doldurur.
+  validUntil     DateTime    @db.Date
+  notes          String?
+  sentAt         DateTime?
+  decidedAt      DateTime?
+  rejectReason   String?
+  reservationId  String?     @unique
+  createdBy      String
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  deletedAt      DateTime?
+
+  hotel       Hotel        @relation(fields: [hotelId], references: [id])
+  lead        Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  roomType    RoomType     @relation(fields: [roomTypeId], references: [id], onDelete: Restrict)
+  reservation Reservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+
+  @@unique([hotelId, code])
+  @@index([leadId, createdAt])
+  // Süre doldurma taraması: gönderilmiş + geçerliliği geçen.
+  @@index([hotelId, status, validUntil])
 }
 
 enum PriceSuggestionSource {
@@ -2753,39 +2916,39 @@ enum MaintenanceCategory {
 /// (personel, kat görevlisi bildirimi, misafir isteği, periyodik plan), oda
 /// kapatıldıysa `roomBlockId` (çözülünce kaldırılır) ve fotoğraflar.
 model MaintenanceTicket {
-  id          String              @id @default(uuid())
-  hotelId     String
+  id                 String              @id @default(uuid())
+  hotelId            String
   /// Oda arızası; oda dışı iş (lobi, asansör) için `locationText` (biri, kısıt).
-  roomId      String?
-  locationText String?
-  category    MaintenanceCategory @default(OTHER)
-  title       String
-  description String
-  status      TaskStatus          @default(PENDING)
+  roomId             String?
+  locationText       String?
+  category           MaintenanceCategory @default(OTHER)
+  title              String
+  description        String
+  status             TaskStatus          @default(PENDING)
   /// 1 en acil, 5 en düşük (kat hizmeti görevleriyle aynı ölçek).
-  priority    Int                 @default(3)
+  priority           Int                 @default(3)
   /// Kim açtı ve nasıl: `staff` | `housekeeping` (kat görevlisi bildirimi) |
   /// `guest` (misafir isteği) | `plan` (periyodik bakım).
-  source      String              @default("staff")
-  reportedBy  String
-  assignedTo  String?
-  assignedAt  DateTime?
-  startedAt   DateTime?
-  resolvedAt  DateTime?
-  resolvedBy  String?
-  resolutionNote String?
-  cancelReason String?
+  source             String              @default("staff")
+  reportedBy         String
+  assignedTo         String?
+  assignedAt         DateTime?
+  startedAt          DateTime?
+  resolvedAt         DateTime?
+  resolvedBy         String?
+  resolutionNote     String?
+  cancelReason       String?
   /// Oda kapatıldıysa açılan arıza kaydı (RoomBlock); çözülünce kaldırılır.
-  roomBlockId String?
+  roomBlockId        String?
   /// Kat görevlisi "sorun var" bildiriminden doğduysa (housekeeping.issue.reported).
   housekeepingTaskId String?
   /// Misafir isteğinden doğduysa (modül 7); bilet durumu isteğe yansır.
-  guestRequestId String?
+  guestRequestId     String?
   /// Periyodik bakım planından üretildiyse.
-  planId      String?
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
-  deletedAt   DateTime?
+  planId             String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  deletedAt          DateTime?
 
   hotel  Hotel              @relation(fields: [hotelId], references: [id])
   room   Room?              @relation(fields: [roomId], references: [id])
@@ -2801,14 +2964,14 @@ model MaintenanceTicket {
 /// Arıza fotoğrafı (modül 20; LostItemPhoto ile aynı desen). İçerik dosya
 /// deposunda; burada yalnızca üstveri. İstemci yüklemeden önce küçültür.
 model MaintenancePhoto {
-  id          String   @id @default(uuid())
+  id          String    @id @default(uuid())
   hotelId     String
   ticketId    String
   contentType String
   sizeBytes   Int
   thumbBytes  Int
   createdBy   String
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
   deletedAt   DateTime?
 
   hotel  Hotel             @relation(fields: [hotelId], references: [id])

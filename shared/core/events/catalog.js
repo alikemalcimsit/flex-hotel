@@ -799,6 +799,21 @@ export const EVENT_CATALOG = Object.freeze({
     contractId: z.string().uuid(),
     change: z.enum(['ADDED', 'REMOVED']),
   }),
+  /* ── Satış CRM (modül 36) ──
+     Fırsat panosu ve teklif ekranı bunlarla canlı tazelenir; yükte yalnızca kimlik. */
+
+  /** Fırsat açıldı, düzenlendi, durumu değişti (pano sütunu) ya da kazanıldı/kaybedildi. */
+  'sales.lead.changed': hotelScoped.extend({
+    leadId: z.string().uuid(),
+    change: z.enum(['CREATED', 'UPDATED', 'STATUS_CHANGED', 'WON', 'LOST']),
+  }),
+  /** Teklif taslağı açıldı, gönderildi, kabul/red edildi ya da süresi doldu. */
+  'sales.quote.changed': hotelScoped.extend({
+    leadId: z.string().uuid(),
+    quoteId: z.string().uuid(),
+    change: z.enum(['CREATED', 'UPDATED', 'SENT', 'ACCEPTED', 'REJECTED', 'EXPIRED']),
+  }),
+
   /** Allotment / kota açıldı, düzenlendi ya da silindi (modül 30; müsaitliği hemen etkiler). */
   'agency.allotment.changed': hotelScoped.extend({
     agencyId: z.string().uuid(),

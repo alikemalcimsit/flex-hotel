@@ -149,6 +149,8 @@ export const EVENT_LABELS = Object.freeze({
   'agency.contract.changed': 'Acente kontratı değişti',
   'agency.stop_sale.changed': 'Acente stop-sale değişti',
   'agency.allotment.changed': 'Acente kotası (allotment) değişti',
+  'sales.lead.changed': 'Satış fırsatı değişti',
+  'sales.quote.changed': 'Satış teklifi değişti',
 
   'agency.bonus.rule.changed': 'Acente prim kuralı değişti',
   'agency.bonus.changed': 'Acente prim hak edişi değişti',

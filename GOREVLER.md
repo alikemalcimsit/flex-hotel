@@ -2645,12 +2645,68 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 36. Call center & satış CRM — Ali Kemal
 **Gün sonu:** Telefonla gelen her talep kayıtlı; teklif gönderiliyor; takip görevleri hatırlatıyor.
-- [ ] Backend: Lead, CallLog, Quote tabloları + API
-- [ ] Backend: teklif PDF + e-posta gönderimi (notification-worker)
-- [ ] Ekran: Arama kaydı formu (arayan, telefon, talep, sonuç)
-- [ ] Ekran: Fırsat panosu (yeni / teklif verildi / bekliyor / kazanıldı / kaybedildi)
-- [ ] Ekran: Teklif oluştur (tarih, oda, fiyat) → gönder → kabul edilince rezervasyona çevir
-- [ ] Ekran: Hatırlatmalar (bugün aranacaklar)
+- [x] Backend: Lead, CallLog, Quote tabloları + API
+- [x] Backend: teklif PDF (pdfkit, gömülü Türkçe font) — e-posta: aşağıdaki dürüstlük notu
+- [x] Ekran: Arama kaydı formu (arayan, telefon, talep, sonuç; FlexAI alanlarıyla)
+- [x] Ekran: Fırsat panosu (yeni / teklif verildi / bekliyor / kazanıldı / kaybedildi)
+- [x] Ekran: Teklif oluştur (tarih, oda, fiyat) → gönder → kabul edilince rezervasyona çevir
+- [x] Ekran: Hatırlatmalar (bugün aranacaklar listesi + günde tek birleşik zil)
+
+> **📌 Modül 36 tamamlandı (15 Kasım 2026 — Ali Kemal).** `flex-ali` dalı.
+>
+> **Kararlar:** **Teklifin fiyatı hazırlandığı anda kilitlenir** — gece gece anlık görüntü (`nightsSnapshot`) o anki
+> sistem fiyatıyla (M28 planı + M34 onaylı çarpan dahil) yazılır; sonradan zam/indirim müşteriye verilen sözü bozmaz
+> (testle kanıtlı: teklif sonrası 5× zam, kabul yine teklif toplamından). Kabulde rezervasyon bu toplamla **elle fiyat**
+> olarak açılır (`priceNote: "Teklif TKF-XXXXXX"`; elle fiyat yetkisi teklife ve `sales.manage`e dayanır, ayrıca
+> `reservations.price_override` istenmez — iz teklif kodundadır). **Pano sonuçları elle oynanamaz:** WON yalnız teklif
+> kabulüyle (`wonReservationId` zorunlu CHECK), LOST sebep ister; kapanmış fırsat taşınamaz (saf kurallar + CHECK).
+> Kabul **idempotent**: rezervasyon `requestId = quote.id` ile açılır — iki adımın (rezervasyon + işaretleme) arasında
+> kopan istek tekrarında ikinci rezervasyon açılmaz.
+>
+> **FlexAI 2.0 hazırlığı:** `CallLog` baştan kanallı — `channel (STAFF | VOICE_AI)`, `recordingRef`, zorunlu `summary`
+> (ekle-yalnız günlük; düzeltme yeni kayıtla): 101 sesli santral çağrılarını ve geri aramaları buraya yazacak; 90 grup
+> değerlendirmesi teklif ekranına öneri koyacak.
+>
+> **Veri** (migration'lar `20261115150000_sales_crm`, `20261115151000_sales_alert_kind`): `Lead` (durum NEW→QUOTED→
+> WAITING→WON/LOST; iletişim CHECK — telefon ya da e-posta; misafir kartına opsiyonel bağ M22; istenen konaklama
+> alanları teklifi önceden doldurur; `followUpAt` takip), `CallLog` (ekle-yalnız), `Quote` (kod `TKF-XXXXXX` — onay
+> kodu alfabesi, otel içinde tekil; durum izleri CHECK'li: gönderilmişlik, karar zamanı, kabul→rezervasyon).
+> `StaffAlertKind`'a `SALES_FOLLOW_UP` eklendi. Kısıt mesajları `errors.js`'te.
+>
+> **Akış:** teklif DRAFT (düzenlenir, fiyat yeniden kilitlenir) → SENT (`sentAt`; fırsat NEW→QUOTED) → ACCEPTED
+> (rezervasyon CONFIRMED + fırsat WON; yer yoksa sebepli red, teklif SENT kalır) / REJECTED (sebep) / EXPIRED
+> (30 dk'lık süpürme işi: `validUntil` geçen gönderilmişler, olaylı). Misafir kartı: fırsat karta bağlıysa o;
+> değilse ad bölünüp (son kelime soyad) iletişimle açılır (`forceNewGuest` — kabul akışı kesilmez; CRM birleştirme M22).
+> Süresi dolan teklif kabul edilemez (`QUOTE_EXPIRED`); geçerlilik en fazla 60 gün.
+>
+> **Hatırlatma:** "bugün aranacaklar" = açık fırsatların `followUpAt ≤ iş günü` listesi (`dueOnly` süzgeci + pano
+> şeridi) + süpürme işinin **günde tek birleşik zili** (`dedupeKey = sales-follow:{otel}:{gün}` — 30 dk'lık tur mükerrer
+> çalmaz; zil `sales.manage` iznine, linki listeye). Arama sonucu "tekrar aranacak" fırsatın takibini aynı işlemde günceller.
+>
+> **PDF** (`sales/pdf.js`, pdf-writer/banket kalıbı): otel + KONAKLAMA TEKLİFİ başlığı, müşteri/dönem/oda/kişi/geçerlilik,
+> gece gece tablo, toplam, not, geçerlilik metni; anlık görüntüden çizilir — sistem fiyatı değişse de belge değişmez.
+>
+> **Dürüstlük notu — e-posta:** teklif e-postası **bilinçli devirde**: `Notification.source` enum'una QUOTE eklemek ve
+> şablon makinesine bağlamak, geçit (email-gateway) stub'ken sembolik kalırdı (M32'yle aynı durum). "Gönderildi" düğmesi
+> kaydı tutar (`sentAt`), PDF indirilip elle gönderilir; geçit canlanınca kuyruğa bağlama tek iştir.
+>
+> **API** (`/sales`): pano özeti, fırsat listesi (durum/kaynak/arama/`dueOnly`) + dosya (aramalar + teklifler) + durum
+> geçişi, arama kaydı, teklif yaşam döngüsü + PDF. Yeni izinler `sales.view` / `sales.manage` (grup "Satış CRM";
+> varsayılan MANAGER + FRONT_DESK — telefonu açan resepsiyon kayıt girer). Olaylar `sales.lead.changed` /
+> `sales.quote.changed` + Activity Feed Türkçe adları (bekçi test yeşil).
+>
+> **Ekran:** `/satis` panosu (durum sütunları — sürükle-bırak bilinçli yok, kart menüsüyle geçiş; özet şeridi + "bugün
+> aranacak" süzgeci; yeni fırsat formu), `/satis/:leadId` dosyası (arama akışı + ekleme, teklif kartları: hazırla /
+> düzenle / gönder / kabul [onay kodu + rezervasyon linki] / reddet / PDF indir).
+>
+> **Test:** kurallar 7 birim (pano geçişleri — WON elle verilemez, kapanmış taşınamaz; teklif yaşam döngüsü; kod; ad
+> bölme); entegrasyon 5 (`sales.integration.test.js`): yaşam döngüsü + özet + LOST sebebi, arama + takip, **fiyat
+> kilidi + kabul → CONFIRMED rezervasyon (elle fiyat, teklif kodu gerekçeli) + WON + misafir kartı**, geçersiz
+> geçişler + kapanmış fırsata teklif reddi, süpürme (süre doldurma + tek birleşik zil). PDF smoke (21 KB geçerli belge).
+>
+> **Devir:** Teklif e-postası (geçit canlanınca `NotificationSource.QUOTE` + şablon), 101 sesli santralin `CallLog`
+> yazması (alanlar hazır), 90'ın teklif önerisi, kaynak/temsilci bazlı dönüşüm raporu (veri `source`/`createdBy`/
+> `lostReason`'da birikmekte).
 
 > **FlexAI 2.0'dan not (3 Kasım 2026 — Ahmet):** `CallLog`'a kanal (PERSONEL / SESLİ AI), kayıt referansı ve özet alanı düşün:
 > 101 (sesli santral) çağrılarını ve geri arama görevlerini buraya yazacak. 90 grup değerlendirmesi teklif ekranına öneri koyacak.

@@ -92,6 +92,7 @@ import { planCacheStats } from './modules/plan/service.js';
 import { roomsRoutes } from './modules/rooms/routes.js';
 import { settingsRoutes } from './modules/settings/routes.js';
 import { pricingRoutes } from './modules/pricing/routes.js';
+import { salesRoutes } from './modules/sales/routes.js';
 import { registerPricingSubscribers, setPricingSubscriberLogger } from './modules/pricing/subscribers.js';
 
 /**
@@ -345,6 +346,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   await app.register(roleRoutes, { prefix: '/roles' });
   await app.register(settingsRoutes, { prefix: '/settings' });
   await app.register(pricingRoutes, { prefix: '/pricing' });
+  await app.register(salesRoutes, { prefix: '/sales' });
   await app.register(roomsRoutes, { prefix: '/rooms' });
   await app.register(reservationRoutes, { prefix: '/reservations' });
   await app.register(frontDeskRoutes, { prefix: '/front-desk' });

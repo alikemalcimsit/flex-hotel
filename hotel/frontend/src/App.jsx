@@ -113,6 +113,8 @@ const AgencyAllotmentsTab = lazy(() => import('./pages/agencies/AgencyAllotments
 const AgencyBonusTab = lazy(() => import('./pages/agencies/AgencyBonusTab.jsx').then((m) => ({ default: m.AgencyBonusTab })));
 const GroupsPage = lazy(() => import('./pages/reservations/GroupsPage.jsx').then((m) => ({ default: m.GroupsPage })));
 const GroupFilePage = lazy(() => import('./pages/reservations/GroupFilePage.jsx').then((m) => ({ default: m.GroupFilePage })));
+const SalesBoardPage = lazy(() => import('./pages/sales/SalesBoardPage.jsx').then((m) => ({ default: m.SalesBoardPage })));
+const SalesLeadPage = lazy(() => import('./pages/sales/SalesLeadPage.jsx').then((m) => ({ default: m.SalesLeadPage })));
 const AgencyBonusLayout = lazy(() => import('./pages/agency-bonus/AgencyBonusLayout.jsx').then((m) => ({ default: m.AgencyBonusLayout })));
 const BonusRulesTab = lazy(() => import('./pages/agency-bonus/BonusRulesTab.jsx').then((m) => ({ default: m.BonusRulesTab })));
 const BonusSettlementsTab = lazy(() => import('./pages/agency-bonus/BonusSettlementsTab.jsx').then((m) => ({ default: m.BonusSettlementsTab })));
@@ -352,6 +354,23 @@ export default function App() {
               element={
                 <RequirePermission permission={PERMISSIONS.RESERVATIONS_VIEW}>
                   <GroupFilePage />
+                </RequirePermission>
+              }
+            />
+            {/* Satış CRM (modül 36): fırsat panosu + dosyası. */}
+            <Route
+              path="satis"
+              element={
+                <RequirePermission permission={PERMISSIONS.SALES_VIEW}>
+                  <SalesBoardPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="satis/:leadId"
+              element={
+                <RequirePermission permission={PERMISSIONS.SALES_VIEW}>
+                  <SalesLeadPage />
                 </RequirePermission>
               }
             />

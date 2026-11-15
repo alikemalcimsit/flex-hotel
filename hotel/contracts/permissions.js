@@ -116,6 +116,10 @@ export const PERMISSIONS = Object.freeze({
 
   /** Acente ve kontrat (modül 29): acente kartı, kontrat fiyatları, komisyon ve cari özetini görmek. */
   AGENCIES_VIEW: 'agencies.view',
+
+  /** Satış CRM (modül 36): fırsat, arama kaydı, teklif. */
+  SALES_VIEW: 'sales.view',
+  SALES_MANAGE: 'sales.manage',
   /** Acente kartı ve kontratı düzenlemek: fiyat, stop-sale, satışa açma, sonlandırma. */
   AGENCIES_MANAGE: 'agencies.manage',
 
@@ -288,6 +292,8 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.BUDGET_MANAGE]: 'Bütçe taslağını, gider kalemlerini ve gerçekleşen giderleri düzenle',
   [PERMISSIONS.BUDGET_APPROVE]: 'Bütçeyi onayla ve revize aç',
   [PERMISSIONS.AGENCIES_VIEW]: 'Acente, kontrat fiyatı ve cari özetini görüntüle',
+  [PERMISSIONS.SALES_VIEW]: 'Satış fırsatlarını, arama kayıtlarını ve teklifleri görüntüle',
+  [PERMISSIONS.SALES_MANAGE]: 'Fırsat ve arama kaydı aç, teklif hazırla / gönder / sonuçlandır',
   [PERMISSIONS.AGENCIES_MANAGE]: 'Acente kartı ve kontratı düzenle (fiyat, stop-sale, satışa aç)',
   [PERMISSIONS.PROMOTIONS_VIEW]: 'Promosyonları, kuponları ve kullanım raporunu görüntüle',
   [PERMISSIONS.PROMOTIONS_MANAGE]: 'Promosyon aç, düzenle, yayına al; kupon üret ve kapat',
@@ -419,6 +425,7 @@ export const PERMISSION_GROUPS = Object.freeze([
   { key: 'guests', label: 'Misafir CRM', permissions: [PERMISSIONS.GUESTS_VIEW, PERMISSIONS.GUESTS_MANAGE, PERMISSIONS.GUESTS_MERGE] },
   { key: 'budget', label: 'Bütçe', permissions: [PERMISSIONS.BUDGET_VIEW, PERMISSIONS.BUDGET_MANAGE, PERMISSIONS.BUDGET_APPROVE] },
   { key: 'agencies', label: 'Acente ve kontrat', permissions: [PERMISSIONS.AGENCIES_VIEW, PERMISSIONS.AGENCIES_MANAGE] },
+  { key: 'sales', label: 'Satış CRM', permissions: [PERMISSIONS.SALES_VIEW, PERMISSIONS.SALES_MANAGE] },
   { key: 'promotions', label: 'Promosyon ve kupon', permissions: [PERMISSIONS.PROMOTIONS_VIEW, PERMISSIONS.PROMOTIONS_MANAGE] },
   {
     key: 'banquet',
@@ -543,6 +550,8 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     // Acente sözleşmesi ve kontrat fiyatı ticari karar: müdürün.
     PERMISSIONS.AGENCIES_VIEW,
     PERMISSIONS.AGENCIES_MANAGE,
+    PERMISSIONS.SALES_VIEW,
+    PERMISSIONS.SALES_MANAGE,
     // İndirim kampanyası fiyat kararıdır: müdürün.
     PERMISSIONS.PROMOTIONS_VIEW,
     PERMISSIONS.PROMOTIONS_MANAGE,
@@ -595,6 +604,8 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.ROOMS_OPERATE,
     PERMISSIONS.RESERVATIONS_VIEW,
     PERMISSIONS.RESERVATIONS_MANAGE,
+    PERMISSIONS.SALES_VIEW,
+    PERMISSIONS.SALES_MANAGE,
     PERMISSIONS.STAYS_VIEW,
     PERMISSIONS.STAYS_MANAGE,
     PERMISSIONS.MESSAGES_VIEW,
