@@ -538,6 +538,7 @@ export const EVENT_CATALOG = Object.freeze({
       'INVOICE',
       'ONLINE_CHECKIN',
       'MAINTENANCE',
+      'SALES_FOLLOW_UP',
     ]),
     userId: z.string().uuid().nullable(),
     permission: z.string().nullable(),
