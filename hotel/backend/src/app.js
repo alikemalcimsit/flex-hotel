@@ -16,7 +16,6 @@ import {
   CORS_ALLOWED_HEADERS,
   CORS_METHODS,
   correlationIdFrom,
-  originChecker,
   rateLimitKey,
   requestLogSerializer,
   resolveJwtSecret,
@@ -71,6 +70,8 @@ import { reportCacheStats } from './modules/reports/service.js';
 import { registerPaymentSubscribers } from './modules/payments/subscribers.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { messagingChannelRoutes, webchatWidgetRoutes, webhookRoutes } from './modules/channels/routes.js';
+import { publicBookingRoutes } from './modules/public-booking/routes.js';
+import { webchatOrigins } from './modules/channels/service.js';
 import { conciergeRoutes } from './modules/concierge/routes.js';
 import { roleRoutes } from './modules/roles/routes.js';
 import { resolveEffectivePermissions } from './modules/roles/service.js';
@@ -191,7 +192,15 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   app.decorate('allowedOrigins', origins);
 
   await app.register(cors, {
-    origin: originChecker(origins),
+    // Panel origin'leri + web chat / rezervasyon widget'ının izinli siteleri
+    // (modül 8/32; kanal ayarından, 60 sn önbellekli). Widget uçları dışındaki
+    // her şey yine oturum ister — CORS tek başına kapı değildir.
+    origin: (origin, callback) => {
+      if (!origin || origins.includes(origin)) return callback(null, true);
+      webchatOrigins()
+        .then((set) => callback(null, set.has(origin)))
+        .catch(() => callback(null, false));
+    },
     methods: [...CORS_METHODS],
     allowedHeaders: [...CORS_ALLOWED_HEADERS],
     exposedHeaders: ['x-correlation-id'],
@@ -387,6 +396,8 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
     await guestApp.register(publicRoomServiceRoutes, { prefix: '/public/room-service' });
     // Misafir portalı (modül 53): online check-in, folyo, istek, oda servisine geçiş.
     await guestApp.register(publicGuestPortalRoutes, { prefix: '/public/portal' });
+    // Online rezervasyon motoru (modül 32): widget'ın options / quote / reserve uçları.
+    await guestApp.register(publicBookingRoutes, { prefix: '/public/booking' });
   });
 
   app.addHook('onClose', async () => {

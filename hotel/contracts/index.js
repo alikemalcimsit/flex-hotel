@@ -168,6 +168,7 @@ export * from './night-audit.js';
 export * from './maintenance.js';
 export * from './crm.js';
 export * from './pricing.js';
+export * from './public-booking.js';
 export * from './bulk.js';
 export * from './events.js';
 export { displayPhone, internationalPhone } from './phone.js';

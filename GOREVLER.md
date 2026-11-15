@@ -2375,12 +2375,55 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 32. Online rezervasyon motoru — Ali Kemal
 **Gün sonu:** Otel sitesindeki widget'tan misafir tarih seçip fiyat görüyor, bilgilerini girip rezervasyon yapıyor; chat balonu da aynı widget'ta.
-- [ ] Backend: public API (müsaitlik, fiyat, rezervasyon talebi; rate limit; API key)
-- [ ] Widget: ayrı küçük React uygulaması (tek script ile gömülür)
-- [ ] Widget: adımlar (tarih + kişi → oda tipi + fiyat listesi → misafir bilgileri → özet → onay)
-- [ ] Widget: kupon alanı, pansiyon seçimi, çoklu dil hazırlığı
-- [ ] Widget: 8'deki chat balonunu içine al
-- [ ] Rezervasyon `source=WIDGET` ile reservation-worker zincirine düşer, onay e-postası gider
+- [x] Backend: public API (müsaitlik, fiyat, rezervasyon talebi; rate limit; anahtar + origin)
+- [x] Widget: tek script ile gömülür (React değil — M8 balonuyla aynı bağımlılıksız Shadow DOM kalıbı; aşağıda)
+- [x] Widget: adımlar (tarih + kişi → oda tipi + fiyat listesi → misafir bilgileri → özet → onay kodu)
+- [x] Widget: kupon alanı, pansiyon seçimi, çoklu dil hazırlığı (tüm metinler tek nesnede, tr/en)
+- [x] Widget: 8'deki chat balonunu içine al (aynı anahtarla balonu sayfaya enjekte eder; `data-chat="off"` kapatır)
+- [x] Rezervasyon `source=WIDGET` ile düşer (onay e-postası: aşağıdaki dürüstlük notu)
+
+> **📌 Modül 32 tamamlandı (15 Kasım 2026 — Ali Kemal).** `flex-ali` dalı.
+>
+> **Kararlar:** Widget **ayrı React uygulaması değil** — M8 balonuyla aynı bağımlılıksız, Shadow DOM'lu tek vanilya
+> dosya (`shared/channels/webchat-gateway/widget/booking-widget.js`): yeni build altyapısı yok, görünüm/güvenlik kalıbı
+> balonla bire bir. Kimlik ve güvenlik **M8'in web chat kanalından**: aynı genel anahtar (`wc_...`), aynı izinli site
+> listesi; kanal ayarına tek alan eklendi (`bookingEnabled`). Rezervasyon **PENDING** açılır (ödeme yok — modül 50;
+> resepsiyon onaylar), kanal isteği yolundan gider: **onaya gitmez**, yer yoksa sebepli reddedilir, `requestId`
+> idempotenstir (ağ hatasında tekrar gönderim ikinci rezervasyon açmaz).
+>
+> **Public API** (`/public/booking/:key`, modül `backend/src/modules/public-booking/`): `GET /options` (otel, oda
+> tipleri + kapasite, pansiyonlar, görünüm), `POST /quote`, `POST /reserve`, `GET /widget.js` (betik, 5 dk cache).
+> Koruma: anahtar → kanal (60 sn cache'li; kapalı/bilinmeyen anahtar aynı 404), Origin ∈ izinli siteler (403), IP hız
+> sınırı (okuma 30/dk, yazma 5/dk + misafir kapsamının ortak IP tavanı), yanıtlar `no-store`. Global CORS, panel
+> origin'lerine ek olarak web chat kanallarının izinli sitelerini dinamik kabul eder (`webchatOrigins()` — CORS tek
+> başına kapı değil, diğer uçlar oturum ister).
+>
+> **Kırpılmış teklif** (`rules.js` → `trimQuoteForPublic`, birim testli): personel teklifinin public hâli — promosyon /
+> kupon / acente kimlikleri ve gece dökümü dönmez; indirim yalnız tutar + etiket; `available` 0–5'e kırpılır (ekran
+> "Son N" / "5+" gösterir, gerçek envanter sızmaz); kapasiteye uymayan tip `fits:false`. Kupon geri bildirimi yalnız
+> durum + misafir mesajı.
+>
+> **Teklif düzeltmesi (M28 boşluğu):** personel teklifinin satırları kişi sayısız fiyatlanıyordu — fiyat planının kişi
+> başı eki (`extraAdultRate`/`childRate`) önizlemeye yansımıyordu, kayıtta yansıyordu (misafir X görüp Y öderdi).
+> `quoteReservation` satırları artık satırın kendi kişi sayısıyla fiyatlar; personel ekranı da düzeldi.
+>
+> **Widget akışı:** tarih + kişi + pansiyon + kupon → tip kartları (fiyat, indirim etiketi, "Son N", sığmayan soluk) →
+> seçimle kesin toplam (kişi başı ek dahil) → misafir formu (ad, soyad, e-posta zorunlu, telefon/not isteğe bağlı) →
+> özet → **onay kodu ekranda** (misafir not alır). Renk/başlık kanal ayarından. Chat balonu ayrı script olarak
+> enjekte edilir (kod kopyası yok). Ayar ekranında (Mesaj kanalları → Web chat) motor aç/kapa + ayrı gömme kodu.
+>
+> **Dürüstlük notu — onay e-postası:** `reservation.created` olayı yayınlanır ve bildirim kuyruğuna düşer, ama
+> **email-gateway stub** (gerçek gönderici yok) — misafire e-posta fiilen gitmez. Bu yüzden widget onay kodunu ekranda
+> gösterir ve "otel onaylayınca e-posta ile bilgi verilecek" der. E-posta geçidi canlandırıldığında zincir hazır.
+>
+> **Test:** entegrasyon 6 (`public-booking.integration.test.js`): kapı (yanlış origin 403 / kapalı motor 404 /
+> bilinmeyen anahtar 404), options, kırpılmış teklif (sızma + 5 kırpması + kapasite), kişi başı ekli seçim toplamı,
+> PENDING + source WIDGET + idempotens, yer yokken 422. Contracts 536 yeşil; rezervasyon + promosyon regresyonu yeşil
+> (teklif düzeltmesi dahil).
+>
+> **Devir:** Ödeme (modül 50) gelince `reserve` akışına ödeme adımı eklenir ve durum CONFIRMED açılabilir. Döviz
+> (modül 60) gelince fiyatlar otel para biriminden çevrilir. Widget'ta paket (M28) satışı ileriki sürüm (şu an oda +
+> pansiyon). Gerçek çoklu dil: metinler tek nesnede (tr/en hazır), dil seçici eklenebilir.
 
 ### 33. Kanal yönetimi / Channel Manager — arkadaşın
 **Gün sonu:** Müsaitlik ve fiyat değişince OTA'ya gidiyor, OTA'dan gelen rezervasyon sisteme düşüyor; oda tipleri eşleştirilmiş.

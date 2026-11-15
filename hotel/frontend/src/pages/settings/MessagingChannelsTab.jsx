@@ -5,7 +5,7 @@ import { Alert, Badge, Button, Card, Checkbox, Icon, Input, Textarea } from '@ho
 import { ConfirmDialog } from '../../components/ConfirmDialog.jsx';
 import { QueryFallback } from '../../components/QueryFallback.jsx';
 import { API_URL, api, apiPost, apiPut } from '../../lib/api.js';
-import { messagingChannelKeys, webhookUrl, widgetSnippet } from '../../lib/concierge.js';
+import { bookingWidgetSnippet, messagingChannelKeys, webhookUrl, widgetSnippet } from '../../lib/concierge.js';
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 import { formatDateTime } from '../../lib/timeFormat.js';
 import { useHotelToday } from '../../lib/useHotel.js';
@@ -317,6 +317,7 @@ function WebchatCard({ item }) {
       title: item.title,
       greeting: item.greeting ?? '',
       accentColor: item.accentColor,
+      bookingEnabled: item.bookingEnabled ?? false,
     },
     path: 'webchat',
     schema: webchatChannelSchema,
@@ -351,6 +352,7 @@ function WebchatCard({ item }) {
           title: form.title,
           greeting: form.greeting,
           accentColor: form.accentColor,
+          bookingEnabled: form.bookingEnabled,
           expectedUpdatedAt: item.updatedAt,
         });
       }}
@@ -367,6 +369,13 @@ function WebchatCard({ item }) {
             hint="Kapalıyken balon sitede görünür ama 'Sohbet şu anda kullanılamıyor' der."
             checked={form.enabled}
             onChange={setField('enabled')}
+          />
+          <Checkbox
+            id="webchat-booking"
+            label="Online rezervasyon motoru açık"
+            hint="Sitedeki widget'tan misafir tarih seçip fiyat görür, rezervasyon isteği bırakır (onay bekleyen olarak düşer). Aynı anahtarı ve site listesini kullanır."
+            checked={form.bookingEnabled}
+            onChange={setField('bookingEnabled')}
           />
           <Textarea
             label={`Balonun çalışacağı site adresleri (her satıra bir tane, en fazla ${MAX_ALLOWED_ORIGINS})`}
@@ -416,6 +425,14 @@ function WebchatCard({ item }) {
               Siteye eklenecek kod
             </h3>
             <CopyField label="Sitenin </body> etiketinden hemen önce" name="wc-snippet" value={widgetSnippet(API_URL, item.publicKey)} multiline />
+            {item.bookingEnabled && (
+              <CopyField
+                label="Rezervasyon motoru (chat balonunu da içerir; ikisi için yalnızca bunu ekleyin)"
+                name="wc-booking-snippet"
+                value={bookingWidgetSnippet(API_URL, item.publicKey)}
+                multiline
+              />
+            )}
             <p className="text-xs text-ink-muted">
               Son mesaj: {item.lastInboundAt ? formatDateTime(item.lastInboundAt, timeZone) : 'henüz yok'}. Anahtar gizli değildir
               (sitede görünür); kötüye kullanılırsa yenileyin — eski kod çalışmayı bırakır.

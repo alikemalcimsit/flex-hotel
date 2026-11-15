@@ -2284,10 +2284,30 @@ export async function quoteReservation(hotelId, input) {
     if (own) {
       unitTotal = own.sellable ? totalOf(own.nights) : null;
     } else {
-      const plan = offerOn(line.roomTypeId, line.boardType ?? quoteBoard);
+      // Satır kendi kişi sayısıyla fiyatlanır (modül 28: fiyat planının kişi başı
+      // eki satıra yansır; tip kartı taban doluluk fiyatını gösterir). Önizleme
+      // kayıttaki fiyatla birebir aynı olsun — misafir X görüp Y ödemesin.
+      const lineType = typeById.get(line.roomTypeId);
+      const listedLine = priceStay({
+        basePrice: lineType.basePrice,
+        seasons,
+        ratePlans,
+        roomTypeId: line.roomTypeId,
+        boardType: line.boardType ?? quoteBoard,
+        occupancy: { adults: line.adults, children: line.children },
+        checkIn: input.checkIn,
+        checkOut: input.checkOut,
+      });
+      const plan = promo.offerFor({
+        roomTypeId: line.roomTypeId,
+        boardType: line.boardType ?? quoteBoard,
+        source,
+        checkIn: checkInDay,
+        nights: listedLine.nights,
+      });
       linePlans.push(plan);
       if (plan.offer?.couponId) couponRooms += line.quantity;
-      unitTotal = totalOf(applyOffer(listedByType.get(line.roomTypeId), plan.offer));
+      unitTotal = totalOf(applyOffer(listedLine.nights, plan.offer));
       discount = discountOf(plan.offer);
     }
     return {
