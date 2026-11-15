@@ -17,6 +17,12 @@ export const EVENT_LABELS = Object.freeze({
   'settings.season.created': 'Sezon eklendi',
   'settings.season.updated': 'Sezon değişti',
   'settings.season.deleted': 'Sezon silindi',
+  'settings.rate_plan.created': 'Fiyat planı eklendi',
+  'settings.rate_plan.updated': 'Fiyat planı değişti',
+  'settings.rate_plan.deleted': 'Fiyat planı silindi',
+  'settings.package.created': 'Paket eklendi',
+  'settings.package.updated': 'Paket değişti',
+  'settings.package.deleted': 'Paket silindi',
 
   'inventory.room.created': 'Oda eklendi',
   'inventory.room.updated': 'Oda bilgisi değişti',
@@ -139,6 +145,7 @@ export const EVENT_LABELS = Object.freeze({
   'agency.changed': 'Acente kartı değişti',
   'agency.contract.changed': 'Acente kontratı değişti',
   'agency.stop_sale.changed': 'Acente stop-sale değişti',
+  'agency.allotment.changed': 'Acente kotası (allotment) değişti',
 
   'agency.bonus.rule.changed': 'Acente prim kuralı değişti',
   'agency.bonus.changed': 'Acente prim hak edişi değişti',
