@@ -120,6 +120,7 @@ export const NAV_SECTIONS = Object.freeze([
       // Teknik servis / arıza-bakım (modül 20): arıza bileti, teknisyen, periyodik bakım.
       {
         label: 'Teknik servis',
+        to: '/teknik-servis',
         icon: 'wrench',
         permission: PERMISSIONS.MAINTENANCE_VIEW,
         children: [
@@ -137,6 +138,7 @@ export const NAV_SECTIONS = Object.freeze([
       // Gün kapanış / night audit (modül 18): gece görevlisi günü kapatır, günlük özet çıkar.
       {
         label: 'Gün kapanış',
+        to: '/gun-kapanis',
         icon: 'alarm',
         permission: PERMISSIONS.NIGHT_AUDIT_VIEW,
         children: [
