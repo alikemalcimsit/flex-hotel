@@ -79,6 +79,8 @@ export const RECIPES_CHANNEL = 'recipes.changed';
 export const PURCHASING_CHANNEL = 'purchasing.changed';
 /** Stok (modül 45 / 44): depo bazında mevcut, hareketler, minimum seviye, depolar. */
 export const STOCK_CHANNEL = 'stock.changed';
+/** Demirbaş ve amortisman (modül 46): kart, Excel yüklemesi, sayım, yıl amortismanı, kategori / alan tanımları. */
+export const ASSETS_CHANNEL = 'assets.changed';
 /** Ön muhasebe (modül 47): cari, kasa / banka, çek / senet, fiş ekranları. */
 export const ACCOUNTING_CHANNEL = 'accounting.changed';
 /** Fatura ve e-belge (modül 16 / 49): faturalanacaklar, faturalar, e-belge durumu, fatura ayarı. */

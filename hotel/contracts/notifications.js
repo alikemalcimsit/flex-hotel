@@ -458,6 +458,7 @@ export const STAFF_ALERT_KINDS = Object.freeze([
   'ONLINE_CHECKIN',
   'MAINTENANCE',
   'SALES_FOLLOW_UP',
+  'ASSET',
 ]);
 
 export const STAFF_ALERT_KIND_LABELS = Object.freeze({
@@ -482,6 +483,7 @@ export const STAFF_ALERT_KIND_LABELS = Object.freeze({
   ONLINE_CHECKIN: 'Online check-in (inceleme bekliyor)',
   SALES_FOLLOW_UP: 'Satış takibi',
   MAINTENANCE: 'Arıza / teknik servis',
+  ASSET: 'Demirbaş (garantisi bitecekler)',
 });
 
 export const STAFF_ALERT_SEVERITIES = Object.freeze(['INFO', 'WARNING', 'CRITICAL']);

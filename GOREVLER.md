@@ -3258,12 +3258,60 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 46. Demirbaş & amortisman — Ali Kemal
 **Gün sonu:** Otelin sabit kıymetleri barkodlu kayıtlı; konumları, garanti bitişleri ve amortisman tablosu görünüyor.
-- [ ] Backend: Asset, AssetMovement, Depreciation tabloları + API; amortisman hesabı (doğrusal)
-- [ ] Ekran: Demirbaş kartı (barkod, ad, kategori, konum/oda, alış tarihi, tutar, garanti bitiş, zimmet)
-- [ ] Ekran: Barkod etiketi yazdırma
-- [ ] Ekran: Sayım (barkod okut, eksikleri listele)
-- [ ] Ekran: Amortisman tablosu (yıllık)
-- [ ] Ekran: Garantisi bitecekler uyarısı
+- [x] Backend: Asset, AssetMovement, Depreciation tabloları + API; amortisman hesabı (doğrusal)
+- [x] Ekran: Demirbaş kartı (barkod, ad, kategori, konum/oda, alış tarihi, tutar, garanti bitiş, zimmet)
+- [x] Ekran: Barkod etiketi yazdırma
+- [x] Ekran: Sayım (barkod okut, eksikleri listele)
+- [x] Ekran: Amortisman tablosu (yıllık)
+- [x] Ekran: Garantisi bitecekler uyarısı
+
+> **📌 Modül 46 tamamlandı (16 Kasım 2026 — Ali Kemal).**
+>
+> **Kararlar (kullanıcı):** amortisman **VUK usulü, yıllık doğrusal** (alındığı yıl tam yıl, elden çıkarıldığı yıl ayrılmaz;
+> aylık raporlar için yıllık / 12 gösterilir); etiket **QR + kod yazısı** (kamerayla okutunca kart açılır; 2D el okuyucusu
+> sayımda okutur; 1D lazer okuyucu okuyamaz); giriş **elle + Excel toplu yükleme**; zimmet **bordro personel kartına**.
+>
+> **Veri** (migration `20261116120000_assets` + `20261116120100_asset_alert_kind`): `AssetCategory` (varsayılan ömür),
+> `AssetArea` (oda dışı yer; adlar harf duyarsız tekil — ifade indeksi), **`Asset`** (kod `DM-000001` kesintisiz sıra; yer
+> tam olarak bir oda ya da alan; zimmet `Employee`; açılış amortismanı + yılı; garanti + zil damgası; elden çıkarma izi
+> ve dondurulmuş net değer — CHECK'li), `AssetMovement` (ekle-yalnız; yer / zimmet o anki adlarıyla), `AssetDepreciationRun`
+> + `AssetDepreciation` (yıl başına tek kayıt, kart başına satır), `AssetCount` + `AssetCountItem` (sayım; beklenenler
+> açılışta dondurulur), `AssetSequence`. `StaffAlertKind.ASSET`.
+>
+> **Amortisman** (saf kurallar `contracts/assets.js`, kuruş BigInt): yılın payı = kalan net değer / ömrün kalan yılı (son
+> yıl kalanın tamamı) — yolunda giden kartta `maliyet / ömür`, açılışla gelen kartta kalan kalan yıllara yayılır. Yıl
+> kaydı **ardışık** (ilk kayıt geçmiş ya da bu yıl; gelecek yıl kaydedilemez), kartları kilitleyerek yazılır; kaydedilen yıl
+> kilitli: kartın alış / tutar / ömür / açılışı değişmez, o yıla ya da öncesine elden çıkarma yazılamaz. **Yalnız son yıl
+> geri alınır**; o kayıttan sonra elden çıkarılan kart varsa alınamaz (dondurulan net değer o kaydı içerir).
+>
+> **Sayım:** kapsam tüm otel / alan / oda; sayımcı "şu an buradayım" seçip okutur (okuyucu klavye gibi yazar; QR
+> bağlantısı da kod da olur; kamerayla okutma `BarcodeDetector` olan tarayıcıda). Sonuç: yerinde / başka yerde / fazla /
+> tekrar / elden çıkarılmış / bilinmeyen (son üçü hata değil sonuç). Birden çok sayımcı aynı anda okutur (paylaşımlı kilit;
+> aynı etiketi ilk okutan kazanır). Kapanışta başka yerde bulunanlar istenirse bulunduğu yere taşınır (geçmişe sayım
+> numarasıyla); **eksikler kendiliğinden düşmez** — elden çıkarma ayrı ve yetkili işlem.
+>
+> **Garanti zili:** 6 saatlik iş; garantisi 30 gün içinde bitecek kart **kart + bitiş tarihi başına bir kez** (garanti
+> uzatılırsa yeniden), aynı günün kartları tek zilde (`assets.manage` iznine, link `/demirbas/garanti`).
+>
+> **İzinler:** `assets.view` / `assets.count` (sayımda okut) / `assets.manage` (kart, Excel, taşıma, zimmet, etiket, sayım
+> aç-kapat, tanımlar) / `assets.finance` (yıl kaydı / geri alma, elden çıkarma). Varsayılan: MANAGER + ACCOUNTING hepsi.
+> Olaylar `asset.changed` / `asset.count.changed` / `asset.depreciation.changed` / `asset.settings.changed`, kanal
+> `assets.changed`.
+>
+> **Ekranlar** (`/demirbas`): liste (süzgeç, arama — QR bağlantısı da yapıştırılabilir, toplu etiket), kart (bilgiler,
+> değer + yıl yıl tablo, hareket geçmişi, düzelt / taşı / zimmetle / iade / elden çıkar), QR yönlendirmesi
+> (`/demirbas/k/:kod`), Excel yükleme (şablon, önizleme satır satır hata, ya hep ya hiç; tekrar gönderim yeni kart açmaz),
+> etiket (50 × 30 mm etiket yazıcısı ya da A4 3 × 8 + başlangıç konumu), sayım listesi + sayım ekranı, amortisman tablosu
+> (yıl, kategori özeti, aylık pay, Excel'e aktar, kaydet / geri al), garanti listesi, tanımlar. Bordro: işten çıkış
+> penceresinde zimmetli demirbaş uyarısı (engellemez).
+>
+> **Test:** sözleşme 14 birim (kod / QR ayrıştırma, amortisman tablosu, şemalar); entegrasyon 7 (kart yaşam döngüsü,
+> VUK kuralları, sayım, Excel, garanti zili, tanımlar, HTTP izin + şema); ön yüz 11 birim (etiket belgesi, Excel okuma).
+> Tarayıcıda uçtan uca denendi (tanımlar → kart → Excel → etiket → QR → sayım → amortisman kaydet / geri al → garanti).
+>
+> **Bilinçli devir:** muhasebe fişi yok (47'de genel muhasebe / hesap planı yok — amortisman ve elden çıkarma kâr / zararı
+> tabloda; ay kapanışı (§ 7) "amortisman yapıldı mı"yı yıl kaydından okuyabilir); zimmet tutanağı PDF'i; satın almadan
+> (45) otomatik kart (satın alma yalnız stok kalemi taşıyor); azalan bakiyeler usulü.
 
 ---
 

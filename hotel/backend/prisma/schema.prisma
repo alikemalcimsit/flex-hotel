@@ -231,6 +231,8 @@ enum StaffAlertKind {
   MAINTENANCE
   /// Takip tarihi gelen satış fırsatları (modül 36): satış yetkisine.
   SALES_FOLLOW_UP
+  /// Modül 46: garantisi bitecek demirbaşlar.
+  ASSET
 }
 
 /// Rezervasyon fiyatının kaynağı (modül 4): sistem hesabı ya da yetkili
@@ -849,6 +851,11 @@ model Hotel {
   treasuryMappings       TreasuryMapping[]
   accountingVouchers     AccountingVoucher[]
   instruments            Instrument[]
+  assetCategories        AssetCategory[]
+  assetAreas             AssetArea[]
+  assets                 Asset[]
+  assetDepreciationRuns  AssetDepreciationRun[]
+  assetCounts            AssetCount[]
 }
 
 model User {
@@ -1429,6 +1436,8 @@ model Room {
   laundryOrders       LaundryOrder[]
   roomServiceOrders   RoomServiceOrder[]
   roomServiceLinks    RoomServiceLink[]
+  assets              Asset[]
+  assetCounts         AssetCount[]
 
   // Oda numarası benzersizliği de kısmi index ile (bkz. RoomType açıklaması):
   // silinen 101 numaralı oda sonradan tekrar açılabilmeli.
@@ -6603,6 +6612,8 @@ model Employee {
   termination   EmployeeTermination?
   entries       PayrollEntry[]
   openings      PayrollOpening[]
+  /// Zimmetindeki demirbaşlar (modül 46).
+  assets        Asset[]
 
   @@unique([hotelId, code])
   @@index([hotelId, status, lastName, firstName])
@@ -7222,4 +7233,252 @@ model DeliveryOrder {
   @@index([hotelId, createdAt, id])
   // Tekrar gelen müşteri: telefonla son adresler.
   @@index([hotelId, phone, createdAt])
+}
+
+/**
+ * ══════════════════ Demirbaş ve amortisman (modül 46) ══════════════════
+ * Sabit kıymet sicili: kart (kod "DM-000001", etiketteki QR), konum (oda ya da alan), zimmet (bordro personel
+ * kartı), ekle-yalnız hareket geçmişi, VUK usulü yıllık doğrusal amortisman (yıl sonunda kaydedilir, kaydedilen yıl
+ * kilitli) ve barkodlu sayım. Kategori ve alan adları otel içinde büyük / küçük harf duyarsız tekildir (ifade
+ * indeksi migration'da).
+ */
+
+enum AssetStatus {
+  ACTIVE
+  DISPOSED
+}
+
+enum AssetDisposalType {
+  SOLD
+  SCRAPPED
+  LOST
+}
+
+enum AssetMovementKind {
+  CREATED
+  UPDATED
+  TRANSFERRED
+  ASSIGNED
+  RETURNED
+  DISPOSED
+}
+
+enum AssetCountStatus {
+  OPEN
+  CLOSED
+  CANCELLED
+}
+
+/// Demirbaş kategorisi: varsayılan faydalı ömür (yıl; VUK oranı = 1 / ömür) yeni karta kopyalanır.
+model AssetCategory {
+  id              String   @id @default(uuid())
+  hotelId         String
+  name            String
+  usefulLifeYears Int
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  hotel  Hotel   @relation(fields: [hotelId], references: [id])
+  assets Asset[]
+
+  @@index([hotelId, isActive])
+}
+
+/// Demirbaşın durduğu oda dışı yer: lobi, restoran, mutfak, depo…
+model AssetArea {
+  id        String   @id @default(uuid())
+  hotelId   String
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  hotel  Hotel        @relation(fields: [hotelId], references: [id])
+  assets Asset[]
+  counts AssetCount[]
+
+  @@index([hotelId, isActive])
+}
+
+/// Demirbaş kartı. Konum bir oda ya da bir alan (tam olarak biri, kısıt); zimmet yalnız kullanımdaki kartta.
+/// Finansal alanlar (alış, tutar, ömür, açılış) kaydedilmiş amortisman varken değişmez (servis).
+model Asset {
+  id                 String             @id @default(uuid())
+  hotelId            String
+  code               String
+  /// Formun ürettiği kimlik (çift gönderime karşı); Excel satırında "yükleme kimliği:satır".
+  requestId          String
+  name               String
+  categoryId         String
+  brand              String?
+  model              String?
+  serialNumber       String?
+  status             AssetStatus        @default(ACTIVE)
+  roomId             String?
+  areaId             String?
+  employeeId         String?
+  assignedAt         DateTime?
+  purchaseDate       DateTime           @db.Date
+  cost               Decimal            @db.Decimal(14, 2)
+  usefulLifeYears    Int
+  /// Sistemden önce ayrılmış amortisman (toplam) ve hangi yıla kadar (dahil).
+  openingAccumulated Decimal            @default(0) @db.Decimal(14, 2)
+  openingThroughYear Int?
+  supplierName       String?
+  invoiceNumber      String?
+  warrantyUntil      DateTime?          @db.Date
+  /// Garanti zili hangi bitiş tarihi için çaldı (tarih değişirse yeniden çalar).
+  warrantyAlertedFor DateTime?          @db.Date
+  note               String?
+  disposalType       AssetDisposalType?
+  disposedOn         DateTime?          @db.Date
+  /// Yalnız satışta.
+  disposalPrice      Decimal?           @db.Decimal(14, 2)
+  disposalReason     String?
+  /// Elden çıkarma anındaki net değer (maliyet − birikmiş amortisman).
+  disposalBookValue  Decimal?           @db.Decimal(14, 2)
+  disposedBy         String?
+  createdBy          String
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  hotel         Hotel               @relation(fields: [hotelId], references: [id])
+  category      AssetCategory       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  room          Room?               @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  area          AssetArea?          @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  employee      Employee?           @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  movements     AssetMovement[]
+  depreciations AssetDepreciation[]
+  countItems    AssetCountItem[]
+
+  @@unique([hotelId, code])
+  @@unique([hotelId, requestId])
+  @@index([hotelId, status, categoryId])
+  @@index([hotelId, roomId])
+  @@index([hotelId, areaId])
+  @@index([hotelId, employeeId])
+  @@index([hotelId, status, warrantyUntil])
+  @@index([name(ops: raw("gin_trgm_ops"))], map: "Asset_name_trgm_idx", type: Gin)
+  @@index([code(ops: raw("gin_trgm_ops"))], map: "Asset_code_trgm_idx", type: Gin)
+  @@index([serialNumber(ops: raw("gin_trgm_ops"))], map: "Asset_serialNumber_trgm_idx", type: Gin)
+}
+
+/// Kartın ekle-yalnız geçmişi. Yer ve zimmet o anki adlarıyla yazılır: sonradan ad değişse de geçmiş okunur kalır.
+model AssetMovement {
+  id         String            @id @default(uuid())
+  hotelId    String
+  assetId    String
+  kind       AssetMovementKind
+  fromLabel  String?
+  toLabel    String?
+  note       String?
+  /// Sayım kapanışındaki taşıma.
+  countId    String?
+  actor      String
+  occurredAt DateTime          @default(now())
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Restrict)
+
+  @@index([assetId, occurredAt])
+}
+
+/// Bir yılın amortisman kaydı (yıl sonu). Otel başına yıl tekil, yıllar ardışık (servis); yalnız son yıl geri alınır.
+model AssetDepreciationRun {
+  id         String   @id @default(uuid())
+  hotelId    String
+  year       Int
+  total      Decimal  @db.Decimal(14, 2)
+  assetCount Int
+  postedBy   String
+  postedAt   DateTime @default(now())
+
+  hotel Hotel               @relation(fields: [hotelId], references: [id])
+  rows  AssetDepreciation[]
+
+  @@unique([hotelId, year])
+}
+
+/// Kartın bir yıllık amortismanı (kaydedilmiş; kilitli).
+model AssetDepreciation {
+  id               String  @id @default(uuid())
+  hotelId          String
+  runId            String
+  assetId          String
+  year             Int
+  amount           Decimal @db.Decimal(14, 2)
+  /// Bu yıldan sonra birikmiş amortisman (açılış dahil).
+  accumulatedAfter Decimal @db.Decimal(14, 2)
+
+  run   AssetDepreciationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  asset Asset                @relation(fields: [assetId], references: [id], onDelete: Restrict)
+
+  @@unique([assetId, year])
+  @@index([runId])
+  @@index([hotelId, year])
+}
+
+/// Demirbaş sayımı. Açılışta kapsamdaki kullanımdaki kartlar "beklenen" olarak dondurulur; okutulan kart bulunduğu
+/// yerle işaretlenir. Kapanışta başka yerde bulunanlar istenirse oraya taşınır; eksikler listede kalır (elden
+/// çıkarma ayrı ve yetkili işlemdir).
+model AssetCount {
+  id               String           @id @default(uuid())
+  hotelId          String
+  number           String
+  title            String?
+  /// Kapsam: ikisi boşsa tüm otel.
+  roomId           String?
+  areaId           String?
+  status           AssetCountStatus @default(OPEN)
+  expectedCount    Int
+  openedBy         String
+  openedAt         DateTime         @default(now())
+  closedBy         String?
+  closedAt         DateTime?
+  /// Kapanışta bulunduğu yere taşınan kart sayısı.
+  transferredCount Int?
+  cancelledBy      String?
+  cancelledAt      DateTime?
+  cancelReason     String?
+  note             String?
+  updatedAt        DateTime         @updatedAt
+
+  hotel Hotel            @relation(fields: [hotelId], references: [id])
+  room  Room?            @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  area  AssetArea?       @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  items AssetCountItem[]
+
+  @@unique([hotelId, number])
+  @@index([hotelId, status, openedAt])
+}
+
+/// Sayımın satırı: beklenen (açılıştaki yeriyle) ya da kapsam dışından okutulan (fazla); bulunduğu yer okutulunca.
+model AssetCountItem {
+  id             String    @id @default(uuid())
+  hotelId        String
+  countId        String
+  assetId        String
+  expected       Boolean
+  expectedRoomId String?
+  expectedAreaId String?
+  foundRoomId    String?
+  foundAreaId    String?
+  foundAt        DateTime?
+  foundBy        String?
+
+  count AssetCount @relation(fields: [countId], references: [id], onDelete: Cascade)
+  asset Asset      @relation(fields: [assetId], references: [id], onDelete: Restrict)
+
+  @@unique([countId, assetId])
+  @@index([countId, foundAt])
+}
+
+/// Demirbaş kodu (yıl 0, kesintisiz) ve sayım numarası (yıllık) sıraları.
+model AssetSequence {
+  hotelId String
+  kind    String
+  year    Int
+  last    Int
+
+  @@id([hotelId, kind, year])
 }

@@ -256,6 +256,20 @@ export const NAV_SECTIONS = Object.freeze([
           { label: 'Depolar', to: '/stok/depolar', icon: 'building' },
         ],
       },
+      // Demirbaş (modül 46): sicil, QR etiket, sayım, VUK amortismanı, garanti; sayımı etiket okutan personel de yapar.
+      {
+        label: 'Demirbaş',
+        to: '/demirbas',
+        icon: 'layers',
+        anyPermission: [PERMISSIONS.ASSETS_VIEW, PERMISSIONS.ASSETS_COUNT],
+        children: [
+          { label: 'Demirbaşlar', to: '/demirbas', icon: 'layers', end: true, permission: PERMISSIONS.ASSETS_VIEW },
+          { label: 'Sayım', to: '/demirbas/sayim', icon: 'clipboard', permission: PERMISSIONS.ASSETS_COUNT },
+          { label: 'Amortisman', to: '/demirbas/amortisman', icon: 'chart', permission: PERMISSIONS.ASSETS_VIEW },
+          { label: 'Garanti', to: '/demirbas/garanti', icon: 'alarm', permission: PERMISSIONS.ASSETS_VIEW },
+          { label: 'Tanımlar', to: '/demirbas/tanimlar', icon: 'settings', permission: PERMISSIONS.ASSETS_VIEW },
+        ],
+      },
       // Faturalar (modül 16 / 49): ön büro folyo faturasını keser, muhasebe e-belgeyi izler, müdür ayarlar.
       {
         label: 'Faturalar',

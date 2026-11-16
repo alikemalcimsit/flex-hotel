@@ -539,6 +539,7 @@ export const EVENT_CATALOG = Object.freeze({
       'ONLINE_CHECKIN',
       'MAINTENANCE',
       'SALES_FOLLOW_UP',
+      'ASSET',
     ]),
     userId: z.string().uuid().nullable(),
     permission: z.string().nullable(),
@@ -908,6 +909,21 @@ export const EVENT_CATALOG = Object.freeze({
   }),
   /** Stok değişti (mal kabul girişi, depo tanımı, minimum seviye); 44 çıkış / transfer / sayımı ekler. */
   'stock.changed': hotelScoped.extend({ change: z.enum(['RECEIPT', 'WAREHOUSE', 'MIN_LEVEL']), stockItemIds: z.array(z.string().uuid()).max(500).default([]) }),
+
+  /* ── Demirbaş ve amortisman (modül 46) ──
+     Demirbaş listesi, kart, sayım, amortisman tablosu ve garanti ekranları (`assets.changed`); yükte yalnız kimlikler. */
+
+  /** Kart(lar) açıldı / düzeltildi / taşındı / zimmetlendi / iade alındı / elden çıkarıldı; Excel yüklemesi ve sayım kapanışındaki taşımalar tek olayda. */
+  'asset.changed': hotelScoped.extend({
+    change: z.enum(['CREATED', 'UPDATED', 'TRANSFERRED', 'ASSIGNED', 'RETURNED', 'DISPOSED', 'IMPORTED']),
+    assetIds: z.array(z.string().uuid()).max(1000).default([]),
+  }),
+  /** Sayım açıldı / etiket okutuldu / kapandı / iptal edildi. */
+  'asset.count.changed': hotelScoped.extend({ countId: z.string().uuid(), change: z.enum(['OPENED', 'SCANNED', 'CLOSED', 'CANCELLED']) }),
+  /** Bir yılın amortismanı kaydedildi ya da (son yıl) geri alındı. */
+  'asset.depreciation.changed': hotelScoped.extend({ year: z.number().int(), change: z.enum(['POSTED', 'REVERSED']), total: z.string() }),
+  /** Kategori ya da alan tanımı değişti. */
+  'asset.settings.changed': hotelScoped.extend({ change: z.enum(['CATEGORY', 'AREA']) }),
 
   /* ── Ön muhasebe (modül 47) ──
      Cari, kasa / banka, çek / senet ve fiş ekranları (`accounting.changed`); yükte yalnız kimlikler. Otomatik
@@ -1501,6 +1517,9 @@ export const PURCHASE_EVENTS = Object.freeze(['purchase.request.changed', 'purch
 
 /** Stok (modül 45 / 44): stok ekranları bunlarla tazelenir (`stock.changed` kanalı). */
 export const STOCK_EVENTS = Object.freeze(['stock.changed']);
+
+/** Demirbaş ve amortisman (modül 46): liste, kart, sayım, amortisman ve garanti ekranları (`assets.changed` kanalı). */
+export const ASSET_EVENTS = Object.freeze(['asset.changed', 'asset.count.changed', 'asset.depreciation.changed', 'asset.settings.changed']);
 
 /** Ön muhasebe (modül 47): cari, kasa / banka, çek / senet ve fiş ekranları (`accounting.changed` kanalı). */
 export const ACCOUNTING_EVENTS = Object.freeze(['accounting.account.changed', 'accounting.treasury.changed', 'accounting.posted', 'accounting.voucher.changed', 'accounting.instrument.changed', 'accounting.settings.changed']);

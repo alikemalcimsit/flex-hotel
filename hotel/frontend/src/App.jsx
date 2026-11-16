@@ -174,6 +174,16 @@ const SuppliersPage = lazy(() => import('./pages/purchasing/SuppliersPage.jsx').
 const StockLayout = lazy(() => import('./pages/stock/StockLayout.jsx').then((m) => ({ default: m.StockLayout })));
 const StockLevelsPage = lazy(() => import('./pages/stock/StockLevelsPage.jsx').then((m) => ({ default: m.StockLevelsPage })));
 const StockMovementsPage = lazy(() => import('./pages/stock/StockMovementsPage.jsx').then((m) => ({ default: m.StockMovementsPage })));
+const AssetsLayout = lazy(() => import('./pages/assets/AssetsLayout.jsx').then((m) => ({ default: m.AssetsLayout })));
+const AssetsHome = lazy(() => import('./pages/assets/AssetsLayout.jsx').then((m) => ({ default: m.AssetsHome })));
+const AssetsPage = lazy(() => import('./pages/assets/AssetsPage.jsx').then((m) => ({ default: m.AssetsPage })));
+const AssetPage = lazy(() => import('./pages/assets/AssetPage.jsx').then((m) => ({ default: m.AssetPage })));
+const AssetQrRedirect = lazy(() => import('./pages/assets/AssetQrRedirect.jsx').then((m) => ({ default: m.AssetQrRedirect })));
+const AssetCountsPage = lazy(() => import('./pages/assets/AssetCountsPage.jsx').then((m) => ({ default: m.AssetCountsPage })));
+const AssetCountPage = lazy(() => import('./pages/assets/AssetCountPage.jsx').then((m) => ({ default: m.AssetCountPage })));
+const AssetDepreciationPage = lazy(() => import('./pages/assets/AssetDepreciationPage.jsx').then((m) => ({ default: m.AssetDepreciationPage })));
+const AssetWarrantyPage = lazy(() => import('./pages/assets/AssetWarrantyPage.jsx').then((m) => ({ default: m.AssetWarrantyPage })));
+const AssetDefinitionsPage = lazy(() => import('./pages/assets/AssetDefinitionsPage.jsx').then((m) => ({ default: m.AssetDefinitionsPage })));
 const AccountingLayout = lazy(() => import('./pages/accounting/AccountingLayout.jsx').then((m) => ({ default: m.AccountingLayout })));
 const AccountsPage = lazy(() => import('./pages/accounting/AccountsPage.jsx').then((m) => ({ default: m.AccountsPage })));
 const AccountPage = lazy(() => import('./pages/accounting/AccountPage.jsx').then((m) => ({ default: m.AccountPage })));
@@ -953,6 +963,80 @@ export default function App() {
               <Route path="hareketler" element={<StockMovementsPage />} />
               <Route path="depolar" element={<WarehousesPage />} />
             </Route>
+            {/* Demirbaş (modül 46): liste, sayım (etiket okutan personel de girer), amortisman, garanti, tanımlar; kart, QR bağlantısı, sayım ekranı. */}
+            <Route
+              path="demirbas"
+              element={
+                <RequireAnyPermission permissions={[PERMISSIONS.ASSETS_VIEW, PERMISSIONS.ASSETS_COUNT]}>
+                  <AssetsLayout />
+                </RequireAnyPermission>
+              }
+            >
+              <Route
+                index
+                element={
+                  <AssetsHome>
+                    <AssetsPage />
+                  </AssetsHome>
+                }
+              />
+              <Route
+                path="sayim"
+                element={
+                  <RequirePermission permission={PERMISSIONS.ASSETS_COUNT}>
+                    <AssetCountsPage />
+                  </RequirePermission>
+                }
+              />
+              <Route
+                path="amortisman"
+                element={
+                  <RequirePermission permission={PERMISSIONS.ASSETS_VIEW}>
+                    <AssetDepreciationPage />
+                  </RequirePermission>
+                }
+              />
+              <Route
+                path="garanti"
+                element={
+                  <RequirePermission permission={PERMISSIONS.ASSETS_VIEW}>
+                    <AssetWarrantyPage />
+                  </RequirePermission>
+                }
+              />
+              <Route
+                path="tanimlar"
+                element={
+                  <RequirePermission permission={PERMISSIONS.ASSETS_VIEW}>
+                    <AssetDefinitionsPage />
+                  </RequirePermission>
+                }
+              />
+            </Route>
+            <Route
+              path="demirbas/sayim/:countId"
+              element={
+                <RequirePermission permission={PERMISSIONS.ASSETS_COUNT}>
+                  <AssetCountPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="demirbas/k/:code"
+              element={
+                <RequirePermission permission={PERMISSIONS.ASSETS_VIEW}>
+                  <AssetQrRedirect />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="demirbas/:assetId"
+              element={
+                <RequirePermission permission={PERMISSIONS.ASSETS_VIEW}>
+                  <AssetPage />
+                </RequirePermission>
+              }
+            />
             {/* Ön muhasebe (modül 47): cariler, yaşlandırma, kasa / banka, çek / senet, fişler, ayarlar. */}
             <Route
               path="muhasebe"

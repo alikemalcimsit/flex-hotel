@@ -606,3 +606,29 @@ export function lockPayrollRuns(tx, hotelId, runIds) {
 export function lockEmployees(tx, hotelId, employeeIds) {
   return lockPlainRows(tx, 'Employee', hotelId, employeeIds, false);
 }
+
+/**
+ * Demirbaş kartı (modül 46): taşıma, zimmet, düzeltme, elden çıkarma ve yıl amortismanı kartı kilitleyerek yazar —
+ * amortisman kaydı ile aynı anda gelen elden çıkarma ya da tutar düzeltmesi birbirini ezemez.
+ * Sıra: sayım → demirbaş.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} assetIds
+ */
+export function lockAssets(tx, hotelId, assetIds) {
+  return lockPlainRows(tx, 'Asset', hotelId, assetIds, false);
+}
+
+/**
+ * Demirbaş sayımı (modül 46): okutma `shared: true` alır (birden çok sayımcı aynı anda okutur), kapanış / iptal özel
+ * alır — kapanırken okutma araya giremez.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} countIds
+ * @param {{ shared?: boolean }} [options]
+ */
+export function lockAssetCounts(tx, hotelId, countIds, { shared = false } = {}) {
+  return lockPlainRows(tx, 'AssetCount', hotelId, countIds, shared);
+}

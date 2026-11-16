@@ -235,6 +235,15 @@ export const PERMISSIONS = Object.freeze({
   GUESTS_MANAGE: 'guests.manage',
   /** Mükerrer kartları birleştir (geri alınamaz). */
   GUESTS_MERGE: 'guests.merge',
+
+  /** Demirbaş (modül 46): liste, kart, hareket geçmişi, amortisman tablosu, garanti listesi. */
+  ASSETS_VIEW: 'assets.view',
+  /** Demirbaş sayımında etiket okut (sayım ekranı). */
+  ASSETS_COUNT: 'assets.count',
+  /** Kart aç / düzelt, Excel ile yükle, taşı, zimmetle, etiket bas, sayım aç / kapat, kategori ve alan tanımları. */
+  ASSETS_MANAGE: 'assets.manage',
+  /** Yıl amortismanını kaydet / geri al, demirbaşı elden çıkar (satış, hurda, kayıp). */
+  ASSETS_FINANCE: 'assets.finance',
 });
 
 /** Tüm izinlerin düz listesi (doğrulama ve "ADMIN her şeyi görür" için). */
@@ -331,6 +340,10 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.GUESTS_VIEW]: 'Misafir kartlarını görüntüle (CRM)',
   [PERMISSIONS.GUESTS_MANAGE]: 'Misafir kartı düzenle, tercih / not / etiket',
   [PERMISSIONS.GUESTS_MERGE]: 'Mükerrer misafir kartlarını birleştir',
+  [PERMISSIONS.ASSETS_VIEW]: 'Demirbaşları, hareketlerini, amortisman tablosunu ve garanti listesini görüntüle',
+  [PERMISSIONS.ASSETS_COUNT]: 'Demirbaş sayımında etiket okut',
+  [PERMISSIONS.ASSETS_MANAGE]: 'Demirbaş kartı aç / düzelt, Excel ile yükle, taşı, zimmetle, etiket bas, sayım aç / kapat, tanımlar',
+  [PERMISSIONS.ASSETS_FINANCE]: 'Yıl amortismanını kaydet / geri al, demirbaşı elden çıkar',
   [PERMISSIONS.EMPLOYEES_VIEW]: 'Personel listesini ve kartlarını görüntüle (ücret hariç)',
   [PERMISSIONS.EMPLOYEES_MANAGE]: 'Personel kartı ekle / düzenle, işten çıkış yap',
   [PERMISSIONS.PAYROLL_VIEW]: 'Ücretleri, bordroları, pusulaları ve çıktıları görüntüle',
@@ -444,6 +457,7 @@ export const PERMISSION_GROUPS = Object.freeze([
     permissions: [PERMISSIONS.PURCHASING_VIEW, PERMISSIONS.PURCHASING_REQUEST, PERMISSIONS.PURCHASING_MANAGE, PERMISSIONS.PURCHASING_RECEIVE],
   },
   { key: 'stock', label: 'Stok ve depo', permissions: [PERMISSIONS.STOCK_VIEW, PERMISSIONS.STOCK_MANAGE] },
+  { key: 'assets', label: 'Demirbaş', permissions: [PERMISSIONS.ASSETS_VIEW, PERMISSIONS.ASSETS_COUNT, PERMISSIONS.ASSETS_MANAGE, PERMISSIONS.ASSETS_FINANCE] },
   { key: 'accounting', label: 'Ön muhasebe', permissions: [PERMISSIONS.ACCOUNTING_VIEW, PERMISSIONS.ACCOUNTING_MANAGE, PERMISSIONS.ACCOUNTING_SETUP] },
   { key: 'invoices', label: 'Fatura ve e-belge', permissions: [PERMISSIONS.INVOICES_VIEW, PERMISSIONS.INVOICES_ISSUE, PERMISSIONS.INVOICES_MANAGE, PERMISSIONS.INVOICES_SETUP] },
   { key: 'employees', label: 'Personel', permissions: [PERMISSIONS.EMPLOYEES_VIEW, PERMISSIONS.EMPLOYEES_MANAGE] },
@@ -583,6 +597,11 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.PURCHASING_RECEIVE,
     PERMISSIONS.STOCK_VIEW,
     PERMISSIONS.STOCK_MANAGE,
+    // Demirbaş sicili, sayım ve amortisman: müdür hepsini görür ve yapar.
+    PERMISSIONS.ASSETS_VIEW,
+    PERMISSIONS.ASSETS_COUNT,
+    PERMISSIONS.ASSETS_MANAGE,
+    PERMISSIONS.ASSETS_FINANCE,
     // Ön muhasebe müdürün de işi (küçük otel); eşik üstü ödeme fişini başka bir yetkili onaylar.
     PERMISSIONS.ACCOUNTING_VIEW,
     PERMISSIONS.ACCOUNTING_MANAGE,
@@ -731,6 +750,11 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.PAYROLL_VIEW,
     PERMISSIONS.PAYROLL_MANAGE,
     PERMISSIONS.PAYROLL_PAY,
+    // Demirbaş sicili ve amortisman muhasebenin işi (sabit kıymet defteri); sayımı da yürütür.
+    PERMISSIONS.ASSETS_VIEW,
+    PERMISSIONS.ASSETS_COUNT,
+    PERMISSIONS.ASSETS_MANAGE,
+    PERMISSIONS.ASSETS_FINANCE,
   ]),
   FNB: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,

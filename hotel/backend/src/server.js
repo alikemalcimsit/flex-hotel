@@ -13,6 +13,7 @@ import { startFolioJobs } from './modules/folios/jobs.js';
 import { startHousekeepingJobs } from './modules/housekeeping/jobs.js';
 import { startPricingJobs } from './modules/pricing/jobs.js';
 import { startSalesJobs } from './modules/sales/jobs.js';
+import { startAssetJobs } from './modules/assets/jobs.js';
 import { startReservationJobs } from './modules/reservations/jobs.js';
 import { startChannelJobs } from './modules/channels/jobs.js';
 import { webchatOrigins } from './modules/channels/service.js';
@@ -97,6 +98,8 @@ const stopInvoiceJobs = startInvoiceJobs(app.log);
 const stopMaintenanceJobs = startMaintenanceJobs(app.log);
 const stopPricingJobs = startPricingJobs(app.log);
 const stopSalesJobs = startSalesJobs(app.log);
+// Garantisi bitecek demirbaşların zili (modül 46).
+const stopAssetJobs = startAssetJobs(app.log);
 const stopApprovalJobs = startApprovalJobs(app.log);
 const stopFolioJobs = startFolioJobs(app.log);
 const stopHousekeepingJobs = startHousekeepingJobs(app.log);
@@ -120,6 +123,7 @@ app.addHook('onClose', async () => {
   stopMaintenanceJobs();
   stopPricingJobs();
   stopSalesJobs();
+  stopAssetJobs();
   stopApprovalJobs();
   stopFolioJobs();
   stopHousekeepingJobs();

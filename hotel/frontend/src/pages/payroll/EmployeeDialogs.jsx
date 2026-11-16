@@ -24,6 +24,7 @@ import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 import { payrollKeys } from '../../lib/payroll.js';
 import { validateWith } from '../../lib/validate.js';
 import { toastSuccess } from '../../store/toast.js';
+import { EmployeeAssetsWarning } from '../assets/EmployeeAssetsWarning.jsx';
 
 /**
  * Personel kartının iletişim kutuları (modül 51): teşvik, avans, icra / nafaka, matrah devri, işten çıkış ve
@@ -253,6 +254,8 @@ export function TerminationDialog({ employee, today, onClose }) {
   }, [key, employee.id]);
   return (
     <FormDialog title={`İşten çıkış: ${employee.name}`} size="lg" formId="termination-form" busy={busy} onClose={onClose} submitLabel="Çıkışı yap" serverError={serverError}>
+      {/* Modül 46: zimmetindeki demirbaşlar (engellemez, hatırlatır). */}
+      <EmployeeAssetsWarning employeeId={employee.id} />
       <form
         id="termination-form"
         noValidate
