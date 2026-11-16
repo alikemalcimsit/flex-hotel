@@ -67,6 +67,8 @@ import { nightAuditRoutes } from './modules/night-audit/routes.js';
 import { maintenanceRoutes } from './modules/maintenance/routes.js';
 import { assetRoutes } from './modules/assets/routes.js';
 import { reportChatRoutes } from './modules/report-chat/routes.js';
+import { reportDesignerRoutes } from './modules/report-designer/routes.js';
+import { dataImportRoutes } from './modules/data-import/routes.js';
 import { guestRoutes } from './modules/guests/routes.js';
 import { reportCacheStats } from './modules/reports/service.js';
 import { registerPaymentSubscribers } from './modules/payments/subscribers.js';
@@ -371,6 +373,8 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   await app.register(maintenanceRoutes, { prefix: '/maintenance' });
   await app.register(assetRoutes, { prefix: '/assets' });
   await app.register(reportChatRoutes, { prefix: '/report-chat' });
+  await app.register(reportDesignerRoutes, { prefix: '/report-designer' });
+  await app.register(dataImportRoutes, { prefix: '/imports' });
   await app.register(guestRoutes, { prefix: '/guests' });
   await app.register(reportRoutes, { prefix: '/reports' });
   await app.register(nightAuditRoutes, { prefix: '/night-audit' });

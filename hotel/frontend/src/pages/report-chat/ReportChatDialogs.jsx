@@ -10,7 +10,7 @@ import { validateWith } from '../../lib/validate.js';
  */
 
 /** @param {{ id: string, title: string, busy: boolean, onClose: () => void, submitLabel: string, onSubmit: (event: React.FormEvent) => void, children: React.ReactNode }} props */
-function FormModal({ id, title, busy, onClose, submitLabel, onSubmit, children }) {
+export function FormModal({ id, title, busy, onClose, submitLabel, onSubmit, children }) {
   return (
     <Modal
       open

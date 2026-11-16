@@ -858,6 +858,8 @@ model Hotel {
   assetCounts            AssetCount[]
   reportQuestions        ReportQuestion[]
   savedReports           SavedReport[]
+  reportDefinitions      ReportDefinition[]
+  dataImports            DataImport[]
 }
 
 model User {
@@ -7547,4 +7549,48 @@ model SavedReport {
 
   @@index([hotelId, owner, createdAt])
   @@index([hotelId, shared, createdAt])
+}
+
+/**
+ * ══════════════════ Rapor tasarımcısı + Excel yükleme (modül 26) ══════════════════
+ */
+
+/// Tasarımcıda kurulan rapor: kaynak + sütunlar + filtreler + gruplama + sıralama (`reportDesignSchema`). Sahibi
+/// düzenler / siler; paylaşılan rapor rapor yetkisi olan herkese görünür (kaynağın yetkisi de gerekir).
+model ReportDefinition {
+  id        String    @id @default(uuid())
+  hotelId   String
+  owner     String
+  title     String
+  source    String
+  design    Json
+  shared    Boolean   @default(false)
+  lastRunAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+
+  @@index([hotelId, owner, updatedAt])
+  @@index([hotelId, shared, updatedAt])
+}
+
+/// Excel'den toplu yükleme (misafir listesi / fiyat planı). Kimlik sihirbazın ürettiği yükleme kimliğidir: aynı
+/// yükleme ikinci kez gönderilirse yazılmaz, bu kayıt döner.
+model DataImport {
+  id        String   @id
+  hotelId   String
+  kind      String
+  fileName  String?
+  total     Int
+  created   Int
+  skipped   Int
+  /// Satır sonuçları (sıra, durum, not) — geçmiş ekranı için.
+  result    Json
+  createdBy String
+  createdAt DateTime @default(now())
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+
+  @@index([hotelId, createdAt])
 }

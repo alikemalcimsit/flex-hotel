@@ -129,7 +129,8 @@ export const NAV_SECTIONS = Object.freeze([
           { label: 'Planlama', to: '/teknik-servis/planlama', icon: 'calendar', permission: PERMISSIONS.MAINTENANCE_MANAGE },
         ],
       },
-      // Raporlar: gelir raporları (modül 23), rapor asistanı (modül 24, AI) ve kayıtlı raporlar (AI'sız çalışır).
+      // Raporlar: gelir raporları (modül 23), rapor asistanı (modül 24, AI), rapor tasarımcısı (modül 26) ve kayıtlı
+      // raporlar (ikisi birlikte; AI'sız çalışır).
       {
         label: 'Raporlar',
         to: '/raporlar',
@@ -138,6 +139,7 @@ export const NAV_SECTIONS = Object.freeze([
         children: [
           { label: 'Gelir raporları', to: '/raporlar/gelir', icon: 'chart', permission: PERMISSIONS.REPORTS_VIEW },
           { label: 'Rapor asistanı', to: '/raporlar/asistan', icon: 'sparkles', permission: PERMISSIONS.REPORTS_ASK },
+          { label: 'Rapor tasarımcısı', to: '/raporlar/tasarim', icon: 'sliders', permission: PERMISSIONS.REPORTS_VIEW },
           { label: 'Kayıtlı raporlar', to: '/raporlar/kayitli', icon: 'fileText', permission: PERMISSIONS.REPORTS_VIEW },
         ],
       },
@@ -391,6 +393,13 @@ export const NAV_SECTIONS = Object.freeze([
           { label: 'Olaylar', to: '/aktivite/olaylar', icon: 'list' },
           { label: 'Denetim kaydı', to: '/aktivite/denetim', icon: 'fileText', permission: PERMISSIONS.AUDIT_VIEW },
         ],
+      },
+      // Excel'den toplu yükleme (modül 26): misafir listesi (misafir yönetimi), fiyat planı (ayar yönetimi).
+      {
+        label: "Excel'den yükle",
+        to: '/ice-aktar',
+        icon: 'upload',
+        anyPermission: [PERMISSIONS.GUESTS_MANAGE, PERMISSIONS.SETTINGS_MANAGE],
       },
       {
         label: 'Aktörler',

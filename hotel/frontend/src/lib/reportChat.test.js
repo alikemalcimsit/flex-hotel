@@ -22,6 +22,7 @@ describe('hücre biçimi', () => {
   test('türüne göre: para, yüzde (tek ondalık), sayı, metin; boş "—"', () => {
     assert.equal(formatCell('125000.5', 'money'), '125.000,50');
     assert.equal(formatCell(74.26, 'percent'), '%74,3');
+    assert.match(formatCell('2026-11-16', 'date'), /^16 Kas(ım)? 2026$/, 'tasarımcının tarih sütunu (modül 26)');
     assert.equal(formatCell(-3.14, 'percent'), '%-3,1');
     assert.equal(formatCell(1234, 'number'), '1.234');
     assert.equal(formatCell('Booking.com', 'text'), 'Booking.com');

@@ -49,13 +49,15 @@ export function numericValue(value) {
 }
 
 /**
- * Tablo hücresi: para "12.500,50", yüzde "%74,2", sayı "1.234", metin olduğu gibi; boş "—".
+ * Tablo hücresi: para "12.500,50", yüzde "%74,2", sayı "1.234", gün "16 Kas 2026" (tasarımcı, modül 26), metin olduğu
+ * gibi; boş "—".
  * @param {unknown} value
- * @param {'text' | 'number' | 'percent' | 'money'} kind
+ * @param {'text' | 'number' | 'percent' | 'money' | 'date'} kind
  */
 export function formatCell(value, kind) {
   if (value === null || value === undefined || value === '') return '—';
   if (kind === 'money') return formatMoney(value);
+  if (kind === 'date') return formatDate(String(value));
   if (kind === 'percent') {
     const number = numericValue(value);
     return number === null ? '—' : formatPercent(Math.round(number * 10) / 10);

@@ -2092,12 +2092,58 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 26. Rapor tasarımcısı + Excel — Ali Kemal
 **Gün sonu:** Kullanıcı kendi raporunu kolon seçerek kuruyor, Excel indiriyor; Excel'den toplu misafir / fiyat yükleyebiliyor.
-- [ ] Backend: ReportDefinition tablosu; kaynak tanımları (rezervasyon, folyo, misafir, ödeme) ve izin verilen kolonlar
-- [ ] Backend: dinamik sorgu üretici (kolon, filtre, grupla, sırala; SQL injection'a kapalı)
-- [ ] Backend: Excel export (xlsx), Excel import (misafir listesi, fiyat planı) + doğrulama raporu
-- [ ] Ekran: Tasarımcı (kaynak seç → kolon sürükle → filtre ekle → önizle → kaydet)
-- [ ] Ekran: Kayıtlı raporlar + çalıştır + Excel indir
-- [ ] Ekran: Excel yükleme sihirbazı (dosya seç → kolon eşleştir → hataları göster → içe aktar)
+- [x] Backend: ReportDefinition tablosu; kaynak tanımları (rezervasyon, folyo, misafir, ödeme) ve izin verilen kolonlar
+- [x] Backend: dinamik sorgu üretici (kolon, filtre, grupla, sırala; SQL injection'a kapalı)
+- [x] Backend: Excel export (xlsx), Excel import (misafir listesi, fiyat planı) + doğrulama raporu — xlsx diğer modüller gibi
+  tarayıcıda üretilir (sunucunun çalıştırdığı tablodan); içe aktarmada dosya tarayıcıda okunur, doğrulama ve yazma sunucuda
+- [x] Ekran: Tasarımcı (kaynak seç → kolon sürükle → filtre ekle → önizle → kaydet)
+- [x] Ekran: Kayıtlı raporlar + çalıştır + Excel indir
+- [x] Ekran: Excel yükleme sihirbazı (dosya seç → kolon eşleştir → hataları göster → içe aktar)
+
+> **📌 Modül 26 tamamlandı (16 Kasım 2026 — Ali Kemal).**
+>
+> **Kararlar (kullanıcı):** kaynaklar **rezervasyon, folyo kalemi, misafir, ödeme**; tasarım raporları **"Kayıtlı raporlar"da
+> rapor asistanının raporlarıyla birlikte** (kişisel + otelle paylaşılabilir); Excel'den misafirde **mevcut kişi atlanır ve
+> raporlanır** (mevcut karta dokunulmaz); fiyat planında **çakışan satır reddedilir** (mevcut fiyat habersiz değişmez).
+>
+> **Sorgu üretici — SQL enjeksiyonuna kapalı:** sütun kataloğu sözleşmede (`contracts/report-designer.js`: anahtar, ad, tür,
+> seçenekler), SQL ifadeleri yalnız sunucuda (`report-designer/catalog.js`; modül yüklenirken katalogdaki her sütunun ifadesi
+> olduğu denetlenir). Kullanıcıdan gelen yalnız katalogla doğrulanmış anahtar ve **parametre** değer; LIKE jokerleri
+> kaçışlanır; takma adlar sıralı (`c0…`, `a0…`), gruplama sıra no. Rapor ekranlarıyla aynı **salt okunur işlem + süre
+> sınırı**. İşleçler türe göre (metin: içerir / eşittir / boş / dolu; seçenek: şunlardan biri / dışında; tarih: **göreli dönem**
+> (M24'ün dönemleri — kayıtlı rapor çalıştığı güne göre kayar) / arasında / önce / sonra; sayı / tutar: eşittir / en az / en
+> çok / arasında). Gruplu modda boyut + adet / toplam / ortalama / en az / en çok. Kayıt anları otelin saat diliminde güne
+> çevrilir (dilim parametre). Kaynağın kendi yetkisi her çalıştırmada denetlenir (misafir kaynağı `guests.view`); paylaşılan
+> rapor yetkisize "yetkiniz yok" olarak görünür. Belge numarası tasarımcıda yok (kişisel veri).
+>
+> **Excel yükleme** (`/imports/:kind`): sihirbaz sütunları başlık adlarından (eş anlamlılarla) önerir; satırlar sözleşmenin
+> sıkı şemasıyla (GG.AA.YYYY / ISO tarih, "2.500,00" tutar, pansiyon kodu ya da adı, belge türü adı, TC kimlik sağlaması)
+> denetlenir; **ya hep ya hiç**; yükleme kimliği `DataImport` kaydının kimliği — aynı yükleme ikinci kez yazılmaz. Misafir
+> eşleşmesi rezervasyondaki misafir aramasıyla aynı kural (e-posta küçük harf, telefon son 7 hane + `phoneMatchScore`, belge
+> no); dosyada tekrar eden kişi bir kez. Fiyat planı oda tipini kodla ya da adla bulur; M28'in çakışma kuralı (kapalı planlar
+> dahil) sistemde ve dosyada; yazılan planlar ayar olaylarıyla fiyat önbelleğini tazeler + tek `rate.changed`. Yetki: misafir
+> `guests.manage`, fiyat planı `settings.manage`. Yükleme geçmişi listelenir.
+>
+> **Veri** (migration `20261116180000_report_designer`): `ReportDefinition` (sahip, başlık, kaynak, tasarım, paylaşım, son
+> çalıştırma) ve `DataImport` (kimlik = yükleme kimliği, tür, dosya adı, sayılar, satır sonuçları). Olaylar
+> `report.definition.changed` (kanal `report-chat.changed`) ve `data.import.completed`.
+>
+> **Ekranlar:** Raporlar kabuğu dört sekme (asistan, tasarımcı, kayıtlı, gelir). **Rapor tasarımcısı** `/raporlar/tasarim`
+> (kaynak → sütunlar (ok / sürükle-bırak sırası) → gruplama → filtreler → sıralama + satır sınırı → önizle (100 satır) / Excel
+> (5000'e kadar) / kaydet; sahibi değilse "farklı kaydet"). **Kayıtlı raporlar**: asistan + tasarım birlikte (tür rozeti),
+> tasarımda düzenle. **Excel'den yükle** `/ice-aktar` (Yönetim): tür → şablon → dosya → eşleştirme (örnek değerlerle) →
+> denetim (hazır / zaten var / hatalı süzgeçli) → içe aktar → geçmiş.
+>
+> **Test:** sözleşme 7 (tasarım şeması, başlık önerisi, hücre biçimleri, satır şemaları, "I" harfi tuzağı), sorgu 5
+> (enjeksiyon, LIKE kaçışı, gruplu SQL, saat dilimi, çıktı), ön yüz 8; entegrasyon 7 (kataloğun **her sütunu** gerçek
+> veritabanında gruplu / gruplamasız; filtre + gruplama + toplam doğruluğu; kaynak yetkisi; kaydet / paylaş / sahiplik;
+> misafir atla / tekrar / hata / tekrar gönderim; fiyat çakışması + önbellek; yetkiler). Tarayıcıda gerçek demo verisiyle:
+> tasarım (kaynağa göre adet + tutar), kaydet, kayıtlı raporlarda çalıştır, misafir Excel'i (hazır / mevcut / hatalı → içe aktar).
+> Bulunup düzeltilen: rezervasyonun 21 sütunu 20 sınırını aşıyordu; pansiyon / belge türü kodunda Türkçe küçük harf "I" →
+> "ı" eşleşmeyi bozuyordu; "Cep Telefonu" gibi yazımlar eş anlamlılara eklendi; misafir eşleşmesi sistemin telefon kuralına
+> bağlandı.
+>
+> **Devir:** yeni kaynaklar (adisyon, demirbaş — katalog genişletilir), kayıtlı raporun zamanlanmış e-postası.
 
 ### 27. Bütçe yönetimi — arkadaşın
 **Gün sonu:** Yıllık bütçe ay ay giriliyor; gerçekleşenle sapma raporu çıkıyor; AI sapmayı yorumluyor.

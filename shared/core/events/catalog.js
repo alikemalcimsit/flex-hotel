@@ -788,6 +788,13 @@ export const EVENT_CATALOG = Object.freeze({
   'report.question.completed': hotelScoped.extend({ questionId: z.string().uuid(), status: z.enum(['READY', 'FAILED']) }),
   'report.saved.changed': hotelScoped.extend({ savedReportId: z.string().uuid(), change: z.enum(['CREATED', 'UPDATED', 'DELETED']) }),
 
+  /* ── Rapor tasarımcısı ve Excel yükleme (modül 26) ── */
+
+  /** Tasarım raporu kaydedildi / değişti / silindi (kayıtlı raporlar ekranı `report-chat.changed` kanalından tazelenir). */
+  'report.definition.changed': hotelScoped.extend({ definitionId: z.string().uuid(), change: z.enum(['CREATED', 'UPDATED', 'DELETED']) }),
+  /** Excel'den toplu yükleme yazıldı (misafir listesi / fiyat planı); fiyat planlarının kendi olayları ayrıca yayınlanır. */
+  'data.import.completed': hotelScoped.extend({ importId: z.string().uuid(), kind: z.enum(['GUESTS', 'RATE_PLANS']), created: z.number().int().min(0), skipped: z.number().int().min(0) }),
+
   /* ── Acente ve kontrat (modül 29) ──
      Acente listesi / kartı, kontrat ekranı ve rezervasyon formundaki acente
      fiyat önizlemesi bunlarla canlı tazelenir (`AGENCY_EVENTS`); yükte yalnızca kimlik. */
@@ -1488,7 +1495,7 @@ export const BUDGET_EVENTS = Object.freeze([
 ]);
 
 /** Rapor asistanı (modül 24): soru cevaplandı, kayıtlı rapor değişti (`report-chat.changed` kanalı). */
-export const REPORT_CHAT_EVENTS = Object.freeze(['report.question.asked', 'report.question.completed', 'report.saved.changed']);
+export const REPORT_CHAT_EVENTS = Object.freeze(['report.question.asked', 'report.question.completed', 'report.saved.changed', 'report.definition.changed']);
 
 /** Acente ve kontrat (modül 29): ekranlar bunlarla tazelenir (`agencies.changed` kanalı). */
 export const AGENCY_EVENTS = Object.freeze(['agency.changed', 'agency.contract.changed', 'agency.stop_sale.changed', 'agency.allotment.changed']);

@@ -97,6 +97,8 @@ const RevenueReportPage = lazy(() => import('./pages/reports/RevenueReportPage.j
 const ReportChatLayout = lazy(() => import('./pages/report-chat/ReportChatLayout.jsx').then((m) => ({ default: m.ReportChatLayout })));
 const ReportChatPage = lazy(() => import('./pages/report-chat/ReportChatPage.jsx').then((m) => ({ default: m.ReportChatPage })));
 const SavedReportsPage = lazy(() => import('./pages/report-chat/SavedReportsPage.jsx').then((m) => ({ default: m.SavedReportsPage })));
+const ReportDesignerPage = lazy(() => import('./pages/report-designer/ReportDesignerPage.jsx').then((m) => ({ default: m.ReportDesignerPage })));
+const DataImportPage = lazy(() => import('./pages/data-import/DataImportPage.jsx').then((m) => ({ default: m.DataImportPage })));
 const NightAuditPage = lazy(() => import('./pages/night-audit/NightAuditPage.jsx').then((m) => ({ default: m.NightAuditPage })));
 const ClosureHistoryPage = lazy(() => import('./pages/night-audit/ClosureHistoryPage.jsx').then((m) => ({ default: m.ClosureHistoryPage })));
 const MaintenancePage = lazy(() => import('./pages/maintenance/MaintenancePage.jsx').then((m) => ({ default: m.MaintenancePage })));
@@ -577,7 +579,33 @@ export default function App() {
                   </RequirePermission>
                 }
               />
+              {/* Rapor tasarımcısı (modül 26): kaynak → sütun → filtre → grupla → önizle / kaydet / Excel. */}
+              <Route
+                path="raporlar/tasarim"
+                element={
+                  <RequirePermission permission={PERMISSIONS.REPORTS_VIEW}>
+                    <ReportDesignerPage />
+                  </RequirePermission>
+                }
+              />
+              <Route
+                path="raporlar/tasarim/:id"
+                element={
+                  <RequirePermission permission={PERMISSIONS.REPORTS_VIEW}>
+                    <ReportDesignerPage />
+                  </RequirePermission>
+                }
+              />
             </Route>
+            {/* Excel'den toplu yükleme (modül 26): misafir listesi, fiyat planı. */}
+            <Route
+              path="ice-aktar"
+              element={
+                <RequireAnyPermission permissions={[PERMISSIONS.GUESTS_MANAGE, PERMISSIONS.SETTINGS_MANAGE]}>
+                  <DataImportPage />
+                </RequireAnyPermission>
+              }
+            />
             <Route
               path="gun-kapanis"
               element={
