@@ -1047,6 +1047,16 @@ export const EVENT_CATALOG = Object.freeze({
     status: z.enum(['REQUESTED', 'SCHEDULED', 'RECEIVED', 'PREPARING', 'READY', 'ON_THE_WAY', 'DELIVERED', 'CANCELLED', 'REJECTED']),
     change: z.enum(['CREATED', 'ACCEPTED', 'REJECTED', 'RELEASED', 'ADVANCED', 'DELIVERED', 'CANCELLED', 'TRAY_COLLECTED', 'UPDATED']),
   }),
+  /**
+   * Paket sipariş (modül 42) alındı / adım ilerledi / kurye atandı / teslim edildi / iptal edildi / tur eklendi.
+   * Paket panosu ve sipariş ekranı tazelenir.
+   */
+  'pos.delivery.changed': hotelScoped.extend({
+    orderId: z.string().uuid(),
+    outletId: z.string().uuid(),
+    status: z.enum(['RECEIVED', 'PREPARING', 'READY', 'ON_THE_WAY', 'DELIVERED', 'CANCELLED']),
+    change: z.enum(['CREATED', 'ADVANCED', 'ASSIGNED', 'DELIVERED', 'CANCELLED', 'UPDATED']),
+  }),
 
   /* ── Restoran siparişinin iş olayları (yayıncı modül 39; tüketiciler: fnb-worker, mutfak ekranı 40,
      stok 44). Ekran tazelemesi değil, iş sözleşmesi: yük kendine yeter (tüketici POS tablosunu okumaz). ── */
@@ -1456,8 +1466,17 @@ export const BUDGET_EVENTS = Object.freeze([
 /** Acente ve kontrat (modül 29): ekranlar bunlarla tazelenir (`agencies.changed` kanalı). */
 export const AGENCY_EVENTS = Object.freeze(['agency.changed', 'agency.contract.changed', 'agency.stop_sale.changed', 'agency.allotment.changed']);
 
-/** Restoran POS (modül 39) ve oda servisi (41): masa planı, adisyon, vardiya, teslim panosu ve tanım ekranları (`pos.changed` kanalı). */
-export const POS_EVENTS = Object.freeze(['pos.setup.changed', 'pos.check.changed', 'pos.order.sent', 'pos.payment.changed', 'pos.shift.changed', 'pos.room_service.changed', 'fnb.order.status_changed']);
+/** Restoran POS (modül 39), oda servisi (41) ve paket servis (42): masa planı, adisyon, vardiya, teslim / paket panosu ve tanım ekranları (`pos.changed` kanalı). */
+export const POS_EVENTS = Object.freeze([
+  'pos.setup.changed',
+  'pos.check.changed',
+  'pos.order.sent',
+  'pos.payment.changed',
+  'pos.shift.changed',
+  'pos.room_service.changed',
+  'pos.delivery.changed',
+  'fnb.order.status_changed',
+]);
 
 /** Mutfak ekranı (modül 40 KDS): yeni tur düşer, durum ilerler, adisyon kapanır/iptal olur. */
 export const KITCHEN_EVENTS = Object.freeze(['fnb.order.placed', 'fnb.order.status_changed', 'pos.check.changed']);

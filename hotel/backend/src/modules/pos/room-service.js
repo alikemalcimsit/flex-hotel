@@ -581,7 +581,7 @@ export async function cancelOrder(hotelId, orderId, input, { canSupervise }) {
  * @param {any} tx @param {Function} stage @param {{ hotelId: string, check: any, today: string, reason: string, waste: boolean }} input
  * @returns {Promise<string[]>} iptal edilenler ("2 × Omlet")
  */
-async function voidCheckLines(tx, stage, { hotelId, check, today, reason, waste }) {
+export async function voidCheckLines(tx, stage, { hotelId, check, today, reason, waste }) {
   const [pending, settled, lines] = await Promise.all([
     pendingState(tx, check.id),
     Promise.all([tx.posPayment.count({ where: { checkId: check.id, status: { in: ['POSTED', 'PENDING'] }, voidedAt: null } }), tx.posRoomCharge.count({ where: { checkId: check.id } })]),

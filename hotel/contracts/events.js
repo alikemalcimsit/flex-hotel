@@ -172,6 +172,7 @@ export const EVENT_LABELS = Object.freeze({
   'pos.payment.changed': 'Restoran ödemesi değişti',
   'pos.shift.changed': 'Garson vardiyası açıldı / kapandı',
   'pos.room_service.changed': 'Oda servisi siparişi değişti',
+  'pos.delivery.changed': 'Paket sipariş değişti (alındı, adım, kurye, teslim, iptal)',
   'recipe.stock_item.changed': 'Malzeme kartı değişti',
   'recipe.changed': 'Reçete değişti',
   'purchase.request.changed': 'Satın alma talebi açıldı / değişti / iptal edildi',

@@ -5,6 +5,7 @@ import { KITCHEN_ORDER_STATUS_LABELS, PAYMENT_KIND_LABELS, PAYMENT_STATUS_LABELS
 import { Alert, Badge, Button, Card, EmptyState, Icon } from '@hotelos/ui';
 import { QueryFallback } from '../../components/QueryFallback.jsx';
 import { apiPost } from '../../lib/api.js';
+import { deliveryOrderPath } from '../../lib/delivery.js';
 import { formatMoney } from '../../lib/format.js';
 import { useAdvanceKitchenOrder } from '../../lib/kdsQueries.js';
 import { PAYMENT_METHOD_ICONS, methodLabel } from '../../lib/payments.js';
@@ -70,10 +71,9 @@ function CheckScreen({ check, terminal }) {
   const balance = Number(check.balance);
   const hasLines = check.lines.length > 0;
   const waiting = check.pending.adjustments + check.pending.payments + check.pending.voids;
-  // Oda servisi adisyonu (modül 41): siparişle bire bir; bölünmez / taşınmaz / birleşmez, hesabı teslimde kapanır.
-  const roomService = check.roomService;
-  const settleHere = !roomService || roomService.status === 'DELIVERED';
-  const floorPath = roomService ? orderPath(roomService.id) : `/pos/masalar?nokta=${check.outletId}`;
+  const handoff = handoffOf(check);
+  const settleHere = !handoff || handoff.delivered;
+  const floorPath = handoff ? handoff.path : `/pos/masalar?nokta=${check.outletId}`;
 
   const replace = (updated) => {
     queryClient.setQueryData(posKeys.check(updated.id), updated);
@@ -103,9 +103,9 @@ function CheckScreen({ check, terminal }) {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
         <Link to={floorPath} className="flex items-center gap-1 text-sm font-semibold text-ink-soft hover:text-ink">
-          <Icon name="arrowLeft" className="size-4" /> {roomService ? `Oda servisi ${roomService.number}` : 'Masa planı'}
+          <Icon name="arrowLeft" className="size-4" /> {handoff ? handoff.back : 'Masa planı'}
         </Link>
-        <h1 className="text-2xl font-bold text-ink">{roomService ? `Oda ${roomService.roomNumber}` : check.table ? `Masa ${check.table.name}` : 'Masasız'}</h1>
+        <h1 className="text-2xl font-bold text-ink">{handoff ? handoff.title : check.table ? `Masa ${check.table.name}` : 'Masasız'}</h1>
         <span className="font-mono text-sm text-ink-soft">{check.number}</span>
         <Badge tone={CHECK_STATUS_TONES[check.status]}>{POS_CHECK_STATUS_LABELS[check.status]}</Badge>
         {check.billRequestedAt && open && <Badge tone="warning">Hesap istiyor</Badge>}
@@ -119,9 +119,9 @@ function CheckScreen({ check, terminal }) {
         )}
       </div>
       {check.note && <p className="text-sm italic text-ink-soft">Not: {check.note}</p>}
-      {roomService && !settleHere && (
-        <Alert tone="info" title={`Oda servisi siparişi · ${roomService.guestName}`}>
-          Hesap teslimde kapanır (kapıda ödeme ve kalanın odaya yazılması oda servisi ekranından). Misafir bir şey daha isterse buradan tur ekleyin; hazır sipariş mutfağa döner, yoldaki siparişe eklenmez.
+      {handoff && !settleHere && (
+        <Alert tone="info" title={handoff.alertTitle}>
+          {handoff.alert}
         </Alert>
       )}
       {check.splitFrom && (
@@ -154,7 +154,7 @@ function CheckScreen({ check, terminal }) {
       <div className={`grid grid-cols-1 gap-4 ${open && operate && terminal ? 'xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]' : ''}`}>
         {open && operate && terminal && <MenuPanel check={check} terminal={terminal} />}
         <div className="flex flex-col gap-4">
-          <LinesCard check={check} canSupervise={supervise && open} canServe={operate && open && !roomService} onAdjust={(kind, line) => setDialog({ kind: 'adjust', adjustKind: kind, line })} />
+          <LinesCard check={check} canSupervise={supervise && open} canServe={operate && open && !handoff} onAdjust={(kind, line) => setDialog({ kind: 'adjust', adjustKind: kind, line })} />
           <TotalsCard check={check} />
           {operate && (
             <Card title="İşlemler">
@@ -169,7 +169,7 @@ function CheckScreen({ check, terminal }) {
                     Odaya yaz
                   </Button>
                 )}
-                {open && !roomService && balance > 0 && (
+                {open && !handoff && balance > 0 && (
                   <Button type="button" variant="outline" icon="bell" onClick={() => run('bill', { requested: !check.billRequestedAt }, check.billRequestedAt ? 'Hesap isteği geri alındı' : 'Masa “hesap istiyor”')} disabled={busy}>
                     {check.billRequestedAt ? 'Hesap isteğini geri al' : 'Hesap istendi'}
                   </Button>
@@ -179,17 +179,17 @@ function CheckScreen({ check, terminal }) {
                     Hesap fişi
                   </Button>
                 )}
-                {open && !roomService && hasLines && (
+                {open && !handoff && hasLines && (
                   <Button type="button" variant="outline" icon="layers" onClick={() => setDialog({ kind: 'split' })} disabled={busy}>
                     Böl
                   </Button>
                 )}
-                {open && !roomService && terminal && (
+                {open && !handoff && terminal && (
                   <Button type="button" variant="outline" icon="arrowRight" onClick={() => setDialog({ kind: 'move' })} disabled={busy}>
                     Masa değiştir
                   </Button>
                 )}
-                {open && !roomService && (
+                {open && !handoff && (
                   <Button type="button" variant="outline" icon="link" onClick={() => setDialog({ kind: 'merge' })} disabled={busy}>
                     Birleştir
                   </Button>
@@ -273,6 +273,37 @@ function CheckScreen({ check, terminal }) {
       {dialog?.kind === 'transfer' && <TransferDialog check={check} onClose={() => setDialog(null)} onDone={(updated) => finish(updated, `Adisyon ${updated.waiterEmail} garsona devredildi`)} />}
     </div>
   );
+}
+
+/**
+ * Teslimli adisyon — oda servisi (modül 41) ya da paket servis (modül 42): siparişle bire bir; bölünmez / taşınmaz /
+ * birleşmez, hesabı teslimde kapanır (ödeme ve kapanış siparişin ekranından). Masa adisyonunda boş.
+ * @param {any} check
+ * @returns {{ delivered: boolean, path: string, back: string, title: string, alertTitle: string, alert: string } | null}
+ */
+function handoffOf(check) {
+  const { roomService, delivery } = check;
+  if (roomService) {
+    return {
+      delivered: roomService.status === 'DELIVERED',
+      path: orderPath(roomService.id),
+      back: `Oda servisi ${roomService.number}`,
+      title: `Oda ${roomService.roomNumber}`,
+      alertTitle: `Oda servisi siparişi · ${roomService.guestName}`,
+      alert: 'Hesap teslimde kapanır (kapıda ödeme ve kalanın odaya yazılması oda servisi ekranından). Misafir bir şey daha isterse buradan tur ekleyin; hazır sipariş mutfağa döner, yoldaki siparişe eklenmez.',
+    };
+  }
+  if (delivery) {
+    return {
+      delivered: delivery.status === 'DELIVERED',
+      path: deliveryOrderPath(delivery.id),
+      back: `Paket ${delivery.number}`,
+      title: `Paket ${delivery.number}`,
+      alertTitle: `Paket sipariş · ${delivery.customerName}`,
+      alert: 'Hesap teslimde kapanır; kapı ödemesi paket servis ekranından (kuryenin kasasına). Müşteri bir şey daha isterse buradan tur ekleyin; hazır sipariş mutfağa döner, yoldaki siparişe eklenmez.',
+    };
+  }
+  return null;
 }
 
 /**

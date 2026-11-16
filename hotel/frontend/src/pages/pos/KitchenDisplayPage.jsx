@@ -3,6 +3,7 @@ import { KITCHEN_ORDER_STATUS_LABELS, KDS_LATE_MINUTES, KDS_WARN_MINUTES, POS_ST
 import { Badge, Button, EmptyState, Icon } from '@hotelos/ui';
 import { ChoiceChips } from '../../components/ChoiceChips.jsx';
 import { QueryFallback } from '../../components/QueryFallback.jsx';
+import { deliveryOrderPath } from '../../lib/delivery.js';
 import { boardSummary, cardTone, kdsActions, waitedMinutes } from '../../lib/kds.js';
 import { useAdvanceKitchenOrder, useKitchenBoard, useKitchenLive } from '../../lib/kdsQueries.js';
 import { checkPath, timeText, usePosOutlets } from '../../lib/pos.js';
@@ -92,7 +93,7 @@ export function KitchenDisplayPage() {
         </ul>
       )}
       <p className="text-xs text-ink-muted">
-        Renk: {KDS_WARN_MINUTES} dakikada sarı, {KDS_LATE_MINUTES} dakikada kırmızı; hazır tur yeşil. Oda servisi turu mutfakta “hazır”da biter, teslimi oda servisi panosundan.
+        Renk: {KDS_WARN_MINUTES} dakikada sarı, {KDS_LATE_MINUTES} dakikada kırmızı; hazır tur yeşil. Oda servisi ve paket turu mutfakta “hazır”da biter, teslimi kendi panosundan.
       </p>
     </div>
   );
@@ -117,15 +118,15 @@ function Summary({ cards, now }) {
  */
 function KitchenCard({ card, now, showStation, busy, onAdvance }) {
   const tone = cardTone(card, now);
-  const roomService = card.roomService;
-  const place = roomService ? `Oda ${roomService.roomNumber}` : card.tableName ? `Masa ${card.tableName}` : 'Masasız';
+  const { roomService, delivery } = card;
+  const { place, to } = cardPlace(card);
   return (
     <li className={`flex flex-col gap-2 rounded-item border-2 p-3 ${TONE_CLASSES[tone]}`}>
       <div className="flex items-start justify-between gap-2">
-        <Link to={roomService ? orderPath(roomService.id) : checkPath(card.checkId)} className="min-w-0">
+        <Link to={to} className="min-w-0">
           <span className="block text-xl font-bold leading-tight text-ink">{place}</span>
           <span className="block truncate text-xs text-ink-soft">
-            {card.outletName} · <span className="font-mono">{card.checkNumber}</span> · {card.seq}. tur · {card.covers} kişi
+            {card.outletName} · <span className="font-mono">{delivery ? delivery.number : card.checkNumber}</span> · {card.seq}. tur{delivery ? '' : ` · ${card.covers} kişi`}
           </span>
         </Link>
         <span className={`flex items-center gap-1 text-lg font-bold tabular-nums ${CLOCK_CLASSES[tone] ?? 'text-ink'}`} title={`Mutfağa düştü ${timeText(card.sentAt)}`}>
@@ -152,10 +153,21 @@ function KitchenCard({ card, now, showStation, busy, onAdvance }) {
   );
 }
 
+/**
+ * Kartın yeri ve bağlantısı: paket (müşteri adı → paket sipariş), oda servisi (oda → oda servisi siparişi), masa
+ * ya da masasız (→ adisyon).
+ * @param {any} card
+ */
+function cardPlace(card) {
+  if (card.delivery) return { place: `Paket · ${card.delivery.customerName}`, to: deliveryOrderPath(card.delivery.id) };
+  if (card.roomService) return { place: `Oda ${card.roomService.roomNumber}`, to: orderPath(card.roomService.id) };
+  return { place: card.tableName ? `Masa ${card.tableName}` : 'Masasız', to: checkPath(card.checkId) };
+}
+
 /** @param {{ card: any, busy: boolean, onAdvance: (status: string) => void }} props */
 function KitchenCardActions({ card, busy, onAdvance }) {
   const actions = kdsActions(card);
-  if (actions.length === 0) return <p className="text-xs text-ink-muted">Teslim oda servisi panosundan işaretlenir.</p>;
+  if (actions.length === 0) return <p className="text-xs text-ink-muted">Teslim {card.delivery ? 'paket servis' : 'oda servisi'} panosundan işaretlenir.</p>;
   return (
     <div className="mt-auto flex flex-wrap gap-2">
       {actions.map((action) => (

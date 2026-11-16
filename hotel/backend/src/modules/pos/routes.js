@@ -48,6 +48,7 @@ import {
 import { PERMISSIONS, requireAnyPermission, requirePermission } from '../../lib/permissions.js';
 import { withHotelContext } from '../../lib/tenant.js';
 import * as checks from './checks.js';
+import { deliveryRoutes } from './delivery-routes.js';
 import * as kitchen from './kitchen.js';
 import * as payments from './payments.js';
 import * as reports from './reports.js';
@@ -290,4 +291,8 @@ export async function posRoutes(app) {
   /* ── Oda servisi (modül 41) ── */
 
   await app.register(roomServiceRoutes, { prefix: '/room-service' });
+
+  /* ── Paket servis (modül 42) ── */
+
+  await app.register(deliveryRoutes, { prefix: '/delivery' });
 }

@@ -322,6 +322,9 @@ export const cancelRoomServiceOrderSchema = z.object({
   waste: z.boolean().default(true),
 });
 
+/* Paket servis (modül 42) aynı parçaları kullanır (kalem listesi, kapı ödemesi, gerekçe, serbest metin). */
+export { lines as menuOrderLinesField, doorPayment as doorPaymentSchema, reasonField as posReasonField, optionalText as posOptionalText };
+
 export const collectTraysSchema = z.object({
   orderIds: z
     .array(uuid('Geçersiz sipariş'), { error: 'Sipariş seçin' })

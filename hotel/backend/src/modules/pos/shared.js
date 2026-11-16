@@ -29,6 +29,9 @@ export const DEFAULT_POS_SETTINGS = Object.freeze({
   prepLeadMinutes: 30,
   trayAlertMinutes: 90,
   guestOrderingEnabled: false,
+  deliveryFee: '0.00',
+  deliveryMinOrder: '0.00',
+  deliveryOrderMinutes: 45,
   updatedAt: null,
 });
 
@@ -57,6 +60,9 @@ export async function loadPosSettings(client, hotelId) {
     prepLeadMinutes: row.prepLeadMinutes,
     trayAlertMinutes: row.trayAlertMinutes,
     guestOrderingEnabled: row.guestOrderingEnabled,
+    deliveryFee: money(row.deliveryFee),
+    deliveryMinOrder: money(row.deliveryMinOrder),
+    deliveryOrderMinutes: row.deliveryOrderMinutes,
     updatedAt: iso(row.updatedAt),
   };
 }

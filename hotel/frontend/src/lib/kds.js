@@ -32,14 +32,21 @@ const READY = Object.freeze({ status: 'READY', label: 'Hazır', icon: 'checkCirc
 const SERVED = Object.freeze({ status: 'SERVED', label: 'Servis edildi', icon: 'checkCheck', variant: 'outline' });
 
 /**
+ * Teslimli tur: oda servisi (modül 41) ya da paket servis (modül 42) — mutfakta
+ * "hazır"da biter, teslim kendi panosunun işidir.
+ * @param {{ roomService?: object | null, delivery?: object | null }} card
+ */
+const isHandoffCard = (card) => Boolean(card.roomService || card.delivery);
+
+/**
  * Kartın düğmeleri (sunucu kuralının karşılığı; sunucu yine denetler). Oda
- * servisi turu hazırda biter: teslim oda servisi panosunun işidir.
- * @param {{ status: string, roomService: object | null }} card
+ * servisi ve paket turu hazırda biter: teslim kendi panosunun işidir.
+ * @param {{ status: string, roomService: object | null, delivery?: object | null }} card
  */
 export function kdsActions(card) {
   if (card.status === 'NEW') return [START, READY];
   if (card.status === 'PREPARING') return [READY];
-  if (card.status === 'READY' && !card.roomService) return [SERVED];
+  if (card.status === 'READY' && !isHandoffCard(card)) return [SERVED];
   return [];
 }
 

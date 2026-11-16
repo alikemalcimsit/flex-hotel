@@ -3023,11 +3023,47 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 42. Online paket sipariş — Ali Kemal
 **Gün sonu:** Dışarıdan gelen paket siparişler aynı POS zincirinden geçiyor; kurye ataması ve teslim takibi var.
-- [ ] Backend: Order `source=ONLINE`, DeliveryInfo tablosu (adres, telefon, kurye, durum)
-- [ ] Ekran: Dış sipariş formu (müşteri, adres, ürünler, ödeme tipi)
-- [ ] Ekran: Sipariş panosu (hazırlanıyor / yolda / teslim)
-- [ ] Ekran: Kurye atama
-- [ ] (opsiyonel) Public sipariş sayfası
+- [x] Backend: Order `source=ONLINE`, DeliveryInfo tablosu (adres, telefon, kurye, durum)
+- [x] Ekran: Dış sipariş formu (müşteri, adres, ürünler, ödeme tipi)
+- [x] Ekran: Sipariş panosu (hazırlanıyor / yolda / teslim)
+- [x] Ekran: Kurye atama
+- [ ] (opsiyonel) Public sipariş sayfası — **kullanıcı kararı:** şimdilik yok (personel girer); yol haritasında
+
+> **📌 Modül 42 tamamlandı (16 Kasım 2026 — Ali Kemal).**
+>
+> **Kararlar (kullanıcı):** ödeme **kapıda (nakit / kart) + önceden** (kart / havale referansıyla; gerçek online tahsilat
+> yok); kurye **otel personeli** (açık vardiyası olan; kapı parası kuryenin kasasına); public sayfa **şimdilik yok**; **sabit
+> paket ücreti + en az sipariş tutarı** (politika).
+>
+> **Veri** (migration `20261116090000_delivery_kinds` + `20261116090100_delivery_orders`): `PosOutletKind.DELIVERY`,
+> `PosSystemItem.DELIVERY_FEE` ("Paket servis ücreti", gizli sistem ürünü — tepsi ücretiyle ortak `ensureSystemItem`),
+> politika `deliveryFee` / `deliveryMinOrder` / `deliveryOrderMinutes` (CHECK'li), **`DeliveryOrder`** (PS-yıl-sıra; adisyonla
+> 1:1; kaynak telefon / mesaj / web-platform; müşteri, telefon **otelin ülke koduyla rakam** (tekrar gelen müşteri bunla
+> bulunur), adres + tarif, kapı yöntemi + bozuk para, teslim hedefi, kurye + atanma, adım damgaları; durum izi / alan /
+> kurye CHECK'leri; pano, geçmiş, telefon ve trigram index'leri).
+>
+> **Akış** (`pos/delivery.js`, kurallar `delivery-rules.js` birim testli): sipariş alınınca girenin vardiyasında masasız adisyon
+> + tur (+ ücret kalemi) — mutfak ekranına düşer; en az tutar ücret hariç ürün toplamına bakar. Ön ödeme girenin kasasına;
+> **tamamı ödense de adisyon teslime kadar açık** (`closeIfSettled` paket siparişi bitmeden kapatmaz — mutfak ve kurye görür);
+> kalan varsa kapı yöntemi şart. Kurye atanınca ziline düşer; kapıda para varsa yola çıkış kuryenin açık vardiyasını ister.
+> **Teslim tek transaction:** kapı ödemeleri kuryenin kasasına ve kalanı tam kapatır (açık hesap / odaya yaz yok), adisyon
+> kapanır, turlar servis edildi; tekrar teslim aynı sonuç. İptal: mutfak başladıysa şef garson + zayi; ön ödemeli siparişte önce
+> ödeme iptali. Adisyon ekranı (`delivery-guards.js`): bölme / taşıma / birleştirme / teslimden önce ödeme-kapatma yok; tur
+> eklenebilir (hazır → mutfağa döner, yoldayken yok); paket noktasında düz adisyon açılmaz; açık paket varken nokta türü
+> değişmez / kapanmaz. Kilit sırası vardiya → adisyon → sipariş → tur. **Mutfak ekranı** (M40) paket turunu da gösterir
+> ("Paket · müşteri"), SERVED vermez, siparişi oda servisiyle ortak tabloyla senkronlar.
+>
+> **Olay:** `pos.delivery.changed` (`pos.changed` kanalı). Zil: kuryeye atama (`POS`, sipariş başına tek uyarı).
+>
+> **API** (`/pos/delivery`): pano (+ günün özeti: teslim, iptal, zamanında %), geçmiş (durum / gün / arama: telefon birebir,
+> numara / ad parçası), sipariş (aç / ekran / adım / kurye / teslim / iptal), tekrar gelen müşteri (`/customers?phone`). Kurye
+> listesi mevcut `/pos/shifts/open-waiters`. **Ekranlar:** `/pos/paket` (pano), `/pos/paket/gecmis`, `/pos/paket/yeni` (form:
+> telefonla önceki ad / adres, kapıda nakit / kart / önceden ödendi, bozuk para, ücret ve en az tutar önizlemesi),
+> `/pos/paket/siparis/:id`; tanımlarda politika alanları ve "Paket servis" nokta türü; masa planı yalnız salon noktalarını
+> gösterir. Testler: entegrasyon 7, kurallar 6, sözleşme 9, ekran kuralları 8.
+>
+> **Bilinçli olarak yok:** gecikme / bekleme zili (pano kırmızıyla gösterir), paket raporu (satış raporu paket noktasını zaten
+> kapsar), public sipariş sayfası ve platform (Yemeksepeti vb.) entegrasyonu.
 
 ### 43. Banket F&B planlaması — arkadaşın
 **Gün sonu:** Etkinliğin menüsü seçiliyor; kişi sayısına göre malzeme ihtiyacı ve maliyet çıkıyor.

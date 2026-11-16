@@ -828,6 +828,7 @@ model Hotel {
   posShifts              PosShift[]
   roomServiceOrders      RoomServiceOrder[]
   roomServiceLinks       RoomServiceLink[]
+  deliveryOrders         DeliveryOrder[]
   posChecks              PosCheck[]
   posPayments            PosPayment[]
   stockItems             StockItem[]
@@ -4507,11 +4508,15 @@ enum PosShiftStatus {
 enum PosOutletKind {
   DINING
   ROOM_SERVICE
+  /// Paket servis (modül 42): masasız, eve teslim panosu.
+  DELIVERY
 }
 
 /// Menüde görünmeyen, sistemin eklediği ürün (oda servisi tepsi ücreti; fiyatı politikadan).
 enum PosSystemItem {
   TRAY_CHARGE
+  /// Paket servis ücreti (modül 42).
+  DELIVERY_FEE
 }
 
 /// Oda servisi siparişinin kaynağı: personel (telefon, kat), misafirin QR bağlantısı, misafir isteği (modül 7).
@@ -4543,7 +4548,7 @@ model PosOutlet {
   name            String
   /// İçerideki misafirin folyosuna yazılabilir mi.
   allowRoomCharge Boolean       @default(true)
-  /// Salon (masa planı) ya da oda servisi (teslim panosu; odaya yazma açık olmalı).
+  /// Salon (masa planı), oda servisi (teslim panosu; odaya yazma açık olmalı) ya da paket servis (modül 42).
   kind            PosOutletKind @default(DINING)
   isActive        Boolean       @default(true)
   sortOrder       Int           @default(0)
@@ -4557,6 +4562,7 @@ model PosOutlet {
   shifts            PosShift[]
   orders            PosOrder[]
   roomServiceOrders RoomServiceOrder[]
+  deliveryOrders    DeliveryOrder[]
 
   @@unique([hotelId, code])
   @@index([hotelId, isActive, sortOrder])
@@ -4651,6 +4657,11 @@ model PosSettings {
   prepLeadMinutes          Int      @default(30)
   trayAlertMinutes         Int      @default(90)
   guestOrderingEnabled     Boolean  @default(false)
+  /// Paket servis (modül 42): sipariş başına ücret (0 = yok), en az sipariş tutarı (ücret hariç; 0 = sınır yok),
+  /// teslim hedefi (dakika; siparişten kapıya).
+  deliveryFee              Decimal  @default(0) @db.Decimal(12, 2)
+  deliveryMinOrder         Decimal  @default(0) @db.Decimal(12, 2)
+  deliveryOrderMinutes     Int      @default(45)
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 
@@ -4751,6 +4762,7 @@ model PosCheck {
   payments    PosPayment[]
   roomCharges PosRoomCharge[]
   roomService RoomServiceOrder?
+  delivery    DeliveryOrder?
 
   @@unique([hotelId, number])
   @@unique([hotelId, sourceKey])
@@ -7135,4 +7147,79 @@ model OnlineCheckinDocument {
   @@index([hotelId, reservationId])
   @@index([onlineCheckinId])
   @@index([createdAt])
+}
+
+/// Paket siparişin geldiği yol (modül 42): telefon, mesaj (WhatsApp), web / platform (personel girer).
+enum DeliverySource {
+  PHONE
+  MESSAGE
+  ONLINE
+}
+
+/// Paket sipariş akışı (modül 42): mutfakta → hazırlanıyor → hazır → yolda → teslim; iptal teslimden önce.
+enum DeliveryStatus {
+  RECEIVED
+  PREPARING
+  READY
+  ON_THE_WAY
+  DELIVERED
+  CANCELLED
+}
+
+/// Kapıda beklenen ödeme (kurye bozuk para ya da kart cihazı götürür); tamamı önceden ödendiyse boş.
+enum DeliveryDoorMethod {
+  CASH
+  CARD
+}
+
+/// Paket (eve teslim) sipariş (modül 42): adisyonla bire bir (sipariş alınınca mutfağa düşer); müşteri, adres,
+/// kapı ödemesi, kurye ve teslim izi. Hesap teslimde kapanır (kapı ödemesi kuryenin vardiya kasasına).
+model DeliveryOrder {
+  id           String              @id @default(uuid())
+  hotelId      String
+  outletId     String
+  /// "PS-2026-000123".
+  number       String
+  checkId      String              @unique
+  source       DeliverySource
+  status       DeliveryStatus      @default(RECEIVED)
+  customerName String
+  /// Yalnız rakam (başta + olabilir): tekrar gelen müşteri telefonla bulunur.
+  phone        String
+  address      String
+  /// Adres tarifi (kapı kodu, kat, yakın yer).
+  addressNote  String?
+  note         String?
+  /// Kapıda beklenen ödeme (tamamı önceden ödendiyse boş); nakitte "şu tutara bozuk getir".
+  doorMethod   DeliveryDoorMethod?
+  changeFor    Decimal?            @db.Decimal(12, 2)
+  /// Teslim hedefi: sipariş anı + politikadaki süre (gecikme ve zamanında teslim buna göre).
+  dueAt        DateTime
+  courierEmail String?
+  assignedAt   DateTime?
+  sourceKey    String
+  createdBy    String
+  createdAt    DateTime            @default(now())
+  preparingAt  DateTime?
+  readyAt      DateTime?
+  dispatchedAt DateTime?
+  deliveredAt  DateTime?
+  deliveredBy  String?
+  cancelledAt  DateTime?
+  cancelledBy  String?
+  cancelReason String?
+  updatedAt    DateTime            @updatedAt
+
+  hotel  Hotel     @relation(fields: [hotelId], references: [id])
+  outlet PosOutlet @relation(fields: [outletId], references: [id], onDelete: Restrict)
+  check  PosCheck  @relation(fields: [checkId], references: [id], onDelete: Restrict)
+
+  @@unique([hotelId, number])
+  @@unique([hotelId, sourceKey])
+  // Pano sütunları (teslim hedefine göre).
+  @@index([hotelId, status, dueAt])
+  // Geçmiş (en yeni önce) ve günün özeti.
+  @@index([hotelId, createdAt, id])
+  // Tekrar gelen müşteri: telefonla son adresler.
+  @@index([hotelId, phone, createdAt])
 }

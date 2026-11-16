@@ -31,15 +31,20 @@ import { moneyInputField } from './reservations.js';
 export const POS_STATIONS = Object.freeze(['HOT', 'COLD', 'BAR', 'PASTRY', 'NONE']);
 export const POS_STATION_LABELS = Object.freeze({ HOT: 'Sıcak mutfak', COLD: 'Soğuk mutfak', BAR: 'Bar', PASTRY: 'Pastane', NONE: 'Mutfağa gitmez' });
 
-/** Prisma `PosOutletKind` ile birebir: salon (masa planı) ya da oda servisi (teslim panosu, modül 41). */
-export const POS_OUTLET_KINDS = Object.freeze(['DINING', 'ROOM_SERVICE']);
-export const POS_OUTLET_KIND_LABELS = Object.freeze({ DINING: 'Salon (masa planı)', ROOM_SERVICE: 'Oda servisi' });
+/** Prisma `PosOutletKind` ile birebir: salon (masa planı), oda servisi (teslim panosu, modül 41), paket servis (modül 42). */
+export const POS_OUTLET_KINDS = Object.freeze(['DINING', 'ROOM_SERVICE', 'DELIVERY']);
+export const POS_OUTLET_KIND_LABELS = Object.freeze({ DINING: 'Salon (masa planı)', ROOM_SERVICE: 'Oda servisi', DELIVERY: 'Paket servis' });
 
 /** Oda servisi politikasının sınırları (veritabanı kuralıyla aynı; modül 41). */
 export const ROOM_SERVICE_POLICY_LIMITS = Object.freeze({
   deliveryTargetMinutes: Object.freeze({ min: 5, max: 240 }),
   prepLeadMinutes: Object.freeze({ min: 5, max: 240 }),
   trayAlertMinutes: Object.freeze({ min: 15, max: 1440 }),
+});
+
+/** Paket servis politikasının sınırları (veritabanı kuralıyla aynı; modül 42). */
+export const DELIVERY_POLICY_LIMITS = Object.freeze({
+  deliveryOrderMinutes: Object.freeze({ min: 10, max: 240 }),
 });
 
 /** Prisma `PosCheckStatus` ile birebir. */
@@ -283,6 +288,10 @@ export const updatePosSettingsSchema = z.object({
   prepLeadMinutes: intField('Hazırlık payı', ROOM_SERVICE_POLICY_LIMITS.prepLeadMinutes.min, ROOM_SERVICE_POLICY_LIMITS.prepLeadMinutes.max).optional(),
   trayAlertMinutes: intField('Tepsi uyarısı', ROOM_SERVICE_POLICY_LIMITS.trayAlertMinutes.min, ROOM_SERVICE_POLICY_LIMITS.trayAlertMinutes.max).optional(),
   guestOrderingEnabled: z.boolean().optional(),
+  /* Paket servis (modül 42); verilmeyen alan değişmez. Ücret sipariş başına (0 = yok), en az tutar ürün toplamı (0 = sınır yok). */
+  deliveryFee: cashField('Paket servis ücreti').optional(),
+  deliveryMinOrder: cashField('En az sipariş tutarı').optional(),
+  deliveryOrderMinutes: intField('Paket teslim hedefi', DELIVERY_POLICY_LIMITS.deliveryOrderMinutes.min, DELIVERY_POLICY_LIMITS.deliveryOrderMinutes.max).optional(),
 });
 
 /* ─────────────── Vardiya ─────────────── */

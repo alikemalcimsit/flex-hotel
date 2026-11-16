@@ -148,6 +148,10 @@ const RoomServiceReportPage = lazy(() => import('./pages/pos/RoomServiceReportPa
 const RoomServiceOrderForm = lazy(() => import('./pages/pos/RoomServiceOrderForm.jsx').then((m) => ({ default: m.RoomServiceOrderForm })));
 const RoomServiceOrderPage = lazy(() => import('./pages/pos/RoomServiceOrderPage.jsx').then((m) => ({ default: m.RoomServiceOrderPage })));
 const RoomServiceTraysPage = lazy(() => import('./pages/pos/RoomServiceTraysPage.jsx').then((m) => ({ default: m.RoomServiceTraysPage })));
+const DeliveryBoardPage = lazy(() => import('./pages/pos/DeliveryBoardPage.jsx').then((m) => ({ default: m.DeliveryBoardPage })));
+const DeliveryHistoryPage = lazy(() => import('./pages/pos/DeliveryHistoryPage.jsx').then((m) => ({ default: m.DeliveryHistoryPage })));
+const DeliveryOrderForm = lazy(() => import('./pages/pos/DeliveryOrderForm.jsx').then((m) => ({ default: m.DeliveryOrderForm })));
+const DeliveryOrderPage = lazy(() => import('./pages/pos/DeliveryOrderPage.jsx').then((m) => ({ default: m.DeliveryOrderPage })));
 const BanquetMenusTab = lazy(() => import('./pages/banquet/MenusTab.jsx').then((m) => ({ default: m.MenusTab })));
 const BanquetNeedsTab = lazy(() => import('./pages/banquet/FnbNeedsTab.jsx').then((m) => ({ default: m.FnbNeedsTab })));
 const BanquetProductionTab = lazy(() => import('./pages/banquet/ProductionTab.jsx').then((m) => ({ default: m.ProductionTab })));
@@ -758,6 +762,23 @@ export default function App() {
                   </RequirePermission>
                 }
               />
+              {/* Paket servis (modül 42): pano ve geçmiş kabuğun içinde. */}
+              <Route
+                path="paket"
+                element={
+                  <RequireAnyPermission permissions={[PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT]}>
+                    <DeliveryBoardPage />
+                  </RequireAnyPermission>
+                }
+              />
+              <Route
+                path="paket/gecmis"
+                element={
+                  <RequireAnyPermission permissions={[PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT]}>
+                    <DeliveryHistoryPage />
+                  </RequireAnyPermission>
+                }
+              />
               <Route
                 path="adisyonlar"
                 element={
@@ -799,6 +820,23 @@ export default function App() {
                 }
               />
             </Route>
+            {/* Paket sipariş formu ve sipariş ekranı (modül 42) tam genişlik. */}
+            <Route
+              path="pos/paket/yeni"
+              element={
+                <RequirePermission permission={PERMISSIONS.POS_OPERATE}>
+                  <DeliveryOrderForm />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="pos/paket/siparis/:orderId"
+              element={
+                <RequireAnyPermission permissions={[PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT]}>
+                  <DeliveryOrderPage />
+                </RequireAnyPermission>
+              }
+            />
             {/* Mutfak ekranı (modül 40): mutfak tabletinde açık duran pano, kabuksuz tam genişlik. */}
             <Route
               path="pos/mutfak-ekrani"

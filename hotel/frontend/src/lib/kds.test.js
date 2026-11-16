@@ -46,6 +46,12 @@ describe('kart düğmeleri', () => {
   it('oda servisi turu hazırda biter (teslim oda servisi panosunda)', () => {
     assert.deepEqual(kdsActions(card({ status: 'READY', roomService: { roomNumber: '412', deliverAt: null } })), []);
   });
+
+  it('paket turu da hazırda biter (teslim paket panosunda); öncesinde düğmeler aynı', () => {
+    const delivery = { id: 'd1', number: 'PS-2026-000001', customerName: 'Ayşe Yılmaz' };
+    assert.deepEqual(kdsActions(card({ status: 'READY', delivery })), []);
+    assert.deepEqual(kdsActions(card({ status: 'NEW', delivery })).map((action) => action.status), ['PREPARING', 'READY']);
+  });
 });
 
 describe('üst sayaçlar', () => {

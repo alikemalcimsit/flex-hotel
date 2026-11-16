@@ -263,6 +263,18 @@ export function lockRoomServiceOrders(tx, hotelId, orderIds) {
 }
 
 /**
+ * Paket sipariş (modül 42): adım, kurye, teslim ve iptal aynı siparişte sıraya girer (iki kişi aynı siparişi teslim
+ * edemez; mutfak ekranının adımı teslimle yarışmaz). Adisyondan sonra alınır.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} orderIds
+ */
+export function lockDeliveryOrders(tx, hotelId, orderIds) {
+  return lockPlainRows(tx, 'DeliveryOrder', hotelId, orderIds, false);
+}
+
+/**
  * Oda servisi QR bağlantısı (modül 41): yenileme / iptal ve misafirin sipariş sınırı (konaklamanın açık misafir
  * siparişi sayısı) bağlantı kilitliyken denetlenir; aynı anda gelen iki sipariş sınırı aşamaz.
  *
