@@ -48,11 +48,11 @@ describe('manuel görev kimi ilgilendirir', () => {
     );
   });
 
-  it('muhasebe folyo ve ön muhasebe görevlerini görür (modül 47)', () => {
+  it('muhasebe folyo, ön muhasebe ve rapor talebi görevlerini görür (modül 47, 24)', () => {
     const scope = manualTaskScope(DEFAULT_ROLE_PERMISSIONS.ACCOUNTING);
     assert.equal(scope.empty, false);
     assert.equal(scope.others, false);
-    assert.deepEqual([...scope.modules], ['Folyo', 'Ön muhasebe']);
+    assert.deepEqual([...scope.modules], ['Folyo', 'Ön muhasebe', 'Rapor talebi']);
   });
 
   it('yiyecek-içecek hiçbir aktör görevini görmez (boş kapsam)', () => {

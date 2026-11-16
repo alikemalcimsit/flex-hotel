@@ -94,6 +94,9 @@ const HousekeepingFloorMapTab = lazy(() =>
 );
 const LostItemDetailPage = lazy(() => import('./pages/lost-items/LostItemDetailPage.jsx').then((m) => ({ default: m.LostItemDetailPage })));
 const RevenueReportPage = lazy(() => import('./pages/reports/RevenueReportPage.jsx').then((m) => ({ default: m.RevenueReportPage })));
+const ReportChatLayout = lazy(() => import('./pages/report-chat/ReportChatLayout.jsx').then((m) => ({ default: m.ReportChatLayout })));
+const ReportChatPage = lazy(() => import('./pages/report-chat/ReportChatPage.jsx').then((m) => ({ default: m.ReportChatPage })));
+const SavedReportsPage = lazy(() => import('./pages/report-chat/SavedReportsPage.jsx').then((m) => ({ default: m.SavedReportsPage })));
 const NightAuditPage = lazy(() => import('./pages/night-audit/NightAuditPage.jsx').then((m) => ({ default: m.NightAuditPage })));
 const ClosureHistoryPage = lazy(() => import('./pages/night-audit/ClosureHistoryPage.jsx').then((m) => ({ default: m.ClosureHistoryPage })));
 const MaintenancePage = lazy(() => import('./pages/maintenance/MaintenancePage.jsx').then((m) => ({ default: m.MaintenancePage })));
@@ -550,6 +553,31 @@ export default function App() {
                 </RequirePermission>
               }
             />
+            {/* Rapor asistanı (modül 24): soru → tablo + grafik + yorum; kayıtlı raporlar AI'sız çalışır. */}
+            <Route
+              element={
+                <RequireAnyPermission permissions={[PERMISSIONS.REPORTS_ASK, PERMISSIONS.REPORTS_VIEW]}>
+                  <ReportChatLayout />
+                </RequireAnyPermission>
+              }
+            >
+              <Route
+                path="raporlar/asistan"
+                element={
+                  <RequirePermission permission={PERMISSIONS.REPORTS_ASK}>
+                    <ReportChatPage />
+                  </RequirePermission>
+                }
+              />
+              <Route
+                path="raporlar/kayitli"
+                element={
+                  <RequirePermission permission={PERMISSIONS.REPORTS_VIEW}>
+                    <SavedReportsPage />
+                  </RequirePermission>
+                }
+              />
+            </Route>
             <Route
               path="gun-kapanis"
               element={

@@ -1,0 +1,16 @@
+{
+  "name": "@hotelos/report-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "description": "Doğal dil rapor sorusunu rapor tanımına çeviren, raporu araçla görüp grafik ve kısa yorum seçen ajan (LangGraph)",
+  "scripts": {
+    "test": "node --test \"*.test.js\""
+  },
+  "dependencies": {
+    "@hotelos/actor-kit": "*",
+    "@langchain/langgraph": "^1.4.17",
+    "@langchain/core": "^1.2.12"
+  }
+}

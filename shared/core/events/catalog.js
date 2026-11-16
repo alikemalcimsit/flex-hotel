@@ -780,6 +780,14 @@ export const EVENT_CATALOG = Object.freeze({
     status: z.enum(['READY', 'FAILED']),
   }),
 
+  /* ── Doğal dil raporlama (modül 24) ──
+     Soru sorulunca rapor ajanı (report-agent) olayı alır, raporu seçer ve cevabı yazar; ekranlar `report-chat.changed`
+     kanalıyla tazelenir. Ajan kapalıysa soru "rapor talebi" manuel görevine düşer (görev başlığı sorudan). */
+
+  'report.question.asked': hotelScoped.extend({ questionId: z.string().uuid(), question: z.string().max(500) }),
+  'report.question.completed': hotelScoped.extend({ questionId: z.string().uuid(), status: z.enum(['READY', 'FAILED']) }),
+  'report.saved.changed': hotelScoped.extend({ savedReportId: z.string().uuid(), change: z.enum(['CREATED', 'UPDATED', 'DELETED']) }),
+
   /* ── Acente ve kontrat (modül 29) ──
      Acente listesi / kartı, kontrat ekranı ve rezervasyon formundaki acente
      fiyat önizlemesi bunlarla canlı tazelenir (`AGENCY_EVENTS`); yükte yalnızca kimlik. */
@@ -1478,6 +1486,9 @@ export const BUDGET_EVENTS = Object.freeze([
   'budget.commentary.requested',
   'budget.commentary.completed',
 ]);
+
+/** Rapor asistanı (modül 24): soru cevaplandı, kayıtlı rapor değişti (`report-chat.changed` kanalı). */
+export const REPORT_CHAT_EVENTS = Object.freeze(['report.question.asked', 'report.question.completed', 'report.saved.changed']);
 
 /** Acente ve kontrat (modül 29): ekranlar bunlarla tazelenir (`agencies.changed` kanalı). */
 export const AGENCY_EVENTS = Object.freeze(['agency.changed', 'agency.contract.changed', 'agency.stop_sale.changed', 'agency.allotment.changed']);

@@ -1,6 +1,7 @@
 import { actorRegistry } from '@hotelos/actor-kit';
 import { budgetAgentManifest, createBudgetAgent } from '@hotelos/budget-agent';
 import { createPricingAgent, pricingAgentManifest } from '@hotelos/pricing-agent';
+import { createReportAgent, reportAgentManifest } from '@hotelos/report-agent';
 import { conciergeAgentManifest, createConciergeAgent } from '@hotelos/concierge-agent';
 import {
   NOTIFICATION_CHANNEL_LABELS,
@@ -24,6 +25,7 @@ import { webchatGatewayService, webchatTransport } from '../modules/channels/web
 import { whatsappGatewayService } from '../modules/channels/whatsapp.js';
 import { completeCommentary, explainVariance } from '../modules/budget/variance.js';
 import { agentReviewInputs, createSuggestions } from '../modules/pricing/yield-service.js';
+import { completeQuestion, failQuestion, handOffQuestion, prepareQuestion, runToolForAgent } from '../modules/report-chat/questions.js';
 import { createLlmDeps } from '../modules/concierge/llm.js';
 import { getAiSettingsCached } from '../modules/concierge/settings.js';
 import { conciergeService, routerService } from '../modules/concierge/service.js';
@@ -181,6 +183,7 @@ const OPTIONAL_ACTORS = Object.freeze([
   { manifest: conciergeAgentManifest, reason: 'Sunucuda OPENAI_API_KEY tanımlı değil; ajan çalışmıyor' },
   { manifest: budgetAgentManifest, reason: 'Sunucuda OPENAI_API_KEY tanımlı değil; ajan çalışmıyor' },
   { manifest: pricingAgentManifest, reason: 'Sunucuda OPENAI_API_KEY tanımlı değil; ajan çalışmıyor (kural tabanlı yield çalışır)' },
+  { manifest: reportAgentManifest, reason: 'Sunucuda OPENAI_API_KEY tanımlı değil; ajan çalışmıyor (sorular rapor talebi olarak personele düşer)' },
 ]);
 
 /**
@@ -202,6 +205,18 @@ const pricingAgentService = {
   model: async (hotelId) => (await getAiSettingsCached(hotelId)).conciergeModel || null,
   reviewInputs: agentReviewInputs,
   submitSuggestions: (hotelId, proposals) => createSuggestions(hotelId, proposals, { requestedBy: 'pricing-agent' }),
+};
+
+/**
+ * Rapor ajanının servisi (modül 24). Model otelin ana modeli; raporu ajan değil servis çalıştırır (MCP araçları),
+ * cevabın tablosu sistemden gelir.
+ */
+const reportAgentService = {
+  prepare: prepareQuestion,
+  runData: runToolForAgent,
+  complete: completeQuestion,
+  fail: failQuestion,
+  handOff: handOffQuestion,
 };
 
 /**
@@ -361,6 +376,7 @@ export function registerAiAgents({ client } = {}) {
   registerAutoResponder({ name: 'concierge-agent' });
   actorRegistry.register(createBudgetAgent(budgetAgentService, { ...deps, llm }));
   actorRegistry.register(createPricingAgent(pricingAgentService, { ...deps, llm }));
+  actorRegistry.register(createReportAgent(reportAgentService, { ...deps, llm, parseArguments: parseToolArguments }));
   // Sonradan (testte) kaydedildiyse de bus'a bağlansın; bağlama tekrar edilebilir.
   actorRegistry.bindAll(eventBus);
   return true;

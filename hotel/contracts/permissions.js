@@ -106,6 +106,8 @@ export const PERMISSIONS = Object.freeze({
 
   /** Gelir raporları (modül 23): doluluk, ADR, RevPAR, oda geliri, kırılımlar, geçen yıl. */
   REPORTS_VIEW: 'reports.view',
+  /** Doğal dil raporlama (modül 24): rapor asistanına soru sor (AI; otelin günlük AI bütçesinden), raporu kaydet / paylaş. */
+  REPORTS_ASK: 'reports.ask',
 
   /** Bütçe (modül 27): bütçeyi ve sapma raporunu görmek. */
   BUDGET_VIEW: 'budget.view',
@@ -297,6 +299,7 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.LOST_ITEMS_RELEASE]: 'Kayıp eşyayı misafirle eşleştir, teslim et',
   [PERMISSIONS.LOST_ITEMS_MANAGE]: 'Sahibi çıkmayan eşyayı kapat, saklama süresini ayarla',
   [PERMISSIONS.REPORTS_VIEW]: 'Gelir raporlarını görüntüle (doluluk, ADR, RevPAR)',
+  [PERMISSIONS.REPORTS_ASK]: 'Rapor asistanına soru sor (AI), raporu kaydet ve paylaş',
   [PERMISSIONS.BUDGET_VIEW]: 'Bütçeyi ve sapma raporunu görüntüle',
   [PERMISSIONS.BUDGET_MANAGE]: 'Bütçe taslağını, gider kalemlerini ve gerçekleşen giderleri düzenle',
   [PERMISSIONS.BUDGET_APPROVE]: 'Bütçeyi onayla ve revize aç',
@@ -432,7 +435,7 @@ export const PERMISSION_GROUPS = Object.freeze([
     label: 'Kayıp eşya',
     permissions: [PERMISSIONS.LOST_ITEMS_VIEW, PERMISSIONS.LOST_ITEMS_RECORD, PERMISSIONS.LOST_ITEMS_RELEASE, PERMISSIONS.LOST_ITEMS_MANAGE],
   },
-  { key: 'reports', label: 'Raporlar', permissions: [PERMISSIONS.REPORTS_VIEW] },
+  { key: 'reports', label: 'Raporlar', permissions: [PERMISSIONS.REPORTS_VIEW, PERMISSIONS.REPORTS_ASK] },
   { key: 'night_audit', label: 'Gün kapanış', permissions: [PERMISSIONS.NIGHT_AUDIT_VIEW, PERMISSIONS.NIGHT_AUDIT_CLOSE] },
   { key: 'maintenance', label: 'Teknik servis', permissions: [PERMISSIONS.MAINTENANCE_VIEW, PERMISSIONS.MAINTENANCE_OPERATE, PERMISSIONS.MAINTENANCE_MANAGE] },
   { key: 'guests', label: 'Misafir CRM', permissions: [PERMISSIONS.GUESTS_VIEW, PERMISSIONS.GUESTS_MANAGE, PERMISSIONS.GUESTS_MERGE] },
@@ -545,6 +548,7 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.LOST_ITEMS_RELEASE,
     PERMISSIONS.LOST_ITEMS_MANAGE,
     PERMISSIONS.REPORTS_VIEW,
+    PERMISSIONS.REPORTS_ASK,
     PERMISSIONS.FORECAST_MANAGE,
     // Gün kapanışı (night audit) gece müdürünün / yönetimin işi.
     PERMISSIONS.NIGHT_AUDIT_VIEW,
@@ -717,6 +721,7 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.EXTRAS_MANAGE,
     // Gelir raporları muhasebenin aylık işi.
     PERMISSIONS.REPORTS_VIEW,
+    PERMISSIONS.REPORTS_ASK,
     // Bütçeyi muhasebe hazırlar ve gerçekleşen giderleri girer; onay müdürün.
     PERMISSIONS.BUDGET_VIEW,
     PERMISSIONS.BUDGET_MANAGE,

@@ -856,6 +856,8 @@ model Hotel {
   assets                 Asset[]
   assetDepreciationRuns  AssetDepreciationRun[]
   assetCounts            AssetCount[]
+  reportQuestions        ReportQuestion[]
+  savedReports           SavedReport[]
 }
 
 model User {
@@ -7481,4 +7483,68 @@ model AssetSequence {
   last    Int
 
   @@id([hotelId, kind, year])
+}
+
+/**
+ * ══════════════════ Doğal dil raporlama (modül 24) ══════════════════
+ * Soru → rapor ajanı → rapor tanımı (hangi rapor, hangi dönem) → sistem raporu MCP araçlarıyla çalıştırır. Tablodaki
+ * rakamlar sistemden gelir; model tanımı, grafik tipini ve kısa yorumu seçer. Kayıtlı rapor tanımı saklar: AI'sız ve
+ * göreli dönemle yeniden çalışır.
+ */
+
+enum ReportQuestionStatus {
+  PENDING
+  READY
+  FAILED
+}
+
+/// Rapor asistanına sorulan soru ve cevabı (sohbet geçmişi kişiseldir).
+model ReportQuestion {
+  id            String               @id @default(uuid())
+  hotelId       String
+  askedBy       String
+  question      String
+  /// Önceki cevaba devam ("bunu aylık göster").
+  followUpOfId  String?
+  status        ReportQuestionStatus @default(PENDING)
+  title         String?
+  comment       String?
+  /// Rapor tanımı (`reportSpecSchema`); yalnız metinle cevaplanan soruda boş.
+  spec          Json?
+  chart         Json?
+  /// Cevap anındaki tablo (sütunlar, satırlar, özet) ve dönemin okunur adı.
+  dataset       Json?
+  periodLabel   String?
+  failureReason String?
+  model         String?
+  /// Ajanın bu soru için yaptığı model çağrısı (maliyet takibi).
+  modelCalls    Int                  @default(0)
+  createdAt     DateTime             @default(now())
+  completedAt   DateTime?
+  updatedAt     DateTime             @updatedAt
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+
+  @@index([hotelId, askedBy, createdAt])
+  @@index([hotelId, status, createdAt])
+}
+
+/// Kayıtlı rapor: tanım + grafik. Sahibi düzenler / siler; paylaşılan rapor rapor yetkisi olan herkese görünür.
+model SavedReport {
+  id        String    @id @default(uuid())
+  hotelId   String
+  owner     String
+  title     String
+  question  String
+  spec      Json
+  chart     Json
+  shared    Boolean   @default(false)
+  lastRunAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+
+  @@index([hotelId, owner, createdAt])
+  @@index([hotelId, shared, createdAt])
 }

@@ -11,6 +11,7 @@ import {
   RECIPE_EVENTS,
   STOCK_EVENTS,
   ASSET_EVENTS,
+  REPORT_CHAT_EVENTS,
   ACCOUNTING_EVENTS,
   INVOICE_EVENTS,
   PAYROLL_EVENTS,
@@ -139,6 +140,9 @@ export const STOCK_CHANNEL = 'stock.changed';
 /** Demirbaş ve amortisman (modül 46): liste, kart, sayım, amortisman tablosu, garanti, tanımlar. */
 export const ASSETS_CHANNEL = 'assets.changed';
 
+/** Rapor asistanı (modül 24): soru cevaplandı, kayıtlı rapor değişti. */
+export const REPORT_CHAT_CHANNEL = 'report-chat.changed';
+
 /** Ön muhasebe (modül 47): cariler ve ekstre, kasa / banka hareketleri, çek / senet, fişler, ayar ve eşleme. */
 export const ACCOUNTING_CHANNEL = 'accounting.changed';
 
@@ -193,6 +197,7 @@ const CHANNEL_EVENTS = Object.freeze({
   [PURCHASING_CHANNEL]: PURCHASE_EVENTS,
   [STOCK_CHANNEL]: STOCK_EVENTS,
   [ASSETS_CHANNEL]: ASSET_EVENTS,
+  [REPORT_CHAT_CHANNEL]: REPORT_CHAT_EVENTS,
   [ACCOUNTING_CHANNEL]: ACCOUNTING_EVENTS,
   [INVOICES_CHANNEL]: INVOICE_EVENTS,
   [PAYROLL_CHANNEL]: PAYROLL_EVENTS,

@@ -81,6 +81,8 @@ export const PURCHASING_CHANNEL = 'purchasing.changed';
 export const STOCK_CHANNEL = 'stock.changed';
 /** Demirbaş ve amortisman (modül 46): kart, Excel yüklemesi, sayım, yıl amortismanı, kategori / alan tanımları. */
 export const ASSETS_CHANNEL = 'assets.changed';
+/** Rapor asistanı (modül 24): soru cevaplandı, kayıtlı rapor değişti. */
+export const REPORT_CHAT_CHANNEL = 'report-chat.changed';
 /** Ön muhasebe (modül 47): cari, kasa / banka, çek / senet, fiş ekranları. */
 export const ACCOUNTING_CHANNEL = 'accounting.changed';
 /** Fatura ve e-belge (modül 16 / 49): faturalanacaklar, faturalar, e-belge durumu, fatura ayarı. */

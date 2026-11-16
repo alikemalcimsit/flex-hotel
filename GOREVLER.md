@@ -1974,14 +1974,60 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 24. Doğal dil raporlama — Ali Kemal
 **Gün sonu:** Müdür "geçen ayın haftalık doluluğunu göster" yazıyor, tablo ve grafik geliyor; rapor kaydedilebiliyor.
-- [ ] report-agent paketi (LangGraph; MCP tool'larını çağırır; sonuç: tablo verisi + grafik tipi önerisi + kısa yorum)
-- [ ] Backend: SavedReport tablosu + API
-- [ ] Ekran: Rapor sohbeti (soru kutusu, cevap: tablo + grafik + yorum)
-- [ ] Ekran: "Kaydet" → kayıtlı raporlar listesi, tekrar çalıştır
-- [ ] Token bütçesi + LlmUsage kaydı; agent kapalıysa "rapor talebi" manuel görevi
+- [x] report-agent paketi (LangGraph; MCP tool'larını çağırır; sonuç: tablo verisi + grafik tipi önerisi + kısa yorum)
+- [x] Backend: SavedReport tablosu + API
+- [x] Ekran: Rapor sohbeti (soru kutusu, cevap: tablo + grafik + yorum)
+- [x] Ekran: "Kaydet" → kayıtlı raporlar listesi, tekrar çalıştır
+- [x] Token bütçesi + LlmUsage kaydı; agent kapalıysa "rapor talebi" manuel görevi
 
 > **FlexAI 2.0'dan not (3 Kasım 2026 — Ahmet):** 86 (işlem yapan asistan) aynı rapor araçlarını kullanacak; araç tanımlarını
 > ajandan ayrı tut (MCP sunucusunda), ajan yalnız çağırsın.
+
+> **📌 Modül 24 tamamlandı (16 Kasım 2026 — Ali Kemal).**
+>
+> **Kararlar (kullanıcı):** kayıtlı rapor **göreli dönemle, AI'sız** yeniden çalışır ("geçen ay" her ay kayar, token
+> harcamaz); kayıtlı raporlar **kişisel + paylaşılabilir**; kapsam **mevcut rapor araçları** (doluluk, oda geliri / ADR /
+> RevPAR, oda tipi ve kaynak kırılımı, 30 günlük tahmin, bütçe sapması).
+>
+> **Mimari — rakamı model üretmez:** ajan soruyu bir **rapor tanımına** çevirir (`contracts/report-chat.js`
+> `reportSpecSchema`: rapor + göreli dönem ya da sabit tarih + gruplama), raporu `run_report` ile görür, `present_report`
+> ile tanım + grafik (çizgi / sütun / tablo, en fazla 3 seri) + kısa yorum sunar. Tabloyu **sistem** çalıştırır:
+> `resolveReportSpec` (o günün tarihine göre) → `reports/mcp.js` `callReportingTool` (MCP sunucusu süreç içi istemciyle —
+> 86'nın notuna uygun: araç tanımları MCP'de, ajan yalnız çağırır) → `report-chat/datasets.js` (sütun türlü tablo).
+> Geçersiz tanım / seri modele araç hatası olarak döner, model düzeltir; geçersiz seri ayıklanır, raporun varsayılan
+> grafiği devreye girer. Model araç şemaları OpenAI katı kipine uygun (her alan zorunlu, boş = null).
+>
+> **Ajan** (`shared/agents/report-agent`, ürün bilmez; talimat / araçlar / kabul otel servisinden): soru başına en fazla
+> 6 model çağrısı; her çağrı `callModel` ile (otelin AI açık mı, günlük bütçe, `LlmUsage` kaydı). Kapsam dışı soru
+> (restoran, personel…) metinle cevaplanır (kaydedilemez). Devam sorusu ("bunu aylık göster") önceki raporun tanımını
+> bağlam alır. **Ajan yoksa / AI kapalıysa / model seçilmemişse / bütçe bittiyse / ajan kapalıysa** soru "cevaplanamadı"
+> olur ve **"Rapor talebi" manuel görevi** açılır (`reports.view` yetkilisine; başlık sorudan). Model otelin ana modeli
+> (aktör panelinde görünür).
+>
+> **Veri** (migration `20261116150000_report_chat`): `ReportQuestion` (soran, soru, devam bağı, durum izi CHECK'li,
+> tanım / grafik / cevap anındaki tablo / dönem adı, model çağrısı sayısı) ve `SavedReport` (sahip, başlık, soru, tanım,
+> grafik, paylaşım, son çalıştırma). Bekleyen soru 3 dakikada "zamanında cevaplanmadı" sayılır; kişi başı en fazla 3
+> bekleyen soru, 100 kayıtlı rapor.
+>
+> **API** `/report-chat`: sorular (sor / geçmiş / tek soru — soru kişiseldir), kayıtlı raporlar (liste kendi / paylaşılan,
+> kaydet, başlık / paylaşım, sil — yalnız sahibi; çalıştır — sahibi ya da paylaşılmışsa herkes). Yeni izin `reports.ask`
+> (MANAGER + ACCOUNTING; soru AI bütçesi harcar); kayıtlıyı görmek / çalıştırmak `reports.view`. Olaylar
+> `report.question.asked` (ajan dinler) / `report.question.completed` / `report.saved.changed`, kanal `report-chat.changed`.
+>
+> **Ekranlar:** menüde "Raporlar" grubu (Gelir raporları, **Rapor asistanı** `/raporlar/asistan`, **Kayıtlı raporlar**
+> `/raporlar/kayitli`). Sohbet: örnek sorular, cevap kartı (başlık, rapor · dönem, yorum, özet, SVG grafik, tablo, notlar),
+> Kaydet (otelle paylaş), Excel'e aktar, "Bunu değiştir" (devam sorusu); AI kapalıyken uyarı + "Rapor talebi gönder".
+> Kayıtlı raporlar: benim / paylaşılan, çalıştır (aynı sonuç bloğu), yeniden adlandır, paylaş, sil.
+>
+> **Test:** sözleşme 5 (dönem hesabı, tanım → araç, şemalar), tablo 5, ajan 6 (araç → cevap, ret → düzeltme, metin,
+> döngü sınırı, AI yok / model yok → devir, kapalı → rapor talebi görevi), entegrasyon 4 (ajan yokken görev; sahte modelle
+> soru → MCP → haftalık tablo + LlmUsage; kaydet / paylaş / AI'sız çalıştır / sahiplik; devam + metin cevap; bekleyen
+> sınırı + izinler), ön yüz 6. Tarayıcıda: AI kapalı yolu (rapor talebi) ve servis üzerinden yazılan cevaplar gerçek
+> demo verisiyle (grafik, tablo, kaydet, paylaş, çalıştır). **Not:** local'de `OPENAI_API_KEY` yok — gerçek modelle
+> deneme canlıda yapılmalı (prompt'un model davranışı gerçek modelle ölçülmedi).
+>
+> **Devir:** yeni araçlar (restoran / POS satışı, acente üretimi — 26'nın rapor tasarımcısıyla birlikte düşünülebilir),
+> kayıtlı raporun zamanlanmış e-postası (email-gateway stub).
 
 ### 25. Günlük durum — forecast — arkadaşın
 **Gün sonu:** Dashboard'da önümüzdeki 30 günün doluluk ve gelir tahmini görünüyor; riskli günler işaretli.

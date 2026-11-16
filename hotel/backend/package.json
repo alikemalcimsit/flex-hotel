@@ -35,6 +35,7 @@
     "@hotelos/llm": "*",
     "@hotelos/mcp-server": "*",
     "@hotelos/notification-worker": "*",
+    "@hotelos/report-agent": "*",
     "@hotelos/reservation-worker": "*",
     "@hotelos/room-worker": "*",
     "@hotelos/router-agent": "*",

@@ -173,6 +173,7 @@ export * from './sales.js';
 export * from './public-booking.js';
 export * from './bulk.js';
 export * from './assets.js';
+export * from './report-chat.js';
 export * from './events.js';
 export { displayPhone, internationalPhone } from './phone.js';
 export {

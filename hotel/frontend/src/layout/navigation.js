@@ -129,11 +129,17 @@ export const NAV_SECTIONS = Object.freeze([
           { label: 'Planlama', to: '/teknik-servis/planlama', icon: 'calendar', permission: PERMISSIONS.MAINTENANCE_MANAGE },
         ],
       },
+      // Raporlar: gelir raporları (modül 23), rapor asistanı (modül 24, AI) ve kayıtlı raporlar (AI'sız çalışır).
       {
-        label: 'Gelir raporları',
-        to: '/raporlar/gelir',
+        label: 'Raporlar',
+        to: '/raporlar',
         icon: 'chart',
-        permission: PERMISSIONS.REPORTS_VIEW,
+        anyPermission: [PERMISSIONS.REPORTS_VIEW, PERMISSIONS.REPORTS_ASK],
+        children: [
+          { label: 'Gelir raporları', to: '/raporlar/gelir', icon: 'chart', permission: PERMISSIONS.REPORTS_VIEW },
+          { label: 'Rapor asistanı', to: '/raporlar/asistan', icon: 'sparkles', permission: PERMISSIONS.REPORTS_ASK },
+          { label: 'Kayıtlı raporlar', to: '/raporlar/kayitli', icon: 'fileText', permission: PERMISSIONS.REPORTS_VIEW },
+        ],
       },
       // Gün kapanış / night audit (modül 18): gece görevlisi günü kapatır, günlük özet çıkar.
       {
