@@ -820,6 +820,10 @@ describe('spa ve spor salonu (entegrasyon)', { skip }, () => {
     assert.equal(sent.length, 1);
     assert.match(sent[0].body, /14:00/);
     assert.equal((await fresh(reminded.id)).updatedAt, reminded.updatedAt, 'hatırlatma randevunun sürümünü ilerletmez');
+    // Sunucunun 5 dakikalık işi (bütün oteller taraması) gerçek SQL ile çalışır — canlıda bigint/make_interval hatası buradan çıktı.
+    const jobErrors = [];
+    assert.equal(typeof (await jobs.runSpaReminderJob({ error: (...args) => jobErrors.push(args) })), 'number');
+    assert.deepEqual(jobErrors, []);
     // Hatırlatma ayarı 0: gönderilmez.
     const other = await book({ reservationId: guest.id, startsAt: `${D(2)}T14:00` });
     await db.spaSettings.create({ data: { hotelId, reminderHours: 0, updatedBy: MANAGER } });
