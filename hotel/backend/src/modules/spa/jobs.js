@@ -64,7 +64,7 @@ export async function runSpaReminderJob(logger = console) {
     await prisma.$queryRaw`
       SELECT DISTINCT "hotelId" FROM "SpaAppointment"
       WHERE "status" = 'BOOKED' AND "reminderSentAt" IS NULL AND "reservationId" IS NOT NULL
-        AND "startsAt" > ${SQL_NOW} AND "startsAt" <= ${SQL_NOW} + make_interval(hours => ${MAX_REMINDER_HOURS})`
+        AND "startsAt" > ${SQL_NOW} AND "startsAt" <= ${SQL_NOW} + make_interval(hours => ${MAX_REMINDER_HOURS}::int)`
   );
   let total = 0;
   for (const { hotelId } of hotels) {
