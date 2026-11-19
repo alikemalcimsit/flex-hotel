@@ -26,6 +26,8 @@ import { decideApproval, requestApproval } from '../approvals/service.js';
 import { EVENT_PAYMENT_SELECT, EVENT_REF_SELECT, toEventPaymentDto } from '../banquet/payments.js';
 import { createStayFolio, dayStart, money, refreshFolioTotals } from '../folios/posting.js';
 import { POS_PAYMENT_SELECT, POS_REF_SELECT, posCheckRef, toPosPaymentDto } from '../pos/payments.js';
+import { paymentView as toSpaPaymentDto } from '../spa/appointments.js';
+import { SPA_PAYMENT_SELECT, SPA_REF_SELECT, spaRef } from '../spa/payments.js';
 import { raiseStaffAlert } from '../notifications/staff-alerts.js';
 import { guestFullName } from '../reservations/guests.js';
 import { getHotelSettings } from '../settings/service.js';
@@ -1353,9 +1355,9 @@ const eventRef = (event) => ({ id: event.id, code: event.code, name: event.name,
  * onay bekleyenler. Gün verilmezse iş günü. `mine`: yalnızca oturumdaki
  * kişinin aldıkları (kendi çekmecesi).
  *
- * Etkinlik ödemeleri (modül 37, etkinliğin kendi hesabı) ve restoran adisyonu
- * ödemeleri (modül 39, garsonun vardiya kasası) aynı kasaya girer: toplamlar üç
- * kaynağın gruplarından tek hesapla çıkar, `origins` kaynak bazında neti verir.
+ * Etkinlik ödemeleri (modül 37, etkinliğin kendi hesabı), restoran adisyonu
+ * ödemeleri (modül 39, garsonun vardiya kasası) ve spa ödemeleri (modül 57) aynı
+ * kasaya girer: toplamlar dört kaynağın gruplarından tek hesapla çıkar, `origins` kaynak bazında neti verir.
  * Etkinlik ve restoran ödemesi otelin para biriminde alınır (kur yok).
  *
  * @param {string} hotelId
@@ -1367,7 +1369,7 @@ export async function getCashSummary(hotelId, query) {
   if (date > businessDate) throw new ValidationError('İleri tarihli kasa görüntülenmez.', { field: 'date' });
   const mine = query.mine ? currentActor() : null;
   const byActor = mine ? { receivedBy: mine } : {};
-  const [rows, eventRows, posRows, pendingRows, pendingCount, eventPendingRows, eventPendingCount, posPendingRows, posPendingCount] = await Promise.all([
+  const [rows, eventRows, posRows, spaRows, pendingRows, pendingCount, eventPendingRows, eventPendingCount, posPendingRows, posPendingCount, spaPendingRows, spaPendingCount] = await Promise.all([
     prisma.$queryRaw`
       SELECT p."method", p."currency", p."kind", COUNT(*)::int AS "count",
              SUM(p."amount")::text AS "amount", SUM(p."folioAmount")::text AS "folioAmount"
@@ -1386,6 +1388,13 @@ export async function getCashSummary(hotelId, query) {
       SELECT p."method", p."currency", p."kind", COUNT(*)::int AS "count",
              SUM(p."amount")::text AS "amount", SUM(p."amount")::text AS "folioAmount"
       FROM "PosPayment" p
+      WHERE p."hotelId" = ${hotelId} AND p."businessDate" = ${date}::date AND p."status" = 'POSTED'
+        ${mine ? Prisma.sql`AND p."receivedBy" = ${mine}` : Prisma.empty}
+      GROUP BY 1, 2, 3`,
+    prisma.$queryRaw`
+      SELECT p."method", p."currency", p."kind", COUNT(*)::int AS "count",
+             SUM(p."amount")::text AS "amount", SUM(p."amount")::text AS "folioAmount"
+      FROM "SpaPayment" p
       WHERE p."hotelId" = ${hotelId} AND p."businessDate" = ${date}::date AND p."status" = 'POSTED'
         ${mine ? Prisma.sql`AND p."receivedBy" = ${mine}` : Prisma.empty}
       GROUP BY 1, 2, 3`,
@@ -1410,13 +1419,21 @@ export async function getCashSummary(hotelId, query) {
       take: CASH_PENDING_LIMIT,
     }),
     prisma.posPayment.count({ where: { hotelId, status: 'PENDING', ...byActor } }),
+    prisma.spaPayment.findMany({
+      where: { hotelId, status: 'PENDING', ...byActor },
+      select: { ...SPA_PAYMENT_SELECT, appointment: { select: SPA_REF_SELECT } },
+      orderBy: [{ receivedAt: 'asc' }, { id: 'asc' }],
+      take: CASH_PENDING_LIMIT,
+    }),
+    prisma.spaPayment.count({ where: { hotelId, status: 'PENDING', ...byActor } }),
   ]);
-  const summary = summarizeCash([...rows, ...eventRows, ...posRows], PAYMENT_METHODS);
+  const summary = summarizeCash([...rows, ...eventRows, ...posRows, ...spaRows], PAYMENT_METHODS);
   // En uzun bekleyen en üstte; iki kaynak birlikte sıralanıp üst sınırla kesilir.
   const pendingItems = [
-    ...pendingRows.map((row) => ({ ...toPaymentDto(row), origin: 'FOLIO', stay: stayRef(row.reservation), event: null, pos: null })),
-    ...eventPendingRows.map((row) => ({ ...toEventPaymentDto(row), origin: 'EVENT', source: null, exchangeRate: null, folioAmount: money(row.amount), converted: money(row.amount), stay: null, event: eventRef(row.event), pos: null })),
-    ...posPendingRows.map((row) => ({ ...toPosPaymentDto(row), origin: 'POS', source: null, exchangeRate: null, folioAmount: money(row.amount), converted: money(row.amount), stay: null, event: null, pos: posCheckRef(row.check) })),
+    ...pendingRows.map((row) => ({ ...toPaymentDto(row), origin: 'FOLIO', stay: stayRef(row.reservation), event: null, pos: null, spa: null })),
+    ...spaPendingRows.map((row) => ({ ...toSpaPaymentDto(row), origin: 'SPA', source: null, exchangeRate: null, folioAmount: money(row.amount), converted: money(row.amount), stay: null, event: null, pos: null, spa: spaRef(row.appointment) })),
+    ...eventPendingRows.map((row) => ({ ...toEventPaymentDto(row), origin: 'EVENT', source: null, exchangeRate: null, folioAmount: money(row.amount), converted: money(row.amount), stay: null, event: eventRef(row.event), pos: null, spa: null })),
+    ...posPendingRows.map((row) => ({ ...toPosPaymentDto(row), origin: 'POS', source: null, exchangeRate: null, folioAmount: money(row.amount), converted: money(row.amount), stay: null, event: null, pos: posCheckRef(row.check), spa: null })),
   ]
     .sort((a, b) => a.receivedAt.localeCompare(b.receivedAt) || a.id.localeCompare(b.id))
     .slice(0, CASH_PENDING_LIMIT);
@@ -1431,21 +1448,22 @@ export async function getCashSummary(hotelId, query) {
       FOLIO: summarizeCash(rows, PAYMENT_METHODS).total.net,
       EVENT: summarizeCash(eventRows, PAYMENT_METHODS).total.net,
       POS: summarizeCash(posRows, PAYMENT_METHODS).total.net,
+      SPA: summarizeCash(spaRows, PAYMENT_METHODS).total.net,
     },
-    pending: { count: pendingCount + eventPendingCount + posPendingCount, items: pendingItems },
+    pending: { count: pendingCount + eventPendingCount + posPendingCount + spaPendingCount, items: pendingItems },
   };
 }
 
 /**
  * Kasa hareketleri: günün işlenen satırları (son işlenen önce), imleçli; yöntem,
- * tür, kaynak (folyo / etkinlik / restoran) ve "benim" süzgeciyle.
+ * tür, kaynak (folyo / etkinlik / restoran / spa) ve "benim" süzgeciyle.
  *
- * Üç tablo aynı imleçle (işlenme anı + kimlik) okunur: her birinden en fazla
+ * Dört tablo aynı imleçle (işlenme anı + kimlik) okunur: her birinden en fazla
  * `limit + 1` satır alınıp birlikte sıralanır, sayfa ilk `limit` satırdır. İmleç
  * sıralamanın son satırı olduğu için hiçbir kaynakta kayma / tekrar olmaz.
  *
  * @param {string} hotelId
- * @param {{ date?: string, mine: boolean, method?: string, kind?: string, origin?: 'FOLIO' | 'EVENT' | 'POS', cursor?: string, limit: number }} query
+ * @param {{ date?: string, mine: boolean, method?: string, kind?: string, origin?: 'FOLIO' | 'EVENT' | 'POS' | 'SPA', cursor?: string, limit: number }} query
  */
 export async function listCashMovements(hotelId, query) {
   const businessDate = await businessDay(hotelId);
@@ -1462,7 +1480,7 @@ export async function listCashMovements(hotelId, query) {
   };
   const orderBy = [{ postedAt: /** @type {const} */ ('desc') }, { id: /** @type {const} */ ('desc') }];
   const only = (origin) => !query.origin || query.origin === origin;
-  const [folioRows, eventRows, posRows] = await Promise.all([
+  const [folioRows, eventRows, posRows, spaRows] = await Promise.all([
     !only('FOLIO')
       ? []
       : prisma.payment.findMany({
@@ -1487,18 +1505,31 @@ export async function listCashMovements(hotelId, query) {
           orderBy,
           take: query.limit + 1,
         }),
+    !only('SPA')
+      ? []
+      : prisma.spaPayment.findMany({
+          where: shared,
+          select: { ...SPA_PAYMENT_SELECT, appointment: { select: SPA_REF_SELECT } },
+          orderBy,
+          take: query.limit + 1,
+        }),
   ]);
   const merged = [
-    ...folioRows.map((row) => ({ at: row.postedAt, id: row.id, dto: { ...toPaymentDto(row), origin: 'FOLIO', stay: stayRef(row.reservation), folioName: folioDisplayName(row.folio), event: null, pos: null } })),
+    ...folioRows.map((row) => ({ at: row.postedAt, id: row.id, dto: { ...toPaymentDto(row), origin: 'FOLIO', stay: stayRef(row.reservation), folioName: folioDisplayName(row.folio), event: null, pos: null, spa: null } })),
+    ...spaRows.map((row) => ({
+      at: row.postedAt,
+      id: row.id,
+      dto: { ...toSpaPaymentDto(row), origin: 'SPA', source: null, exchangeRate: null, folioAmount: money(row.amount), converted: money(row.amount), stay: null, folioName: null, event: null, pos: null, spa: spaRef(row.appointment) },
+    })),
     ...eventRows.map((row) => ({
       at: row.postedAt,
       id: row.id,
-      dto: { ...toEventPaymentDto(row), origin: 'EVENT', source: null, exchangeRate: null, folioAmount: money(row.amount), converted: money(row.amount), stay: null, folioName: null, event: eventRef(row.event), pos: null },
+      dto: { ...toEventPaymentDto(row), origin: 'EVENT', source: null, exchangeRate: null, folioAmount: money(row.amount), converted: money(row.amount), stay: null, folioName: null, event: eventRef(row.event), pos: null, spa: null },
     })),
     ...posRows.map((row) => ({
       at: row.postedAt,
       id: row.id,
-      dto: { ...toPosPaymentDto(row), origin: 'POS', source: null, exchangeRate: null, folioAmount: money(row.amount), converted: money(row.amount), stay: null, folioName: null, event: null, pos: posCheckRef(row.check) },
+      dto: { ...toPosPaymentDto(row), origin: 'POS', source: null, exchangeRate: null, folioAmount: money(row.amount), converted: money(row.amount), stay: null, folioName: null, event: null, pos: posCheckRef(row.check), spa: null },
     })),
   ].sort((a, b) => b.at.getTime() - a.at.getTime() || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
   const page = merged.slice(0, query.limit);

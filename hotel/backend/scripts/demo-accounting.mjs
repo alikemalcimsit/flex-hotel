@@ -33,6 +33,7 @@ function ibanOf(bban) {
 const TREASURY = Object.freeze([
   { key: 'onburo', kind: 'CASH', name: 'Ön büro kasası', currency: 'TRY', opening: '45000' },
   { key: 'restoran', kind: 'CASH', name: 'Restoran kasası', currency: 'TRY', opening: '12000' },
+  { key: 'spa', kind: 'CASH', name: 'Spa kasası', currency: 'TRY', opening: '5000' },
   { key: 'eur', kind: 'CASH', name: 'Döviz kasası EUR', currency: 'EUR', opening: '3500' },
   { key: 'usd', kind: 'CASH', name: 'Döviz kasası USD', currency: 'USD', opening: '1200' },
   { key: 'ziraat', kind: 'BANK', name: 'Ziraat Bankası TL', currency: 'TRY', bankName: 'Ziraat Bankası', branch: 'Kızılay', iban: ibanOf('0001000001234567890123'), opening: '1850000' },
@@ -120,6 +121,8 @@ export async function seedAccountingDemo({ prisma, core, contracts, hotelId, tod
           { channel: 'BANQUET', method: 'TRANSFER', currency: '', treasuryAccountId: ids.ziraat },
           { channel: 'POS', method: 'CASH', currency: '', treasuryAccountId: ids.restoran },
           { channel: 'POS', method: 'CARD', currency: '', treasuryAccountId: ids.is },
+          { channel: 'SPA', method: 'CASH', currency: '', treasuryAccountId: ids.spa },
+          { channel: 'SPA', method: 'CARD', currency: '', treasuryAccountId: ids.is },
         ],
       }),
     ),

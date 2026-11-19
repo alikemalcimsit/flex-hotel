@@ -46,6 +46,7 @@ class AccountingWorker extends BaseWorker {
    *   syncFolioPayment: (hotelId: string, paymentId: string) => Promise<{ posted?: boolean, skipped?: string, message?: string | null }>,
    *   syncEventPayment: (hotelId: string, paymentId: string) => Promise<{ posted?: boolean, skipped?: string, message?: string | null }>,
    *   syncPosPayment: (hotelId: string, paymentId: string) => Promise<{ posted?: boolean, skipped?: string, message?: string | null }>,
+   *   syncSpaPayment: (hotelId: string, paymentId: string) => Promise<{ posted?: boolean, skipped?: string, message?: string | null }>,
    *   syncGoodsReceipt: (hotelId: string, receiptId: string) => Promise<{ posted?: boolean, skipped?: string, message?: string | null }>,
    *   syncAgencyBonus: (hotelId: string, bonusId: string) => Promise<{ posted?: boolean, skipped?: string, message?: string | null }>,
    *   syncEventCharge: (hotelId: string, eventId: string) => Promise<{ posted?: boolean, skipped?: string, message?: string | null }>,
@@ -71,6 +72,10 @@ class AccountingWorker extends BaseWorker {
         'pos.payment.changed': async (payload) => {
           if (!POSTED_PAYMENT_CHANGES.includes(payload.change)) return { message: 'Muhasebe etkisi yok (onay bekliyor / reddedildi)' };
           return said(await run(() => service.syncPosPayment(payload.hotelId, payload.paymentId)), 'Restoran tahsilatı işlendi');
+        },
+        'spa.payment.changed': async (payload) => {
+          if (!POSTED_PAYMENT_CHANGES.includes(payload.change)) return { message: 'Muhasebe etkisi yok (onay bekliyor / reddedildi)' };
+          return said(await run(() => service.syncSpaPayment(payload.hotelId, payload.paymentId)), 'Spa tahsilatı işlendi');
         },
         /** Mal kabul: tedarikçi carisine vadeli borcumuz. */
         'purchase.goods.received': async (payload) => said(await run(() => service.syncGoodsReceipt(payload.hotelId, payload.receiptId)), 'Mal kabul cariye işlendi'),
@@ -117,6 +122,8 @@ class AccountingWorker extends BaseWorker {
         return 'Etkinlik tahsilatı kasaya / bankaya ve müşteri carisine işlenecek';
       case 'pos.payment.changed':
         return 'Restoran tahsilatı kasaya / bankaya işlenecek';
+      case 'spa.payment.changed':
+        return 'Spa tahsilatı kasaya / bankaya işlenecek';
       case 'purchase.goods.received':
         return 'Mal kabul tedarikçi carisine işlenecek';
       case 'agency.bonus.changed':

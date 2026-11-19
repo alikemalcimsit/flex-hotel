@@ -45,6 +45,9 @@ import { randomUUID } from 'node:crypto';
  * - Oda servisi (modül 41, `demo-room-service.mjs`): son 7 günün teslim edilmiş / iptal siparişleri
  *   (süreleriyle), bugünün panosu (misafir QR siparişi kabul bekliyor, mutfakta, hazır, yolda),
  *   yarının kahvaltı kartları, toplanmamış tepsiler, siparişe çevrilmiş misafir isteği, QR bağlantısı.
+ * - Spa ve spor salonu (modül 57, `demo-spa.mjs`): ayar (portal açık), oda / terapist / hizmet tanımları, son 21
+ *   günün randevuları (odaya yazılan, kasada ödenen, iptal, gelmedi) ve grup dersleri, bugünün panosu, portaldan
+ *   gelen randevular, dolu ders ve yedek listesi, izin ve bakım blokları, onay bekleyen iade. `--reset` önce siler.
  */
 
 if (process.env.DEMO_CONFIRM !== 'DEMO') {
@@ -67,6 +70,7 @@ const { resetInvoicingDemo, seedInvoicingDemo } = await import('./demo-invoicing
 const { resetPayrollDemo, seedPayrollDemo } = await import('./demo-payroll.mjs');
 const { resetGuestPortalDemo, seedGuestPortalDemo } = await import('./demo-guest-portal.mjs');
 const { resetSurveyDemo, seedSurveyDemo } = await import('./demo-surveys.mjs');
+const { resetSpaDemo, seedSpaDemo } = await import('./demo-spa.mjs');
 
 const HISTORY_DAYS = 400;
 const FUTURE_DAYS = 75;
@@ -104,6 +108,8 @@ if (process.argv.includes('--reset')) {
     async (tx) => {
       // Demo misafir portalı (modül 53): bağlantı, online check-in ve belgeleri rezervasyona kısıtlı bağlı — en önce.
       portalFiles = await resetGuestPortalDemo(tx, hotelId);
+      // Demo spa (modül 57): randevular, kasa ve oda yazımları rezervasyona / misafire kısıtlı bağlı — rezervasyondan önce.
+      await resetSpaDemo(tx, hotelId);
       // Demo anketler (modül 55): davet, cevap, takip rezervasyona kısıtlı bağlı — rezervasyondan önce.
       await resetSurveyDemo(tx, hotelId, ACTOR);
       // Demo faturalar (modül 16 / 49): folyo, etkinlik, cari ve misafire kısıtlı bağlı.
@@ -978,6 +984,14 @@ try {
   console.error(`Misafir portalı adımı tamamlanamadı: ${error.message}`);
 }
 
+// ── Spa ve spor salonu (modül 57): tanımlar, son 21 günün randevuları ve dersleri, bugünün panosu, portaldan gelenler ──
+let spaSummary = null;
+try {
+  spaSummary = await seedSpaDemo({ prisma, core, contracts, hotelId, today, actor: ACTOR });
+} catch (error) {
+  console.error(`Spa adımı tamamlanamadı: ${error.message}`);
+}
+
 // ── Anket (modül 55): son 60 günün çıkışlarına anket, cevaplar, ara anket, düşük puan takipleri, dönem özeti ──
 let surveySummary = null;
 try {
@@ -1054,6 +1068,9 @@ console.log(
       : '.') +
     (payrollSummary ? ` Bordro: ${payrollSummary.employees} personel, ${payrollSummary.runs} bordro (${payrollSummary.approved} onaylı, ${payrollSummary.supplementary} fark), ${payrollSummary.paid} ödeme, ${payrollSummary.terminated} işten çıkış, ${payrollSummary.posted} muhasebe kaydı.` : ''),
     (portalSummary ? ` Misafir portalı: ${portalSummary.links} bağlantı, ${portalSummary.checkins} online check-in, ${portalSummary.documents} belge fotoğrafı.` : '') +
-    (surveySummary ? ` Anket: ${surveySummary.invitations} davet, ${surveySummary.responses} cevap, ${surveySummary.followUps} takip (${surveySummary.open} açık).` : ''),
+    (surveySummary ? ` Anket: ${surveySummary.invitations} davet, ${surveySummary.responses} cevap, ${surveySummary.followUps} takip (${surveySummary.open} açık).` : '') +
+    (spaSummary
+      ? ` Spa: ${spaSummary.services} hizmet, ${spaSummary.therapists} terapist, ${spaSummary.appointments} randevu (${spaSummary.completed} tamamlandı, ${spaSummary.cancelled} iptal, ${spaSummary.noShow} gelmedi), ${spaSummary.sessions} ders (${spaSummary.enrollments} kayıt), ${spaSummary.portal} portal kaydı, ${spaSummary.roomCharges} oda yazımı, ${spaSummary.payments} kasa tahsilatı, ${spaSummary.pendingApprovals} onay bekleyen iade${spaSummary.skipped ? `, ${spaSummary.skipped} dolu saat atlandı` : ''}.`
+      : ''),
 );
 await prisma.$disconnect();

@@ -195,6 +195,13 @@ export const NAV_SECTIONS = Object.freeze([
         icon: 'star',
         permission: PERMISSIONS.SURVEYS_VIEW,
       },
+      // Spa ve spor salonu (modül 57): terapist takvimi, randevular, grup dersleri.
+      {
+        label: 'Spa',
+        to: '/spa',
+        icon: 'sparkles',
+        permission: PERMISSIONS.SPA_VIEW,
+      },
       // Mutfak (modül 43): şef reçete ve malzeme maliyetini yönetir, muhasebe maliyeti izler.
       {
         label: 'Mutfak',

@@ -208,6 +208,16 @@ export const PERMISSIONS = Object.freeze({
   SURVEYS_FOLLOW_UP: 'surveys.follow_up',
   /** Anket tasarımı (sorular), gönderim ayarları, yorum bağlantıları; AI dönem özeti isteme. */
   SURVEYS_SETUP: 'surveys.setup',
+  /** Spa takvimi, randevular, dersler ve rapor (modül 57). */
+  SPA_VIEW: 'spa.view',
+  /** Randevu aç / değiştir / tamamla / iptal et; derse kayıt; ücreti oda hesabına yaz. */
+  SPA_BOOK: 'spa.book',
+  /** Spa kasasında tahsilat; iade ve hatalı giriş iptali iste (onayı başka bir yetkili verir). */
+  SPA_PAYMENT: 'spa.payment',
+  /** Fiyatı elle belirle (ikram, paket), geç iptal / gelmedi bedelini sil. */
+  SPA_SUPERVISE: 'spa.supervise',
+  /** Hizmetler, terapistler, odalar, izin / bakım blokları, ders programı ve spa ayarları. */
+  SPA_SETUP: 'spa.setup',
 
   /** Kanal yönetimi (modül 33): kanallar, eşleştirme, senkron logu, kanal rezervasyonları. */
   CHANNEL_MANAGER_VIEW: 'channel_manager.view',
@@ -316,6 +326,11 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.SURVEYS_VIEW]: 'Anket cevaplarını, NPS raporunu, takipleri ve AI özetlerini gör',
   [PERMISSIONS.SURVEYS_FOLLOW_UP]: 'Düşük puan takibi: üstlen, görüşme / not yaz, kapat',
   [PERMISSIONS.SURVEYS_SETUP]: 'Anket soruları, gönderim ayarları ve yorum bağlantıları; AI dönem özeti iste',
+  [PERMISSIONS.SPA_VIEW]: 'Spa takvimini, randevuları, dersleri ve raporu gör',
+  [PERMISSIONS.SPA_BOOK]: 'Randevu aç, değiştir, tamamla, iptal et; derse kaydet; ücreti oda hesabına yaz',
+  [PERMISSIONS.SPA_PAYMENT]: 'Spa kasasında tahsilat al; iade ve hatalı giriş iptali iste',
+  [PERMISSIONS.SPA_SUPERVISE]: 'Randevu fiyatını elle belirle; geç iptal / gelmedi bedelini sil',
+  [PERMISSIONS.SPA_SETUP]: 'Spa hizmetleri, terapistler, odalar, bloklar, ders programı ve ayarlar',
   [PERMISSIONS.CHANNEL_MANAGER_VIEW]: 'Kanalları, senkron logunu ve kanal rezervasyonlarını görüntüle',
   [PERMISSIONS.CHANNEL_MANAGER_MANAGE]: 'Kanal bağla, eşleştir, stop-sale koy, elle senkronla',
   [PERMISSIONS.ACTORS_VIEW]: 'Aktör panelini görüntüle',
@@ -422,6 +437,7 @@ export const PERMISSION_GROUPS = Object.freeze([
   { key: 'payroll', label: 'Bordro', permissions: [PERMISSIONS.PAYROLL_VIEW, PERMISSIONS.PAYROLL_MANAGE, PERMISSIONS.PAYROLL_PAY, PERMISSIONS.PAYROLL_SETUP] },
   { key: 'guest_portal', label: 'Misafir portalı ve online check-in', permissions: [PERMISSIONS.GUEST_PORTAL_VIEW, PERMISSIONS.GUEST_PORTAL_MANAGE, PERMISSIONS.GUEST_PORTAL_SETUP] },
   { key: 'surveys', label: 'Anket ve memnuniyet', permissions: [PERMISSIONS.SURVEYS_VIEW, PERMISSIONS.SURVEYS_FOLLOW_UP, PERMISSIONS.SURVEYS_SETUP] },
+  { key: 'spa', label: 'Spa ve spor salonu', permissions: [PERMISSIONS.SPA_VIEW, PERMISSIONS.SPA_BOOK, PERMISSIONS.SPA_PAYMENT, PERMISSIONS.SPA_SUPERVISE, PERMISSIONS.SPA_SETUP] },
   {
     key: 'agency_bonus',
     label: 'Acente primi',
@@ -562,6 +578,12 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.SURVEYS_VIEW,
     PERMISSIONS.SURVEYS_FOLLOW_UP,
     PERMISSIONS.SURVEYS_SETUP,
+    // Spa ve spor salonu (modül 57): tanımlar, ayar, fiyat / bedel kararı dahil; iade ve ödeme iptalini başka bir yetkili onaylar.
+    PERMISSIONS.SPA_VIEW,
+    PERMISSIONS.SPA_BOOK,
+    PERMISSIONS.SPA_PAYMENT,
+    PERMISSIONS.SPA_SUPERVISE,
+    PERMISSIONS.SPA_SETUP,
   ]),
   FRONT_DESK: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,
@@ -604,6 +626,9 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     // İçerideki misafirin düşük ara anketi resepsiyona düşer: görür, ilgilenir, kapatır.
     PERMISSIONS.SURVEYS_VIEW,
     PERMISSIONS.SURVEYS_FOLLOW_UP,
+    // Resepsiyon / concierge misafir adına spa randevusu alır ve takvimi görür; tahsilat spa kasasında.
+    PERMISSIONS.SPA_VIEW,
+    PERMISSIONS.SPA_BOOK,
   ]),
   HOUSEKEEPING: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,
@@ -665,6 +690,8 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.BANQUET_PAYMENT,
     // Restoran vardiya kasası ve adisyonları muhasebe izler; servis yapmaz.
     PERMISSIONS.POS_REPORT,
+    // Spa gelirini, açık bakiyeleri ve kasa hareketlerini muhasebe izler; randevu almaz.
+    PERMISSIONS.SPA_VIEW,
     // Maliyet kontrolü: reçete maliyeti ve gıda maliyeti yüzdesini izler; reçeteyi düzenlemez.
     PERMISSIONS.RECIPES_VIEW,
     // Satın alma taleplerini ve siparişleri izler (tedarikçi borcu 47'de); stok değeri muhasebenin işi.

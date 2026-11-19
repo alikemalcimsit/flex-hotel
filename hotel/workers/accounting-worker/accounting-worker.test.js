@@ -24,6 +24,7 @@ function makeHarness({ service = {}, isEnabled = async () => true } = {}) {
       syncFolioPayment: record('syncFolioPayment', { posted: true, message: 'Folyo tahsilatı · 101 · Nakit → Ön büro kasası (1500.00 TRY)' }),
       syncEventPayment: record('syncEventPayment', { posted: true, message: 'Etkinlik tahsilatı → Banka' }),
       syncPosPayment: record('syncPosPayment', { posted: true, message: 'Restoran tahsilatı → Restoran kasası' }),
+      syncSpaPayment: record('syncSpaPayment', { posted: true, message: 'Spa tahsilatı → Spa kasası' }),
       syncGoodsReceipt: record('syncGoodsReceipt', { posted: true, message: 'Mal kabul MKB-2026-0001 → Anadolu Süt carisine borç' }),
       syncAgencyBonus: record('syncAgencyBonus', { posted: true, message: 'Prim hak edişi → Tatil Acentesi' }),
       syncEventCharge: record('syncEventCharge', { posted: true, message: 'Etkinlik bedeli ETK-2026-0001 → Demir Holding' }),
@@ -56,8 +57,11 @@ describe('manifest', () => {
       'payment.received',
       'payment.refunded',
       'payment.voided',
+      'payroll.run.approved',
+      'payroll.run.changed',
       'pos.payment.changed',
       'purchase.goods.received',
+      'spa.payment.changed',
     ]);
     assert.equal(accountingWorkerManifest.fallbackModule, 'Ön muhasebe');
     assert.deepEqual(accountingWorkerManifest.publishes, ['accounting.posted']);
@@ -81,14 +85,16 @@ describe('ödemeler', () => {
     assert.match(calls.activity[0].message, /Ön büro kasası \(1500\.00 TRY\)/);
   });
 
-  it('etkinlik ve restoran ödemesinde yalnız işlenen / iptal edilen haberler servise gider', async () => {
+  it('etkinlik, restoran ve spa ödemesinde yalnız işlenen / iptal edilen haberler servise gider', async () => {
     const { worker, calls } = makeHarness();
     for (const change of ['RECEIVED', 'PENDING', 'POSTED', 'DECLINED', 'VOID_REQUESTED', 'VOIDED', 'VOID_DECLINED']) {
       await worker.handle({ hotelId: HOTEL, eventId: ID, paymentId: ID, change }, envelope('banquet.payment.changed', `b-${change}`));
       await worker.handle({ hotelId: HOTEL, checkId: ID, paymentId: ID, change }, envelope('pos.payment.changed', `p-${change}`));
+      await worker.handle({ hotelId: HOTEL, appointmentId: ID, paymentId: ID, change }, envelope('spa.payment.changed', `s-${change}`));
     }
     assert.equal(calls.service.filter((call) => call.name === 'syncEventPayment').length, 3);
     assert.equal(calls.service.filter((call) => call.name === 'syncPosPayment').length, 3);
+    assert.equal(calls.service.filter((call) => call.name === 'syncSpaPayment').length, 3);
     assert.ok(calls.activity.some((entry) => /Muhasebe etkisi yok/.test(entry.message)));
   });
 

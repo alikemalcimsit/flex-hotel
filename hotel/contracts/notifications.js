@@ -84,7 +84,7 @@ export function notificationRetryAt(attemptsMade, now) {
 /* ─────────────── Tetikleyiciler ve şablonlar ─────────────── */
 
 /** Şablonu olan olaylar. */
-export const NOTIFICATION_TRIGGERS = Object.freeze(['RESERVATION_CONFIRMED', 'ROOM_ASSIGNED', 'CHECKED_IN', 'CHECKED_OUT', 'CHECKIN_INVITE', 'SURVEY_POST_STAY', 'SURVEY_MID_STAY']);
+export const NOTIFICATION_TRIGGERS = Object.freeze(['RESERVATION_CONFIRMED', 'ROOM_ASSIGNED', 'CHECKED_IN', 'CHECKED_OUT', 'CHECKIN_INVITE', 'SURVEY_POST_STAY', 'SURVEY_MID_STAY', 'SPA_BOOKED', 'SPA_REMINDER']);
 
 /** Geçmişte görünen bütün kaynaklar (şablonlu olaylar + kanal testi). */
 export const NOTIFICATION_SOURCES = Object.freeze([...NOTIFICATION_TRIGGERS, 'CHANNEL_TEST']);
@@ -97,6 +97,8 @@ export const NOTIFICATION_SOURCE_LABELS = Object.freeze({
   CHECKIN_INVITE: 'Online check-in daveti',
   SURVEY_POST_STAY: 'Çıkış sonrası anket',
   SURVEY_MID_STAY: 'Ara anket',
+  SPA_BOOKED: 'Spa randevu onayı',
+  SPA_REMINDER: 'Spa randevu hatırlatması',
   CHANNEL_TEST: 'Kanal testi',
 });
 
@@ -113,13 +115,17 @@ export const NOTIFICATION_TRIGGER_HINTS = Object.freeze({
     'Çıkış gününden, anket ayarındaki gün kadar sonra ve saatte gönderilir (çıkış yapmış konaklamaya, aynı misafire ayardaki günden sık değil). {anketLinki} misafirin anket bağlantısıdır.',
   SURVEY_MID_STAY:
     'Girişin ertesi günü, anket ayarındaki saatte gönderilir (içerideki, en kısa konaklamadan uzun kalan misafire; ayrılış gününe değil). {anketLinki} misafirin anket bağlantısıdır.',
+  SPA_BOOKED:
+    'Konaklamaya bağlı spa randevusu ya da ders kaydı kesinleşince gönderilir (personel açınca, misafir portaldan alınca, yedekten asıla geçince). {hizmetAdi}, {randevuTarihi} ve {randevuSaati} randevunun bilgileridir.',
+  SPA_REMINDER:
+    'Randevudan, spa ayarındaki saat kadar önce gönderilir (konaklamaya bağlı açık randevuya; ayarda 0 ise gönderilmez).',
 });
 
 /**
  * Tetikleyiciyi yayınlayan event(ler) (dinleyen: notification-worker). Bir
  * tetikleyiciyi birden çok event açabilir; aynı rezervasyona ikinci kez
  * gönderilmez (tekilleştirme anahtarı). Online check-in daveti (`CHECKIN_INVITE`)
- * ve anketler (`SURVEY_*`) event'le değil zamanlanmış işlerle gönderilir; burada yok.
+ * anketler (`SURVEY_*`) ve spa bildirimleri (`SPA_*`, modül 57 servisinden) event'le değil doğrudan / zamanlanmış işle gönderilir; burada yok.
  */
 export const NOTIFICATION_TRIGGER_EVENTS = Object.freeze({
   RESERVATION_CONFIRMED: Object.freeze(['reservation.created', 'reservation.confirmed']),
@@ -162,6 +168,9 @@ export const TEMPLATE_VARIABLES = Object.freeze({
   tarih: 'Bildirimin gönderildiği gün',
   portalLinki: 'Misafir portalı bağlantısı (online check-in)',
   anketLinki: 'Misafirin anket bağlantısı',
+  hizmetAdi: 'Spa hizmetinin / dersin adı',
+  randevuTarihi: 'Spa randevusunun günü',
+  randevuSaati: 'Spa randevusunun saati',
 });
 
 const STAY_VARIABLES = Object.freeze([
@@ -190,6 +199,8 @@ export const TRIGGER_VARIABLES = Object.freeze({
   CHECKIN_INVITE: Object.freeze([...STAY_VARIABLES, 'portalLinki']),
   SURVEY_POST_STAY: Object.freeze([...STAY_VARIABLES, 'odaNo', 'anketLinki']),
   SURVEY_MID_STAY: Object.freeze([...STAY_VARIABLES, 'odaNo', 'anketLinki']),
+  SPA_BOOKED: Object.freeze([...STAY_VARIABLES, 'hizmetAdi', 'randevuTarihi', 'randevuSaati']),
+  SPA_REMINDER: Object.freeze([...STAY_VARIABLES, 'hizmetAdi', 'randevuTarihi', 'randevuSaati']),
 });
 
 /** Önizleme ve uzunluk denetimi için gerçekçi (uzunca) örnek değerler. */
@@ -208,6 +219,9 @@ export const TEMPLATE_SAMPLE_VALUES = Object.freeze({
   tarih: '17.09.2026',
   portalLinki: 'https://hotel.flexai.tr/misafir/p/6f1c2a7e-0b9d-4c5e-8a3f-2d7e9b1c4a60.Qm9vbGVhbkJhc2U2NFVybFNpZ25hdHVyZVNhbXBsZTEy',
   anketLinki: 'https://hotel.flexai.tr/misafir/a/0b5e7c2d-9a41-4f6e-b3c8-7d2e1f9a6c40.U3VydmV5TGlua1NpZ25hdHVyZUJhc2U2NFVybFNhbXBsZQ',
+  hizmetAdi: 'Aromaterapi Masajı (60 dk)',
+  randevuTarihi: '16.09.2026',
+  randevuSaati: '15:30',
 });
 
 const VARIABLE_PATTERN = /\{([A-Za-z]+)\}/g;
@@ -470,6 +484,34 @@ export const DEFAULT_NOTIFICATION_TEMPLATES = Object.freeze([
     'Dear {misafirAdi},\n\nHow is your stay going? If there is anything we can fix or do for you, let us know in a minute and we will take care of it right away.\n\n{anketLinki}\n\n{otelAdi} · {otelTelefonu}',
   ),
   en('SURVEY_MID_STAY', 'SMS', null, '{otelAdi}: how is your stay going? Anything we can do: {anketLinki}'),
+  tr(
+    'SPA_BOOKED',
+    'EMAIL',
+    'Spa randevunuz — {otelAdi}',
+    'Sayın {misafirAdi},\n\n{hizmetAdi} randevunuz {randevuTarihi} günü saat {randevuSaati} için alındı. Lütfen 10 dakika önce spa resepsiyonunda olun.\n\nDeğişiklik ya da iptal için {otelTelefonu} numarasından bize ulaşabilirsiniz.\n{otelAdi}',
+  ),
+  tr('SPA_BOOKED', 'SMS', null, '{otelAdi}: {hizmetAdi} randevunuz {randevuTarihi} {randevuSaati}. Bilgi: {otelTelefonu}'),
+  en(
+    'SPA_BOOKED',
+    'EMAIL',
+    'Your spa appointment — {otelAdi}',
+    'Dear {misafirAdi},\n\nYour {hizmetAdi} appointment is booked for {randevuTarihi} at {randevuSaati}. Please arrive at the spa reception 10 minutes early.\n\nTo change or cancel, call us on {otelTelefonu}.\n{otelAdi}',
+  ),
+  en('SPA_BOOKED', 'SMS', null, '{otelAdi}: your {hizmetAdi} appointment is on {randevuTarihi} at {randevuSaati}. Info: {otelTelefonu}'),
+  tr(
+    'SPA_REMINDER',
+    'EMAIL',
+    'Randevu hatırlatması — {otelAdi}',
+    'Sayın {misafirAdi},\n\n{hizmetAdi} randevunuz bugün saat {randevuSaati}. Sizi 10 dakika önce spa resepsiyonunda bekliyoruz.\n\n{otelAdi} · {otelTelefonu}',
+  ),
+  tr('SPA_REMINDER', 'SMS', null, '{otelAdi}: {hizmetAdi} randevunuz bugün {randevuSaati}. Sizi bekliyoruz.'),
+  en(
+    'SPA_REMINDER',
+    'EMAIL',
+    'Appointment reminder — {otelAdi}',
+    'Dear {misafirAdi},\n\nYour {hizmetAdi} appointment is today at {randevuSaati}. We look forward to seeing you at the spa reception 10 minutes early.\n\n{otelAdi} · {otelTelefonu}',
+  ),
+  en('SPA_REMINDER', 'SMS', null, '{otelAdi}: your {hizmetAdi} appointment is today at {randevuSaati}. See you soon.'),
 ]);
 
 /* ─────────────── Personel uyarıları ─────────────── */
@@ -495,6 +537,7 @@ export const STAFF_ALERT_KINDS = Object.freeze([
   'INVOICE',
   'ONLINE_CHECKIN',
   'SURVEY_LOW_SCORE',
+  'SPA',
 ]);
 
 export const STAFF_ALERT_KIND_LABELS = Object.freeze({
@@ -518,6 +561,7 @@ export const STAFF_ALERT_KIND_LABELS = Object.freeze({
   INVOICE: 'Fatura / e-belge (gönderilemedi, reddedildi)',
   ONLINE_CHECKIN: 'Online check-in (inceleme bekliyor)',
   SURVEY_LOW_SCORE: 'Ankette düşük puan (takip)',
+  SPA: 'Spa (portal randevusu, yedek liste, açık bakiye)',
 });
 
 export const STAFF_ALERT_SEVERITIES = Object.freeze(['INFO', 'WARNING', 'CRITICAL']);

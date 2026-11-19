@@ -46,6 +46,8 @@ import { registerPayrollSubscribers } from './modules/payroll/subscribers.js';
 import { registerGuestPortalSubscribers } from './modules/guest-portal/jobs.js';
 import { guestPortalRoutes, publicGuestPortalRoutes } from './modules/guest-portal/routes.js';
 import { publicSurveyRoutes, surveyRoutes } from './modules/surveys/routes.js';
+import { publicSpaRoutes, spaRoutes } from './modules/spa/routes.js';
+import { registerSpaSubscribers } from './modules/spa/subscribers.js';
 import { recipeRoutes } from './modules/recipes/routes.js';
 import { publicRoomServiceRoutes } from './modules/pos/room-service-routes.js';
 import { registerPosSubscribers } from './modules/pos/subscribers.js';
@@ -180,6 +182,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   registerPayrollSubscribers();
   registerGuestPortalSubscribers();
   registerHousekeepingSubscribers();
+  registerSpaSubscribers(app.log);
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
@@ -372,6 +375,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   await app.register(payrollRoutes, { prefix: '/payroll' });
   await app.register(guestPortalRoutes, { prefix: '/guest-portal' });
   await app.register(surveyRoutes, { prefix: '/surveys' });
+  await app.register(spaRoutes, { prefix: '/spa' });
   await app.register(promotionRoutes, { prefix: '/promotions' });
   await app.register(channelManagerRoutes, { prefix: '/channel-manager' });
   await app.register(manualTaskRoutes, { prefix: '/manual-tasks' });
@@ -390,6 +394,8 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
     await guestApp.register(publicRoomServiceRoutes, { prefix: '/public/room-service' });
     // Misafir portalı (modül 53): online check-in, folyo, istek, oda servisine geçiş.
     await guestApp.register(publicGuestPortalRoutes, { prefix: '/public/portal' });
+    // Spa (modül 57): portaldan randevu ve ders kaydı (aynı portal bağlantısıyla).
+    await guestApp.register(publicSpaRoutes, { prefix: '/public/portal' });
     // Anket (modül 55): misafirin anket sayfası.
     await guestApp.register(publicSurveyRoutes, { prefix: '/public/survey' });
   });

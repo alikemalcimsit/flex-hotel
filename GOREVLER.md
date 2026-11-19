@@ -3341,13 +3341,90 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 - [ ] Ekran: Puan harcama (rezervasyonda indirim olarak kullan)
 - [ ] Portala (53) puan görünümü
 
+> **📌 Ali'ye not (modül 57, 19 Kasım 2026 — Ahmet):** spa ücreti iki yoldan kapanır: odaya yazılan `spa.charged` olayıyla folyoya düşer
+> (`folio.closed` kuralınız onu kendiliğinden sayar); **spa kasasında** ödenen ise folyoya girmez (`SpaPayment`, olay
+> `spa.payment.changed`). Spa harcamasına da puan verilecekse randevunun `reservationId` / `guestId`'si ve `totalDue`'su
+> (`status = COMPLETED`) kaynak olarak kullanılabilir.
+
 ### 57. SPA & spor salonu randevu — arkadaşın
 **Gün sonu:** Masaj / hamam / PT randevuları terapist takviminde; ücret folyoya yansıyor.
-- [ ] Backend: SpaService, Therapist, SpaAppointment tabloları + API; çakışma kontrolü
-- [ ] Ekran: Hizmet listesi (süre, fiyat, gereken terapist)
-- [ ] Ekran: Randevu takvimi (terapist × saat)
-- [ ] Ekran: Randevu formu (misafir / dışarıdan, hizmet, terapist, saat) → folyo kalemi
-- [ ] Portaldan (53) randevu alma
+- [x] Backend: SpaService, Therapist, SpaAppointment tabloları + API; çakışma kontrolü — **+ SpaRoom, SpaTherapistHour, SpaBlock, SpaHold (terapist / oda EXCLUDE kısıtı), SpaSession, SpaPayment, SpaRoomCharge, SpaSettings**
+- [x] Ekran: Hizmet listesi (süre, fiyat, gereken terapist) — **+ ekip ve çalışma saatleri, odalar, izin / bakım blokları, dört dilde ad**
+- [x] Ekran: Randevu takvimi (terapist × saat) — **+ oda görünümü, boş hücreden randevu**
+- [x] Ekran: Randevu formu (misafir / dışarıdan, hizmet, terapist, saat) → folyo kalemi — **+ randevu ekranı (tamamla, iptal / gelmedi bedeli, odaya yaz, spa kasası, geri al), grup dersleri, rapor, ayarlar**
+- [x] Portaldan (53) randevu alma — **anında onay, ders kaydı ve yedek liste, iptal; dört dil**
+
+> **✅ Modül 57 tamamlandı (19 Kasım 2026 — Ahmet).** Kararlar (kullanıcı): **PT + grup dersleri** (yoga / pilates kontenjan ve yedek
+> listesiyle); ödeme **oda hesabı + spa kasası**; iptal / gelmedi bedeli **süre + oran, ayardan**; portaldan **anında onay**.
+>
+> **Tanımlar:** oda (bakım, hamam, stüdyo, spor salonu), terapist / eğitmen (unvan, cinsiyet, haftalık saat — günde 3 dilime kadar,
+> verebildiği hizmetler), hizmet (kategori, birebir / grup, süre + temizlik arası, kişi başı fiyat × kişi, terapist sayısı — çift masajı
+> 2, kontenjan, oda gerekip gerekmediği, portaldan alınabilirlik, TR / EN / DE / RU ad ve açıklama), izin / bakım bloğu (en fazla 60 gün).
+> Hepsi `updatedAt` sürüm kilitli, ad tekil; ileri tarihli işi olan terapist / oda / hizmet silinmez (yumuşak silme, geçmiş okunur).
+>
+> **Yerleştirme:** saat açılış–kapanış içinde ve ayardaki aralığa (varsayılan 15 dk) oturmalı, terapist o gün o saatte çalışıyor olmalı;
+> tutma = başlangıç → bitiş + temizlik arası. Terapist / oda boşsa otomatik: istenen kaynak, yoksa tercih edilen cinsiyet, sonra en az
+> meşgul terapist; oda hizmetin odalarından boş olan. Son söz `SpaHold` üzerindeki iki **EXCLUDE (gist, tsrange)** kısıtında; otomatik
+> atamada yarışı kaybeden 3 kez yeniden yerleşir. Aynı `requestId` ikinci randevu açmaz. Saat değişmeden terapist / oda değişirse aralık
+> denetlenmez (ayar sonradan değişmiş olabilir).
+>
+> **Para:** `listPrice` = kişi başı × kişi; `price` gerekçe + `spa.supervise` ile değişir — açık randevuda (ikram, paket) ve **kasada
+> kapanmış tamamlanan randevuda** (şikâyet telafisi: borç yeniden hesaplanır, fazlası onaylı iadeyle geri verilir; odaya yazılmışta
+> düzeltme folyodan). Tamamlanınca `totalDue` folyonun vergi hesabıyla (`chargeLine`, SPA kategorisi; dahil vergide aynı, hariçte üstüne).
+> Randevu ya **odaya** (`spa.charged` → billing-worker `postExternalCharge`, kaynak SPA) ya **spa kasasına** kapanır (kısmi ikisi kuruş
+> farkı doğurur). Kasa: açıkta ön ödeme fiyat kadar, kapanmışta kalan kadar; iade alınan paradan (kapanmışta yalnız fazlası); büyük ödeme,
+> her iade ve hatalı girişin iptali `SPA_PAYMENT` onayına (dört göz). Kasa ekranında "Spa" kaynağı; muhasebe `TreasuryChannel SPA`.
+>
+> **İptal / gelmedi:** başlangıçtan `freeCancelHours` (varsayılan 4) önce bedelsiz, sonra `lateCancelFeePct` (50), gelmedi `noShowFeePct`
+> (100; yalnız saati gelmiş randevuda). İçerideki misafirde bedel odaya, dışarıdan gelende bakiye. Bedeli silmek yetkili + gerekçe. Yedek
+> listedeki kayıt, seans iptali, konaklamanın iptali / gelmemesi bedelsiz. Para hareketi yoksa kapanmış randevu geri alınır (ekran engeli
+> önceden gösterir).
+>
+> **Grup dersleri:** haftanın günlerinde tekrar (çakışan gün atlanır), kontenjan + yedek liste (seans satırı kilitli sayaçlar, kısıtla
+> korunur); yer açılınca sıradaki asıla geçer ve bildirim alır; saat değişince kayıtların saati de değişir; toplu tamamlama süre bütçeli
+> (içerideki ve kasada ödemesi olmayan odaya, diğerleri bakiyede).
+>
+> **Portal (53):** otelin spa ayarında açılır; en erken şimdi + `portalLeadMinutes` (120), konaklama başına `portalMaxActive` (4) açık kayıt,
+> yalnız konaklama günleri; anında onay, spa'ya zil; saati gelmemiş kayıt portaldan iptal (bedel varsa onaydan önce gösterilir). Misafire
+> personel notu, terapist ataması, kasa satırları gitmez. Okuma 60, yazma 10 istek / dk.
+>
+> **Bildirim ve olaylar:** `SPA_BOOKED` (açılınca / saat değişince / yedekten asıla geçince) ve `SPA_REMINDER` (`reminderHours` önce; iş 5 dk'da
+> bir, `reminderSentAt` ile tek kez) — yalnız konaklamaya bağlı randevuda; şablonlar ilk kullanımda yüklenir. Konaklama iptal / gelmedi → ileri
+> randevular bedelsiz kapanır; çıkışta açık randevu ya da borç spa'nın ziline. Olaylar `spa.appointment.changed`, `spa.session.changed`,
+> `spa.payment.changed`, `spa.setup.changed`, `spa.charged`; kanal `spa.changed`.
+>
+> **API ve izinler:** `/spa` — `settings`, `setup`, `rooms`, `therapists`, `services`, `blocks`, `availability`, `calendar`, `appointments` (+ `price`,
+> `complete`, `cancel`, `no-show`, `restore`, `room-charge`, `payments` + `void`), `stays`, `payments/:id/appointment`, `sessions` (+ `enroll`, `cancel`, `complete`), `report`;
+> portal `/public/portal/:token/spa`. İzinler `spa.view`, `spa.book`, `spa.payment`, `spa.supervise`, `spa.setup`.
+>
+> **Ölçüm** (`scripts/perf-spa.mjs`; 50 bakım odası + 4 stüdyo, 56 terapist / eğitmen, 120 hizmet, 2 yıl + 60 gün: 272.000 randevu,
+> 456.000 tutma): boş saat 21–28 ms (50 terapist × 50 oda), takvim 49 ms, listeler 18–30 ms (1 yıllık açık bakiye / gelmedi 63–66 ms),
+> randevu ekranı 10 ms, dersler 12–15 ms, rapor 31 gün 80 ms / 1 yıl 587 ms, kasa 6–7 ms, hatırlatma turu 4 ms, boş saat → aç → ön ödeme
+> 142 ms, derse kayıt 47 ms. Ölçümle düzeltilen: **1 yıllık rapor 1,1–1,3 sn → 0,59 sn** (çift terapistli randevunun pay sayısı randevu
+> başına alt sorgu yerine pencere fonksiyonuyla).
+>
+> **Öz denetimde düzeltilen:** kasada ödenmiş tamamlanan hizmette şikâyet telafisi yapılamıyordu (fiyat yalnız açıkta değişiyordu, iade
+> yalnız fazlayı kapsıyordu) → kasada kapanmış randevuda gerekçeli fiyat düzeltmesi; API ızgara dışı saati (10:07) kabul ediyordu → sunucuda
+> aralık denetimi; geri alınamayacak randevuda "Geri al" etkin görünüyordu → sunucu engeli döner, düğme sebebiyle kapalı; boş randevu
+> formunda hata görünmüyordu; rapor yüzdeleri noktalıydı ("%4.8" → "%4,8"); rapor kategorileri ilk 100 hizmetle sınırlıydı.
+>
+> **Testler:** entegrasyon tam suite 706 (705 + sırasız uyarı okuyan modül 47 testi sağlamlaştırıldı, tek başına geçti; spa 13), backend birim 691, sözleşme 573, çekirdek 52, ön yüz 83, billing-worker 25,
+> accounting-worker 9; iki ön yüz derlemesi.
+>
+> **Demo** (`scripts/demo-spa.mjs`, `demo-data.mjs` çağırır; `--reset` otelin bütün spa verisini siler): ayar (07:00–22:00, portal açık),
+> 8 oda / salon, 9 terapist ve eğitmen, 13 hizmet (çift masajı, hamam ritüeli, PT, dört dil), yoga (pzt–cmt 08:00) ve pilates dersleri;
+> son 21 günün randevuları (odaya yazılan / kasada ödenen, ücretsiz ve geç iptal, gelmedi, sadakat indirimi) ve dersleri, bugünün panosu,
+> önümüzdeki günler (portaldan gelenler, ön ödemeli), dolu ders + yedek liste, terapist izni ve hamam bakımı, onay bekleyen ön ödeme iadesi.
+> Kasa ve folyo tarihleri randevunun gününe taşınır; spa kasası ön muhasebede eşlenir (demo: "Spa kasası").
+>
+> **Sınırlar:** dışarıdan gelen müşterinin spa kasası satışının mali belgesi (ÖKC fişi / e-Arşiv) 74'te, restoranla birlikte (Ali'ye not
+> 74'te); hediye çeki ve spa / spor üyeliği 84'te; odaya yazılmış spa ücretinin sonradan düzeltmesi folyodan (15). Terapist doluluğu bugünkü
+> haftalık saatlerden hesaplanır (geçmiş saat değişiklikleri ve izinler düşülmez; raporda yazılı).
+>
+> **Canlıya alırken:** 2 migration (`20261113090000_spa`, `20261113100000_spa_treasury_source`); yeni paket yok. Otel spa ayarından portalı
+> açar; ön muhasebe kullanan otel Ayarlar → eşlemede **Spa** kanalını (nakit / kart) bir kasa / banka hesabına bağlamalı (yoksa spa
+> tahsilatı muhasebe görevine düşer); bildirim şablonları ilk kullanımda yüklenir; demo için yeniden yükleme.
+
 
 ---
 
@@ -3577,6 +3654,12 @@ veri envanterine (71) saklama süresiyle; 5 sn'den uzun iş uzun iş çerçevesi
 - [ ] Olaylar: `fiscal.receipt.printed`, `fiscal.receipt.failed`, `fiscal.day.closed`
 - [ ] Test: belge türü kuralı (ödeme türü × müşteri türü), KDV departman eşlemesi
 
+> **📌 Ali'ye not (modül 57, 19 Kasım 2026 — Ahmet):** spa kasası da restoran gibi mali belge ister: dışarıdan gelen müşterinin spa
+> tahsilatı (`SpaPayment`, `kind = PAYMENT`, `status = POSTED`, yöntem `CASH` / `CARD`, olay `spa.payment.changed`) ÖKC fişi ya da
+> e-Arşiv ister; odaya yazılan spa ücreti (`SpaRoomCharge` → folyo) istemez (belge folyodan, 49). İade satırı (`kind = REFUND`, onaylı)
+> ve hatalı girişin iptali (`reversalOfId`) fiş iptali / iade belgesi kuralınıza bağlanmalı. Spa KDV kategorisi `SPA` (otelin vergi
+> ayarından); ÖKC departman eşlemesine eklenmeli.
+
 ---
 
 ## 12. SAHİP VE OKUL
@@ -3710,6 +3793,12 @@ veri envanterine (71) saklama süresiyle; 5 sn'den uzun iş uzun iş çerçevesi
 - [ ] Ekran: Provizyonlar, itirazlar, hediye çekleri, üyelikler
 - [ ] Olaylar: `payment.authorization.changed`, `gift_card.changed`, `membership.changed`
 - [ ] Test: provizyon tutarı ve artırım kuralı, hediye çeki bakiyesi (eşzamanlı harcama kilidi)
+
+> **📌 Ali'ye not (modül 57, 19 Kasım 2026 — Ahmet):** 84'ün hediye çeki ve üyeliği için spa tarafı hazır bağlantı noktaları: randevunun
+> `price` + `priceReason` alanı paket / üyelik indirimini bugün taşıyor (`POST /spa/appointments/:id/price`, `spa.supervise`); spa kasası
+> `SpaPayment` (yöntem `CASH` / `CARD`, `SPA_PAYMENT_METHODS` + `TREASURY_CHANNEL_METHODS.SPA`) — hediye çeki bir ödeme yöntemi olarak
+> buraya eklenebilir (`spaPaymentIssue` sınırları yöntemden bağımsız). Dışarıdan gelen müşteri bugün ad + telefonla tutuluyor
+> (`customerName`, `customerPhone`); üyelik gelince `SpaAppointment`'a üyelik kimliği bağlanabilir.
 
 ---
 

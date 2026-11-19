@@ -307,6 +307,7 @@ export function registerActors() {
           syncFolioPayment: accountingPostings.syncFolioPayment,
           syncEventPayment: accountingPostings.syncEventPayment,
           syncPosPayment: accountingPostings.syncPosPayment,
+          syncSpaPayment: accountingPostings.syncSpaPayment,
           syncGoodsReceipt: accountingPostings.syncGoodsReceipt,
           syncAgencyBonus: accountingPostings.syncAgencyBonus,
           syncEventCharge: accountingPostings.syncEventCharge,

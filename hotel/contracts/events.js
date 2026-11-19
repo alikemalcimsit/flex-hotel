@@ -178,6 +178,11 @@ export const EVENT_LABELS = Object.freeze({
   'survey.insight.completed': 'Anket dönem özeti yazıldı',
   'survey.followup.changed': 'Düşük puan takibi değişti',
   'survey.settings.changed': 'Anket tasarımı / ayarı / davetleri değişti',
+  'spa.appointment.changed': 'Spa randevusu açıldı / değişti / tamamlandı / iptal edildi',
+  'spa.session.changed': 'Grup dersi seansı açıldı / değişti / iptal edildi',
+  'spa.payment.changed': 'Spa ödemesi alındı / onaya gitti / iptal edildi',
+  'spa.setup.changed': 'Spa hizmeti / terapisti / odası / bloğu / ayarı değişti',
+  'spa.charged': 'Spa ücreti odaya yazıldı (iş olayı)',
   'fnb.order.placed': 'Restoran siparişi mutfağa gitti (iş olayı)',
   'fnb.order.paid': 'Restoran adisyonu kapandı: satılanlar (iş olayı)',
 

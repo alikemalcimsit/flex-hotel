@@ -65,7 +65,7 @@ class BillingWorker extends BaseWorker {
    *   postReservationFee: (hotelId: string, reservationId: string, input: { kind: 'CANCELLATION' | 'NO_SHOW', eventId: string }) => Promise<{ skipped?: string, posted?: string | null }>,
    *   reverseReservationFees: (hotelId: string, reservationId: string, input: { occurredAt: Date }) => Promise<{ reversed: number }>,
    *   runRoomCharges: (hotelId: string, input: { night: string }) => Promise<{ night: string, stays: number, items: number, total: string }>,
-   *   postExternalCharge: (hotelId: string, charge: object, options: { source: 'FNB_ORDER' | 'MINIBAR' | 'LAUNDRY', eventId: string }) => Promise<{ reservationId: string, items: number, total: string, late?: boolean }>,
+   *   postExternalCharge: (hotelId: string, charge: object, options: { source: 'FNB_ORDER' | 'MINIBAR' | 'LAUNDRY' | 'SPA', eventId: string }) => Promise<{ reservationId: string, items: number, total: string, late?: boolean }>,
    *   recordCheckInDeposit: (hotelId: string, reservationId: string) => Promise<{ skipped?: string, status?: string, amount?: string, currency?: string }>,
    *   reverseCheckInDeposits: (hotelId: string, reservationId: string, input: { reason: string, occurredAt: Date }) => Promise<{ reversed: number, withdrawn: number }>,
    *   closeFolioIfSettled: (hotelId: string, folioId: string) => Promise<{ closed: boolean, reason?: string, balance?: string }>,
@@ -199,6 +199,12 @@ class BillingWorker extends BaseWorker {
           return { message: `Çamaşır siparişi ${payload.reference} folyoya işlendi (${result.total}${lateNote(result)})`, meta: result };
         },
 
+        /** Spa randevusu tamamlandı ya da geç iptal / gelmedi bedeli doğdu: tutar oda hesabına (modül 57). */
+        'spa.charged': async (payload, envelope) => {
+          const result = await run(() => service.postExternalCharge(payload.hotelId, payload, { source: 'SPA', eventId: envelope.id }));
+          return { message: `Spa randevusu ${payload.reference} folyoya işlendi (${result.total}${lateNote(result)})`, meta: result };
+        },
+
         /**
          * Ödeme / iade / ödeme iptali işlendi: konaklaması bitmiş misafirin
          * folyosu sıfırlandıysa kapanır (fatura modülü `folio.closed`'u dinler).
@@ -278,6 +284,8 @@ class BillingWorker extends BaseWorker {
         return `Minibar tüketimi ${payload.reference} folyoya elle işlenecek`;
       case 'laundry.charged':
         return `Çamaşır siparişi ${payload.reference} folyoya elle işlenecek`;
+      case 'spa.charged':
+        return `Spa randevusu ${payload.reference} folyoya elle işlenecek`;
       case 'payment.received':
       case 'payment.refunded':
       case 'payment.voided':

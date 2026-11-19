@@ -54,6 +54,8 @@ const ENTITY_LINKS = Object.freeze({
   // Restoran (modül 39): ödemenin / düzeltmenin adisyonu sorulup adisyon ekranına gidilir.
   PosPayment: { to: (id) => `/pos/odeme/${id}`, permission: PERMISSIONS.POS_OPERATE },
   PosAdjustment: { to: (id) => `/pos/duzeltme/${id}`, permission: PERMISSIONS.POS_OPERATE },
+  // Spa (modül 57): ödemenin randevusu sorulup randevunun sayfasına gidilir.
+  SpaPayment: { to: (id) => `/spa-odeme/${id}`, permission: PERMISSIONS.SPA_VIEW },
   // Satın alma (modül 45): eşik üstü sipariş.
   PurchaseOrder: { to: (id) => `/satin-alma/siparisler/${id}`, permission: PERMISSIONS.PURCHASING_VIEW },
   // Ön muhasebe (modül 47): eşik üstü ödeme fişi.
