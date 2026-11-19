@@ -224,6 +224,16 @@ const FollowUpsPage = lazy(() => import('./pages/surveys/FollowUpsPage.jsx').the
 const FollowUpPage = lazy(() => import('./pages/surveys/FollowUpPage.jsx').then((m) => ({ default: m.FollowUpPage })));
 const SurveyDesignPage = lazy(() => import('./pages/surveys/SurveyDesignPage.jsx').then((m) => ({ default: m.SurveyDesignPage })));
 const SurveySettingsPage = lazy(() => import('./pages/surveys/SurveySettingsPage.jsx').then((m) => ({ default: m.SurveySettingsPage })));
+const SpaLayout = lazy(() => import('./pages/spa/SpaLayout.jsx').then((m) => ({ default: m.SpaLayout })));
+const SpaCalendarPage = lazy(() => import('./pages/spa/SpaCalendarPage.jsx').then((m) => ({ default: m.SpaCalendarPage })));
+const SpaAppointmentsPage = lazy(() => import('./pages/spa/SpaAppointmentsPage.jsx').then((m) => ({ default: m.SpaAppointmentsPage })));
+const SpaAppointmentPage = lazy(() => import('./pages/spa/SpaAppointmentPage.jsx').then((m) => ({ default: m.SpaAppointmentPage })));
+const SpaSessionsPage = lazy(() => import('./pages/spa/SpaSessionsPage.jsx').then((m) => ({ default: m.SpaSessionsPage })));
+const SpaSessionPage = lazy(() => import('./pages/spa/SpaSessionPage.jsx').then((m) => ({ default: m.SpaSessionPage })));
+const SpaSetupPage = lazy(() => import('./pages/spa/SpaSetupPage.jsx').then((m) => ({ default: m.SpaSetupPage })));
+const SpaReportPage = lazy(() => import('./pages/spa/SpaReportPage.jsx').then((m) => ({ default: m.SpaReportPage })));
+const SpaSettingsPage = lazy(() => import('./pages/spa/SpaSettingsPage.jsx').then((m) => ({ default: m.SpaSettingsPage })));
+const SpaPaymentRedirect = lazy(() => import('./pages/spa/SpaPaymentRedirect.jsx').then((m) => ({ default: m.SpaPaymentRedirect })));
 const InHouseTab = lazy(() => import('./pages/front-desk/InHouseTab.jsx').then((m) => ({ default: m.InHouseTab })));
 const ApprovalsPage = lazy(() => import('./pages/approvals/ApprovalsPage.jsx').then((m) => ({ default: m.ApprovalsPage })));
 const ApprovalsPendingTab = lazy(() => import('./pages/approvals/PendingTab.jsx').then((m) => ({ default: m.PendingTab })));
@@ -878,6 +888,33 @@ export default function App() {
               <Route path="tasarim" element={<SurveyDesignPage />} />
               <Route path="ayarlar" element={<SurveySettingsPage />} />
             </Route>
+            {/* Spa ve spor salonu (modül 57): takvim, randevular, dersler, rapor, tanımlar, ayarlar. */}
+            <Route
+              path="spa"
+              element={
+                <RequirePermission permission={PERMISSIONS.SPA_VIEW}>
+                  <SpaLayout />
+                </RequirePermission>
+              }
+            >
+              <Route index element={<SpaCalendarPage />} />
+              <Route path="randevular" element={<SpaAppointmentsPage />} />
+              <Route path="randevular/:appointmentId" element={<SpaAppointmentPage />} />
+              <Route path="dersler" element={<SpaSessionsPage />} />
+              <Route path="dersler/:sessionId" element={<SpaSessionPage />} />
+              <Route path="rapor" element={<SpaReportPage />} />
+              <Route path="tanimlar" element={<SpaSetupPage />} />
+              <Route path="ayarlar" element={<SpaSettingsPage />} />
+            </Route>
+            {/* Onay ekranından spa ödemesinin randevusuna geçiş. */}
+            <Route
+              path="spa-odeme/:paymentId"
+              element={
+                <RequireAnyPermission permissions={[PERMISSIONS.SPA_VIEW, PERMISSIONS.APPROVALS_VIEW]}>
+                  <SpaPaymentRedirect />
+                </RequireAnyPermission>
+              }
+            />
             {/* Faturalar (modül 16 çekirdeği + 49): faturalanacaklar, taslaklar, kesilenler, ayarlar; fatura ekranı. */}
             <Route
               path="faturalar"

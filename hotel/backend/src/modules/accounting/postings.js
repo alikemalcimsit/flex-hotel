@@ -329,6 +329,57 @@ async function postPosPaymentRow(context, hotelId, row, original, memo) {
   });
 }
 
+/* ═══════════════ Spa ödemesi (modül 57) ═══════════════ */
+
+const SPA_PAYMENT_SELECT = Object.freeze({
+  id: true,
+  kind: true,
+  status: true,
+  method: true,
+  amount: true,
+  currency: true,
+  businessDate: true,
+  reference: true,
+  reversalOfId: true,
+  appointment: { select: { code: true, serviceName: true } },
+  reversal: { select: { id: true } },
+});
+
+/**
+ * Spa kasasında alınan ödeme, iade ya da iptal kaydı: yöntem eşlemesine ("Spa ve spor salonu" kanalı) göre kasaya /
+ * bankaya. İptal kaydı asıl ödeme işlenmişse ters hareketle düşer.
+ * @param {string} hotelId @param {string} paymentId @param {PostingMemo} [memo]
+ */
+export async function syncSpaPayment(hotelId, paymentId, memo = newMemo()) {
+  const context = await accountingContext(hotelId, memo);
+  const row = await prisma.spaPayment.findFirst({ where: { id: paymentId, hotelId }, select: SPA_PAYMENT_SELECT });
+  if (!row) throw new NotFoundError('Spa ödemesi bulunamadı');
+  const original = row.reversalOfId ? await prisma.spaPayment.findFirst({ where: { id: row.reversalOfId, hotelId }, select: SPA_PAYMENT_SELECT }) : row;
+  if (!original) throw new NotFoundError('Asıl ödeme bulunamadı');
+  const reversal = original.reversal ? await prisma.spaPayment.findFirst({ where: { id: original.reversal.id, hotelId }, select: SPA_PAYMENT_SELECT }) : null;
+  const results = [await postSpaPaymentRow(context, hotelId, original, null, memo)];
+  if (reversal) results.push(await postSpaPaymentRow(context, hotelId, reversal, original, memo));
+  return summarize(results);
+}
+
+/** @param {any} context @param {string} hotelId @param {any} row @param {any | null} original @param {PostingMemo} memo */
+async function postSpaPaymentRow(context, hotelId, row, original, memo) {
+  const label = row.kind === 'REVERSAL' ? 'Spa ödeme iptali' : row.kind === 'REFUND' ? 'Spa iadesi' : 'Spa tahsilatı';
+  if (row.status !== 'POSTED') return { skipped: `${label}: işlenmemiş (onay bekliyor / reddedildi)` };
+  const date = day(row.businessDate);
+  if (date < context.startDate) return { skipped: `${label}: başlangıç gününden önce (${date})` };
+  if (original && !(await isPosted(hotelId, `SPA_PAYMENT:${original.id}`))) return { skipped: `${label}: asıl ödeme muhasebeye işlenmemiş` };
+  const description = `${label} · ${row.appointment.code} ${row.appointment.serviceName} · ${PAYMENT_METHOD_LABELS[row.method] ?? row.method}`.slice(0, 200);
+  const treasury = await mappedTreasury(hotelId, 'SPA', row.method, row.currency, memo);
+  const amounts = treasuryAmount(treasury, { amount: money(row.amount), currency: row.currency, converted: money(row.amount), rate: null }, context.currency);
+  return writeWithEvents(async (tx, stage) => {
+    await lockTreasuryAccounts(tx, hotelId, [treasury.id]);
+    const posted = await postTreasury(tx, { hotelId, treasuryAccountId: treasury.id, date, ...amounts, description, reference: row.reference, sourceType: 'SPA_PAYMENT', sourceId: row.id, sourceKey: `SPA_PAYMENT:${row.id}` });
+    if (posted.created) await stage('accounting.posted', { hotelId, source: 'SPA_PAYMENT', ledgerAccountIds: [], treasuryAccountIds: [treasury.id] });
+    return { posted: posted.created, message: posted.created ? `${description} → ${treasury.name}` : null };
+  });
+}
+
 /* ═══════════════ Mal kabul (modül 45) ═══════════════ */
 
 /**
@@ -665,6 +716,15 @@ export async function syncPeriod(hotelId, { from, to }, { budgetMs = SYNC_TIME_B
         FROM "PosPayment" s
         WHERE s."hotelId" = ${hotelId} AND s."status" = 'POSTED' AND s."businessDate" BETWEEN ${start}::date AND ${to}::date
           AND NOT EXISTS (SELECT 1 FROM "TreasuryMovement" m WHERE m."hotelId" = ${hotelId} AND m."sourceKey" = 'POS_PAYMENT:' || s."id")`,
+      order: Prisma.sql`s."businessDate", s."receivedAt"`,
+    },
+    {
+      name: 'SPA_PAYMENT',
+      sync: syncSpaPayment,
+      scan: Prisma.sql`
+        FROM "SpaPayment" s
+        WHERE s."hotelId" = ${hotelId} AND s."status" = 'POSTED' AND s."businessDate" BETWEEN ${start}::date AND ${to}::date
+          AND NOT EXISTS (SELECT 1 FROM "TreasuryMovement" m WHERE m."hotelId" = ${hotelId} AND m."sourceKey" = 'SPA_PAYMENT:' || s."id")`,
       order: Prisma.sql`s."businessDate", s."receivedAt"`,
     },
   ];

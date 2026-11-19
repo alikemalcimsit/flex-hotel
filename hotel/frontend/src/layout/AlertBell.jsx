@@ -34,6 +34,7 @@ const KIND_ICONS = Object.freeze({
   INVOICE: 'fileText',
   ONLINE_CHECKIN: 'user',
   SURVEY_LOW_SCORE: 'star',
+  SPA: 'sparkles',
 });
 
 const SEVERITY_TONES = Object.freeze({

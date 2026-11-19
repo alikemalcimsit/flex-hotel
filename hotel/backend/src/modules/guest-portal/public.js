@@ -23,6 +23,7 @@ import { loadPosSettings } from '../pos/shared.js';
 import { getHotelSettings } from '../settings/service.js';
 import { decodeSignature, detachReplacedDocuments, signatureKey } from './documents.js';
 import { resolvePortalToken, touchPortalLink } from './links.js';
+import { loadSpaSettings } from '../spa/shared.js';
 import { surveyPath } from '../surveys/shared.js';
 import { iso, prisma, shortGuestName } from './shared.js';
 
@@ -62,13 +63,14 @@ async function webchatKeyFor(hotelId, publicBaseUrl) {
 export async function portalOverview(token) {
   const { link, reservation, settings, today } = await resolvePortalToken(prisma, token);
   const hotelId = link.hotelId;
-  const [hotel, submission, posSettings, webchatKey, survey] = await Promise.all([
+  const [hotel, submission, posSettings, webchatKey, survey, spaSettings] = await Promise.all([
     getHotelSettings(hotelId),
     prisma.onlineCheckin.findUnique({ where: { reservationId: reservation.id }, select: { status: true, rejectReason: true, submittedAt: true } }),
     loadPosSettings(prisma, hotelId),
     webchatKeyFor(hotelId, settings.publicBaseUrl),
     // Açık anket (55): bağlantı kaybolsa da misafir portaldan ulaşır.
     prisma.surveyInvitation.findFirst({ where: { reservationId: reservation.id, respondedAt: null, expiresAt: { gt: new Date() } }, orderBy: { sentAt: 'desc' }, select: { id: true, nonce: true, kind: true } }),
+    loadSpaSettings(prisma, hotelId),
   ]);
   const days = reservationDays(reservation);
   const window = onlineCheckinWindow(days, { today, openDays: settings.checkinOpenDays, submission, enabled: settings.enabled });
@@ -101,6 +103,8 @@ export async function portalOverview(token) {
       digitalKey: false,
       payOnline: false,
       survey: survey ? { path: surveyPath(survey), kind: survey.kind } : null,
+      // Spa (57): gelecek ve içerideki misafir portaldan randevu alır (spa ayarında açıksa).
+      spa: spaSettings.portalEnabled && ['CONFIRMED', 'CHECKED_IN'].includes(reservation.status),
     },
   };
 }

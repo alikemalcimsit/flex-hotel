@@ -102,6 +102,8 @@ enum FolioItemSource {
   MINIBAR
   LAUNDRY
   REVERSAL
+  /// Spa randevusu / iptal bedeli odaya yazıldı (modül 57).
+  SPA
 }
 
 enum PaymentMethod {
@@ -185,6 +187,8 @@ enum NotificationSource {
   CHECKIN_INVITE
   SURVEY_POST_STAY
   SURVEY_MID_STAY
+  SPA_BOOKED
+  SPA_REMINDER
 }
 
 /// Şablonu olan olaylar.
@@ -196,6 +200,8 @@ enum NotificationTrigger {
   CHECKIN_INVITE
   SURVEY_POST_STAY
   SURVEY_MID_STAY
+  SPA_BOOKED
+  SPA_REMINDER
 }
 
 /// Personel uyarısı türleri (üst bardaki zil).
@@ -233,6 +239,8 @@ enum StaffAlertKind {
   ONLINE_CHECKIN
   /// Ankette düşük puan (modül 55): takip kaydı açıldı.
   SURVEY_LOW_SCORE
+  /// Spa (modül 57): portaldan randevu / iptal, yedekten asıla geçiş, çıkan misafirin açık spa bakiyesi.
+  SPA
 }
 
 /// Rezervasyon fiyatının kaynağı (modül 4): sistem hesabı ya da yetkili
@@ -777,6 +785,14 @@ model Hotel {
   surveyFollowUps        SurveyFollowUp[]
   surveyFollowUpNotes    SurveyFollowUpNote[]
   surveyInsights         SurveyInsight[]
+  spaSettings            SpaSettings?
+  spaRooms               SpaRoom[]
+  spaTherapists          SpaTherapist[]
+  spaServices            SpaService[]
+  spaBlocks              SpaBlock[]
+  spaSessions            SpaSession[]
+  spaAppointments        SpaAppointment[]
+  spaPayments            SpaPayment[]
   payrollParameterSets   PayrollParameterSet[]
   payElements            PayElement[]
   payrollRuns            PayrollRun[]
@@ -1061,6 +1077,7 @@ model Approval {
   agencyBonuses      AgencyBonus[]
   eventPayments      EventPayment[]
   posPayments        PosPayment[]
+  spaPayments        SpaPayment[]
   posAdjustments     PosAdjustment[]
   accountingVouchers AccountingVoucher[]
 
@@ -1483,6 +1500,7 @@ model Guest {
   guestRequests     GuestRequest[]
   surveyInvitations SurveyInvitation[]
   surveyResponses   SurveyResponse[]
+  spaAppointments   SpaAppointment[]
   folios            Folio[]
   lostItems         LostItem[]
   notifications     Notification[]
@@ -1604,6 +1622,8 @@ model Reservation {
   onlineCheckinDocuments OnlineCheckinDocument[]
   surveyInvitations      SurveyInvitation[]
   surveyResponses        SurveyResponse[]
+  spaAppointments        SpaAppointment[]
+  spaRoomCharges         SpaRoomCharge[]
 
   // Müsaitlik sorgusunun sıcak yolu: "şu otelde, şu oda tipinde, şu tarihlerde
   // envanteri tüketen rezervasyonlar". Dolu bir otelde saniyede onlarca kez çalışır.
@@ -5184,6 +5204,7 @@ enum TreasurySource {
   FOLIO_PAYMENT
   EVENT_PAYMENT
   POS_PAYMENT
+  SPA_PAYMENT
   VOUCHER
   INSTRUMENT
   PAYROLL_PAYMENT
@@ -5195,6 +5216,7 @@ enum TreasuryChannel {
   FRONT_DESK
   BANQUET
   POS
+  SPA
 }
 
 enum AccountingVoucherType {
@@ -6912,4 +6934,434 @@ model SurveyInsight {
   hotel Hotel @relation(fields: [hotelId], references: [id])
 
   @@index([hotelId, kind, requestedAt])
+}
+
+/**
+ * ═══════════════════════ SPA ve spor salonu (modül 57) ═══════════════════════
+ * Saatler otelin duvar saatiyle girilir, gerçek an (UTC) olarak saklanır. Terapist ve oda tutmaları tek tabloda
+ * (`SpaHold`); çakışmayı veritabanı EXCLUDE kısıtı engeller (migration'da elle).
+ */
+
+enum SpaServiceKind {
+  /// Birebir randevu (masaj, hamam, cilt bakımı, PT).
+  PRIVATE
+  /// Kontenjanlı grup dersi (yoga, pilates): seans + kayıt.
+  GROUP
+}
+
+enum SpaAppointmentStatus {
+  BOOKED
+  /// Grup dersinde yedek liste (yer açılınca sırayla asıla geçer).
+  WAITLISTED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum SpaBookingSource {
+  STAFF
+  PORTAL
+}
+
+enum SpaSessionStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+/// Spa politikası (otel başına tek satır; yoksa sözleşmedeki varsayılanlar).
+model SpaSettings {
+  hotelId           String   @id
+  /// Açılış / kapanış: gün başından dakika (otel saati).
+  openMinute        Int      @default(540)
+  closeMinute       Int      @default(1320)
+  /// Takvim ve boş saat aralığı (dakika).
+  slotMinutes       Int      @default(15)
+  /// Randevudan bu kadar saat öncesine kadar iptal ücretsiz.
+  freeCancelHours   Int      @default(4)
+  lateCancelFeePct  Decimal  @default(50) @db.Decimal(5, 2)
+  noShowFeePct      Decimal  @default(100) @db.Decimal(5, 2)
+  /// Misafir portalından (53) randevu.
+  portalEnabled     Boolean  @default(false)
+  portalLeadMinutes Int      @default(120)
+  /// Bir konaklamanın aynı anda en çok bu kadar açık randevusu olur.
+  portalMaxActive   Int      @default(4)
+  /// Hatırlatma: randevudan kaç saat önce (0 = gönderme).
+  reminderHours     Int      @default(2)
+  updatedBy         String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+}
+
+/// Bakım odası, hamam, stüdyo, salon.
+model SpaRoom {
+  id        String    @id @default(uuid())
+  hotelId   String
+  name      String
+  kind      String
+  isActive  Boolean   @default(true)
+  sortOrder Int       @default(0)
+  createdBy String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  hotel    Hotel            @relation(fields: [hotelId], references: [id])
+  services SpaServiceRoom[]
+  holds    SpaHold[]
+  blocks   SpaBlock[]
+
+  @@index([hotelId, sortOrder, name])
+}
+
+/// Terapist, antrenör, eğitmen.
+model SpaTherapist {
+  id        String    @id @default(uuid())
+  hotelId   String
+  name      String
+  title     String?
+  /// FEMALE / MALE (misafirin terapist tercihi bununla eşleşir); boş: belirtilmemiş.
+  gender    String?
+  phone     String?
+  isActive  Boolean   @default(true)
+  sortOrder Int       @default(0)
+  createdBy String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  hotel    Hotel                 @relation(fields: [hotelId], references: [id])
+  hours    SpaTherapistHour[]
+  services SpaServiceTherapist[]
+  holds    SpaHold[]
+  blocks   SpaBlock[]
+
+  @@index([hotelId, sortOrder, name])
+}
+
+/// Terapistin haftalık çalışma saati (gün başına birden fazla dilim olabilir: bölünmüş vardiya).
+model SpaTherapistHour {
+  id          String @id @default(uuid())
+  hotelId     String
+  therapistId String
+  /// 1 = Pazartesi … 7 = Pazar.
+  weekday     Int
+  startMinute Int
+  endMinute   Int
+
+  therapist SpaTherapist @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+
+  @@unique([therapistId, weekday, startMinute])
+  @@index([hotelId])
+}
+
+/// Hizmet: birebir (randevu) ya da grup dersi (seans).
+model SpaService {
+  id              String         @id @default(uuid())
+  hotelId         String
+  name            String
+  description     String?
+  /// { en: { name, description }, de: {…}, ru: {…} } — boş dil Türkçeye düşer.
+  translations    Json           @default("{}")
+  category        String
+  kind            SpaServiceKind @default(PRIVATE)
+  durationMinutes Int
+  /// Bitişten sonra terapistin ve odanın dolu sayıldığı süre (temizlik, hazırlık).
+  bufferMinutes   Int            @default(0)
+  /// Kişi başı fiyat (otelin vergi ayarına göre dahil / hariç; SPA vergi kategorisi).
+  price           Decimal        @db.Decimal(12, 2)
+  /// Randevu başına terapist (çift masajında 2); grup dersinde eğitmen (1).
+  therapistCount  Int            @default(1)
+  /// Randevu başına misafir (çift masajında 2). Grup dersinde kayıt başına kişi ayrıca girilir.
+  guestCount      Int            @default(1)
+  /// Grup dersinin kontenjanı (seans açılırken varsayılan).
+  capacity        Int?
+  requiresRoom    Boolean        @default(true)
+  portalBookable  Boolean        @default(true)
+  isActive        Boolean        @default(true)
+  sortOrder       Int            @default(0)
+  createdBy       String
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  deletedAt       DateTime?
+
+  hotel        Hotel                 @relation(fields: [hotelId], references: [id])
+  therapists   SpaServiceTherapist[]
+  rooms        SpaServiceRoom[]
+  sessions     SpaSession[]
+  appointments SpaAppointment[]
+
+  @@index([hotelId, kind, sortOrder, name])
+}
+
+/// Hizmeti verebilen terapist.
+model SpaServiceTherapist {
+  serviceId   String
+  therapistId String
+  hotelId     String
+
+  service   SpaService   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  therapist SpaTherapist @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+
+  @@id([serviceId, therapistId])
+  @@index([therapistId])
+}
+
+/// Hizmetin verilebildiği oda.
+model SpaServiceRoom {
+  serviceId String
+  roomId    String
+  hotelId   String
+
+  service SpaService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  room    SpaRoom    @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@id([serviceId, roomId])
+  @@index([roomId])
+}
+
+/// Terapistin izni / molası ya da odanın bakımı: o aralıkta randevu verilmez.
+model SpaBlock {
+  id          String   @id @default(uuid())
+  hotelId     String
+  therapistId String?
+  roomId      String?
+  startsAt    DateTime
+  endsAt      DateTime
+  reason      String
+  createdBy   String
+  createdAt   DateTime @default(now())
+
+  hotel     Hotel         @relation(fields: [hotelId], references: [id])
+  therapist SpaTherapist? @relation(fields: [therapistId], references: [id], onDelete: Restrict)
+  room      SpaRoom?      @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  holds     SpaHold[]
+
+  // Günün blokları: "pencere başından sonra biten" (geçmiş birikse de tarama ileri ufukla sınırlı).
+  @@index([hotelId, endsAt])
+  @@index([therapistId, endsAt])
+  @@index([roomId, endsAt])
+}
+
+/// Kaynağın (terapist ya da oda) dolu aralığı: randevu, grup seansı ya da blok. İptalde `active` kapanır
+/// (kimin atanmış olduğu kayıtta kalır). Aynı kaynağa çakışan iki etkin tutma olamaz (EXCLUDE).
+model SpaHold {
+  id            String   @id @default(uuid())
+  hotelId       String
+  therapistId   String?
+  roomId        String?
+  appointmentId String?
+  sessionId     String?
+  blockId       String?
+  startsAt      DateTime
+  /// Hizmetin bitişi + temizlik arası.
+  endsAt        DateTime
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  therapist   SpaTherapist?   @relation(fields: [therapistId], references: [id], onDelete: Restrict)
+  room        SpaRoom?        @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  appointment SpaAppointment? @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  session     SpaSession?     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  block       SpaBlock?       @relation(fields: [blockId], references: [id], onDelete: Cascade)
+
+  // Günün takvimi ve boş saat hesabı: başlangıcı pencerede olan tutmalar.
+  @@index([hotelId, startsAt])
+  @@index([therapistId, startsAt])
+  @@index([roomId, startsAt])
+  @@index([appointmentId])
+  @@index([sessionId])
+  @@index([blockId])
+}
+
+/// Grup dersinin bir seansı. Eğitmen ve salon `SpaHold` ile tutulur; katılımcılar `SpaAppointment` (sessionId).
+model SpaSession {
+  id            String           @id @default(uuid())
+  hotelId       String
+  serviceId     String
+  serviceName   String
+  startsAt      DateTime
+  endsAt        DateTime
+  capacity      Int
+  /// Kişi başı fiyat (seans açılırken hizmetten kopyalanır).
+  price         Decimal          @db.Decimal(12, 2)
+  status        SpaSessionStatus @default(SCHEDULED)
+  note          String?
+  /// Asıl listedeki kişi sayısı (seans satırı kilitliyken güncellenir).
+  bookedCount   Int              @default(0)
+  waitlistCount Int              @default(0)
+  createdBy     String
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  cancelledAt   DateTime?
+  cancelledBy   String?
+  cancelReason  String?
+  completedAt   DateTime?
+
+  hotel       Hotel            @relation(fields: [hotelId], references: [id])
+  service     SpaService       @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  holds       SpaHold[]
+  enrollments SpaAppointment[]
+
+  @@index([hotelId, startsAt, id])
+  @@index([hotelId, status, startsAt])
+  @@index([serviceId, startsAt])
+}
+
+/// Randevu numarası serisi (otel × yıl).
+model SpaSequence {
+  hotelId String
+  year    Int
+  last    Int
+
+  @@id([hotelId, year])
+}
+
+/// Randevu (birebir) ya da grup dersi kaydı (`sessionId` dolu). Tutarlar: `price` anlaşılan fiyat (vergi ayarına
+/// göre matrah ya da dahil), `amountDue` borcun aynı esastaki tutarı (tamamlanınca fiyat, geç iptal / gelmedide
+/// bedel), `totalDue` vergiyle misafirin ödeyeceği. Bakiye = totalDue − paidTotal − roomChargeTotal.
+model SpaAppointment {
+  id                  String               @id @default(uuid())
+  hotelId             String
+  code                String
+  serviceId           String
+  sessionId           String?
+  serviceName         String
+  category            String
+  kind                SpaServiceKind
+  startsAt            DateTime
+  endsAt              DateTime
+  /// Bitiş + temizlik arası (kaynakların boşaldığı an).
+  busyUntil           DateTime
+  guestCount          Int                  @default(1)
+  reservationId       String?
+  guestId             String?
+  customerName        String
+  customerPhone       String?
+  /// Randevu açılırken misafirin odası (liste ve takvimde).
+  roomNumber          String?
+  status              SpaAppointmentStatus @default(BOOKED)
+  source              SpaBookingSource     @default(STAFF)
+  /// Misafirin terapist tercihi: FEMALE / MALE.
+  therapistPreference String?
+  note                String?
+  listPrice           Decimal              @db.Decimal(12, 2)
+  price               Decimal              @db.Decimal(12, 2)
+  priceReason         String?
+  priceBy             String?
+  /// Geç iptal / gelmedide uygulanan oran.
+  feePct              Decimal?             @db.Decimal(5, 2)
+  feeWaivedBy         String?
+  feeWaiveReason      String?
+  amountDue           Decimal              @default(0) @db.Decimal(12, 2)
+  totalDue            Decimal              @default(0) @db.Decimal(12, 2)
+  paidTotal           Decimal              @default(0) @db.Decimal(12, 2)
+  roomChargeTotal     Decimal              @default(0) @db.Decimal(12, 2)
+  balance             Decimal              @default(0) @db.Decimal(12, 2)
+  /// Tekrar gönderime karşı istek anahtarı (aynı istek ikinci randevu açmaz).
+  requestKey          String?
+  reminderSentAt      DateTime?
+  createdBy           String
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  completedAt         DateTime?
+  completedBy         String?
+  cancelledAt         DateTime?
+  cancelledBy         String?
+  cancelReason        String?
+
+  hotel       Hotel           @relation(fields: [hotelId], references: [id])
+  service     SpaService      @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  session     SpaSession?     @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  reservation Reservation?    @relation(fields: [reservationId], references: [id], onDelete: Restrict)
+  guest       Guest?          @relation(fields: [guestId], references: [id], onDelete: Restrict)
+  holds       SpaHold[]
+  payments    SpaPayment[]
+  roomCharges SpaRoomCharge[]
+
+  @@unique([hotelId, code])
+  @@unique([hotelId, requestKey])
+  // Randevu listesi ve rapor: gün aralığı.
+  @@index([hotelId, startsAt, id])
+  @@index([hotelId, status, startsAt, id])
+  @@index([hotelId, serviceId, startsAt])
+  // Konaklamanın randevuları (portal, çıkış denetimi).
+  @@index([reservationId, startsAt])
+  // Seansın katılımcıları ve yedek sırası.
+  @@index([sessionId, status, createdAt])
+  @@index([customerName(ops: raw("gin_trgm_ops"))], map: "SpaAppointment_customerName_trgm_idx", type: Gin)
+}
+
+/// Spa kasasında alınan ödeme (modül 17 kuralları; kasada "Spa" kaynağı).
+model SpaPayment {
+  id              String        @id @default(uuid())
+  hotelId         String
+  appointmentId   String
+  kind            PaymentKind   @default(PAYMENT)
+  status          PaymentStatus @default(POSTED)
+  method          PaymentMethod
+  /// Tahsilatta artı, iadede eksi; iptal kaydında asıl satırın tersi.
+  amount          Decimal       @db.Decimal(14, 2)
+  currency        String
+  businessDate    DateTime      @db.Date
+  reference       String?
+  note            String?
+  sourceKey       String?
+  receivedBy      String
+  receivedAt      DateTime      @default(now())
+  postedAt        DateTime?
+  approvalId      String?
+  declinedAt      DateTime?
+  reversalOfId    String?       @unique
+  voidedAt        DateTime?
+  voidedBy        String?
+  voidReason      String?
+  voidApprovalId  String?
+  voidRequestedAt DateTime?
+  voidRequestedBy String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  hotel       Hotel          @relation(fields: [hotelId], references: [id])
+  appointment SpaAppointment @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
+  approval    Approval?      @relation(fields: [approvalId], references: [id], onDelete: Restrict)
+  reversalOf  SpaPayment?    @relation("SpaPaymentReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversal    SpaPayment?    @relation("SpaPaymentReversal")
+
+  @@unique([hotelId, sourceKey])
+  @@index([appointmentId, receivedAt, id])
+  // Kasa: günün işlenen hareketleri ve onay bekleyenler.
+  @@index([hotelId, businessDate, postedAt, id])
+  @@index([hotelId, status, receivedAt])
+  @@index([approvalId])
+  @@index([voidApprovalId])
+}
+
+/// Randevunun (ya da iptal bedelinin) oda hesabına yazılması: folyoya giden olayın kaydı.
+model SpaRoomCharge {
+  id            String   @id @default(uuid())
+  hotelId       String
+  appointmentId String
+  reservationId String
+  roomNumber    String
+  guestName     String
+  /// Folyoya giden esas tutar ve vergiyle toplamı.
+  amount        Decimal  @db.Decimal(12, 2)
+  total         Decimal  @db.Decimal(12, 2)
+  /// Folyoya giden olay (işlenme durumu `evt:<olay>:0` kalem anahtarından okunur).
+  eventId       String
+  sourceKey     String
+  chargedBy     String
+  chargedAt     DateTime @default(now())
+  businessDate  DateTime @db.Date
+
+  appointment SpaAppointment @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
+  reservation Reservation    @relation(fields: [reservationId], references: [id], onDelete: Restrict)
+
+  @@unique([hotelId, sourceKey])
+  @@index([appointmentId])
+  @@index([hotelId, businessDate])
+  @@index([reservationId])
 }

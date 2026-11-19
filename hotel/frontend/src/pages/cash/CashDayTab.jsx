@@ -10,6 +10,7 @@ import { eventPath } from '../../lib/banquet.js';
 import { folioPath } from '../../lib/folios.js';
 import { formatDate, formatMoney } from '../../lib/format.js';
 import { checkPath } from '../../lib/pos.js';
+import { appointmentPath } from '../../lib/spa.js';
 import {
   PAYMENT_METHOD_ICONS,
   absolute,
@@ -193,7 +194,7 @@ function MethodTotals({ data }) {
               </tr>
             </tfoot>
           </table>
-          {data.origins && (Number(data.origins.EVENT) !== 0 || Number(data.origins.POS) !== 0) && (
+          {data.origins && (Number(data.origins.EVENT) !== 0 || Number(data.origins.POS) !== 0 || Number(data.origins.SPA ?? 0) !== 0) && (
             <p className="mt-2 text-sm text-ink-soft">
               Kaynak:{' '}
               {CASH_ORIGINS.map((origin, index) => (
@@ -257,6 +258,11 @@ function PendingPayments({ pending, currency, canDecide }) {
                 {row.pos.tableName ? ` · masa ${row.pos.tableName}` : ''}
               </Link>
             )}
+            {row.spa && (
+              <Link className="text-info-ink underline-offset-2 hover:underline" to={appointmentPath(row.spa.id)}>
+                spa {row.spa.code} · {row.spa.customerName}
+              </Link>
+            )}
             <span className="text-xs text-ink-muted">
               {formatDate(row.receivedAt)} · {row.receivedBy}
             </span>
@@ -304,7 +310,16 @@ function Movements({ query, currency }) {
                 <tr key={row.id} className={row.voided ? 'bg-surface-muted' : ''}>
                   <td className="whitespace-nowrap px-4 py-2.5 align-top tabular-nums">{timeFormatter.format(new Date(row.postedAt))}</td>
                   <td className="px-4 py-2.5 align-top">
-                    {row.pos ? (
+                    {row.spa ? (
+                      <>
+                        <Link className="font-semibold text-info-ink underline-offset-2 hover:underline" to={appointmentPath(row.spa.id)}>
+                          {row.spa.customerName}
+                        </Link>
+                        <span className="block text-xs text-ink-muted">
+                          {CASH_ORIGIN_LABELS.SPA} · {row.spa.code} · {row.spa.serviceName}
+                        </span>
+                      </>
+                    ) : row.pos ? (
                       <>
                         <Link className="font-semibold text-info-ink underline-offset-2 hover:underline" to={checkPath(row.pos.id)}>
                           {row.pos.outletName}

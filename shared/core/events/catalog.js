@@ -517,6 +517,7 @@ export const EVENT_CATALOG = Object.freeze({
       'INVOICE',
       'ONLINE_CHECKIN',
       'SURVEY_LOW_SCORE',
+      'SPA',
     ]),
     userId: z.string().uuid().nullable(),
     permission: z.string().nullable(),
@@ -639,6 +640,8 @@ export const EVENT_CATALOG = Object.freeze({
   'minibar.consumed': externalCharge,
   /** Çamaşır siparişi misafire teslim edildi: ücreti folyoya (modül 19). */
   'laundry.charged': externalCharge,
+  /** Spa randevusu tamamlandı ya da iptal / gelmedi bedeli doğdu: tutar oda hesabına (modül 57). */
+  'spa.charged': externalCharge,
 
   /* ── Minibar ve çamaşırhane ekranları (modül 19) ──
      Kayıt ve pano ekranları bunlarla canlı tazelenir (`EXTRAS_EVENTS`).
@@ -922,6 +925,28 @@ export const EVENT_CATALOG = Object.freeze({
   'survey.followup.changed': hotelScoped.extend({ followUpId: z.string().uuid(), change: z.enum(['OPENED', 'ASSIGNED', 'NOTED', 'RESOLVED', 'REOPENED']) }),
   /** Ekran olayı: anket tasarımı, ayar ya da davetler değişti. */
   'survey.settings.changed': hotelScoped.extend({ area: z.enum(['SETTINGS', 'QUESTIONS', 'INVITATIONS']) }),
+
+  /* ── Spa ve spor salonu (modül 57) ──
+     Takvim, randevu, ders ve tanım ekranları bunlarla tazelenir (`SPA_EVENTS`). Yükte yalnız kimlikler:
+     misafir adı ve tutar socket'e çıkmaz. Folyoya giden ücret yukarıdaki `spa.charged`. */
+
+  /** Randevu / ders kaydı açıldı, değişti, tamamlandı, iptal edildi, gelmedi, geri alındı, odaya yazıldı, yedekten asıla geçti. */
+  'spa.appointment.changed': hotelScoped.extend({
+    appointmentId: z.string().uuid(),
+    sessionId: z.string().uuid().nullable(),
+    change: z.enum(['BOOKED', 'WAITLISTED', 'PROMOTED', 'UPDATED', 'PRICED', 'COMPLETED', 'CANCELLED', 'NO_SHOW', 'RESTORED', 'CHARGED']),
+    source: z.enum(['STAFF', 'PORTAL']),
+  }),
+  /** Grup dersi seansı açıldı / değişti / yapıldı / iptal edildi. */
+  'spa.session.changed': hotelScoped.extend({ sessionId: z.string().uuid(), change: z.enum(['CREATED', 'UPDATED', 'COMPLETED', 'CANCELLED']) }),
+  /** Spa kasasında ödeme: alındı, onaya gitti, işlendi, reddedildi, iptali istendi / uygulandı / reddedildi. */
+  'spa.payment.changed': hotelScoped.extend({
+    appointmentId: z.string().uuid(),
+    paymentId: z.string().uuid(),
+    change: z.enum(['RECEIVED', 'PENDING', 'POSTED', 'DECLINED', 'VOID_REQUESTED', 'VOIDED', 'VOID_DECLINED']),
+  }),
+  /** Tanım ya da ayar değişti (hizmet, terapist, oda, blok, ayar). */
+  'spa.setup.changed': hotelScoped.extend({ entity: z.enum(['SERVICE', 'THERAPIST', 'ROOM', 'BLOCK', 'SETTINGS']) }),
 
   /* ── Restoran POS (modül 39) ──
      Masa planı, adisyon ekranı ve mutfak ekranı (modül 40) bunlarla canlı tazelenir
@@ -1331,7 +1356,7 @@ export const PAYMENT_EVENTS = Object.freeze(Object.keys(EVENT_CATALOG).filter((n
 
 /** Kasa görünümünü ve kur ekranını etkileyen olaylar (canlı yayın: `cash.changed`). */
 /** Kasa: folyo ödemeleri, kur ve etkinlik ödemeleri (modül 37, kaynak "Etkinlik"). */
-export const CASH_EVENTS = Object.freeze([...PAYMENT_EVENTS, 'exchange_rate.updated', 'banquet.payment.changed', 'pos.payment.changed']);
+export const CASH_EVENTS = Object.freeze([...PAYMENT_EVENTS, 'exchange_rate.updated', 'banquet.payment.changed', 'pos.payment.changed', 'spa.payment.changed']);
 
 /** Minibar / çamaşırhane ekranlarını etkileyen olaylar (canlı yayın: `extras.changed`, modül 19). */
 export const EXTRAS_EVENTS = Object.freeze(['minibar.recorded', 'laundry.order.changed', 'extras.catalog.changed']);
@@ -1401,6 +1426,9 @@ export const PAYROLL_EVENTS = Object.freeze(['employee.changed', 'payroll.run.ch
 
 /** Misafir portalı ve online check-in (modül 53): ekranlar bunlarla tazelenir (`guest-portal.changed` kanalı). */
 export const GUEST_PORTAL_EVENTS = Object.freeze(['online_checkin.changed', 'guest_portal.link.changed', 'guest_portal.settings.changed']);
+
+/** Spa ve spor salonu (modül 57): ekranlar bunlarla tazelenir (`spa.changed` kanalı). */
+export const SPA_EVENTS = Object.freeze(['spa.appointment.changed', 'spa.session.changed', 'spa.payment.changed', 'spa.setup.changed']);
 
 /** Anket ve memnuniyet (modül 55): ekranlar bunlarla tazelenir (`surveys.changed` kanalı). */
 export const SURVEY_EVENTS = Object.freeze(['survey.response.submitted', 'survey.analysis.completed', 'survey.insight.requested', 'survey.insight.completed', 'survey.followup.changed', 'survey.settings.changed']);

@@ -48,6 +48,10 @@ export function triggerSkipReason(trigger, reservation, businessDate) {
       return reservation.status === 'CHECKED_OUT' ? null : 'Misafir çıkış yapmamış';
     case 'SURVEY_MID_STAY':
       return reservation.status === 'CHECKED_IN' ? null : 'Misafir içeride değil';
+    case 'SPA_BOOKED':
+    case 'SPA_REMINDER':
+      // Spa randevusu gelecek ya da içerideki misafirin olabilir (gelmeden önce de alınır).
+      return ['PENDING', 'CONFIRMED', 'CHECKED_IN'].includes(reservation.status) ? null : `Rezervasyon durumu uygun değil (${reservation.status})`;
     default:
       return 'Bilinmeyen tetikleyici';
   }

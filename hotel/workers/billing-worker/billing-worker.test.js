@@ -71,6 +71,7 @@ describe('manifest', () => {
         'reservation.cancelled',
         'reservation.no_show',
         'reservation.reinstated',
+        'spa.charged',
       ],
     );
     assert.ok(billingWorkerManifest.publishes.includes('folio.closed'));
@@ -304,5 +305,31 @@ describe('çamaşır ve geç kalem (modül 19)', () => {
     assert.equal(calls.manualTasks.length, 1);
     assert.equal(calls.manualTasks[0].title, 'Çamaşır siparişi LND-3XH8PA folyoya elle işlenecek');
     assert.match(calls.manualTasks[0].description, /folyosu kapalı/);
+  });
+});
+
+describe('spa (modül 57)', () => {
+  const spa = { hotelId: HOTEL, reservationId: RESERVATION, roomId: null, reference: 'SPA-2026-00042', items: [{ description: 'Spa · Aromaterapi Masajı', unitPrice: '2500.00', quantity: 1, taxCategory: 'SPA' }] };
+
+  it('odaya yazılan spa randevusu olay kimliğiyle spa kalemi olarak işlenir', async () => {
+    const { worker, calls } = makeHarness({ service: { postExternalCharge: async (...args) => (calls.service.push({ args }), { reservationId: RESERVATION, items: 1, total: '2500.00' }) } });
+    await worker.handle(spa, envelope('spa.charged', 'evt-s'));
+    assert.deepEqual(calls.service[0].args.slice(2), [{ source: 'SPA', eventId: 'evt-s' }]);
+    assert.equal(calls.activity[0].message, 'Spa randevusu SPA-2026-00042 folyoya işlendi (2500.00)');
+  });
+
+  it('misafir içeride değilse tekrar denenmeden folyo görevine düşer', async () => {
+    const { worker, calls } = makeHarness({
+      service: {
+        postExternalCharge: async () => {
+          const error = new Error('Konaklama içeride değil; harcama folyoya elle işlenmeli.');
+          error.statusCode = 409;
+          throw error;
+        },
+      },
+    });
+    await worker.handle(spa, envelope('spa.charged'));
+    assert.equal(calls.manualTasks.length, 1);
+    assert.equal(calls.manualTasks[0].title, 'Spa randevusu SPA-2026-00042 folyoya elle işlenecek');
   });
 });

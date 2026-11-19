@@ -357,6 +357,44 @@ describe('ön muhasebe (entegrasyon)', { skip }, () => {
       assert.match(rows[0].description, /Ana restoran ADS-0042 · Nakit/);
     });
 
+    it('spa tahsilatı spa eşlemesiyle kasaya; eşleme yoksa işlenmez; iade çıkış, iptal kaydı ters; dönem eşitlemesi kalanı işler', async () => {
+      const service = await db.spaService.create({ data: { hotelId, name: 'Aromaterapi Masajı', category: 'MASSAGE', durationMinutes: 60, price: '2500', createdBy: MANAGER } });
+      const startsAt = new Date(`${D(0)}T10:00:00.000Z`);
+      const appointment = await db.spaAppointment.create({
+        data: { hotelId, code: 'SPA-2026-00042', serviceId: service.id, serviceName: service.name, category: 'MASSAGE', kind: 'PRIVATE', startsAt, endsAt: new Date(startsAt.getTime() + 3_600_000), busyUntil: new Date(startsAt.getTime() + 4_500_000), customerName: 'Selin Aksoy', listPrice: '2500', price: '2500', createdBy: MANAGER },
+      });
+      const base = { hotelId, appointmentId: appointment.id, method: 'CASH', currency: 'TRY', businessDate: new Date(`${D(0)}T00:00:00.000Z`), receivedBy: DESK, postedAt: new Date() };
+      const paid = await db.spaPayment.create({ data: { ...base, amount: '2500.00' } });
+      // Spa kanalının eşlemesi yok: restoran / ön büro eşlemesi spa için geçerli değil.
+      await frontDeskMapping();
+      await assert.rejects(postings.syncSpaPayment(hotelId, paid.id), /Spa ve spor salonu · Nakit · TRY için kasa \/ banka eşlemesi yok/);
+      assert.equal((await movementsOf(kasa.try.id)).length, 0);
+      await mapping([
+        { channel: 'FRONT_DESK', method: 'CASH', currency: '', treasuryAccountId: kasa.try.id },
+        { channel: 'SPA', method: 'CASH', currency: '', treasuryAccountId: kasa.try.id },
+        { channel: 'SPA', method: 'CARD', currency: '', treasuryAccountId: banka.try.id },
+      ]);
+      await postings.syncSpaPayment(hotelId, paid.id);
+      await postings.syncSpaPayment(hotelId, paid.id);
+      // İade (kasadan çıkış) ve hatalı girişin iptal kaydı (ters hareket).
+      const refund = await db.spaPayment.create({ data: { ...base, kind: 'REFUND', amount: '-500.00' } });
+      await postings.syncSpaPayment(hotelId, refund.id);
+      const card = await db.spaPayment.create({ data: { ...base, method: 'CARD', amount: '1200.00', reference: 'SLIP-7' } });
+      await db.spaPayment.create({ data: { ...base, method: 'CARD', kind: 'REVERSAL', amount: '-1200.00', reference: 'SLIP-7', reversalOfId: card.id } });
+      // Aktör kapalıyken birikenler: dönem eşitlemesi asıl ödemeyi ve iptal kaydını işler; onay bekleyen işlenmez.
+      await db.approval.create({ data: { id: '00000000-0000-4000-8000-00000000a057', hotelId, type: 'SPA_PAYMENT', summary: 'Büyük spa ödemesi', requestedBy: DESK, expiresAt: new Date(Date.now() + 86_400_000) } });
+      await db.spaPayment.create({ data: { ...base, amount: '30000.00', status: 'PENDING', postedAt: null, approvalId: '00000000-0000-4000-8000-00000000a057' } });
+      const report = await boss(() => postings.syncPeriod(hotelId, { from: D(0), to: D(0) }));
+      assert.equal(report.failed, 0, JSON.stringify(report.errors));
+      const cashRows = await movementsOf(kasa.try.id);
+      assert.deepEqual(cashRows.map((row) => [row.sourceType, money(row.amount)]), [['SPA_PAYMENT', '2500.00'], ['SPA_PAYMENT', '-500.00']]);
+      assert.match(cashRows[0].description, /Spa tahsilatı · SPA-2026-00042 Aromaterapi Masajı · Nakit/);
+      assert.match(cashRows[1].description, /Spa iadesi/);
+      assert.deepEqual((await movementsOf(banka.try.id)).map((row) => money(row.amount)).sort(), ['-1200.00', '1200.00']);
+      assert.equal(await treasuryBalance(kasa.try.id), '2000.00');
+      assert.equal(await treasuryBalance(banka.try.id), '0.00');
+    });
+
     it('mal kabul tedarikçi carisine vadeli borcumuz; prim onaylanınca acente carisine alacak, yeniden açılınca geri', async () => {
       const supplier = await db.supplier.create({ data: { hotelId, name: 'Anadolu Süt', paymentTermDays: 45, createdBy: MANAGER } });
       const warehouse = await db.warehouse.create({ data: { hotelId, code: 'ANA', name: 'Ana depo', createdBy: MANAGER } });
@@ -491,8 +529,9 @@ describe('ön muhasebe (entegrasyon)', { skip }, () => {
       await as(MANAGER2, () => approvals.decideApproval(hotelId, cash.voucher.approvalId, 'GRANTED', { note: 'Uygun' }));
       assert.equal((await db.accountingVoucher.findUnique({ where: { id: cash.voucher.id } })).status, 'DECLINED');
       assert.equal(await treasuryBalance(kasa.try.id), '15000.00');
-      const alert = await db.staffAlert.findFirst({ where: { hotelId, entityId: cash.voucher.approvalId } });
-      assert.match(alert.body, /yeterli bakiye yok/);
+      // Aynı onaya bağlı iki uyarı var (onay isteği ve işlenemedi): sırasız okunmasın.
+      const alerts = await db.staffAlert.findMany({ where: { hotelId, entityId: cash.voucher.approvalId }, select: { body: true } });
+      assert.ok(alerts.some((row) => /yeterli bakiye yok/.test(row.body)), JSON.stringify(alerts));
     });
 
     it('aynı istek kimliği tek fiş; eşzamanlı iki kasa çıkışından biri geçer; aynı çek iki fişte ciro edilemez', async () => {
