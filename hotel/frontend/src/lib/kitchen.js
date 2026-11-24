@@ -64,6 +64,15 @@ export const stockKeys = Object.freeze({
   movements: (filters) => ['stock', 'movements', filters],
   /** @param {boolean} includeInactive */
   warehouses: (includeInactive) => ['stock', 'warehouses', includeInactive],
+  /** @param {object} filters */
+  counts: (filters) => ['stock', 'counts', filters],
+  /** @param {string} countId */
+  count: (countId) => ['stock', 'count', countId],
+  /** @param {object} filters */
+  costReport: (filters) => ['stock', 'report', 'cost', filters],
+  /** @param {object} filters */
+  productReport: (filters) => ['stock', 'report', 'products', filters],
+  settings: ['stock', 'settings'],
 });
 
 /** Canlı tazelemede en kısa aralık. */

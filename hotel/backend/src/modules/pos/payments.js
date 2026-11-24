@@ -11,6 +11,7 @@ import { requestApproval } from '../approvals/service.js';
 import { needsLargePaymentApproval } from '../payments/rules.js';
 import { guestFullName } from '../reservations/guests.js';
 import { alertRequester, closeIfSettled, getCheck, lockedCheck, pendingState } from './checks.js';
+import { assertDeliverySettlable } from './delivery-guards.js';
 import { assertRoomServiceSettlable } from './room-service-guards.js';
 import { checkBalance, roomChargeItems } from './rules.js';
 import { computeCheckTotals, dateOnly, day, hotelContext, iso, money, prisma, recomputeCheckPayments, recomputeCheckTotals, requireOpenShift } from './shared.js';
@@ -152,6 +153,7 @@ export async function receivePayment(hotelId, checkId, input) {
       const again = await replay();
       if (again) return again;
       await assertRoomServiceSettlable(tx, checkId);
+      await assertDeliverySettlable(tx, checkId);
       const { paymentId } = await takePayment(tx, stage, { hotelId, hotel, today, shift, check, input, sourceKey });
       return { paymentId, created: true };
     });
@@ -390,6 +392,7 @@ export async function chargeToRoom(hotelId, checkId, input) {
       const check = await lockedCheck(tx, hotelId, checkId);
       if (await replay()) return;
       await assertRoomServiceSettlable(tx, checkId);
+      await assertDeliverySettlable(tx, checkId);
       await postRoomCharge(tx, stage, { hotelId, hotel, today, check, reservationId: input.reservationId, amount: input.amount, sourceKey });
     });
   } catch (error) {

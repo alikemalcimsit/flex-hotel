@@ -17,7 +17,6 @@ import {
   CORS_ALLOWED_HEADERS,
   CORS_METHODS,
   correlationIdFrom,
-  originChecker,
   rateLimitKey,
   requestLogSerializer,
   resolveJwtSecret,
@@ -68,10 +67,19 @@ import { exchangeRateRoutes, paymentRoutes } from './modules/payments/routes.js'
 import { extrasRoutes } from './modules/extras/routes.js';
 import { lostItemRoutes } from './modules/lost-items/routes.js';
 import { reportRoutes } from './modules/reports/routes.js';
+import { nightAuditRoutes } from './modules/night-audit/routes.js';
+import { maintenanceRoutes } from './modules/maintenance/routes.js';
+import { assetRoutes } from './modules/assets/routes.js';
+import { reportChatRoutes } from './modules/report-chat/routes.js';
+import { reportDesignerRoutes } from './modules/report-designer/routes.js';
+import { dataImportRoutes } from './modules/data-import/routes.js';
+import { guestRoutes } from './modules/guests/routes.js';
 import { reportCacheStats } from './modules/reports/service.js';
 import { registerPaymentSubscribers } from './modules/payments/subscribers.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { messagingChannelRoutes, webchatWidgetRoutes, webhookRoutes } from './modules/channels/routes.js';
+import { publicBookingRoutes } from './modules/public-booking/routes.js';
+import { webchatOrigins } from './modules/channels/service.js';
 import { conciergeRoutes } from './modules/concierge/routes.js';
 import { roleRoutes } from './modules/roles/routes.js';
 import { resolveEffectivePermissions } from './modules/roles/service.js';
@@ -91,6 +99,9 @@ import { planRoutes } from './modules/plan/routes.js';
 import { planCacheStats } from './modules/plan/service.js';
 import { roomsRoutes } from './modules/rooms/routes.js';
 import { settingsRoutes } from './modules/settings/routes.js';
+import { pricingRoutes } from './modules/pricing/routes.js';
+import { salesRoutes } from './modules/sales/routes.js';
+import { registerPricingSubscribers, setPricingSubscriberLogger } from './modules/pricing/subscribers.js';
 
 /**
  * Bir personelin (IP + kullanıcı) dakikada atabileceği istek sayısı. Canlı
@@ -168,6 +179,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   registerActors();
   registerNotificationSubscribers();
   setApprovalSubscriberLogger(app.log);
+  setPricingSubscriberLogger(app.log);
   registerApprovalSubscribers();
   setReservationSubscriberLogger(app.log);
   registerReservationSubscribers();
@@ -183,6 +195,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   registerGuestPortalSubscribers();
   registerHousekeepingSubscribers();
   registerSpaSubscribers(app.log);
+  registerPricingSubscribers();
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
@@ -197,7 +210,15 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   app.decorate('allowedOrigins', origins);
 
   await app.register(cors, {
-    origin: originChecker(origins),
+    // Panel origin'leri + web chat / rezervasyon widget'ının izinli siteleri
+    // (modül 8/32; kanal ayarından, 60 sn önbellekli). Widget uçları dışındaki
+    // her şey yine oturum ister — CORS tek başına kapı değildir.
+    origin: (origin, callback) => {
+      if (!origin || origins.includes(origin)) return callback(null, true);
+      webchatOrigins()
+        .then((set) => callback(null, set.has(origin)))
+        .catch(() => callback(null, false));
+    },
     methods: [...CORS_METHODS],
     allowedHeaders: [...CORS_ALLOWED_HEADERS],
     exposedHeaders: ['x-correlation-id'],
@@ -341,6 +362,8 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   await app.register(userRoutes, { prefix: '/users' });
   await app.register(roleRoutes, { prefix: '/roles' });
   await app.register(settingsRoutes, { prefix: '/settings' });
+  await app.register(pricingRoutes, { prefix: '/pricing' });
+  await app.register(salesRoutes, { prefix: '/sales' });
   await app.register(roomsRoutes, { prefix: '/rooms' });
   await app.register(reservationRoutes, { prefix: '/reservations' });
   await app.register(frontDeskRoutes, { prefix: '/front-desk' });
@@ -360,7 +383,14 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   await app.register(extrasRoutes, { prefix: '/extras' });
   await app.register(housekeepingRoutes, { prefix: '/housekeeping' });
   await app.register(lostItemRoutes, { prefix: '/lost-items' });
+  await app.register(maintenanceRoutes, { prefix: '/maintenance' });
+  await app.register(assetRoutes, { prefix: '/assets' });
+  await app.register(reportChatRoutes, { prefix: '/report-chat' });
+  await app.register(reportDesignerRoutes, { prefix: '/report-designer' });
+  await app.register(dataImportRoutes, { prefix: '/imports' });
+  await app.register(guestRoutes, { prefix: '/guests' });
   await app.register(reportRoutes, { prefix: '/reports' });
+  await app.register(nightAuditRoutes, { prefix: '/night-audit' });
   await app.register(forecastRoutes, { prefix: '/forecast' });
   await app.register(budgetRoutes, { prefix: '/budgets' });
   await app.register(agencyRoutes, { prefix: '/agencies' });
@@ -398,6 +428,8 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
     await guestApp.register(publicSpaRoutes, { prefix: '/public/portal' });
     // Anket (modül 55): misafirin anket sayfası.
     await guestApp.register(publicSurveyRoutes, { prefix: '/public/survey' });
+    // Online rezervasyon motoru (modül 32): widget'ın options / quote / reserve uçları.
+    await guestApp.register(publicBookingRoutes, { prefix: '/public/booking' });
   });
 
   app.addHook('onClose', async () => {

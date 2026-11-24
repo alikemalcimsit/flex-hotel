@@ -201,7 +201,26 @@ export async function createRequest(hotelId, input) {
   });
   if (Object.keys(dayFields).length) throw new ValidationError(`Talepte düzeltilmesi gereken alanlar var: ${Object.values(dayFields)[0]}`, { fields: dayFields });
   try {
-    const id = await writeWithEvents(async (tx, stage) => {
+    const { id } = await writeWithEvents((tx, stage) => createRequestInTx(tx, stage, hotelId, input, today));
+    return getRequest(hotelId, id);
+  } catch (error) {
+    rethrowPrismaError(error);
+  }
+}
+
+/**
+ * Talebi çağıranın transaction'ında açar (stok aktörü minimum altı önerisini kart kilidi altında, tek işlemde yazar).
+ * Gün denetimi çağıranda. @returns talebin kimliği ve numarası
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {(name: string, payload: object) => Promise<unknown>} stage
+ * @param {string} hotelId
+ * @param {{ source: 'MANUAL' | 'STOCK', neededBy: string, note?: string | null, lines: Array<{ stockItemId: string, quantity: string, neededBy?: string | null }> }} input
+ * @param {string} today otelin iş günü "YYYY-AA-GG"
+ */
+export async function createRequestInTx(tx, stage, hotelId, input, today) {
+  const actor = currentActor();
+  {
+    {
       const stockItems = await tx.stockItem.findMany({
         where: { hotelId, id: { in: input.lines.map((line) => line.stockItemId) } },
         select: { id: true, name: true, unit: true, unitCost: true, isActive: true },
@@ -246,11 +265,8 @@ export async function createRequest(hotelId, input) {
         after: { number, source: input.source, neededBy, lines: lines.slice(0, 40).map((line) => `${line.item.name} ${quantityText(line.quantity)}`) },
       });
       await stage('purchase.request.changed', { hotelId, requestId: request.id, change: 'CREATED', source: input.source });
-      return request.id;
-    });
-    return getRequest(hotelId, id);
-  } catch (error) {
-    rethrowPrismaError(error);
+      return { id: request.id, number };
+    }
   }
 }
 

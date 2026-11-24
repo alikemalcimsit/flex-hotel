@@ -109,17 +109,21 @@ export const selectionTotal = (lines, selection) => money(lines.reduce((sum, lin
 
 /**
  * Kalemleri sipariş turlarına ayırır (tur kimliğiyle; sıra turların gönderiliş sırası). Bölmeyle
- * gelen kalem kaynak adisyonun turunda kalır; numarası aynı olsa da ayrı tur sayılır.
+ * gelen kalem kaynak adisyonun turunda kalır; numarası aynı olsa da ayrı tur sayılır. Turun mutfak
+ * durumu (modül 40 KDS: yeni / hazırlanıyor / hazır / servis edildi) ve sürümü gruba taşınır.
  * @template {{ orderId: string, orderSeq: number }} T
  * @param {T[]} lines
- * @param {Array<{ id: string, seq: number, sentAt: string }>} orders adisyon ekranının turları (gönderiliş sırasıyla)
- * @returns {Array<{ orderId: string, seq: number, sentAt: string | null, lines: T[] }>}
+ * @param {Array<{ id: string, seq: number, sentAt: string, status?: string, updatedAt?: string }>} orders adisyon ekranının turları (gönderiliş sırasıyla)
+ * @returns {Array<{ orderId: string, seq: number, sentAt: string | null, status: string | null, updatedAt: string | null, lines: T[] }>}
  */
 export function groupByOrder(lines, orders) {
   const rank = new Map(orders.map((order, index) => [order.id, index]));
   const groups = new Map();
   for (const line of lines) {
-    if (!groups.has(line.orderId)) groups.set(line.orderId, { orderId: line.orderId, seq: line.orderSeq, sentAt: orders[rank.get(line.orderId)]?.sentAt ?? null, lines: [] });
+    if (!groups.has(line.orderId)) {
+      const order = orders[rank.get(line.orderId)];
+      groups.set(line.orderId, { orderId: line.orderId, seq: line.orderSeq, sentAt: order?.sentAt ?? null, status: order?.status ?? null, updatedAt: order?.updatedAt ?? null, lines: [] });
+    }
     groups.get(line.orderId).lines.push(line);
   }
   return [...groups.values()].sort((a, b) => (rank.get(a.orderId) ?? 0) - (rank.get(b.orderId) ?? 0));

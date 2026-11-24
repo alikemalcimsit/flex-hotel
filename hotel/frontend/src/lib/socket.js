@@ -71,12 +71,18 @@ export const PROMOTION_CHANNEL = 'promotions.changed';
 export const BANQUET_CHANNEL = 'banquet.changed';
 /** Restoran POS (modül 39): masa planı, adisyon, sipariş turu, ödeme, vardiya ve tanımlar. */
 export const POS_CHANNEL = 'pos.changed';
+/** Mutfak ekranı (modül 40 KDS): yeni tur, durum ilerlemesi, kapanan / iptal edilen adisyon. */
+export const KITCHEN_CHANNEL = 'kitchen.changed';
 /** Reçete ve malzeme kartı (modül 43): reçete, malzeme, birim maliyet. */
 export const RECIPES_CHANNEL = 'recipes.changed';
 /** Satın alma (modül 43 / 45): talep, tedarikçi, teklif turu, sipariş, mal kabul. */
 export const PURCHASING_CHANNEL = 'purchasing.changed';
 /** Stok (modül 45 / 44): depo bazında mevcut, hareketler, minimum seviye, depolar. */
 export const STOCK_CHANNEL = 'stock.changed';
+/** Demirbaş ve amortisman (modül 46): kart, Excel yüklemesi, sayım, yıl amortismanı, kategori / alan tanımları. */
+export const ASSETS_CHANNEL = 'assets.changed';
+/** Rapor asistanı (modül 24): soru cevaplandı, kayıtlı rapor değişti. */
+export const REPORT_CHAT_CHANNEL = 'report-chat.changed';
 /** Ön muhasebe (modül 47): cari, kasa / banka, çek / senet, fiş ekranları. */
 export const ACCOUNTING_CHANNEL = 'accounting.changed';
 /** Fatura ve e-belge (modül 16 / 49): faturalanacaklar, faturalar, e-belge durumu, fatura ayarı. */

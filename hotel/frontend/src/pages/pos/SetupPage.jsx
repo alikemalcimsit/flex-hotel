@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  DELIVERY_POLICY_LIMITS,
   POS_OUTLET_KINDS,
   POS_OUTLET_KIND_LABELS,
   POS_STATIONS,
@@ -497,7 +498,7 @@ function OutletsSection() {
               <span className="font-mono text-xs text-ink-muted">{outlet.code}</span>
               <span className="font-semibold text-ink">{outlet.name}</span>
               {!outlet.isActive && <Badge tone="neutral">Pasif</Badge>}
-              {outlet.kind === 'ROOM_SERVICE' && <Badge tone="violet" dot={false}>{POS_OUTLET_KIND_LABELS.ROOM_SERVICE}</Badge>}
+              {outlet.kind !== 'DINING' && <Badge tone={OUTLET_KIND_TONES[outlet.kind]} dot={false}>{POS_OUTLET_KIND_LABELS[outlet.kind]}</Badge>}
               <Badge tone={outlet.allowRoomCharge ? 'info' : 'neutral'} dot={false}>
                 {outlet.allowRoomCharge ? 'Odaya yaz açık' : 'Odaya yaz kapalı'}
               </Badge>
@@ -512,6 +513,14 @@ function OutletsSection() {
     </Card>
   );
 }
+
+const OUTLET_KIND_TONES = Object.freeze({ ROOM_SERVICE: 'violet', DELIVERY: 'sky' });
+
+/**
+ * Türe göre "odaya yaz": oda servisinde zorunlu (teslimde kalan folyoya), paket serviste yok (müşteri otelde değil).
+ * @param {string} kind @param {boolean} current
+ */
+const roomChargeFor = (kind, current) => (kind === 'ROOM_SERVICE' ? true : kind === 'DELIVERY' ? false : current);
 
 /** @param {{ outlet: any, onClose: () => void }} props */
 function OutletDialog({ outlet, onClose }) {
@@ -546,16 +555,17 @@ function OutletDialog({ outlet, onClose }) {
         required
         options={POS_OUTLET_KINDS.map((value) => ({ value, label: POS_OUTLET_KIND_LABELS[value] }))}
         value={values.kind}
-        onChange={(kind) => setValues((current) => ({ ...current, kind, allowRoomCharge: kind === 'ROOM_SERVICE' ? true : current.allowRoomCharge }))}
+        onChange={(kind) => setValues((current) => ({ ...current, kind, allowRoomCharge: roomChargeFor(kind, current.allowRoomCharge) }))}
         disabled={busy}
       />
       {values.kind === 'ROOM_SERVICE' && <p className="text-xs text-ink-muted">Oda servisi noktasının masası yoktur; siparişleri teslim panosundadır. Menü grubunu yalnızca bu noktaya açarak kahvaltı kartı gibi oda servisine özel ürünler tanımlanır.</p>}
+      {values.kind === 'DELIVERY' && <p className="text-xs text-ink-muted">Paket servis noktasının masası yoktur; siparişleri paket panosundadır, ödeme kapıda ya da önceden alınır. Menü grubunu yalnızca bu noktaya açarak pakete özel ürünler tanımlanır.</p>}
       <Checkbox
         label="Odaya yaz açık"
-        hint={values.kind === 'ROOM_SERVICE' ? 'Oda servisinde zorunlu: teslimde kalan folyoya yazılır.' : 'İçerideki misafirin folyosuna yazılabilir.'}
+        hint={values.kind === 'ROOM_SERVICE' ? 'Oda servisinde zorunlu: teslimde kalan folyoya yazılır.' : values.kind === 'DELIVERY' ? 'Paket serviste odaya yazılmaz (müşteri otelde değil).' : 'İçerideki misafirin folyosuna yazılabilir.'}
         checked={values.allowRoomCharge}
         onChange={(event) => setValues((current) => ({ ...current, allowRoomCharge: event.target.checked }))}
-        disabled={busy || values.kind === 'ROOM_SERVICE'}
+        disabled={busy || values.kind !== 'DINING'}
       />
       {errors.allowRoomCharge && <p className="text-xs font-semibold text-danger-ink">{errors.allowRoomCharge}</p>}
       <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2">
@@ -575,8 +585,19 @@ function SettingsSection() {
   const save = useSave(() => {}, setErrors);
   useEffect(() => {
     if (settings.data) {
-      const { adjustmentApprovalAmount, cashVarianceAlert, trayCharge, deliveryTargetMinutes, prepLeadMinutes, trayAlertMinutes, guestOrderingEnabled } = settings.data;
-      setValues({ adjustmentApprovalAmount, cashVarianceAlert, trayCharge, deliveryTargetMinutes: String(deliveryTargetMinutes), prepLeadMinutes: String(prepLeadMinutes), trayAlertMinutes: String(trayAlertMinutes), guestOrderingEnabled });
+      const { adjustmentApprovalAmount, cashVarianceAlert, trayCharge, deliveryTargetMinutes, prepLeadMinutes, trayAlertMinutes, guestOrderingEnabled, deliveryFee, deliveryMinOrder, deliveryOrderMinutes } = settings.data;
+      setValues({
+        adjustmentApprovalAmount,
+        cashVarianceAlert,
+        trayCharge,
+        deliveryTargetMinutes: String(deliveryTargetMinutes),
+        prepLeadMinutes: String(prepLeadMinutes),
+        trayAlertMinutes: String(trayAlertMinutes),
+        guestOrderingEnabled,
+        deliveryFee: deliveryFee ?? '0.00',
+        deliveryMinOrder: deliveryMinOrder ?? '0.00',
+        deliveryOrderMinutes: String(deliveryOrderMinutes ?? DELIVERY_POLICY_LIMITS.deliveryOrderMinutes.min),
+      });
     }
   }, [settings.data]);
   if (settings.isPending || !values) return <Spinner className="py-6" />;
@@ -593,7 +614,7 @@ function SettingsSection() {
 
   const busy = save.isPending;
   return (
-    <Card title="Restoran ve oda servisi politikası" description="Dört göz eşiği, kasa farkı uyarısı ve oda servisi kuralları. Tutarlar otelin para biriminde.">
+    <Card title="Restoran, oda servisi ve paket servis politikası" description="Dört göz eşiği, kasa farkı uyarısı, oda servisi ve paket servis kuralları. Tutarlar otelin para biriminde.">
       <form onSubmit={submit} noValidate className="grid max-w-2xl grid-cols-1 gap-4 sm:grid-cols-2">
         <Input
           label="Onay eşiği (ikram / iptal / indirim)"
@@ -666,6 +687,7 @@ function SettingsSection() {
           <Switch label="Misafir QR bağlantısıyla sipariş verebilir" showLabel checked={values.guestOrderingEnabled} onChange={(guestOrderingEnabled) => setValues((current) => ({ ...current, guestOrderingEnabled }))} disabled={busy} />
           <p className="mt-1 text-xs text-ink-muted">Misafirin siparişi panoda kabul bekler; aynı anda en fazla 3 açık siparişi olur. Oda servisi ücreti adisyonda ayrı kalem olarak görünür; şef garson ikram edebilir.</p>
         </div>
+        <DeliveryPolicyFields values={values} setValues={setValues} errors={errors} busy={busy} />
         <div className="sm:col-span-2">
           <Button type="submit" icon="check" disabled={busy}>
             {busy ? 'Kaydediliyor…' : 'Kaydet'}
@@ -673,5 +695,34 @@ function SettingsSection() {
         </div>
       </form>
     </Card>
+  );
+}
+
+/**
+ * Paket servis (modül 42) politikası: sipariş başına ücret (adisyonda ayrı kalem), en az sipariş tutarı (ücret hariç
+ * ürün toplamı) ve siparişten kapıya teslim hedefi.
+ * @param {{ values: any, setValues: (update: (current: any) => any) => void, errors: Record<string, string>, busy: boolean }} props
+ */
+function DeliveryPolicyFields({ values, setValues, errors, busy }) {
+  const set = (key) => (event) => setValues((current) => ({ ...current, [key]: event.target.value }));
+  return (
+    <>
+      <h3 className="mt-2 text-sm font-bold text-ink sm:col-span-2">Paket servis</h3>
+      <Input label="Paket servis ücreti (sipariş başına, 0 = yok)" name="pos-delivery-fee" inputMode="decimal" value={values.deliveryFee} onChange={set('deliveryFee')} error={errors.deliveryFee} disabled={busy} />
+      <Input label="En az sipariş tutarı (ücret hariç, 0 = sınır yok)" name="pos-delivery-min" inputMode="decimal" value={values.deliveryMinOrder} onChange={set('deliveryMinOrder')} error={errors.deliveryMinOrder} disabled={busy} />
+      <Input
+        label="Paket teslim hedefi (siparişten kapıya, dakika)"
+        name="pos-delivery-order-minutes"
+        type="number"
+        inputMode="numeric"
+        min={DELIVERY_POLICY_LIMITS.deliveryOrderMinutes.min}
+        max={DELIVERY_POLICY_LIMITS.deliveryOrderMinutes.max}
+        value={values.deliveryOrderMinutes}
+        onChange={set('deliveryOrderMinutes')}
+        error={errors.deliveryOrderMinutes}
+        disabled={busy}
+      />
+      <p className="self-end text-xs text-ink-muted">Ücret adisyonda “Paket servis ücreti” kalemi olarak görünür; hedefi aşan sipariş panoda kırmızıdır.</p>
+    </>
   );
 }

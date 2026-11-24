@@ -1,10 +1,12 @@
 import { calendarDateInTimeZone, toIsoDay } from '@hotelos/core';
 import { addIsoDays, channelAvailability, channelRate, encodeRestriction, windowDays } from '@hotelos/channel-sync-worker';
 import { prisma } from '../../db.js';
+import { holdsForSale } from '../agencies/allotments.js';
+import { getActiveAdjustments } from '../pricing/yield-service.js';
 import { buildAvailabilityCalendar } from '../rooms/rules.js';
 import { loadInventorySnapshot } from '../rooms/service.js';
 import { priceStay } from '../reservations/rules.js';
-import { getActiveRoomTypes, getActiveSeasons } from '../settings/service.js';
+import { getActiveRoomTypes, getActiveSeasons, getHotelSettings } from '../settings/service.js';
 
 /**
  * Kanala gidecek müsaitlik, fiyat ve stop-sale değerlerinin hesabı (modül 33).
@@ -53,16 +55,30 @@ export async function computeRoomTypeValues({ hotelId, channel, rooms, window })
   const from = new Date(`${window.from}T00:00:00.000Z`);
   const to = new Date(`${window.to}T00:00:00.000Z`);
 
-  const [snapshot, roomTypes, seasons, stopSales] = await Promise.all([
+  const [snapshot, roomTypes, seasons, adjustments, stopSales, hotel] = await Promise.all([
     loadInventorySnapshot(prisma, hotelId, from, to, { roomTypeIds }),
     getActiveRoomTypes(hotelId),
     getActiveSeasons(hotelId),
+    getActiveAdjustments(hotelId),
     prisma.channelStopSale.findMany({
       where: { channelId: channel.id, hotelId, startDate: { lt: to }, endDate: { gte: from } },
       select: { roomTypeIds: true, startDate: true, endDate: true },
     }),
+    getHotelSettings(hotelId),
   ]);
   const calendar = buildAvailabilityCalendar({ ...snapshot, from, to, roomTypeIds });
+  // Allotment (modül 30): acentelere tutulan kota kanala "boş" gitmesin — OTA
+  // satışı genel havuzdan satıştır. Release edilen kota kendiliğinden kanala açılır
+  // (günlük tam eşitleme ve her envanter olayı pencereyi tazeler).
+  const holds = await holdsForSale(prisma, hotelId, {
+    from,
+    to,
+    days,
+    roomTypeIds,
+    saleAgencyId: null,
+    today: channelToday(hotel),
+    agencyStays: snapshot.reservations,
+  });
   const typeById = new Map(roomTypes.map((type) => [type.id, type]));
   const markup = String(channel.priceMarkupPercent ?? '0');
 
@@ -71,13 +87,15 @@ export async function computeRoomTypeValues({ hotelId, channel, rooms, window })
     const type = typeById.get(roomTypeId);
     const calendarDays = calendar.byRoomType[roomTypeId]?.days ?? {};
     // Silinmiş tip satılamaz: müsaitlik 0, fiyat yok (kanal en son fiyatı tutar; stop-sale açık).
-    const prices = type ? priceStay({ basePrice: type.basePrice, seasons, checkIn: from, checkOut: to }).nights : [];
+    // Onaylı dinamik çarpan (modül 34) kanala da yansır — misafir sitede ne görüyorsa OTA da onu satar.
+    const prices = type ? priceStay({ basePrice: type.basePrice, seasons, adjustments, roomTypeId, checkIn: from, checkOut: to }).nights : [];
     const priceByDay = new Map(prices.map((night) => [night.date, night.amount]));
     const free = {};
     const rate = {};
     const stop = {};
     for (const day of days) {
-      free[day] = type ? channelAvailability(calendarDays[day]?.free ?? 0) : 0;
+      const held = holds?.[roomTypeId]?.[day] ?? 0;
+      free[day] = type ? channelAvailability((calendarDays[day]?.free ?? 0) - held) : 0;
       rate[day] = channelRate(priceByDay.get(day) ?? '0', markup);
       stop[day] = !type;
     }

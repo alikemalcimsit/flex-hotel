@@ -4,11 +4,11 @@
   "private": true,
   "type": "module",
   "main": "index.js",
-  "description": "Dinamik fiyat önerisi LLM agent (LangGraph)",
+  "description": "Doluluk / geçen yıl verisinden gerekçeli fiyat önerileri üreten otel ajanı (modül 34; öneriler onaya düşer, fiyatı kendisi değiştirmez)",
+  "scripts": {
+    "test": "node --test \"*.test.js\""
+  },
   "dependencies": {
-    "@langchain/anthropic": "^1.5.9",
-    "@langchain/core": "^1.2.9",
-    "@langchain/langgraph": "^1.4.14",
-    "zod": "^4.5.4"
+    "@hotelos/actor-kit": "*"
   }
 }

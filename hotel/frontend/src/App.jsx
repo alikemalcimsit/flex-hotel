@@ -29,7 +29,10 @@ const HotelInfoTab = lazy(() => import('./pages/settings/HotelInfoTab.jsx').then
 const RoomTypesTab = lazy(() => import('./pages/settings/RoomTypesTab.jsx').then((m) => ({ default: m.RoomTypesTab })));
 const TaxesTab = lazy(() => import('./pages/settings/TaxesTab.jsx').then((m) => ({ default: m.TaxesTab })));
 const SeasonsTab = lazy(() => import('./pages/settings/SeasonsTab.jsx').then((m) => ({ default: m.SeasonsTab })));
+const RatePlansTab = lazy(() => import('./pages/settings/RatePlansTab.jsx').then((m) => ({ default: m.RatePlansTab })));
+const PackagesTab = lazy(() => import('./pages/settings/PackagesTab.jsx').then((m) => ({ default: m.PackagesTab })));
 const GeneralTab = lazy(() => import('./pages/settings/GeneralTab.jsx').then((m) => ({ default: m.GeneralTab })));
+const YieldSettingsTab = lazy(() => import('./pages/settings/YieldSettingsTab.jsx').then((m) => ({ default: m.YieldSettingsTab })));
 const UsersTab = lazy(() => import('./pages/settings/UsersTab.jsx').then((m) => ({ default: m.UsersTab })));
 const RolePermissionsTab = lazy(() =>
   import('./pages/settings/RolePermissionsTab.jsx').then((m) => ({ default: m.RolePermissionsTab })),
@@ -45,6 +48,7 @@ const RecordChainsPage = lazy(() =>
 const ActorsPage = lazy(() => import('./pages/actors/ActorsPage.jsx').then((m) => ({ default: m.ActorsPage })));
 const ActorDetailPage = lazy(() => import('./pages/actors/ActorDetailPage.jsx').then((m) => ({ default: m.ActorDetailPage })));
 const ManualTasksPage = lazy(() => import('./pages/tasks/ManualTasksPage.jsx').then((m) => ({ default: m.ManualTasksPage })));
+const GuidePage = lazy(() => import('./pages/guide/GuidePage.jsx').then((m) => ({ default: m.GuidePage })));
 const AiAssistantTab = lazy(() => import('./pages/settings/AiAssistantTab.jsx').then((m) => ({ default: m.AiAssistantTab })));
 const MessagingChannelsTab = lazy(() =>
   import('./pages/settings/MessagingChannelsTab.jsx').then((m) => ({ default: m.MessagingChannelsTab })),
@@ -91,13 +95,32 @@ const HousekeepingFloorMapTab = lazy(() =>
 );
 const LostItemDetailPage = lazy(() => import('./pages/lost-items/LostItemDetailPage.jsx').then((m) => ({ default: m.LostItemDetailPage })));
 const RevenueReportPage = lazy(() => import('./pages/reports/RevenueReportPage.jsx').then((m) => ({ default: m.RevenueReportPage })));
+const ReportChatLayout = lazy(() => import('./pages/report-chat/ReportChatLayout.jsx').then((m) => ({ default: m.ReportChatLayout })));
+const ReportChatPage = lazy(() => import('./pages/report-chat/ReportChatPage.jsx').then((m) => ({ default: m.ReportChatPage })));
+const SavedReportsPage = lazy(() => import('./pages/report-chat/SavedReportsPage.jsx').then((m) => ({ default: m.SavedReportsPage })));
+const ReportDesignerPage = lazy(() => import('./pages/report-designer/ReportDesignerPage.jsx').then((m) => ({ default: m.ReportDesignerPage })));
+const DataImportPage = lazy(() => import('./pages/data-import/DataImportPage.jsx').then((m) => ({ default: m.DataImportPage })));
+const NightAuditPage = lazy(() => import('./pages/night-audit/NightAuditPage.jsx').then((m) => ({ default: m.NightAuditPage })));
+const ClosureHistoryPage = lazy(() => import('./pages/night-audit/ClosureHistoryPage.jsx').then((m) => ({ default: m.ClosureHistoryPage })));
+const MaintenancePage = lazy(() => import('./pages/maintenance/MaintenancePage.jsx').then((m) => ({ default: m.MaintenancePage })));
+const TicketFormPage = lazy(() => import('./pages/maintenance/TicketFormPage.jsx').then((m) => ({ default: m.TicketFormPage })));
+const TechnicianPage = lazy(() => import('./pages/maintenance/TechnicianPage.jsx').then((m) => ({ default: m.TechnicianPage })));
+const PlansPage = lazy(() => import('./pages/maintenance/PlansPage.jsx').then((m) => ({ default: m.PlansPage })));
+const TicketDetailPage = lazy(() => import('./pages/maintenance/TicketDetailPage.jsx').then((m) => ({ default: m.TicketDetailPage })));
+const GuestsPage = lazy(() => import('./pages/guests/GuestsPage.jsx').then((m) => ({ default: m.GuestsPage })));
+const GuestCardPage = lazy(() => import('./pages/guests/GuestCardPage.jsx').then((m) => ({ default: m.GuestCardPage })));
 const BudgetPage = lazy(() => import('./pages/budget/BudgetPage.jsx').then((m) => ({ default: m.BudgetPage })));
 const AgenciesPage = lazy(() => import('./pages/agencies/AgenciesPage.jsx').then((m) => ({ default: m.AgenciesPage })));
 const AgencyPage = lazy(() => import('./pages/agencies/AgencyPage.jsx').then((m) => ({ default: m.AgencyPage })));
 const AgencyOverviewTab = lazy(() => import('./pages/agencies/AgencyOverviewTab.jsx').then((m) => ({ default: m.AgencyOverviewTab })));
 const AgencyContractsTab = lazy(() => import('./pages/agencies/AgencyContractsTab.jsx').then((m) => ({ default: m.AgencyContractsTab })));
 const AgencyAccountTab = lazy(() => import('./pages/agencies/AgencyAccountTab.jsx').then((m) => ({ default: m.AgencyAccountTab })));
+const AgencyAllotmentsTab = lazy(() => import('./pages/agencies/AgencyAllotmentsTab.jsx').then((m) => ({ default: m.AgencyAllotmentsTab })));
 const AgencyBonusTab = lazy(() => import('./pages/agencies/AgencyBonusTab.jsx').then((m) => ({ default: m.AgencyBonusTab })));
+const GroupsPage = lazy(() => import('./pages/reservations/GroupsPage.jsx').then((m) => ({ default: m.GroupsPage })));
+const GroupFilePage = lazy(() => import('./pages/reservations/GroupFilePage.jsx').then((m) => ({ default: m.GroupFilePage })));
+const SalesBoardPage = lazy(() => import('./pages/sales/SalesBoardPage.jsx').then((m) => ({ default: m.SalesBoardPage })));
+const SalesLeadPage = lazy(() => import('./pages/sales/SalesLeadPage.jsx').then((m) => ({ default: m.SalesLeadPage })));
 const AgencyBonusLayout = lazy(() => import('./pages/agency-bonus/AgencyBonusLayout.jsx').then((m) => ({ default: m.AgencyBonusLayout })));
 const BonusRulesTab = lazy(() => import('./pages/agency-bonus/BonusRulesTab.jsx').then((m) => ({ default: m.BonusRulesTab })));
 const BonusSettlementsTab = lazy(() => import('./pages/agency-bonus/BonusSettlementsTab.jsx').then((m) => ({ default: m.BonusSettlementsTab })));
@@ -121,6 +144,7 @@ const PosShiftPage = lazy(() => import('./pages/pos/ShiftPage.jsx').then((m) => 
 const PosSalesReportPage = lazy(() => import('./pages/pos/SalesReportPage.jsx').then((m) => ({ default: m.SalesReportPage })));
 const PosSetupPage = lazy(() => import('./pages/pos/SetupPage.jsx').then((m) => ({ default: m.SetupPage })));
 const PosCheckPage = lazy(() => import('./pages/pos/CheckPage.jsx').then((m) => ({ default: m.CheckPage })));
+const KitchenDisplayPage = lazy(() => import('./pages/pos/KitchenDisplayPage.jsx').then((m) => ({ default: m.KitchenDisplayPage })));
 const PosPaymentRedirect = lazy(() => import('./pages/pos/PosRedirects.jsx').then((m) => ({ default: m.PosPaymentRedirect })));
 const PosAdjustmentRedirect = lazy(() => import('./pages/pos/PosRedirects.jsx').then((m) => ({ default: m.PosAdjustmentRedirect })));
 const RoomServiceBoardPage = lazy(() => import('./pages/pos/RoomServiceBoardPage.jsx').then((m) => ({ default: m.RoomServiceBoardPage })));
@@ -130,6 +154,10 @@ const RoomServiceReportPage = lazy(() => import('./pages/pos/RoomServiceReportPa
 const RoomServiceOrderForm = lazy(() => import('./pages/pos/RoomServiceOrderForm.jsx').then((m) => ({ default: m.RoomServiceOrderForm })));
 const RoomServiceOrderPage = lazy(() => import('./pages/pos/RoomServiceOrderPage.jsx').then((m) => ({ default: m.RoomServiceOrderPage })));
 const RoomServiceTraysPage = lazy(() => import('./pages/pos/RoomServiceTraysPage.jsx').then((m) => ({ default: m.RoomServiceTraysPage })));
+const DeliveryBoardPage = lazy(() => import('./pages/pos/DeliveryBoardPage.jsx').then((m) => ({ default: m.DeliveryBoardPage })));
+const DeliveryHistoryPage = lazy(() => import('./pages/pos/DeliveryHistoryPage.jsx').then((m) => ({ default: m.DeliveryHistoryPage })));
+const DeliveryOrderForm = lazy(() => import('./pages/pos/DeliveryOrderForm.jsx').then((m) => ({ default: m.DeliveryOrderForm })));
+const DeliveryOrderPage = lazy(() => import('./pages/pos/DeliveryOrderPage.jsx').then((m) => ({ default: m.DeliveryOrderPage })));
 const BanquetMenusTab = lazy(() => import('./pages/banquet/MenusTab.jsx').then((m) => ({ default: m.MenusTab })));
 const BanquetNeedsTab = lazy(() => import('./pages/banquet/FnbNeedsTab.jsx').then((m) => ({ default: m.FnbNeedsTab })));
 const BanquetProductionTab = lazy(() => import('./pages/banquet/ProductionTab.jsx').then((m) => ({ default: m.ProductionTab })));
@@ -152,6 +180,19 @@ const SuppliersPage = lazy(() => import('./pages/purchasing/SuppliersPage.jsx').
 const StockLayout = lazy(() => import('./pages/stock/StockLayout.jsx').then((m) => ({ default: m.StockLayout })));
 const StockLevelsPage = lazy(() => import('./pages/stock/StockLevelsPage.jsx').then((m) => ({ default: m.StockLevelsPage })));
 const StockMovementsPage = lazy(() => import('./pages/stock/StockMovementsPage.jsx').then((m) => ({ default: m.StockMovementsPage })));
+const StockCountsPage = lazy(() => import('./pages/stock/StockCountsPage.jsx').then((m) => ({ default: m.StockCountsPage })));
+const StockCountPage = lazy(() => import('./pages/stock/StockCountPage.jsx').then((m) => ({ default: m.StockCountPage })));
+const StockCostReportPage = lazy(() => import('./pages/stock/StockCostReportPage.jsx').then((m) => ({ default: m.StockCostReportPage })));
+const AssetsLayout = lazy(() => import('./pages/assets/AssetsLayout.jsx').then((m) => ({ default: m.AssetsLayout })));
+const AssetsHome = lazy(() => import('./pages/assets/AssetsLayout.jsx').then((m) => ({ default: m.AssetsHome })));
+const AssetsPage = lazy(() => import('./pages/assets/AssetsPage.jsx').then((m) => ({ default: m.AssetsPage })));
+const AssetPage = lazy(() => import('./pages/assets/AssetPage.jsx').then((m) => ({ default: m.AssetPage })));
+const AssetQrRedirect = lazy(() => import('./pages/assets/AssetQrRedirect.jsx').then((m) => ({ default: m.AssetQrRedirect })));
+const AssetCountsPage = lazy(() => import('./pages/assets/AssetCountsPage.jsx').then((m) => ({ default: m.AssetCountsPage })));
+const AssetCountPage = lazy(() => import('./pages/assets/AssetCountPage.jsx').then((m) => ({ default: m.AssetCountPage })));
+const AssetDepreciationPage = lazy(() => import('./pages/assets/AssetDepreciationPage.jsx').then((m) => ({ default: m.AssetDepreciationPage })));
+const AssetWarrantyPage = lazy(() => import('./pages/assets/AssetWarrantyPage.jsx').then((m) => ({ default: m.AssetWarrantyPage })));
+const AssetDefinitionsPage = lazy(() => import('./pages/assets/AssetDefinitionsPage.jsx').then((m) => ({ default: m.AssetDefinitionsPage })));
 const AccountingLayout = lazy(() => import('./pages/accounting/AccountingLayout.jsx').then((m) => ({ default: m.AccountingLayout })));
 const AccountsPage = lazy(() => import('./pages/accounting/AccountsPage.jsx').then((m) => ({ default: m.AccountsPage })));
 const AccountPage = lazy(() => import('./pages/accounting/AccountPage.jsx').then((m) => ({ default: m.AccountPage })));
@@ -236,6 +277,7 @@ const SpaSettingsPage = lazy(() => import('./pages/spa/SpaSettingsPage.jsx').the
 const SpaPaymentRedirect = lazy(() => import('./pages/spa/SpaPaymentRedirect.jsx').then((m) => ({ default: m.SpaPaymentRedirect })));
 const InHouseTab = lazy(() => import('./pages/front-desk/InHouseTab.jsx').then((m) => ({ default: m.InHouseTab })));
 const ApprovalsPage = lazy(() => import('./pages/approvals/ApprovalsPage.jsx').then((m) => ({ default: m.ApprovalsPage })));
+const PriceSuggestionsPage = lazy(() => import('./pages/pricing/PriceSuggestionsPage.jsx').then((m) => ({ default: m.PriceSuggestionsPage })));
 const ApprovalsPendingTab = lazy(() => import('./pages/approvals/PendingTab.jsx').then((m) => ({ default: m.PendingTab })));
 const ApprovalsHistoryTab = lazy(() => import('./pages/approvals/HistoryTab.jsx').then((m) => ({ default: m.HistoryTab })));
 
@@ -294,6 +336,9 @@ export default function App() {
             }
           >
             <Route index element={<HomePage />} />
+            {/* Kılavuz: uygulama içi kullanım ve mimari dökümanı (herkes görür). */}
+            <Route path="kilavuz" element={<GuidePage />} />
+            <Route path="kilavuz/:slug" element={<GuidePage />} />
             <Route
               path="gorevler"
               element={
@@ -339,6 +384,40 @@ export default function App() {
               <Route path="bekleme-listesi" element={<WaitlistTab />} />
               <Route path=":reservationId" element={<ReservationDetailPage />} />
             </Route>
+            {/* Grup dosyaları (modül 30): rooming list, toplu oda atama / giriş / çıkış. */}
+            <Route
+              path="gruplar"
+              element={
+                <RequirePermission permission={PERMISSIONS.RESERVATIONS_VIEW}>
+                  <GroupsPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="gruplar/:groupId"
+              element={
+                <RequirePermission permission={PERMISSIONS.RESERVATIONS_VIEW}>
+                  <GroupFilePage />
+                </RequirePermission>
+              }
+            />
+            {/* Satış CRM (modül 36): fırsat panosu + dosyası. */}
+            <Route
+              path="satis"
+              element={
+                <RequirePermission permission={PERMISSIONS.SALES_VIEW}>
+                  <SalesBoardPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="satis/:leadId"
+              element={
+                <RequirePermission permission={PERMISSIONS.SALES_VIEW}>
+                  <SalesLeadPage />
+                </RequirePermission>
+              }
+            />
             <Route
               path="on-buro"
               element={
@@ -500,6 +579,80 @@ export default function App() {
                 </RequirePermission>
               }
             />
+            {/* Rapor asistanı (modül 24): soru → tablo + grafik + yorum; kayıtlı raporlar AI'sız çalışır. */}
+            <Route
+              element={
+                <RequireAnyPermission permissions={[PERMISSIONS.REPORTS_ASK, PERMISSIONS.REPORTS_VIEW]}>
+                  <ReportChatLayout />
+                </RequireAnyPermission>
+              }
+            >
+              <Route
+                path="raporlar/asistan"
+                element={
+                  <RequirePermission permission={PERMISSIONS.REPORTS_ASK}>
+                    <ReportChatPage />
+                  </RequirePermission>
+                }
+              />
+              <Route
+                path="raporlar/kayitli"
+                element={
+                  <RequirePermission permission={PERMISSIONS.REPORTS_VIEW}>
+                    <SavedReportsPage />
+                  </RequirePermission>
+                }
+              />
+              {/* Rapor tasarımcısı (modül 26): kaynak → sütun → filtre → grupla → önizle / kaydet / Excel. */}
+              <Route
+                path="raporlar/tasarim"
+                element={
+                  <RequirePermission permission={PERMISSIONS.REPORTS_VIEW}>
+                    <ReportDesignerPage />
+                  </RequirePermission>
+                }
+              />
+              <Route
+                path="raporlar/tasarim/:id"
+                element={
+                  <RequirePermission permission={PERMISSIONS.REPORTS_VIEW}>
+                    <ReportDesignerPage />
+                  </RequirePermission>
+                }
+              />
+            </Route>
+            {/* Excel'den toplu yükleme (modül 26): misafir listesi, fiyat planı. */}
+            <Route
+              path="ice-aktar"
+              element={
+                <RequireAnyPermission permissions={[PERMISSIONS.GUESTS_MANAGE, PERMISSIONS.SETTINGS_MANAGE]}>
+                  <DataImportPage />
+                </RequireAnyPermission>
+              }
+            />
+            <Route
+              path="gun-kapanis"
+              element={
+                <RequirePermission permission={PERMISSIONS.NIGHT_AUDIT_VIEW}>
+                  <NightAuditPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="gun-kapanis/gecmis"
+              element={
+                <RequirePermission permission={PERMISSIONS.NIGHT_AUDIT_VIEW}>
+                  <ClosureHistoryPage />
+                </RequirePermission>
+              }
+            />
+            <Route path="teknik-servis" element={<RequirePermission permission={PERMISSIONS.MAINTENANCE_VIEW}><MaintenancePage /></RequirePermission>} />
+            <Route path="teknik-servis/yeni" element={<RequirePermission permission={PERMISSIONS.MAINTENANCE_OPERATE}><TicketFormPage /></RequirePermission>} />
+            <Route path="teknik-servis/benim" element={<RequirePermission permission={PERMISSIONS.MAINTENANCE_VIEW}><TechnicianPage /></RequirePermission>} />
+            <Route path="teknik-servis/planlama" element={<RequirePermission permission={PERMISSIONS.MAINTENANCE_MANAGE}><PlansPage /></RequirePermission>} />
+            <Route path="teknik-servis/:id" element={<RequirePermission permission={PERMISSIONS.MAINTENANCE_VIEW}><TicketDetailPage /></RequirePermission>} />
+            <Route path="misafirler" element={<RequirePermission permission={PERMISSIONS.GUESTS_VIEW}><GuestsPage /></RequirePermission>} />
+            <Route path="misafirler/:id" element={<RequirePermission permission={PERMISSIONS.GUESTS_VIEW}><GuestCardPage /></RequirePermission>} />
             <Route path="butce" element={<Navigate to="/butce/plan" replace />} />
             <Route
               path="butce/plan"
@@ -552,6 +705,7 @@ export default function App() {
             >
               <Route index element={<AgencyOverviewTab />} />
               <Route path="kontratlar" element={<AgencyContractsTab />} />
+              <Route path="kota" element={<AgencyAllotmentsTab />} />
               <Route path="cari" element={<AgencyAccountTab />} />
               <Route
                 path="prim"
@@ -698,6 +852,23 @@ export default function App() {
                   </RequirePermission>
                 }
               />
+              {/* Paket servis (modül 42): pano ve geçmiş kabuğun içinde. */}
+              <Route
+                path="paket"
+                element={
+                  <RequireAnyPermission permissions={[PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT]}>
+                    <DeliveryBoardPage />
+                  </RequireAnyPermission>
+                }
+              />
+              <Route
+                path="paket/gecmis"
+                element={
+                  <RequireAnyPermission permissions={[PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT]}>
+                    <DeliveryHistoryPage />
+                  </RequireAnyPermission>
+                }
+              />
               <Route
                 path="adisyonlar"
                 element={
@@ -739,6 +910,32 @@ export default function App() {
                 }
               />
             </Route>
+            {/* Paket sipariş formu ve sipariş ekranı (modül 42) tam genişlik. */}
+            <Route
+              path="pos/paket/yeni"
+              element={
+                <RequirePermission permission={PERMISSIONS.POS_OPERATE}>
+                  <DeliveryOrderForm />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="pos/paket/siparis/:orderId"
+              element={
+                <RequireAnyPermission permissions={[PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT]}>
+                  <DeliveryOrderPage />
+                </RequireAnyPermission>
+              }
+            />
+            {/* Mutfak ekranı (modül 40): mutfak tabletinde açık duran pano, kabuksuz tam genişlik. */}
+            <Route
+              path="pos/mutfak-ekrani"
+              element={
+                <RequirePermission permission={PERMISSIONS.POS_OPERATE}>
+                  <KitchenDisplayPage />
+                </RequirePermission>
+              }
+            />
             {/* Oda servisi siparişi ve formu tam genişlik; tepsi listesi POS dışında (kat hizmetleri de toplar). */}
             <Route
               path="pos/oda-servisi/yeni"
@@ -833,7 +1030,7 @@ export default function App() {
                 </RequirePermission>
               }
             />
-            {/* Stok (modül 45 — 44'ün çekirdeği): mevcut, hareketler, depolar. */}
+            {/* Stok (modül 45 + 44): mevcut, hareketler (elle hareket), sayım (liste + ekran), maliyet raporu, depolar (+ satış noktası → depo). */}
             <Route
               path="stok"
               element={
@@ -844,8 +1041,85 @@ export default function App() {
             >
               <Route index element={<StockLevelsPage />} />
               <Route path="hareketler" element={<StockMovementsPage />} />
+              <Route path="sayim" element={<StockCountsPage />} />
+              <Route path="sayim/:countId" element={<StockCountPage />} />
+              <Route path="maliyet" element={<StockCostReportPage />} />
               <Route path="depolar" element={<WarehousesPage />} />
             </Route>
+            {/* Demirbaş (modül 46): liste, sayım (etiket okutan personel de girer), amortisman, garanti, tanımlar; kart, QR bağlantısı, sayım ekranı. */}
+            <Route
+              path="demirbas"
+              element={
+                <RequireAnyPermission permissions={[PERMISSIONS.ASSETS_VIEW, PERMISSIONS.ASSETS_COUNT]}>
+                  <AssetsLayout />
+                </RequireAnyPermission>
+              }
+            >
+              <Route
+                index
+                element={
+                  <AssetsHome>
+                    <AssetsPage />
+                  </AssetsHome>
+                }
+              />
+              <Route
+                path="sayim"
+                element={
+                  <RequirePermission permission={PERMISSIONS.ASSETS_COUNT}>
+                    <AssetCountsPage />
+                  </RequirePermission>
+                }
+              />
+              <Route
+                path="amortisman"
+                element={
+                  <RequirePermission permission={PERMISSIONS.ASSETS_VIEW}>
+                    <AssetDepreciationPage />
+                  </RequirePermission>
+                }
+              />
+              <Route
+                path="garanti"
+                element={
+                  <RequirePermission permission={PERMISSIONS.ASSETS_VIEW}>
+                    <AssetWarrantyPage />
+                  </RequirePermission>
+                }
+              />
+              <Route
+                path="tanimlar"
+                element={
+                  <RequirePermission permission={PERMISSIONS.ASSETS_VIEW}>
+                    <AssetDefinitionsPage />
+                  </RequirePermission>
+                }
+              />
+            </Route>
+            <Route
+              path="demirbas/sayim/:countId"
+              element={
+                <RequirePermission permission={PERMISSIONS.ASSETS_COUNT}>
+                  <AssetCountPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="demirbas/k/:code"
+              element={
+                <RequirePermission permission={PERMISSIONS.ASSETS_VIEW}>
+                  <AssetQrRedirect />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="demirbas/:assetId"
+              element={
+                <RequirePermission permission={PERMISSIONS.ASSETS_VIEW}>
+                  <AssetPage />
+                </RequirePermission>
+              }
+            />
             {/* Ön muhasebe (modül 47): cariler, yaşlandırma, kasa / banka, çek / senet, fişler, ayarlar. */}
             <Route
               path="muhasebe"
@@ -1130,6 +1404,14 @@ export default function App() {
               <Route path="gecmis" element={<ApprovalsHistoryTab />} />
             </Route>
             <Route
+              path="fiyat-onerileri"
+              element={
+                <RequirePermission permission={PERMISSIONS.APPROVALS_VIEW}>
+                  <PriceSuggestionsPage />
+                </RequirePermission>
+              }
+            />
+            <Route
               path="bildirimler"
               element={
                 <RequirePermission permission={PERMISSIONS.NOTIFICATIONS_VIEW}>
@@ -1205,6 +1487,9 @@ export default function App() {
               <Route path="oda-tipleri" element={<RoomTypesTab />} />
               <Route path="vergiler" element={<TaxesTab />} />
               <Route path="sezonlar" element={<SeasonsTab />} />
+              <Route path="fiyat-planlari" element={<RatePlansTab />} />
+              <Route path="paketler" element={<PackagesTab />} />
+              <Route path="dinamik-fiyat" element={<YieldSettingsTab />} />
               <Route path="genel" element={<GeneralTab />} />
               <Route
                 path="kullanicilar"

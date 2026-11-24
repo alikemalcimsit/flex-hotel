@@ -1439,11 +1439,14 @@ export async function postStayRoomCharges(hotelId, reservationId) {
  * @param {string} hotelId
  * @param {{ night?: string }} [options] verilmezse dün gece (otelin iş gününe göre)
  */
-export async function runRoomCharges(hotelId, { night } = {}) {
+export async function runRoomCharges(hotelId, { night, allowCurrent = false } = {}) {
   const taxes = await getActiveTaxes(hotelId);
   const today = await businessDay(hotelId);
   const throughNight = night ?? toIsoDay(addDays(dayStart(today), -1));
-  if (throughNight >= today) throw new ValidationError('Henüz bitmemiş gecenin oda ücreti işlenmez.', { field: 'night' });
+  // Gece kapanışı (modül 18) o anki gecenin "bittiğini" bildirir: `allowCurrent`
+  // ile iş gününün gecesi de işlenir (yalnız gelecek gece engellenir).
+  const ceiling = allowCurrent ? toIsoDay(addDays(dayStart(today), 1)) : today;
+  if (throughNight >= ceiling) throw new ValidationError('Henüz bitmemiş gecenin oda ücreti işlenmez.', { field: 'night' });
   const nextDay = addDays(dayStart(throughNight), 1);
   const totals = { stays: 0, items: 0, total: toDecimal(0) };
 

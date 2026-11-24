@@ -106,6 +106,8 @@ export const PERMISSIONS = Object.freeze({
 
   /** Gelir raporları (modül 23): doluluk, ADR, RevPAR, oda geliri, kırılımlar, geçen yıl. */
   REPORTS_VIEW: 'reports.view',
+  /** Doğal dil raporlama (modül 24): rapor asistanına soru sor (AI; otelin günlük AI bütçesinden), raporu kaydet / paylaş. */
+  REPORTS_ASK: 'reports.ask',
 
   /** Bütçe (modül 27): bütçeyi ve sapma raporunu görmek. */
   BUDGET_VIEW: 'budget.view',
@@ -116,6 +118,10 @@ export const PERMISSIONS = Object.freeze({
 
   /** Acente ve kontrat (modül 29): acente kartı, kontrat fiyatları, komisyon ve cari özetini görmek. */
   AGENCIES_VIEW: 'agencies.view',
+
+  /** Satış CRM (modül 36): fırsat, arama kaydı, teklif. */
+  SALES_VIEW: 'sales.view',
+  SALES_MANAGE: 'sales.manage',
   /** Acente kartı ve kontratı düzenlemek: fiyat, stop-sale, satışa açma, sonlandırma. */
   AGENCIES_MANAGE: 'agencies.manage',
 
@@ -228,6 +234,34 @@ export const PERMISSIONS = Object.freeze({
   ACTORS_VIEW: 'actors.view',
   /** Aktörü bu otelde açmak / kapatmak (kapalı aktörün işi personele düşer). */
   ACTORS_MANAGE: 'actors.manage',
+
+  /** Gün kapanış (modül 18): kapanış durumu, önizleme, kapanış geçmişi ve günlük özet. */
+  NIGHT_AUDIT_VIEW: 'night_audit.view',
+  /** Günü kapatmak: gelmeyenleri düş, oda ücretlerini bas, kasayı say, günü ilerlet. */
+  NIGHT_AUDIT_CLOSE: 'night_audit.close',
+
+  /** Teknik servis (modül 20): arıza listesi, bilet ayrıntısı, bakım planı. */
+  MAINTENANCE_VIEW: 'maintenance.view',
+  /** Arıza bileti aç, başla, çöz, fotoğraf ekle (teknisyen / bildiren personel). */
+  MAINTENANCE_OPERATE: 'maintenance.operate',
+  /** Bilete teknisyen ata, iptal et, odayı arızaya al, periyodik bakım planı. */
+  MAINTENANCE_MANAGE: 'maintenance.manage',
+
+  /** CRM (modül 22): misafir listesi, kart, geçmiş, tercih ve notlar. */
+  GUESTS_VIEW: 'guests.view',
+  /** Misafir kartını düzenle, tercih / not / etiket ekle. */
+  GUESTS_MANAGE: 'guests.manage',
+  /** Mükerrer kartları birleştir (geri alınamaz). */
+  GUESTS_MERGE: 'guests.merge',
+
+  /** Demirbaş (modül 46): liste, kart, hareket geçmişi, amortisman tablosu, garanti listesi. */
+  ASSETS_VIEW: 'assets.view',
+  /** Demirbaş sayımında etiket okut (sayım ekranı). */
+  ASSETS_COUNT: 'assets.count',
+  /** Kart aç / düzelt, Excel ile yükle, taşı, zimmetle, etiket bas, sayım aç / kapat, kategori ve alan tanımları. */
+  ASSETS_MANAGE: 'assets.manage',
+  /** Yıl amortismanını kaydet / geri al, demirbaşı elden çıkar (satış, hurda, kayıp). */
+  ASSETS_FINANCE: 'assets.finance',
 });
 
 /** Tüm izinlerin düz listesi (doğrulama ve "ADMIN her şeyi görür" için). */
@@ -281,10 +315,13 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.LOST_ITEMS_RELEASE]: 'Kayıp eşyayı misafirle eşleştir, teslim et',
   [PERMISSIONS.LOST_ITEMS_MANAGE]: 'Sahibi çıkmayan eşyayı kapat, saklama süresini ayarla',
   [PERMISSIONS.REPORTS_VIEW]: 'Gelir raporlarını görüntüle (doluluk, ADR, RevPAR)',
+  [PERMISSIONS.REPORTS_ASK]: 'Rapor asistanına soru sor (AI), raporu kaydet ve paylaş',
   [PERMISSIONS.BUDGET_VIEW]: 'Bütçeyi ve sapma raporunu görüntüle',
   [PERMISSIONS.BUDGET_MANAGE]: 'Bütçe taslağını, gider kalemlerini ve gerçekleşen giderleri düzenle',
   [PERMISSIONS.BUDGET_APPROVE]: 'Bütçeyi onayla ve revize aç',
   [PERMISSIONS.AGENCIES_VIEW]: 'Acente, kontrat fiyatı ve cari özetini görüntüle',
+  [PERMISSIONS.SALES_VIEW]: 'Satış fırsatlarını, arama kayıtlarını ve teklifleri görüntüle',
+  [PERMISSIONS.SALES_MANAGE]: 'Fırsat ve arama kaydı aç, teklif hazırla / gönder / sonuçlandır',
   [PERMISSIONS.AGENCIES_MANAGE]: 'Acente kartı ve kontratı düzenle (fiyat, stop-sale, satışa aç)',
   [PERMISSIONS.PROMOTIONS_VIEW]: 'Promosyonları, kuponları ve kullanım raporunu görüntüle',
   [PERMISSIONS.PROMOTIONS_MANAGE]: 'Promosyon aç, düzenle, yayına al; kupon üret ve kapat',
@@ -306,7 +343,7 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.PURCHASING_MANAGE]: 'Tedarikçi, teklif turu, kazanan seçimi / sipariş, sipariş iptali, satın alma politikası',
   [PERMISSIONS.PURCHASING_RECEIVE]: 'Mal kabul / irsaliye gir (stok girer)',
   [PERMISSIONS.STOCK_VIEW]: 'Stok mevcudu, hareketleri ve stok değerini görüntüle',
-  [PERMISSIONS.STOCK_MANAGE]: 'Depo tanımları ve minimum stok seviyesi',
+  [PERMISSIONS.STOCK_MANAGE]: 'Depo tanımları, minimum stok seviyesi, elle hareket (çıkış / fire / transfer), sayım, satış noktası → depo eşlemesi',
   [PERMISSIONS.ACCOUNTING_VIEW]: 'Cariler ve ekstre, kasa / banka hareketleri, çek / senet portföyü ve fişleri görüntüle',
   [PERMISSIONS.ACCOUNTING_MANAGE]: 'Tahsilat / ödeme / virman fişi gir, çek / senet işlemleri, cari kartı aç ve düzenle',
   [PERMISSIONS.ACCOUNTING_SETUP]: 'Kasa / banka tanımları, yöntem eşlemesi, başlangıç günü ve onay eşiği, açılış bakiyesi, fiş iptali',
@@ -314,6 +351,18 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.INVOICES_ISSUE]: 'Folyo / etkinlik faturası kes (taslak, alıcı, kesim), e-belgeyi tekrar gönder',
   [PERMISSIONS.INVOICES_MANAGE]: 'Cariye serbest fatura kes, fatura iptali iste (onay kuyruğu)',
   [PERMISSIONS.INVOICES_SETUP]: 'Fatura ayarları: satıcı bilgileri, seriler, faturalama başlangıcı, vergi kodları, entegratör, test mükellefleri',
+  [PERMISSIONS.NIGHT_AUDIT_VIEW]: 'Gün kapanışını ve günlük özeti görüntüle',
+  [PERMISSIONS.NIGHT_AUDIT_CLOSE]: 'Günü kapat (night audit)',
+  [PERMISSIONS.MAINTENANCE_VIEW]: 'Arıza / bakım taleplerini görüntüle',
+  [PERMISSIONS.MAINTENANCE_OPERATE]: 'Arıza bileti aç, başla, çöz, fotoğraf ekle',
+  [PERMISSIONS.MAINTENANCE_MANAGE]: 'Arıza atama / iptal, odayı arızaya alma, bakım planı',
+  [PERMISSIONS.GUESTS_VIEW]: 'Misafir kartlarını görüntüle (CRM)',
+  [PERMISSIONS.GUESTS_MANAGE]: 'Misafir kartı düzenle, tercih / not / etiket',
+  [PERMISSIONS.GUESTS_MERGE]: 'Mükerrer misafir kartlarını birleştir',
+  [PERMISSIONS.ASSETS_VIEW]: 'Demirbaşları, hareketlerini, amortisman tablosunu ve garanti listesini görüntüle',
+  [PERMISSIONS.ASSETS_COUNT]: 'Demirbaş sayımında etiket okut',
+  [PERMISSIONS.ASSETS_MANAGE]: 'Demirbaş kartı aç / düzelt, Excel ile yükle, taşı, zimmetle, etiket bas, sayım aç / kapat, tanımlar',
+  [PERMISSIONS.ASSETS_FINANCE]: 'Yıl amortismanını kaydet / geri al, demirbaşı elden çıkar',
   [PERMISSIONS.EMPLOYEES_VIEW]: 'Personel listesini ve kartlarını görüntüle (ücret hariç)',
   [PERMISSIONS.EMPLOYEES_MANAGE]: 'Personel kartı ekle / düzenle, işten çıkış yap',
   [PERMISSIONS.PAYROLL_VIEW]: 'Ücretleri, bordroları, pusulaları ve çıktıları görüntüle',
@@ -410,9 +459,13 @@ export const PERMISSION_GROUPS = Object.freeze([
     label: 'Kayıp eşya',
     permissions: [PERMISSIONS.LOST_ITEMS_VIEW, PERMISSIONS.LOST_ITEMS_RECORD, PERMISSIONS.LOST_ITEMS_RELEASE, PERMISSIONS.LOST_ITEMS_MANAGE],
   },
-  { key: 'reports', label: 'Raporlar', permissions: [PERMISSIONS.REPORTS_VIEW] },
+  { key: 'reports', label: 'Raporlar', permissions: [PERMISSIONS.REPORTS_VIEW, PERMISSIONS.REPORTS_ASK] },
+  { key: 'night_audit', label: 'Gün kapanış', permissions: [PERMISSIONS.NIGHT_AUDIT_VIEW, PERMISSIONS.NIGHT_AUDIT_CLOSE] },
+  { key: 'maintenance', label: 'Teknik servis', permissions: [PERMISSIONS.MAINTENANCE_VIEW, PERMISSIONS.MAINTENANCE_OPERATE, PERMISSIONS.MAINTENANCE_MANAGE] },
+  { key: 'guests', label: 'Misafir CRM', permissions: [PERMISSIONS.GUESTS_VIEW, PERMISSIONS.GUESTS_MANAGE, PERMISSIONS.GUESTS_MERGE] },
   { key: 'budget', label: 'Bütçe', permissions: [PERMISSIONS.BUDGET_VIEW, PERMISSIONS.BUDGET_MANAGE, PERMISSIONS.BUDGET_APPROVE] },
   { key: 'agencies', label: 'Acente ve kontrat', permissions: [PERMISSIONS.AGENCIES_VIEW, PERMISSIONS.AGENCIES_MANAGE] },
+  { key: 'sales', label: 'Satış CRM', permissions: [PERMISSIONS.SALES_VIEW, PERMISSIONS.SALES_MANAGE] },
   { key: 'promotions', label: 'Promosyon ve kupon', permissions: [PERMISSIONS.PROMOTIONS_VIEW, PERMISSIONS.PROMOTIONS_MANAGE] },
   {
     key: 'banquet',
@@ -431,6 +484,7 @@ export const PERMISSION_GROUPS = Object.freeze([
     permissions: [PERMISSIONS.PURCHASING_VIEW, PERMISSIONS.PURCHASING_REQUEST, PERMISSIONS.PURCHASING_MANAGE, PERMISSIONS.PURCHASING_RECEIVE],
   },
   { key: 'stock', label: 'Stok ve depo', permissions: [PERMISSIONS.STOCK_VIEW, PERMISSIONS.STOCK_MANAGE] },
+  { key: 'assets', label: 'Demirbaş', permissions: [PERMISSIONS.ASSETS_VIEW, PERMISSIONS.ASSETS_COUNT, PERMISSIONS.ASSETS_MANAGE, PERMISSIONS.ASSETS_FINANCE] },
   { key: 'accounting', label: 'Ön muhasebe', permissions: [PERMISSIONS.ACCOUNTING_VIEW, PERMISSIONS.ACCOUNTING_MANAGE, PERMISSIONS.ACCOUNTING_SETUP] },
   { key: 'invoices', label: 'Fatura ve e-belge', permissions: [PERMISSIONS.INVOICES_VIEW, PERMISSIONS.INVOICES_ISSUE, PERMISSIONS.INVOICES_MANAGE, PERMISSIONS.INVOICES_SETUP] },
   { key: 'employees', label: 'Personel', permissions: [PERMISSIONS.EMPLOYEES_VIEW, PERMISSIONS.EMPLOYEES_MANAGE] },
@@ -520,7 +574,19 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.LOST_ITEMS_RELEASE,
     PERMISSIONS.LOST_ITEMS_MANAGE,
     PERMISSIONS.REPORTS_VIEW,
+    PERMISSIONS.REPORTS_ASK,
     PERMISSIONS.FORECAST_MANAGE,
+    // Gün kapanışı (night audit) gece müdürünün / yönetimin işi.
+    PERMISSIONS.NIGHT_AUDIT_VIEW,
+    PERMISSIONS.NIGHT_AUDIT_CLOSE,
+    // Teknik servisin tüm akışı yöneticide: bilet, atama, oda kapatma, bakım planı.
+    PERMISSIONS.MAINTENANCE_VIEW,
+    PERMISSIONS.MAINTENANCE_OPERATE,
+    PERMISSIONS.MAINTENANCE_MANAGE,
+    // Misafir CRM: kart, tercih, not, birleştirme.
+    PERMISSIONS.GUESTS_VIEW,
+    PERMISSIONS.GUESTS_MANAGE,
+    PERMISSIONS.GUESTS_MERGE,
     // Bütçeyi müdür onaylar.
     PERMISSIONS.BUDGET_VIEW,
     PERMISSIONS.BUDGET_MANAGE,
@@ -528,6 +594,8 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     // Acente sözleşmesi ve kontrat fiyatı ticari karar: müdürün.
     PERMISSIONS.AGENCIES_VIEW,
     PERMISSIONS.AGENCIES_MANAGE,
+    PERMISSIONS.SALES_VIEW,
+    PERMISSIONS.SALES_MANAGE,
     // İndirim kampanyası fiyat kararıdır: müdürün.
     PERMISSIONS.PROMOTIONS_VIEW,
     PERMISSIONS.PROMOTIONS_MANAGE,
@@ -559,6 +627,11 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.PURCHASING_RECEIVE,
     PERMISSIONS.STOCK_VIEW,
     PERMISSIONS.STOCK_MANAGE,
+    // Demirbaş sicili, sayım ve amortisman: müdür hepsini görür ve yapar.
+    PERMISSIONS.ASSETS_VIEW,
+    PERMISSIONS.ASSETS_COUNT,
+    PERMISSIONS.ASSETS_MANAGE,
+    PERMISSIONS.ASSETS_FINANCE,
     // Ön muhasebe müdürün de işi (küçük otel); eşik üstü ödeme fişini başka bir yetkili onaylar.
     PERMISSIONS.ACCOUNTING_VIEW,
     PERMISSIONS.ACCOUNTING_MANAGE,
@@ -590,6 +663,8 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.ROOMS_OPERATE,
     PERMISSIONS.RESERVATIONS_VIEW,
     PERMISSIONS.RESERVATIONS_MANAGE,
+    PERMISSIONS.SALES_VIEW,
+    PERMISSIONS.SALES_MANAGE,
     PERMISSIONS.STAYS_VIEW,
     PERMISSIONS.STAYS_MANAGE,
     PERMISSIONS.MESSAGES_VIEW,
@@ -629,6 +704,16 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     // Resepsiyon / concierge misafir adına spa randevusu alır ve takvimi görür; tahsilat spa kasasında.
     PERMISSIONS.SPA_VIEW,
     PERMISSIONS.SPA_BOOK,
+    // Gece vardiyasında günü resepsiyon kapatır (night audit).
+    PERMISSIONS.NIGHT_AUDIT_VIEW,
+    PERMISSIONS.NIGHT_AUDIT_CLOSE,
+    // Resepsiyon arızayı görür ve bilet açar (teknisyene gider).
+    PERMISSIONS.MAINTENANCE_VIEW,
+    PERMISSIONS.MAINTENANCE_OPERATE,
+    // Misafir kartı resepsiyonun işi: tercih, not, mükerrer birleştirme.
+    PERMISSIONS.GUESTS_VIEW,
+    PERMISSIONS.GUESTS_MANAGE,
+    PERMISSIONS.GUESTS_MERGE,
   ]),
   HOUSEKEEPING: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,
@@ -652,6 +737,9 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     // Eşyayı en çok oda temizliğinde kat görevlisi bulur; sahibine teslim resepsiyonun işi.
     PERMISSIONS.LOST_ITEMS_VIEW,
     PERMISSIONS.LOST_ITEMS_RECORD,
+    // Arızayı temizlikte görür ve bilet açar / teknisyense çözer.
+    PERMISSIONS.MAINTENANCE_VIEW,
+    PERMISSIONS.MAINTENANCE_OPERATE,
   ]),
   ACCOUNTING: Object.freeze([
     PERMISSIONS.SETTINGS_VIEW,
@@ -675,6 +763,7 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.EXTRAS_MANAGE,
     // Gelir raporları muhasebenin aylık işi.
     PERMISSIONS.REPORTS_VIEW,
+    PERMISSIONS.REPORTS_ASK,
     // Bütçeyi muhasebe hazırlar ve gerçekleşen giderleri girer; onay müdürün.
     PERMISSIONS.BUDGET_VIEW,
     PERMISSIONS.BUDGET_MANAGE,
@@ -710,6 +799,11 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.PAYROLL_VIEW,
     PERMISSIONS.PAYROLL_MANAGE,
     PERMISSIONS.PAYROLL_PAY,
+    // Demirbaş sicili ve amortisman muhasebenin işi (sabit kıymet defteri); sayımı da yürütür.
+    PERMISSIONS.ASSETS_VIEW,
+    PERMISSIONS.ASSETS_COUNT,
+    PERMISSIONS.ASSETS_MANAGE,
+    PERMISSIONS.ASSETS_FINANCE,
   ]),
   FNB: Object.freeze([
     PERMISSIONS.ROOMS_VIEW,

@@ -538,6 +538,10 @@ export const STAFF_ALERT_KINDS = Object.freeze([
   'ONLINE_CHECKIN',
   'SURVEY_LOW_SCORE',
   'SPA',
+  'MAINTENANCE',
+  'SALES_FOLLOW_UP',
+  'ASSET',
+  'STOCK',
 ]);
 
 export const STAFF_ALERT_KIND_LABELS = Object.freeze({
@@ -562,6 +566,10 @@ export const STAFF_ALERT_KIND_LABELS = Object.freeze({
   ONLINE_CHECKIN: 'Online check-in (inceleme bekliyor)',
   SURVEY_LOW_SCORE: 'Ankette düşük puan (takip)',
   SPA: 'Spa (portal randevusu, yedek liste, açık bakiye)',
+  SALES_FOLLOW_UP: 'Satış takibi',
+  MAINTENANCE: 'Arıza / teknik servis',
+  ASSET: 'Demirbaş (garantisi bitecekler)',
+  STOCK: 'Stok (minimum altı; talep açıldı)',
 });
 
 export const STAFF_ALERT_SEVERITIES = Object.freeze(['INFO', 'WARNING', 'CRITICAL']);

@@ -10,7 +10,8 @@ import {
   REPORT_QUERY_NAMES,
   reportRangeSchema,
 } from '@hotelos/hotel-contracts';
-import { createReadOnlyMcpServer } from '@hotelos/mcp-server';
+import { connectInProcess, createReadOnlyMcpServer } from '@hotelos/mcp-server';
+import { ValidationError } from '../../lib/errors.js';
 import { explainVariance } from '../budget/variance.js';
 import { getForecast } from '../forecast/service.js';
 import { getRevenueReport } from './service.js';
@@ -165,4 +166,27 @@ export function createReportingMcpServer({ hotelId, actor = 'mcp:raporlama', log
       },
     ],
   });
+}
+
+/**
+ * Raporlama aracını uygulamanın içinden **MCP üzerinden** çağırır (modül 24 rapor asistanı ve kayıtlı raporlar):
+ * ajanın gördüğü sonuçla ekrana gelen tablo aynı araçtan, aynı doğrulamayla çıkar. Aracın beklenen hatası (geçersiz
+ * aralık, bütçe yok…) `ValidationError` olur; mesajı kullanıcıya / modele gösterilebilir.
+ *
+ * @param {string} hotelId
+ * @param {string} name araç adı
+ * @param {Record<string, unknown>} input
+ * @param {{ actor?: string }} [options]
+ * @returns {Promise<any>} aracın yapılandırılmış çıktısı
+ */
+export async function callReportingTool(hotelId, name, input, { actor = 'mcp:rapor-asistani' } = {}) {
+  const { client, close } = await connectInProcess(createReportingMcpServer({ hotelId, actor }));
+  try {
+    const result = await client.callTool({ name, arguments: input });
+    const text = result.content?.find((part) => part.type === 'text')?.text ?? '';
+    if (result.isError) throw new ValidationError(text || 'Rapor üretilemedi');
+    return result.structuredContent ?? JSON.parse(text);
+  } finally {
+    await close();
+  }
 }

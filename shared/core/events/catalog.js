@@ -115,6 +115,27 @@ export const EVENT_CATALOG = Object.freeze({
   'settings.season.created': settingsEntity,
   'settings.season.updated': settingsEntity.extend({ changedFields: z.array(z.string()).default([]) }),
   'settings.season.deleted': settingsEntity,
+  /** Modül 28: fiyat planı (oda tipi × pansiyon × dönem). */
+  'settings.rate_plan.created': settingsEntity,
+  'settings.rate_plan.updated': settingsEntity.extend({ changedFields: z.array(z.string()).default([]) }),
+  'settings.rate_plan.deleted': settingsEntity,
+  /** Modül 28: paket (oda + ek hizmet demeti). */
+  'settings.package.created': settingsEntity,
+  'settings.package.updated': settingsEntity.extend({ changedFields: z.array(z.string()).default([]) }),
+  'settings.package.deleted': settingsEntity,
+  /** Modül 34: yield kural parametreleri değişti. */
+  'settings.yield.updated': hotelScoped.extend({ changedFields: z.array(z.string()).default([]) }),
+  /** Modül 34: onaylanan fiyat ayarı uygulandı / geri alındı (gece hassasiyetli çarpan). */
+  'settings.price_adjustment.changed': hotelScoped.extend({
+    roomTypeIds: z.array(z.string().uuid()).max(100).default([]),
+    from: isoDay,
+    to: isoDay,
+  }),
+  /** Modül 34: günlük fiyat değerlendirmesi — pricing-agent bu olayla çalışır. */
+  'pricing.review.requested': hotelScoped.extend({
+    businessDate: isoDay,
+    horizonDays: z.number().int().min(1).max(90),
+  }),
 
   /* ── Oda envanteri (modül 3) ── */
 
@@ -518,6 +539,10 @@ export const EVENT_CATALOG = Object.freeze({
       'ONLINE_CHECKIN',
       'SURVEY_LOW_SCORE',
       'SPA',
+      'MAINTENANCE',
+      'SALES_FOLLOW_UP',
+      'ASSET',
+      'STOCK',
     ]),
     userId: z.string().uuid().nullable(),
     permission: z.string().nullable(),
@@ -592,6 +617,49 @@ export const EVENT_CATALOG = Object.freeze({
     items: z.number().int().min(0),
     total: moneyText,
   }),
+
+  /** Gün kapanışı (modül 18) başladı: görevli günü kapatmaya başladı (iş günü henüz ilerlemedi). */
+  'night.audit.started': hotelScoped.extend({ businessDay: isoDay }),
+  /**
+   * Gün kapandı: iş günü ilerledi. FlexAI 2.0'da gece müdürü (87), kârlılık (92)
+   * ve dış muhasebe (96) bunu dinler. Kapanışın yaptığı iş özeti payload'da.
+   */
+  'night.audit.closed': hotelScoped.extend({
+    businessDay: isoDay,
+    noShows: z.number().int().min(0),
+    roomChargeStays: z.number().int().min(0),
+    roomChargeTotal: moneyText,
+  }),
+
+  /** Arıza bileti açıldı (modül 20). Oda kapatıldıysa `roomBlockId` dolu. */
+  'maintenance.ticket.created': hotelScoped.extend({
+    ticketId: z.string().uuid(),
+    roomId: z.string().uuid().nullable().default(null),
+    priority: z.number().int().min(1).max(5),
+    source: z.string(),
+    roomBlockId: z.string().uuid().nullable().default(null),
+  }),
+  /** Bilete teknisyen atandı (ya da atama kaldırıldı). */
+  'maintenance.ticket.assigned': hotelScoped.extend({
+    ticketId: z.string().uuid(),
+    assignedTo: z.string().uuid().nullable().default(null),
+  }),
+  /** Bilet çözüldü; oda kapatılmışsa açıldı. */
+  'maintenance.ticket.resolved': hotelScoped.extend({
+    ticketId: z.string().uuid(),
+    roomId: z.string().uuid().nullable().default(null),
+  }),
+  /** Bilet iptal edildi. */
+  'maintenance.ticket.cancelled': hotelScoped.extend({ ticketId: z.string().uuid() }),
+
+  /** Misafir kartı güncellendi (iletişim, kimlik, etiket) — modül 22. */
+  'guest.card.updated': hotelScoped.extend({ guestId: z.string().uuid() }),
+  /** İki misafir kartı birleştirildi (kaynak silindi, kayıtları hedefe taşındı). */
+  'guest.card.merged': hotelScoped.extend({ sourceId: z.string().uuid(), targetId: z.string().uuid() }),
+  /** Misafir tercihi eklendi / değişti / silindi. */
+  'guest.preference.updated': hotelScoped.extend({ guestId: z.string().uuid() }),
+  /** Misafir kartına not eklendi. */
+  'guest.note.added': hotelScoped.extend({ guestId: z.string().uuid() }),
   /** Kalem iptali onaya gitti. */
   'folio.item.void_requested': folioEvent.extend({ itemId: z.string().uuid(), approvalId: z.string().uuid() }),
   /** Kalem iptal edildi (ters kayıt işlendi). Onaylı iptalde `approvalId` dolu; sistemin geri alması boş. */
@@ -717,6 +785,21 @@ export const EVENT_CATALOG = Object.freeze({
     status: z.enum(['READY', 'FAILED']),
   }),
 
+  /* ── Doğal dil raporlama (modül 24) ──
+     Soru sorulunca rapor ajanı (report-agent) olayı alır, raporu seçer ve cevabı yazar; ekranlar `report-chat.changed`
+     kanalıyla tazelenir. Ajan kapalıysa soru "rapor talebi" manuel görevine düşer (görev başlığı sorudan). */
+
+  'report.question.asked': hotelScoped.extend({ questionId: z.string().uuid(), question: z.string().max(500) }),
+  'report.question.completed': hotelScoped.extend({ questionId: z.string().uuid(), status: z.enum(['READY', 'FAILED']) }),
+  'report.saved.changed': hotelScoped.extend({ savedReportId: z.string().uuid(), change: z.enum(['CREATED', 'UPDATED', 'DELETED']) }),
+
+  /* ── Rapor tasarımcısı ve Excel yükleme (modül 26) ── */
+
+  /** Tasarım raporu kaydedildi / değişti / silindi (kayıtlı raporlar ekranı `report-chat.changed` kanalından tazelenir). */
+  'report.definition.changed': hotelScoped.extend({ definitionId: z.string().uuid(), change: z.enum(['CREATED', 'UPDATED', 'DELETED']) }),
+  /** Excel'den toplu yükleme yazıldı (misafir listesi / fiyat planı); fiyat planlarının kendi olayları ayrıca yayınlanır. */
+  'data.import.completed': hotelScoped.extend({ importId: z.string().uuid(), kind: z.enum(['GUESTS', 'RATE_PLANS']), created: z.number().int().min(0), skipped: z.number().int().min(0) }),
+
   /* ── Acente ve kontrat (modül 29) ──
      Acente listesi / kartı, kontrat ekranı ve rezervasyon formundaki acente
      fiyat önizlemesi bunlarla canlı tazelenir (`AGENCY_EVENTS`); yükte yalnızca kimlik. */
@@ -737,6 +820,30 @@ export const EVENT_CATALOG = Object.freeze({
     agencyId: z.string().uuid(),
     contractId: z.string().uuid(),
     change: z.enum(['ADDED', 'REMOVED']),
+  }),
+  /* ── Satış CRM (modül 36) ──
+     Fırsat panosu ve teklif ekranı bunlarla canlı tazelenir; yükte yalnızca kimlik. */
+
+  /** Fırsat açıldı, düzenlendi, durumu değişti (pano sütunu) ya da kazanıldı/kaybedildi. */
+  'sales.lead.changed': hotelScoped.extend({
+    leadId: z.string().uuid(),
+    change: z.enum(['CREATED', 'UPDATED', 'STATUS_CHANGED', 'WON', 'LOST']),
+  }),
+  /** Teklif taslağı açıldı, gönderildi, kabul/red edildi ya da süresi doldu. */
+  'sales.quote.changed': hotelScoped.extend({
+    leadId: z.string().uuid(),
+    quoteId: z.string().uuid(),
+    change: z.enum(['CREATED', 'UPDATED', 'SENT', 'ACCEPTED', 'REJECTED', 'EXPIRED']),
+  }),
+
+  /** Allotment / kota açıldı, düzenlendi ya da silindi (modül 30; müsaitliği hemen etkiler). */
+  'agency.allotment.changed': hotelScoped.extend({
+    agencyId: z.string().uuid(),
+    allotmentId: z.string().uuid(),
+    roomTypeId: z.string().uuid(),
+    from: isoDay,
+    to: isoDay,
+    change: z.enum(['CREATED', 'UPDATED', 'DELETED']),
   }),
 
   /* ── Banket / etkinlik (modül 37) ──
@@ -820,8 +927,30 @@ export const EVENT_CATALOG = Object.freeze({
     currency: z.string(),
     dueDate: z.string(),
   }),
-  /** Stok değişti (mal kabul girişi, depo tanımı, minimum seviye); 44 çıkış / transfer / sayımı ekler. */
-  'stock.changed': hotelScoped.extend({ change: z.enum(['RECEIPT', 'WAREHOUSE', 'MIN_LEVEL']), stockItemIds: z.array(z.string().uuid()).max(500).default([]) }),
+  /**
+   * Stok değişti: mal kabul girişi, depo tanımı, minimum seviye (modül 45); elle hareket (çıkış / fire / transfer),
+   * sayım onayı, satış düşümü (adisyon kapanışında reçeteden) ve satış noktası → depo ayarı (modül 44).
+   * `stockItemIds` miktarı değişen malzemeler: inventory-worker minimum altına düşeni buradan izler.
+   */
+  'stock.changed': hotelScoped.extend({
+    change: z.enum(['RECEIPT', 'WAREHOUSE', 'MIN_LEVEL', 'MOVEMENT', 'COUNT', 'SALE', 'SETTINGS']),
+    stockItemIds: z.array(z.string().uuid()).max(500).default([]),
+  }),
+
+  /* ── Demirbaş ve amortisman (modül 46) ──
+     Demirbaş listesi, kart, sayım, amortisman tablosu ve garanti ekranları (`assets.changed`); yükte yalnız kimlikler. */
+
+  /** Kart(lar) açıldı / düzeltildi / taşındı / zimmetlendi / iade alındı / elden çıkarıldı; Excel yüklemesi ve sayım kapanışındaki taşımalar tek olayda. */
+  'asset.changed': hotelScoped.extend({
+    change: z.enum(['CREATED', 'UPDATED', 'TRANSFERRED', 'ASSIGNED', 'RETURNED', 'DISPOSED', 'IMPORTED']),
+    assetIds: z.array(z.string().uuid()).max(1000).default([]),
+  }),
+  /** Sayım açıldı / etiket okutuldu / kapandı / iptal edildi. */
+  'asset.count.changed': hotelScoped.extend({ countId: z.string().uuid(), change: z.enum(['OPENED', 'SCANNED', 'CLOSED', 'CANCELLED']) }),
+  /** Bir yılın amortismanı kaydedildi ya da (son yıl) geri alındı. */
+  'asset.depreciation.changed': hotelScoped.extend({ year: z.number().int(), change: z.enum(['POSTED', 'REVERSED']), total: z.string() }),
+  /** Kategori ya da alan tanımı değişti. */
+  'asset.settings.changed': hotelScoped.extend({ change: z.enum(['CATEGORY', 'AREA']) }),
 
   /* ── Ön muhasebe (modül 47) ──
      Cari, kasa / banka, çek / senet ve fiş ekranları (`accounting.changed`); yükte yalnız kimlikler. Otomatik
@@ -968,6 +1097,16 @@ export const EVENT_CATALOG = Object.freeze({
     outletId: z.string().uuid(),
     stations: z.array(z.string()).max(10),
   }),
+  /** Mutfak turunun durumu ilerledi (modül 40 KDS): garson ekranı "hazır"ı bununla görür. */
+  'fnb.order.status_changed': hotelScoped.extend({
+    checkId: z.string().uuid(),
+    orderId: z.string().uuid(),
+    outletId: z.string().uuid(),
+    seq: z.number().int().min(1),
+    status: z.enum(['PREPARING', 'READY', 'SERVED']),
+    tableName: z.string().nullable().default(null),
+    roomNumber: z.string().nullable().default(null),
+  }),
   /** Restoran ödemesi alındı, onaya gitti, onaylandı / reddedildi, iptal edildi. Kasa ekranı da tazelenir. */
   'pos.payment.changed': hotelScoped.extend({
     checkId: z.string().uuid(),
@@ -986,6 +1125,16 @@ export const EVENT_CATALOG = Object.freeze({
     reservationId: z.string().uuid(),
     status: z.enum(['REQUESTED', 'SCHEDULED', 'RECEIVED', 'PREPARING', 'READY', 'ON_THE_WAY', 'DELIVERED', 'CANCELLED', 'REJECTED']),
     change: z.enum(['CREATED', 'ACCEPTED', 'REJECTED', 'RELEASED', 'ADVANCED', 'DELIVERED', 'CANCELLED', 'TRAY_COLLECTED', 'UPDATED']),
+  }),
+  /**
+   * Paket sipariş (modül 42) alındı / adım ilerledi / kurye atandı / teslim edildi / iptal edildi / tur eklendi.
+   * Paket panosu ve sipariş ekranı tazelenir.
+   */
+  'pos.delivery.changed': hotelScoped.extend({
+    orderId: z.string().uuid(),
+    outletId: z.string().uuid(),
+    status: z.enum(['RECEIVED', 'PREPARING', 'READY', 'ON_THE_WAY', 'DELIVERED', 'CANCELLED']),
+    change: z.enum(['CREATED', 'ADVANCED', 'ASSIGNED', 'DELIVERED', 'CANCELLED', 'UPDATED']),
   }),
 
   /* ── Restoran siparişinin iş olayları (yayıncı modül 39; tüketiciler: fnb-worker, mutfak ekranı 40,
@@ -1266,6 +1415,9 @@ export const INVENTORY_CHANGED_EVENTS = Object.freeze([
   'guest.checked_out',
   'guest.check_in_reverted',
   'guest.check_out_reverted',
+  // Allotment (modül 30): kota değişikliği satılabilir oda sayısını değiştirir
+  // (kanal senkronu ve canlı ekranlar tazelenir).
+  'agency.allotment.changed',
 ]);
 
 /**
@@ -1281,6 +1433,8 @@ export const INVENTORY_RELEASING_EVENTS = Object.freeze([
   'reservation.cancelled',
   'reservation.no_show',
   'guest.checked_out',
+  // Kota azaltma / silme genel havuza yer açabilir (iki yöne gidebilen değişiklik).
+  'agency.allotment.changed',
 ]);
 
 /**
@@ -1388,11 +1542,26 @@ export const BUDGET_EVENTS = Object.freeze([
   'budget.commentary.completed',
 ]);
 
-/** Acente ve kontrat (modül 29): ekranlar bunlarla tazelenir (`agencies.changed` kanalı). */
-export const AGENCY_EVENTS = Object.freeze(['agency.changed', 'agency.contract.changed', 'agency.stop_sale.changed']);
+/** Rapor asistanı (modül 24): soru cevaplandı, kayıtlı rapor değişti (`report-chat.changed` kanalı). */
+export const REPORT_CHAT_EVENTS = Object.freeze(['report.question.asked', 'report.question.completed', 'report.saved.changed', 'report.definition.changed']);
 
-/** Restoran POS (modül 39) ve oda servisi (41): masa planı, adisyon, vardiya, teslim panosu ve tanım ekranları (`pos.changed` kanalı). */
-export const POS_EVENTS = Object.freeze(['pos.setup.changed', 'pos.check.changed', 'pos.order.sent', 'pos.payment.changed', 'pos.shift.changed', 'pos.room_service.changed']);
+/** Acente ve kontrat (modül 29): ekranlar bunlarla tazelenir (`agencies.changed` kanalı). */
+export const AGENCY_EVENTS = Object.freeze(['agency.changed', 'agency.contract.changed', 'agency.stop_sale.changed', 'agency.allotment.changed']);
+
+/** Restoran POS (modül 39), oda servisi (41) ve paket servis (42): masa planı, adisyon, vardiya, teslim / paket panosu ve tanım ekranları (`pos.changed` kanalı). */
+export const POS_EVENTS = Object.freeze([
+  'pos.setup.changed',
+  'pos.check.changed',
+  'pos.order.sent',
+  'pos.payment.changed',
+  'pos.shift.changed',
+  'pos.room_service.changed',
+  'pos.delivery.changed',
+  'fnb.order.status_changed',
+]);
+
+/** Mutfak ekranı (modül 40 KDS): yeni tur düşer, durum ilerler, adisyon kapanır/iptal olur. */
+export const KITCHEN_EVENTS = Object.freeze(['fnb.order.placed', 'fnb.order.status_changed', 'pos.check.changed']);
 
 /** Banket / etkinlik (modül 37): ekranlar bunlarla tazelenir (`banquet.changed` kanalı). */
 export const BANQUET_EVENTS = Object.freeze([
@@ -1414,6 +1583,9 @@ export const PURCHASE_EVENTS = Object.freeze(['purchase.request.changed', 'purch
 
 /** Stok (modül 45 / 44): stok ekranları bunlarla tazelenir (`stock.changed` kanalı). */
 export const STOCK_EVENTS = Object.freeze(['stock.changed']);
+
+/** Demirbaş ve amortisman (modül 46): liste, kart, sayım, amortisman ve garanti ekranları (`assets.changed` kanalı). */
+export const ASSET_EVENTS = Object.freeze(['asset.changed', 'asset.count.changed', 'asset.depreciation.changed', 'asset.settings.changed']);
 
 /** Ön muhasebe (modül 47): cari, kasa / banka, çek / senet ve fiş ekranları (`accounting.changed` kanalı). */
 export const ACCOUNTING_EVENTS = Object.freeze(['accounting.account.changed', 'accounting.treasury.changed', 'accounting.posted', 'accounting.voucher.changed', 'accounting.instrument.changed', 'accounting.settings.changed']);

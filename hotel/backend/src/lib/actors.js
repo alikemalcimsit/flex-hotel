@@ -1,6 +1,8 @@
 import { actorRegistry } from '@hotelos/actor-kit';
 import { budgetAgentManifest, createBudgetAgent } from '@hotelos/budget-agent';
 import { createInsightAgent, insightAgentManifest } from '@hotelos/insight-agent';
+import { createPricingAgent, pricingAgentManifest } from '@hotelos/pricing-agent';
+import { createReportAgent, reportAgentManifest } from '@hotelos/report-agent';
 import { conciergeAgentManifest, createConciergeAgent } from '@hotelos/concierge-agent';
 import {
   NOTIFICATION_CHANNEL_LABELS,
@@ -15,6 +17,7 @@ import { parseToolArguments } from '@hotelos/llm';
 import { createNotificationWorker, NOTIFICATION_WORKER_NAME } from '@hotelos/notification-worker';
 import { createReservationWorker } from '@hotelos/reservation-worker';
 import { createHousekeepingWorker } from '@hotelos/housekeeping-worker';
+import { createInventoryWorker } from '@hotelos/inventory-worker';
 import { createRoomWorker } from '@hotelos/room-worker';
 import { createRouterAgent, routerAgentManifest } from '@hotelos/router-agent';
 import { createWebchatGateway } from '@hotelos/webchat-gateway';
@@ -24,6 +27,8 @@ import { webchatGatewayService, webchatTransport } from '../modules/channels/web
 import { whatsappGatewayService } from '../modules/channels/whatsapp.js';
 import { completeCommentary, explainVariance } from '../modules/budget/variance.js';
 import { analysisInput, completeAnalysis, completeInsight, insightInput } from '../modules/surveys/responses.js';
+import { agentReviewInputs, createSuggestions } from '../modules/pricing/yield-service.js';
+import { completeQuestion, failQuestion, handOffQuestion, prepareQuestion, runToolForAgent } from '../modules/report-chat/questions.js';
 import { createLlmDeps } from '../modules/concierge/llm.js';
 import { getAiSettingsCached } from '../modules/concierge/settings.js';
 import { conciergeService, routerService } from '../modules/concierge/service.js';
@@ -31,6 +36,8 @@ import * as folioService from '../modules/folios/service.js';
 import * as paymentService from '../modules/payments/service.js';
 import * as accountingPostings from '../modules/accounting/postings.js';
 import { syncPayrollRun } from '../modules/payroll/postings.js';
+import { consumeSale } from '../modules/stock/sales.js';
+import { suggestPurchases } from '../modules/stock/suggestions.js';
 import * as invoiceService from '../modules/invoicing/invoices.js';
 import { enqueueTriggerNotifications } from '../modules/notifications/service.js';
 import { raiseStaffAlert } from '../modules/notifications/staff-alerts.js';
@@ -181,6 +188,8 @@ const OPTIONAL_ACTORS = Object.freeze([
   { manifest: conciergeAgentManifest, reason: 'Sunucuda OPENAI_API_KEY tanımlı değil; ajan çalışmıyor' },
   { manifest: budgetAgentManifest, reason: 'Sunucuda OPENAI_API_KEY tanımlı değil; ajan çalışmıyor' },
   { manifest: insightAgentManifest, reason: 'Sunucuda OPENAI_API_KEY tanımlı değil; ajan çalışmıyor' },
+  { manifest: pricingAgentManifest, reason: 'Sunucuda OPENAI_API_KEY tanımlı değil; ajan çalışmıyor (kural tabanlı yield çalışır)' },
+  { manifest: reportAgentManifest, reason: 'Sunucuda OPENAI_API_KEY tanımlı değil; ajan çalışmıyor (sorular rapor talebi olarak personele düşer)' },
 ]);
 
 /**
@@ -203,6 +212,29 @@ const budgetAgentService = {
   model: async (hotelId) => (await getAiSettingsCached(hotelId)).conciergeModel || null,
   explainVariance,
   completeCommentary,
+};
+
+/**
+ * Fiyat ajanının servisi (modül 34). Model otelin ana modeli (bütçe ajanı
+ * gibi). Öneriler kural tabanlı yield ile aynı kapıdan girer: `createSuggestions`
+ * → M11 onayı; ajan fiyatı doğrudan DEĞİŞTİREMEZ.
+ */
+const pricingAgentService = {
+  model: async (hotelId) => (await getAiSettingsCached(hotelId)).conciergeModel || null,
+  reviewInputs: agentReviewInputs,
+  submitSuggestions: (hotelId, proposals) => createSuggestions(hotelId, proposals, { requestedBy: 'pricing-agent' }),
+};
+
+/**
+ * Rapor ajanının servisi (modül 24). Model otelin ana modeli; raporu ajan değil servis çalıştırır (MCP araçları),
+ * cevabın tablosu sistemden gelir.
+ */
+const reportAgentService = {
+  prepare: prepareQuestion,
+  runData: runToolForAgent,
+  complete: completeQuestion,
+  fail: failQuestion,
+  handOff: handOffQuestion,
 };
 
 /**
@@ -318,6 +350,10 @@ export function registerActors() {
       ),
     );
   }
+  // Stok aktörü (modül 44): kapanan adisyon → reçeteden düşüm; miktarı düşen malzeme minimum altındaysa → stok talebi.
+  if (!actorRegistry.get('inventory-worker')) {
+    actorRegistry.register(createInventoryWorker({ consumeSale, suggestPurchases }, deps));
+  }
   // Kanal aktörü (modül 33): envanter / fiyat değişikliğini kanallara işaretler, kanal rezervasyonunu işler.
   if (!actorRegistry.get(CHANNEL_SYNC_WORKER_NAME)) {
     actorRegistry.register(createChannelSyncWorker(channelSyncService, deps));
@@ -363,6 +399,8 @@ export function registerAiAgents({ client } = {}) {
   registerAutoResponder({ name: 'concierge-agent' });
   actorRegistry.register(createBudgetAgent(budgetAgentService, { ...deps, llm }));
   actorRegistry.register(createInsightAgent(insightAgentService, { ...deps, llm }));
+  actorRegistry.register(createPricingAgent(pricingAgentService, { ...deps, llm }));
+  actorRegistry.register(createReportAgent(reportAgentService, { ...deps, llm, parseArguments: parseToolArguments }));
   // Sonradan (testte) kaydedildiyse de bus'a bağlansın; bağlama tekrar edilebilir.
   actorRegistry.bindAll(eventBus);
   return true;

@@ -22,7 +22,7 @@ import { writeWithEvents } from '../../lib/write.js';
  */
 
 const CACHE_TTL_MS = 60_000;
-const DEFAULT_WEBCHAT = Object.freeze({ allowedOrigins: [], title: 'Canlı destek', greeting: null, accentColor: '#0f766e' });
+const DEFAULT_WEBCHAT = Object.freeze({ allowedOrigins: [], title: 'Canlı destek', greeting: null, accentColor: '#0f766e', bookingEnabled: false });
 
 const byHotelKey = (hotelId, channel) => `channels:${hotelId}:${channel}`;
 const byIdKey = (id) => `channels:id:${id}`;
@@ -186,6 +186,7 @@ function webchatDto(row) {
     title: settings.title,
     greeting: settings.greeting,
     accentColor: settings.accentColor,
+    bookingEnabled: settings.bookingEnabled ?? false,
     connected: isChannelConnected('WEBCHAT'),
     lastInboundAt: row?.lastInboundAt?.toISOString() ?? null,
     updatedAt: row?.updatedAt?.toISOString() ?? null,
@@ -296,6 +297,8 @@ export async function saveWebchatChannel(hotelId, input) {
       title: input.title,
       greeting: input.greeting ?? null,
       accentColor: input.accentColor,
+      // Rezervasyon motoru (modül 32): aynı kanal anahtarıyla public booking uçları.
+      bookingEnabled: input.bookingEnabled ?? false,
     },
   }));
   return webchatDto(row);

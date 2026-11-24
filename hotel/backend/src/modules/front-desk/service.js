@@ -720,6 +720,66 @@ export async function checkOutBatch(hotelId, items, { now = new Date() } = {}) {
   return { results, succeeded: results.filter((row) => row.ok).length, failed: results.filter((row) => !row.ok).length };
 }
 
+/**
+ * Toplu check-in (modül 30, grup dosyası): her rezervasyon tek girişin aynı
+ * servisinden geçer (oda atanmış mı, oda hazır mı, kimlik politikası, erken
+ * giriş ücreti). Kimlik ve refakatçiler **karttan okunup geri verilir** —
+ * toplu giriş kayıtlı kimliği / refakatçiyi silmez; politika kimlik istiyor ve
+ * kartta yoksa o kayıt sebebiyle atlanır (tek tek alınır). Depozito, plaka,
+ * erken giriş onayı gibi ayrıntılar toplu girişte sorulmaz.
+ *
+ * @param {string} hotelId
+ * @param {Array<{ id: string, expectedUpdatedAt: Date }>} items
+ * @param {{ now?: Date }} [options]
+ */
+export async function checkInBatch(hotelId, items, { now = new Date() } = {}) {
+  const results = [];
+  for (const item of items) {
+    try {
+      const stay = await prisma.reservation.findFirst({
+        where: { id: item.id, hotelId, deletedAt: null },
+        select: {
+          guest: { select: { idType: true, idNumber: true, nationality: true, birthDate: true } },
+          reservationGuests: {
+            where: { isPrimary: false, deletedAt: null },
+            select: { guest: { select: { firstName: true, lastName: true, idType: true, idNumber: true, nationality: true, birthDate: true } } },
+          },
+        },
+      });
+      if (!stay) throw new NotFoundError('Rezervasyon bulunamadı');
+      const input = {
+        expectedUpdatedAt: item.expectedUpdatedAt,
+        roomId: null,
+        acceptRoomNotReady: false,
+        guest: {
+          idType: stay.guest.idType,
+          idNumber: stay.guest.idNumber,
+          nationality: stay.guest.nationality,
+          birthDate: stay.guest.birthDate,
+        },
+        companions: stay.reservationGuests.map(({ guest }) => ({
+          firstName: guest.firstName,
+          lastName: guest.lastName,
+          isChild: false,
+          idType: guest.idType,
+          idNumber: guest.idNumber,
+          nationality: guest.nationality,
+          birthDate: guest.birthDate,
+        })),
+        vehiclePlate: null,
+        deposit: { method: 'NONE' },
+        waiveEarlyFee: false,
+        expectedEarlyFee: null,
+      };
+      await checkIn(hotelId, item.id, input, { now });
+      results.push({ id: item.id, ok: true, message: null });
+    } catch (error) {
+      results.push(bulkItemFailure(item.id, error));
+    }
+  }
+  return { results, succeeded: results.filter((row) => row.ok).length, failed: results.filter((row) => !row.ok).length };
+}
+
 export async function checkOut(hotelId, reservationId, input, { now = new Date(), canAllowOpenBalance = false } = {}) {
   const { hotel, businessDate, clock } = await loadClock(hotelId, now);
   const actor = currentActor();

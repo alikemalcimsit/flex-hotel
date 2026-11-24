@@ -30,6 +30,8 @@ export const NAV_SECTIONS = Object.freeze([
       { label: 'Panel', to: '/', icon: 'dashboard', end: true },
       // Aktörün yapamadığı işler: herkes kendi modülününkini görür.
       { label: 'Görevler', to: '/gorevler', icon: 'wrench', badge: 'tasks', anyPermission: MANUAL_TASK_PERMISSIONS },
+      // Kılavuz: yeni başlayan için kullanım rehberi + "arka planda ne oluyor"; herkese açık.
+      { label: 'Kılavuz', to: '/kilavuz', icon: 'bookOpen' },
     ],
   },
   {
@@ -62,9 +64,15 @@ export const NAV_SECTIONS = Object.freeze([
             permission: PERMISSIONS.RESERVATIONS_MANAGE,
           },
           { label: 'Bekleme listesi', to: '/rezervasyonlar/bekleme-listesi', icon: 'clock' },
+          // Grup dosyaları (modül 30): rooming list, toplu oda atama / giriş / çıkış.
+          { label: 'Gruplar', to: '/gruplar', icon: 'users' },
         ],
       },
       { label: 'Oda planı', to: '/oda-plani', icon: 'calendar' },
+      // Misafir CRM (modül 22): kart, tercih, geçmiş, birleştirme.
+      { label: 'Misafirler', to: '/misafirler', icon: 'users', permission: PERMISSIONS.GUESTS_VIEW },
+      // Satış CRM (modül 36): fırsat panosu, arama günlüğü, teklifler.
+      { label: 'Satış CRM', to: '/satis', icon: 'phone', permission: PERMISSIONS.SALES_VIEW },
       // Konaklamaların hesabı (modül 15): kat hizmetleri görmez.
       { label: 'Folyolar', to: '/folyolar', icon: 'fileText', permission: PERMISSIONS.FOLIO_VIEW },
       // Tahsilat ve döviz kuru (modül 17): kasayı gören ya da kuru giren.
@@ -111,11 +119,42 @@ export const NAV_SECTIONS = Object.freeze([
         icon: 'package',
         permission: PERMISSIONS.LOST_ITEMS_VIEW,
       },
+      // Teknik servis / arıza-bakım (modül 20): arıza bileti, teknisyen, periyodik bakım.
       {
-        label: 'Gelir raporları',
-        to: '/raporlar/gelir',
+        label: 'Teknik servis',
+        to: '/teknik-servis',
+        icon: 'wrench',
+        permission: PERMISSIONS.MAINTENANCE_VIEW,
+        children: [
+          { label: 'Arızalar', to: '/teknik-servis', icon: 'list', end: true },
+          { label: 'Bana atananlar', to: '/teknik-servis/benim', icon: 'user' },
+          { label: 'Planlama', to: '/teknik-servis/planlama', icon: 'calendar', permission: PERMISSIONS.MAINTENANCE_MANAGE },
+        ],
+      },
+      // Raporlar: gelir raporları (modül 23), rapor asistanı (modül 24, AI), rapor tasarımcısı (modül 26) ve kayıtlı
+      // raporlar (ikisi birlikte; AI'sız çalışır).
+      {
+        label: 'Raporlar',
+        to: '/raporlar',
         icon: 'chart',
-        permission: PERMISSIONS.REPORTS_VIEW,
+        anyPermission: [PERMISSIONS.REPORTS_VIEW, PERMISSIONS.REPORTS_ASK],
+        children: [
+          { label: 'Gelir raporları', to: '/raporlar/gelir', icon: 'chart', permission: PERMISSIONS.REPORTS_VIEW },
+          { label: 'Rapor asistanı', to: '/raporlar/asistan', icon: 'sparkles', permission: PERMISSIONS.REPORTS_ASK },
+          { label: 'Rapor tasarımcısı', to: '/raporlar/tasarim', icon: 'sliders', permission: PERMISSIONS.REPORTS_VIEW },
+          { label: 'Kayıtlı raporlar', to: '/raporlar/kayitli', icon: 'fileText', permission: PERMISSIONS.REPORTS_VIEW },
+        ],
+      },
+      // Gün kapanış / night audit (modül 18): gece görevlisi günü kapatır, günlük özet çıkar.
+      {
+        label: 'Gün kapanış',
+        to: '/gun-kapanis',
+        icon: 'alarm',
+        permission: PERMISSIONS.NIGHT_AUDIT_VIEW,
+        children: [
+          { label: 'Kapanış', to: '/gun-kapanis', icon: 'checkCircle', end: true },
+          { label: 'Geçmiş', to: '/gun-kapanis/gecmis', icon: 'list' },
+        ],
       },
       // Bütçe ve sapma (modül 27): müdür ve muhasebe.
       {
@@ -153,7 +192,9 @@ export const NAV_SECTIONS = Object.freeze([
         anyPermission: [PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT, PERMISSIONS.POS_SETUP],
         children: [
           { label: 'Masa planı', to: '/pos/masalar', icon: 'utensils', permission: PERMISSIONS.POS_OPERATE },
+          { label: 'Mutfak ekranı', to: '/pos/mutfak-ekrani', icon: 'bell', permission: PERMISSIONS.POS_OPERATE },
           { label: 'Oda servisi', to: '/pos/oda-servisi', icon: 'bed', anyPermission: [PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT] },
+          { label: 'Paket servis', to: '/pos/paket', icon: 'truck', anyPermission: [PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT] },
           { label: 'Adisyonlar', to: '/pos/adisyonlar', icon: 'list', anyPermission: [PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT] },
           { label: 'Vardiyalar', to: '/pos/vardiyalar', icon: 'clock', anyPermission: [PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT] },
           { label: 'Satış raporu', to: '/pos/rapor', icon: 'chart', permission: PERMISSIONS.POS_REPORT },
@@ -227,7 +268,7 @@ export const NAV_SECTIONS = Object.freeze([
           { label: 'Tedarikçiler', to: '/satin-alma/tedarikciler', icon: 'users' },
         ],
       },
-      // Stok (modül 45 — 44'ün çekirdeği): depo bazında mevcut, değer, hareketler.
+      // Stok (modül 45 + 44): mevcut, hareketler (çıkış / fire / transfer / satış düşümü), sayım, maliyet raporu, depolar.
       {
         label: 'Stok',
         to: '/stok',
@@ -236,7 +277,23 @@ export const NAV_SECTIONS = Object.freeze([
         children: [
           { label: 'Mevcut', to: '/stok', icon: 'package', end: true },
           { label: 'Hareketler', to: '/stok/hareketler', icon: 'list' },
+          { label: 'Sayım', to: '/stok/sayim', icon: 'clipboard' },
+          { label: 'Maliyet raporu', to: '/stok/maliyet', icon: 'chart' },
           { label: 'Depolar', to: '/stok/depolar', icon: 'building' },
+        ],
+      },
+      // Demirbaş (modül 46): sicil, QR etiket, sayım, VUK amortismanı, garanti; sayımı etiket okutan personel de yapar.
+      {
+        label: 'Demirbaş',
+        to: '/demirbas',
+        icon: 'layers',
+        anyPermission: [PERMISSIONS.ASSETS_VIEW, PERMISSIONS.ASSETS_COUNT],
+        children: [
+          { label: 'Demirbaşlar', to: '/demirbas', icon: 'layers', end: true, permission: PERMISSIONS.ASSETS_VIEW },
+          { label: 'Sayım', to: '/demirbas/sayim', icon: 'clipboard', permission: PERMISSIONS.ASSETS_COUNT },
+          { label: 'Amortisman', to: '/demirbas/amortisman', icon: 'chart', permission: PERMISSIONS.ASSETS_VIEW },
+          { label: 'Garanti', to: '/demirbas/garanti', icon: 'alarm', permission: PERMISSIONS.ASSETS_VIEW },
+          { label: 'Tanımlar', to: '/demirbas/tanimlar', icon: 'settings', permission: PERMISSIONS.ASSETS_VIEW },
         ],
       },
       // Faturalar (modül 16 / 49): ön büro folyo faturasını keser, muhasebe e-belgeyi izler, müdür ayarlar.
@@ -318,6 +375,12 @@ export const NAV_SECTIONS = Object.freeze([
         ],
       },
       {
+        label: 'Fiyat önerileri',
+        to: '/fiyat-onerileri',
+        icon: 'chart',
+        permission: PERMISSIONS.APPROVALS_VIEW,
+      },
+      {
         label: 'Bildirimler',
         to: '/bildirimler',
         icon: 'bell',
@@ -349,6 +412,13 @@ export const NAV_SECTIONS = Object.freeze([
           { label: 'Denetim kaydı', to: '/aktivite/denetim', icon: 'fileText', permission: PERMISSIONS.AUDIT_VIEW },
         ],
       },
+      // Excel'den toplu yükleme (modül 26): misafir listesi (misafir yönetimi), fiyat planı (ayar yönetimi).
+      {
+        label: "Excel'den yükle",
+        to: '/ice-aktar',
+        icon: 'upload',
+        anyPermission: [PERMISSIONS.GUESTS_MANAGE, PERMISSIONS.SETTINGS_MANAGE],
+      },
       {
         label: 'Aktörler',
         to: '/aktorler',
@@ -365,6 +435,9 @@ export const NAV_SECTIONS = Object.freeze([
           { label: 'Oda tipleri', to: '/ayarlar/oda-tipleri', icon: 'layers' },
           { label: 'Vergiler', to: '/ayarlar/vergiler', icon: 'percent' },
           { label: 'Sezonlar', to: '/ayarlar/sezonlar', icon: 'sun' },
+          { label: 'Fiyat planları', to: '/ayarlar/fiyat-planlari', icon: 'coins' },
+          { label: 'Paketler', to: '/ayarlar/paketler', icon: 'package' },
+          { label: 'Dinamik fiyat', to: '/ayarlar/dinamik-fiyat', icon: 'zap' },
           { label: 'Genel parametreler', to: '/ayarlar/genel', icon: 'sliders' },
           { label: 'Kullanıcılar', to: '/ayarlar/kullanicilar', icon: 'user', permission: PERMISSIONS.USERS_VIEW },
           { label: 'Roller & İzinler', to: '/ayarlar/roller', icon: 'lock', permission: PERMISSIONS.ROLES_MANAGE },

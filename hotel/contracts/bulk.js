@@ -31,3 +31,14 @@ export const noShowBatchSchema = z.object({
 export const checkOutBatchSchema = z.object({
   items: z.array(bulkItem).min(1, 'Konaklama seçin').max(MAX_BULK_CHECK_OUTS, `Tek seferde en fazla ${MAX_BULK_CHECK_OUTS} çıkış`),
 });
+
+/**
+ * Toplu check-in (modül 30, grup dosyası): odası atanmış rezervasyonlar hızlı
+ * giriş yapar — kimlik / refakatçi / depozito sorulmaz, ayrıntı gereken misafir
+ * tek tek alınır. Odası atanmamış ya da kuralı tutmayan kayıt sebebiyle atlanır.
+ */
+export const MAX_BULK_CHECK_INS = 50;
+
+export const checkInBatchSchema = z.object({
+  items: z.array(bulkItem).min(1, 'Rezervasyon seçin').max(MAX_BULK_CHECK_INS, `Tek seferde en fazla ${MAX_BULK_CHECK_INS} giriş`),
+});

@@ -59,6 +59,12 @@ export function affectedWindow(eventName, payload) {
     if (!payload.from) return null;
     return { from: payload.from, to: payload.to ? nextDay(payload.to) : null };
   }
+  // Allotment (modül 30): kota değişikliği dönemin satılabilir oda sayısını
+  // değiştirir — dönem iki uçtan kapalı, kanala son gün dahil gider.
+  if (eventName === 'agency.allotment.changed') {
+    if (!payload.from) return null;
+    return { from: payload.from, to: payload.to ? nextDay(payload.to) : null };
+  }
   return null;
 }
 

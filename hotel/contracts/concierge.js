@@ -201,6 +201,8 @@ export const webchatChannelSchema = z.object({
     .string()
     .trim()
     .regex(/^#[0-9a-fA-F]{6}$/, 'Renk #RRGGBB biçiminde olmalı'),
+  /** Rezervasyon motoru (modül 32): widget'ta tarih seç → fiyat gör → rezervasyon yap. */
+  bookingEnabled: z.boolean().default(false),
   expectedUpdatedAt: expectedUpdatedAt.nullish(),
 }).superRefine((value, ctx) => {
   // Balon yalnızca izin verilen sitelerde bağlanır; liste boşken açmak "açık ama hiçbir yerde çalışmıyor" olurdu.

@@ -31,6 +31,7 @@ export const billingWorkerManifest = defineActor({
     'reservation.no_show',
     'reservation.reinstated',
     'folio.room_charges.due',
+    'night.audit.started',
     'fnb.order.charged',
     'minibar.consumed',
     'laundry.charged',

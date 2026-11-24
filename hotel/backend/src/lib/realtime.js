@@ -5,10 +5,13 @@ import {
   AGENCY_EVENTS,
   AGENCY_BONUS_EVENTS,
   BANQUET_EVENTS,
+  KITCHEN_EVENTS,
   POS_EVENTS,
   PURCHASE_EVENTS,
   RECIPE_EVENTS,
   STOCK_EVENTS,
+  ASSET_EVENTS,
+  REPORT_CHAT_EVENTS,
   ACCOUNTING_EVENTS,
   INVOICE_EVENTS,
   PAYROLL_EVENTS,
@@ -124,6 +127,9 @@ export const BANQUET_CHANNEL = 'banquet.changed';
 /** Restoran POS (modül 39): masa planı, adisyon, sipariş turu, ödeme, vardiya, tanımlar. */
 export const POS_CHANNEL = 'pos.changed';
 
+/** Mutfak ekranı (modül 40 KDS): yeni tur, durum ilerlemesi, kapanan adisyon. */
+export const KITCHEN_CHANNEL = 'kitchen.changed';
+
 /** Reçete ve malzeme kartı (modül 43): reçete, malzeme, birim maliyet — banket F&B ekranlarının maliyeti de. */
 export const RECIPES_CHANNEL = 'recipes.changed';
 
@@ -132,6 +138,12 @@ export const PURCHASING_CHANNEL = 'purchasing.changed';
 
 /** Stok (modül 45 / 44): depo bazında mevcut, hareketler, minimum seviye, depo tanımları. */
 export const STOCK_CHANNEL = 'stock.changed';
+
+/** Demirbaş ve amortisman (modül 46): liste, kart, sayım, amortisman tablosu, garanti, tanımlar. */
+export const ASSETS_CHANNEL = 'assets.changed';
+
+/** Rapor asistanı (modül 24): soru cevaplandı, kayıtlı rapor değişti. */
+export const REPORT_CHAT_CHANNEL = 'report-chat.changed';
 
 /** Ön muhasebe (modül 47): cariler ve ekstre, kasa / banka hareketleri, çek / senet, fişler, ayar ve eşleme. */
 export const ACCOUNTING_CHANNEL = 'accounting.changed';
@@ -188,9 +200,12 @@ const CHANNEL_EVENTS = Object.freeze({
   [AGENCY_BONUS_CHANNEL]: AGENCY_BONUS_EVENTS,
   [BANQUET_CHANNEL]: BANQUET_EVENTS,
   [POS_CHANNEL]: POS_EVENTS,
+  [KITCHEN_CHANNEL]: KITCHEN_EVENTS,
   [RECIPES_CHANNEL]: RECIPE_EVENTS,
   [PURCHASING_CHANNEL]: PURCHASE_EVENTS,
   [STOCK_CHANNEL]: STOCK_EVENTS,
+  [ASSETS_CHANNEL]: ASSET_EVENTS,
+  [REPORT_CHAT_CHANNEL]: REPORT_CHAT_EVENTS,
   [ACCOUNTING_CHANNEL]: ACCOUNTING_EVENTS,
   [INVOICES_CHANNEL]: INVOICE_EVENTS,
   [PAYROLL_CHANNEL]: PAYROLL_EVENTS,

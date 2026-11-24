@@ -1,10 +1,13 @@
 import {
+  advanceKitchenOrderSchema,
   bulkPosTablesSchema,
   closePosShiftSchema,
   createMenuCategorySchema,
   createMenuItemSchema,
   createPosOutletSchema,
   createPosTableSchema,
+  kitchenBoardQuerySchema,
+  kitchenOrderParamSchema,
   menuCategoryParamSchema,
   menuItemListQuerySchema,
   menuItemParamSchema,
@@ -45,6 +48,8 @@ import {
 import { PERMISSIONS, requireAnyPermission, requirePermission } from '../../lib/permissions.js';
 import { withHotelContext } from '../../lib/tenant.js';
 import * as checks from './checks.js';
+import { deliveryRoutes } from './delivery-routes.js';
+import * as kitchen from './kitchen.js';
 import * as payments from './payments.js';
 import * as reports from './reports.js';
 import { roomServiceRoutes } from './room-service-routes.js';
@@ -205,6 +210,15 @@ export async function posRoutes(app) {
     ok(await shifts.shiftReport(request.hotelId, request.params.shiftId, { canSeeAll: canSeeAll(request) })),
   );
 
+  /* ── Mutfak ekranı / KDS (modül 40) — mutfak tableti garsonla aynı izinle (`pos.operate`) girer ── */
+
+  app.get('/kitchen/board', { ...operate, schema: { querystring: kitchenBoardQuerySchema } }, async (request) =>
+    ok(await kitchen.listKitchenBoard(request.hotelId, request.query)),
+  );
+  app.post('/kitchen/orders/:orderId/advance', { ...operate, schema: { params: kitchenOrderParamSchema, body: advanceKitchenOrderSchema } }, async (request) =>
+    ok(await kitchen.advanceKitchenOrder(request.hotelId, request.params.orderId, request.body)),
+  );
+
   /* ── Rapor ── */
 
   app.get('/reports/sales', { ...report, schema: { querystring: posSalesQuerySchema } }, async (request) =>
@@ -277,4 +291,8 @@ export async function posRoutes(app) {
   /* ── Oda servisi (modül 41) ── */
 
   await app.register(roomServiceRoutes, { prefix: '/room-service' });
+
+  /* ── Paket servis (modül 42) ── */
+
+  await app.register(deliveryRoutes, { prefix: '/delivery' });
 }

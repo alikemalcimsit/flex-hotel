@@ -195,3 +195,139 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Kılavuz (markdown) metni: ekranın yazı ailesi ve renk belirteçleriyle sade bir "prose". */
+@layer components {
+  .guide-prose {
+    color: var(--color-ink-soft);
+    font-size: 0.95rem;
+    line-height: 1.7;
+  }
+  .guide-prose > :first-child {
+    margin-top: 0;
+  }
+  .guide-prose h1 {
+    margin: 0 0 1rem;
+    font-size: 1.75rem;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--color-ink);
+    letter-spacing: -0.01em;
+  }
+  .guide-prose h2 {
+    margin: 2.5rem 0 0.75rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--color-line);
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--color-ink);
+    scroll-margin-top: 6rem;
+  }
+  .guide-prose h3 {
+    margin: 1.75rem 0 0.5rem;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--color-ink);
+    scroll-margin-top: 6rem;
+  }
+  .guide-prose h4 {
+    margin: 1.25rem 0 0.4rem;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--color-ink);
+  }
+  .guide-prose p {
+    margin: 0.75rem 0;
+  }
+  .guide-prose ul,
+  .guide-prose ol {
+    margin: 0.75rem 0 0.75rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+  .guide-prose ul {
+    list-style: disc;
+  }
+  .guide-prose ol {
+    list-style: decimal;
+  }
+  .guide-prose li > ul,
+  .guide-prose li > ol {
+    margin-top: 0.3rem;
+  }
+  .guide-prose strong {
+    color: var(--color-ink);
+    font-weight: 600;
+  }
+  .guide-prose a {
+    color: var(--color-ink);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .guide-prose code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.85em;
+    background: var(--color-surface-muted);
+    border: 1px solid var(--color-line);
+    border-radius: 6px;
+    padding: 0.1em 0.35em;
+    color: var(--color-ink);
+  }
+  .guide-prose pre {
+    margin: 1rem 0;
+    padding: 1rem;
+    overflow-x: auto;
+    background: var(--color-surface-muted);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-item);
+    font-size: 0.85rem;
+    line-height: 1.5;
+  }
+  .guide-prose pre code {
+    border: 0;
+    background: transparent;
+    padding: 0;
+  }
+  .guide-prose blockquote {
+    margin: 1rem 0;
+    padding: 0.75rem 1rem;
+    border-left: 3px solid var(--color-ink);
+    background: var(--color-surface-muted);
+    border-radius: 0 var(--radius-item) var(--radius-item) 0;
+  }
+  .guide-prose blockquote p {
+    margin: 0.25rem 0;
+  }
+  .guide-prose table {
+    width: 100%;
+    margin: 1rem 0;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+    display: block;
+    overflow-x: auto;
+  }
+  .guide-prose thead th {
+    text-align: left;
+    font-weight: 700;
+    color: var(--color-ink);
+    background: var(--color-surface-muted);
+    border-bottom: 1px solid var(--color-line-strong);
+    padding: 0.5rem 0.75rem;
+    white-space: nowrap;
+  }
+  .guide-prose tbody td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--color-line);
+    vertical-align: top;
+  }
+  .guide-prose hr {
+    margin: 2rem 0;
+    border: 0;
+    border-top: 1px solid var(--color-line);
+  }
+  .guide-prose img {
+    max-width: 100%;
+    border-radius: var(--radius-item);
+  }
+}

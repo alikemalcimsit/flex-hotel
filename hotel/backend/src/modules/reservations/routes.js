@@ -7,6 +7,7 @@ import {
   createReservationSchema,
   createWaitlistSchema,
   guestSearchQuerySchema,
+  listQuerySchema,
   noShowBatchSchema,
   noShowReservationSchema,
   reservationGroupParamSchema,
@@ -23,6 +24,7 @@ import { PERMISSIONS, assertRequestPermission, requirePermission } from '../../l
 import { withHotelContext } from '../../lib/tenant.js';
 import { getHotelSettings } from '../settings/service.js';
 import { searchGuests } from './guests.js';
+import * as groups from './groups.js';
 import * as service from './service.js';
 import * as waitlist from './waitlist.js';
 
@@ -115,6 +117,18 @@ export async function reservationRoutes(app) {
     reply.status(OUTCOME_STATUS[result.outcome] ?? 200);
     return { success: true, data: result };
   });
+
+  /* ── Grup dosyası (modül 30) ── */
+
+  app.get('/groups', { ...view, schema: { querystring: listQuerySchema } }, async (request) => ({
+    success: true,
+    data: await groups.listGroups(request.hotelId, request.query),
+  }));
+
+  app.get('/groups/:groupId', { ...view, schema: { params: reservationGroupParamSchema } }, async (request) => ({
+    success: true,
+    data: await groups.getGroupFile(request.hotelId, request.params.groupId),
+  }));
 
   app.post(
     '/groups/:groupId/cancel',

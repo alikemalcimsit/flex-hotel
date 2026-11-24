@@ -12,11 +12,12 @@ import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 import { useHotelContext } from '../../lib/useHotel.js';
 import { validateWith } from '../../lib/validate.js';
 import { toastError, toastSuccess } from '../../store/toast.js';
+import { OutletWarehousesCard } from './OutletWarehousesCard.jsx';
 
 /**
  * Depolar (modül 45): kod, ad, varsayılan (mal kabulde önce seçili; otelde tek, pasif olamaz),
- * stoklu malzeme sayısı ve değer. Stoğu olan depo pasife alınamaz (transfer 44'te). Düzenleme
- * `stock.manage`; en fazla `MAX_WAREHOUSES` depo.
+ * stoklu malzeme sayısı ve değer. Stoğu olan depo pasife alınamaz (önce Hareketler → Transfer). Düzenleme
+ * `stock.manage`; en fazla `MAX_WAREHOUSES` depo. Altta satış noktası → depo eşlemesi (modül 44).
  */
 export function WarehousesPage() {
   const can = useCan();
@@ -83,6 +84,7 @@ export function WarehousesPage() {
             : undefined
         }
       />
+      <OutletWarehousesCard canManage={canManage} />
       {editing && <WarehouseDialog warehouse={editing === 'new' ? null : editing} first={rows.length === 0} onClose={() => setEditing(null)} />}
     </div>
   );

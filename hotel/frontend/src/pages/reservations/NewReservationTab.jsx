@@ -22,6 +22,7 @@ import { formatDate, formatMoney } from '../../lib/format.js';
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 import { couponBlocks, couponStatusText, usePromotionLive } from '../../lib/promotions.js';
 import { addDaysIso, newRequestId, reservationKeys } from '../../lib/reservations.js';
+import { downloadRoomingTemplate, readRoomingList } from '../../lib/roomingList.js';
 import { useHotelContext, useHotelToday } from '../../lib/useHotel.js';
 import { validateWith } from '../../lib/validate.js';
 import { toastError, toastSuccess } from '../../store/toast.js';
@@ -36,7 +37,7 @@ const SOURCE_OPTIONS = RESERVATION_MANUAL_SOURCES.map((value) => ({ value, label
 const STATUS_OPTIONS = RESERVATION_CREATE_STATUSES.map((value) => ({ value, label: RESERVATION_CREATE_STATUS_LABELS[value] }));
 
 let lineKey = 0;
-const newLine = (boardType, roomTypeId = '') => ({ key: (lineKey += 1), roomTypeId, adults: '2', children: '0', boardType, quantity: '1' });
+const newLine = (boardType, roomTypeId = '') => ({ key: (lineKey += 1), roomTypeId, adults: '2', children: '0', boardType, quantity: '1', guestFirstName: '', guestLastName: '' });
 
 /** @param {string} value */
 const validDay = (value) => DAY_PATTERN.test(value ?? '');
@@ -82,9 +83,11 @@ export function NewReservationTab() {
   const [mode, setMode] = useState('single');
   const [checkIn, setCheckIn] = useState(() => (validDay(params.get('giris')) ? params.get('giris') : today));
   const [checkOut, setCheckOut] = useState(() => (validDay(params.get('cikis')) ? params.get('cikis') : addDaysIso(validDay(params.get('giris')) ? params.get('giris') : today, 1)));
-  const [single, setSingle] = useState({ roomTypeId: params.get('tip') ?? '', adults: '2', children: '0', boardType: '' });
+  const [single, setSingle] = useState({ roomTypeId: params.get('tip') ?? '', adults: '2', children: '0', boardType: '', packageId: '' });
   const [groupName, setGroupName] = useState('');
   const [lines, setLines] = useState(() => [newLine('')]);
+  /** Rooming list (modül 30) yüklemesinin satır hataları. */
+  const [roomingErrors, setRoomingErrors] = useState([]);
   const [status, setStatus] = useState('CONFIRMED');
   const [source, setSource] = useState('UI');
   // Acente adına açılıyorsa (modül 29): fiyat kontrattan gelir, kaynak her zaman "Acente".
@@ -127,15 +130,25 @@ export function NewReservationTab() {
     setCheckIn(entry.checkIn);
     setCheckOut(entry.checkOut);
     setMode('single');
-    setSingle({ roomTypeId: entry.roomType.id, adults: String(entry.adults), children: String(entry.children), boardType: entry.boardType });
+    setSingle({ roomTypeId: entry.roomType.id, adults: String(entry.adults), children: String(entry.children), boardType: entry.boardType, packageId: '' });
     if (entry.notes) setNotes(entry.notes);
   }, [waitlistQuery.data]);
+
+  // Paketler (modül 28): yayındaki paketler seçicide; paket seçilince pansiyon ve
+  // oda gece fiyatı paketten gelir. Acente / elle fiyatla birleşmez.
+  const packagesQuery = useQuery({
+    queryKey: reservationKeys.activePackages,
+    queryFn: () => api('/pricing/packages/active'),
+  });
+  const packages = packagesQuery.data ?? [];
+  const packagesDisabled = Boolean(agency) || source === 'AGENCY' || manual.enabled;
+  const selectedPackage = !packagesDisabled ? packages.find((pkg) => pkg.id === single.packageId) ?? null : null;
 
   const stayValid = validDay(checkIn) && validDay(checkOut) && checkOut > checkIn;
   const agencyId = agency?.id ?? null;
   // Pansiyon önizlemeye girer: acente kontratı pansiyona göre fiyatlar, promosyonun
-  // pansiyon koşulu da (modül 31) ona bakar.
-  const quoteBoard = board(single.boardType);
+  // pansiyon koşulu da (modül 31) ona bakar. Paket seçiliyse pansiyon paketten.
+  const quoteBoard = selectedPackage ? selectedPackage.boardType : board(single.boardType);
   // Kupon yalnızca doğrudan satışta ve sistem fiyatında (elle fiyatta indirim yok).
   const couponUsable = !agency && source !== 'AGENCY' && !(mode === 'single' && manual.enabled);
   const activeCoupon = couponUsable ? couponCode : null;
@@ -219,6 +232,11 @@ export function NewReservationTab() {
           children: line.children,
           boardType: board(line.boardType),
           quantity: line.quantity,
+          // Satır misafiri (modül 30, rooming list): verilmezse oda grup sorumlusuna açılır.
+          guest:
+            line.guestFirstName.trim() || line.guestLastName.trim()
+              ? { firstName: line.guestFirstName.trim(), lastName: line.guestLastName.trim(), phone: null, email: null, nationality: null }
+              : null,
         })),
       };
     }
@@ -227,7 +245,9 @@ export function NewReservationTab() {
       roomTypeId: single.roomTypeId,
       adults: single.adults,
       children: single.children,
-      boardType: board(single.boardType),
+      // Paket seçiliyse pansiyon paketten gelir (modül 28).
+      boardType: selectedPackage ? selectedPackage.boardType : board(single.boardType),
+      packageId: selectedPackage ? selectedPackage.id : null,
       roomId: prefillRoomId ?? null,
       manualTotal: manual.enabled ? manual.total : null,
       priceNote: manual.enabled ? manual.note : null,
@@ -505,8 +525,35 @@ export function NewReservationTab() {
                 <div className="flex flex-wrap gap-3">
                   <Input label="Yetişkin" name="adults" type="number" min={1} max={20} value={single.adults} onChange={(e) => setSingle((c) => ({ ...c, adults: e.target.value }))} error={errors.adults} disabled={busy} className="w-28" />
                   <Input label="Çocuk" name="children" type="number" min={0} max={20} value={single.children} onChange={(e) => setSingle((c) => ({ ...c, children: e.target.value }))} error={errors.children} disabled={busy} className="w-28" />
-                  <Select label="Pansiyon" name="boardType" value={board(single.boardType)} onChange={(e) => setSingle((c) => ({ ...c, boardType: e.target.value }))} options={BOARD_OPTIONS} disabled={busy} className="w-full sm:w-64" />
+                  <Select
+                    label="Pansiyon"
+                    name="boardType"
+                    value={quoteBoard}
+                    onChange={(e) => setSingle((c) => ({ ...c, boardType: e.target.value }))}
+                    options={BOARD_OPTIONS}
+                    disabled={busy || Boolean(selectedPackage)}
+                    className="w-full sm:w-64"
+                  />
+                  {packages.length > 0 && (
+                    <Select
+                      label="Paket"
+                      name="packageId"
+                      value={single.packageId}
+                      onChange={(e) => setSingle((c) => ({ ...c, packageId: e.target.value }))}
+                      options={[{ value: '', label: 'Paket yok' }, ...packages.map((pkg) => ({ value: pkg.id, label: `${pkg.name} — ${BOARD_TYPE_LABELS[pkg.boardType]}` }))]}
+                      disabled={busy || packagesDisabled}
+                      className="w-full sm:w-72"
+                    />
+                  )}
                 </div>
+                {packagesDisabled && single.packageId && (
+                  <p className="text-xs text-ink-muted">Acente satışında ya da elle fiyatta paket kullanılmaz; paket seçimi yok sayılır.</p>
+                )}
+                {selectedPackage && (
+                  <Alert tone="info" title={`Paket: ${selectedPackage.name}`}>
+                    Fiyat paketten gelir: {formatMoney(selectedPackage.nightlyPrice, quoteData?.currency)}/gece ({BOARD_TYPE_LABELS[selectedPackage.boardType]}). Pansiyon ve oda gece fiyatı paketten; promosyon / kupon uygulanmaz.
+                  </Alert>
+                )}
                 {selectedQuote && single.adults && Number(single.adults) > selectedQuote.capacityAdults && (
                   <Alert tone="warning" title="Kişi sayısı bu tipe sığmıyor">
                     {selectedQuote.name} en fazla {selectedQuote.capacityAdults} yetişkin alır. Başka tip seçin ya da grup olarak birden fazla oda açın.
@@ -539,6 +586,23 @@ export function NewReservationTab() {
                       <Input label="Yetişkin / oda" type="number" min={1} max={20} value={line.adults} onChange={(e) => update('adults', e.target.value)} error={errors[`lines.${index}.adults`]} disabled={busy} className="w-32" />
                       <Input label="Çocuk / oda" type="number" min={0} max={20} value={line.children} onChange={(e) => update('children', e.target.value)} disabled={busy} className="w-28" />
                       <Select label="Pansiyon" value={board(line.boardType)} onChange={(e) => update('boardType', e.target.value)} options={BOARD_OPTIONS} disabled={busy} className="w-full sm:w-56" />
+                      <Input
+                        label="Misafir adı (ops.)"
+                        value={line.guestFirstName}
+                        onChange={(e) => update('guestFirstName', e.target.value)}
+                        error={errors[`lines.${index}.guest.firstName`]}
+                        disabled={busy}
+                        placeholder="Grup sorumlusu"
+                        className="w-full sm:w-40"
+                      />
+                      <Input
+                        label="Soyadı"
+                        value={line.guestLastName}
+                        onChange={(e) => update('guestLastName', e.target.value)}
+                        error={errors[`lines.${index}.guest.lastName`]}
+                        disabled={busy}
+                        className="w-full sm:w-36"
+                      />
                       {typeQuote && (
                         <span className="self-center text-sm">
                           {lineQuote && lineQuote.unitTotal === null ? (
@@ -563,6 +627,67 @@ export function NewReservationTab() {
                     </Button>
                   </div>
                 )}
+
+                {/* Rooming list (modül 30): operatörün Excel listesi satırlara dönüşür; tarihler formun ortak giriş / çıkışı. */}
+                <div className="flex flex-col gap-2 rounded-item border border-dashed border-line p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-semibold text-ink">Rooming list (Excel)</span>
+                    <span className="text-xs text-ink-muted">Her satır bir oda + bir misafir; tarihler yukarıdaki ortak giriş / çıkış.</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      icon="fileText"
+                      disabled={busy}
+                      onClick={() => downloadRoomingTemplate({ roomTypes }).catch(() => toastError('Şablon indirilemedi'))}
+                    >
+                      Şablonu indir
+                    </Button>
+                    <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-control border border-line px-3 py-1.5 text-sm font-semibold text-ink hover:bg-surface-muted">
+                      <Icon name="inbox" className="size-4" />
+                      Dosya yükle
+                      <input
+                        type="file"
+                        accept=".xlsx"
+                        className="sr-only"
+                        disabled={busy}
+                        onChange={async (event) => {
+                          const file = event.target.files?.[0];
+                          event.target.value = '';
+                          if (!file) return;
+                          try {
+                            const { lines: parsed, errors: issues } = await readRoomingList(file, { roomTypes, defaultBoardType: defaultBoard || 'BB' });
+                            setRoomingErrors(issues);
+                            if (parsed.length > 0) {
+                              setLines(
+                                parsed.map((row) => ({
+                                  ...newLine(row.boardType, row.roomTypeId),
+                                  adults: String(row.adults),
+                                  children: String(row.children),
+                                  guestFirstName: row.guest.firstName,
+                                  guestLastName: row.guest.lastName,
+                                })),
+                              );
+                              toastSuccess(`${parsed.length} satır yüklendi`);
+                            }
+                          } catch {
+                            setRoomingErrors(['Dosya okunamadı; ekrandan indirilen şablonu kullanın.']);
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                  {roomingErrors.length > 0 && (
+                    <Alert tone="warning" title="Bazı satırlar alınamadı">
+                      <ul className="list-inside list-disc text-sm">
+                        {roomingErrors.map((issue) => (
+                          <li key={issue}>{issue}</li>
+                        ))}
+                      </ul>
+                    </Alert>
+                  )}
+                </div>
               </div>
             )}
           </Section>

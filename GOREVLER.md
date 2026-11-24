@@ -1609,13 +1609,51 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 18. Vardiya / kasa kapama (night audit) — Ali Kemal
 **Gün sonu:** Gece görevlisi sihirbazı adım adım geçip günü kapatıyor; oda ücretleri işleniyor, no-show'lar düşülüyor, kasa farkı raporlanıyor.
-- [ ] Backend: NightAudit, ShiftReport tabloları; `startNightAudit`, `closeDay` servisleri
-- [ ] Backend: gelmeyen rezervasyonları NO_SHOW yapma, tüm dolu odalara oda ücreti basma
-- [ ] Backend: günlük özet (gelir, doluluk, tahsilat) DailyStats tablosuna yazılır
-- [ ] Ekran: Night audit sihirbazı (1. gelmeyenler → 2. oda ücretleri → 3. kasa sayımı → 4. fark → 5. kapat)
-- [ ] Ekran: Vardiya devir formu (kasa sayımı, not) + devir raporu PDF
-- [ ] Ekran: Kapanış geçmişi
-- [ ] Aktör: billing-worker'a `night.audit.started` kuralı
+- [x] Backend: NightAudit, ShiftReport tabloları; `startNightAudit`, `closeDay` servisleri
+- [x] Backend: gelmeyen rezervasyonları NO_SHOW yapma, tüm dolu odalara oda ücreti basma
+- [x] Backend: günlük özet (gelir, doluluk, tahsilat) DailyStats tablosuna yazılır
+- [x] Ekran: Night audit sihirbazı (1. gelmeyenler → 2. oda ücretleri → 3. kasa sayımı → 4. fark → 5. kapat)
+- [x] Ekran: Vardiya devir formu (kasa sayımı, not) + devir raporu PDF
+- [x] Ekran: Kapanış geçmişi
+- [x] Aktör: billing-worker'a `night.audit.started` kuralı
+
+> **📌 Modül 18 tamamlandı (10 Kasım 2026 — Ali Kemal).**
+>
+> **İş günü artık `NightAudit`'ten okunuyor.** `lib/business-date.js` → `getBusinessDate`
+> son CLOSED günün ertesini döndürür (cache'li, kapanışta tazelenir); hiç kapanış
+> yoksa takvim günü (geriye uyumlu). **Gün kapatılmadan iş günü ilerlemez** — her
+> yer buradan okuduğu için başka yere dokunmayın. Takvimden ileri gün kapatılamaz
+> (`DAY_NOT_ARRIVED`), aynı gün iki kez kapatılamaz (`ALREADY_CLOSED`).
+>
+> **Veri** (`20261109120000_night_audit`): `NightAudit` iskeleti durumlu hale geldi
+> (`status` IN_PROGRESS/CLOSED, `startedBy`, `closedAt/By`, kapanış özeti); kasa
+> sayımı `ShiftReport`'a taşındı (yöntem bazında beklenen/sayılan/fark, `counts` JSON,
+> devir notu). `DailyStats` (`hotelId, day` tekil): doluluk, oda geliri, ADR, RevPAR,
+> tahsilat — **göstergeler modül 23'ün tanımlarıyla** (`reports/queries.js` → `loadSellable`
+> yeniden kullanıldı; satılan gece, satılabilir = oda − arıza).
+>
+> **Kapanış orkestrasyonu** (`modules/night-audit/service.js` → `closeDay`): gelmeyenleri
+> `reservations.markNoShowBatch` ile düşer → o gecenin oda ücretlerini
+> `folios.runRoomCharges(hotelId, { night, allowCurrent: true })` ile basar (kapanış
+> geceyi "bitti" sayar; yeni `allowCurrent` seçeneği) → `DailyStats`, `ShiftReport`,
+> `NightAudit` CLOSED'u tek transaction'da yazar → `night.audit.closed` yayınlar →
+> commit sonrası iş gününü tazeler. Her adım idempotent (oda ücreti `sourceKey`,
+> gelmedi tek tek). **`startNightAudit`** IN_PROGRESS işaretler (iki görevli aynı anda
+> kapatamaz), günü ilerletmez.
+>
+> **Olaylar** (katalog + etiket): `night.audit.started` (billing-worker dinler →
+> kapanış öncesi tamamlanmış gecelerin ücretini önceden basar), `night.audit.closed`
+> (FlexAI 2.0'da 87 gece müdürü, 92 kârlılık, 96 dış muhasebe dinleyecek — `businessDay`
+> + özet payload).
+>
+> **API** (`/night-audit`, izin `night_audit.view` / `night_audit.close`; resepsiyon +
+> müdür alır): `GET /status` (sihirbaz önizlemesi: gelmeyenler, içeride, beklenen kasa),
+> `POST /start`, `POST /close`, `GET /closures` (sayfalı), `GET /closures/:day`,
+> `GET /closures/:day/report.pdf` (vardiya devir raporu).
+>
+> **Modül 23'e not:** `DailyStats` kapanış anındaki özet; `RevenueDayStat` (zamanlanmış,
+> daha ayrıntılı kırılım) ayrı durur — ikisi de aynı satılan-gece / satılabilir tanımını
+> kullanır. **FlexAI 2.0'a not:** gece müdürü ve patron uygulaması `DailyStats`'i okur.
 
 > **Modül 3'ten not (16 Eylül 2026 — Ahmet):**
 >
@@ -1713,12 +1751,48 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 > göreve çeviriyor (izin eşlemesi `rooms.operate`). Bu modül gelince aynı
 > dinleyici MaintenanceTicket açmalı ve manuel görev yolu kaldırılmalı —
 > olay sözleşmesi hazır, yükte `taskId, roomId, roomNumber, note` var.
-- [ ] Backend: MaintenanceTicket, MaintenancePlan tabloları + API
-- [ ] Backend: arıza "oda kullanılamaz" işaretliyse odaya arıza kaydı (`RoomBlock`) aç — `blockRoom`, bitince `removeBlock`
-- [ ] Ekran: Arıza listesi (oda, başlık, öncelik, durum, atanan, süre)
-- [ ] Ekran: Yeni arıza formu (oda/alan, açıklama, fotoğraf, öncelik, odayı kapat mı)
-- [ ] Ekran: Teknisyen görünümü (bana atananlar, başla / bitti)
-- [ ] Ekran: Periyodik bakım planı (aylık kontrol listeleri, otomatik görev üretimi)
+- [x] Backend: MaintenanceTicket, MaintenancePlan tabloları + API
+- [x] Backend: arıza "oda kullanılamaz" işaretliyse odaya arıza kaydı (`RoomBlock`) aç — `blockRoom`, bitince `removeBlock`
+- [x] Ekran: Arıza listesi (oda, başlık, öncelik, durum, atanan, süre)
+- [x] Ekran: Yeni arıza formu (oda/alan, açıklama, fotoğraf, öncelik, odayı kapat mı)
+- [x] Ekran: Teknisyen görünümü (bana atananlar, başla / bitti)
+- [x] Ekran: Periyodik bakım planı (aylık kontrol listeleri, otomatik görev üretimi)
+
+> **📌 Modül 20 tamamlandı (10 Kasım 2026 — Ali Kemal).**
+>
+> **Veri** (`20261110090000_maintenance`): `MaintenanceTicket` iskeleti genişletildi
+> (kategori, kaynak, atama/başlama/çözüm izi, `roomBlockId`, `housekeepingTaskId`,
+> `guestRequestId`, `planId`); `MaintenancePhoto` (modül 21 foto deseni) ve
+> `MaintenancePlan` (periyodik, kontrol listeli) eklendi. `StaffAlertKind`'a
+> `MAINTENANCE` (Prisma + olay kataloğu + `STAFF_ALERT_KINDS` + etiket).
+>
+> **Servis** (`modules/maintenance/`): bilet yaşam döngüsü (aç → ata → başla →
+> çöz / iptal), `TaskStatus` ile. **Oda kapatma modül 3'e devrediliyor**:
+> `createTicket({ closeRoom })` önce `blockRoom` çağırır (dolu odada 409 → ekran
+> "misafiri taşı" der, bilet açılmaz), `roomBlockId` saklar; çözümde
+> `removeBlock` (süren kayıt sonlanır/iptal olur, oda serbest). **Oda durumunu
+> doğrudan yazmaz** — tek yazıcı rooms servisidir.
+>
+> **Entegrasyon:** `housekeeping.issue.reported` dinleyicisi artık **MaintenanceTicket
+> açıyor** (eski manuel-görev yolu kaldırıldı; aynı `housekeeping:issue-to-maintenance`
+> aboneliği, idempotent — görev başına tek açık bilet). Misafir isteğine bağlı bilet
+> (`guestRequestId`) açılışta isteği IN_PROGRESS, çözümde DONE yapar
+> (`applyRequestStatus`, geçersiz geçişi yutar). Yeni/atanan bilet personel uyarısı
+> (`raiseStaffAlert`, kind MAINTENANCE, link `/teknik-servis/:id`).
+>
+> **Zamanlanmış iş** (`modules/maintenance/jobs.js`, server.js'te
+> `startMaintenanceModuleJobs` — altyapının `startMaintenanceJobs`'uyla karışmasın):
+> 6 saatte bir süresi gelen planlardan bilet üretir (plan başına tek açık bilet,
+> `lastRunOn` iş gününe çekilir); günde bir kapanmış bilet fotoğraflarını siler.
+>
+> **Olaylar:** `maintenance.ticket.created/assigned/resolved/cancelled`.
+> **İzinler:** `maintenance.view` / `operate` (bilet aç/çöz/foto) / `manage`
+> (atama, iptal, oda kapatma, plan). Roller: müdür hepsi; resepsiyon + kat
+> hizmetleri view+operate.
+>
+> **API** (`/maintenance`): `tickets` (liste `?view=OPEN|MINE|ALL`, ayrıntı, aç,
+> güncelle, ata, başla, çöz, iptal), `tickets/:id/photos`, `plans` (CRUD).
+> **Modül 14 notu:** kat görevlisinin "Sorun var" bildirimi artık bu modüle gider.
 
 > **Modül 3'ten not (16 Eylül 2026 — Ahmet):** "MAINTENANCE" durumu kaldırıldı;
 > arıza artık **tarihli kayıt** (`RoomBlock`). Odalar ekranında "Arıza kayıtları"
@@ -1808,13 +1882,37 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 22. CRM & misafir kartı — Ali Kemal
 **Gün sonu:** Her misafirin tek profili var: geçmiş konaklamalar, tercihler, toplam harcama, notlar; mükerrer kayıtlar birleştirilebiliyor.
-- [ ] Backend: Guest genişletme (GuestPreference, GuestNote tabloları), `mergeGuests` servisi
-- [ ] Backend: misafir özeti API'si (konaklama sayısı, toplam harcama, son konaklama)
-- [ ] Ekran: Misafir listesi + arama (ad, telefon, e-posta, etiket)
-- [ ] Ekran: Misafir kartı (iletişim, kimlik, tercihler: kat / yastık / alerji; etiketler: VIP / sorunlu)
-- [ ] Ekran: Konaklama geçmişi sekmesi, harcama sekmesi, notlar sekmesi
-- [ ] Ekran: Birleştirme (iki kaydı seç, hangi alanlar kalacak)
-- [ ] Rezervasyon formuna misafir kartı önizlemesi (tercihler görünsün)
+- [x] Backend: Guest genişletme (GuestPreference, GuestNote tabloları), `mergeGuests` servisi
+- [x] Backend: misafir özeti API'si (konaklama sayısı, toplam harcama, son konaklama)
+- [x] Ekran: Misafir listesi + arama (ad, telefon, e-posta, etiket)
+- [x] Ekran: Misafir kartı (iletişim, kimlik, tercihler: kat / yastık / alerji; etiketler: VIP / sorunlu)
+- [x] Ekran: Konaklama geçmişi sekmesi, harcama sekmesi, notlar sekmesi
+- [x] Ekran: Birleştirme (iki kaydı seç, hangi alanlar kalacak)
+- [x] Rezervasyon formuna misafir kartı önizlemesi (tercihler görünsün)
+
+> **📌 Modül 22 tamamlandı (10 Kasım 2026 — Ali Kemal).**
+>
+> **Veri** (`20261110140000_guest_crm`): `Guest` zaten `tags[]`/`preferences` JSON/`notes`
+> taşıyordu; yapılandırılmış **`GuestPreference`** (kategori + değer + kaynak
+> STAFF/GUEST/AI + güven + son teyit) ve **`GuestNote`** (tarihli, sabitlenebilir)
+> eklendi. ALLERGY tercihleri **modül 43'ün alerjen kodlarını** kullanır
+> (`ALLERGENS`/`ALLERGEN_LABELS`, recipes.js — yeniden tanımlanmadı).
+>
+> **Servis** (`modules/guests/`): misafir listesi+arama (mevcut
+> `reservations/guests.js` → `searchGuests` yeniden kullanıldı), kart, **özet**
+> (tamamlanmış konaklama sayısı, toplam harcama = folyo borçları, ilk/son
+> konaklama — tek sorgu seti), tercih/not CRUD. **`mergeGuests(hotelId,
+> {sourceId, targetId, keep})`** kaynağın 9 tablodaki kaydını hedefe taşır
+> (Reservation, ReservationGuest [çakışma temizlenerek], Conversation,
+> GuestRequest, Folio, LostItem, Invoice, WaitlistEntry, Notification + tercih/not),
+> etiketleri birleştirir (düz `toLowerCase` — "VIP" Türkçe I→ı bozulmasın),
+> `keep` alanlarını hedefe yazar, kaynağı soft-delete eder. **Modül 69 (göç) de
+> bu fonksiyonu kullanacak** — dışa açık.
+>
+> **Olaylar** `guest.card.updated/merged`, `guest.preference.updated`,
+> `guest.note.added`. **İzinler** `guests.view/manage/merge` (müdür + resepsiyon).
+> **API** `/guests` (liste, `search` [rezervasyon önizlemesi], kart, `:id/stays`,
+> `:id/spend`, tercih/not CRUD, `merge`).
 
 > **Modül 7'den not (17 Eylül 2026 — Ahmet):** gelen WhatsApp mesajı misafir kartını
 > telefondan buluyor (`Guest_phone_match_idx` ifade dizini + `phoneMatchScore`;
@@ -1897,14 +1995,60 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 24. Doğal dil raporlama — Ali Kemal
 **Gün sonu:** Müdür "geçen ayın haftalık doluluğunu göster" yazıyor, tablo ve grafik geliyor; rapor kaydedilebiliyor.
-- [ ] report-agent paketi (LangGraph; MCP tool'larını çağırır; sonuç: tablo verisi + grafik tipi önerisi + kısa yorum)
-- [ ] Backend: SavedReport tablosu + API
-- [ ] Ekran: Rapor sohbeti (soru kutusu, cevap: tablo + grafik + yorum)
-- [ ] Ekran: "Kaydet" → kayıtlı raporlar listesi, tekrar çalıştır
-- [ ] Token bütçesi + LlmUsage kaydı; agent kapalıysa "rapor talebi" manuel görevi
+- [x] report-agent paketi (LangGraph; MCP tool'larını çağırır; sonuç: tablo verisi + grafik tipi önerisi + kısa yorum)
+- [x] Backend: SavedReport tablosu + API
+- [x] Ekran: Rapor sohbeti (soru kutusu, cevap: tablo + grafik + yorum)
+- [x] Ekran: "Kaydet" → kayıtlı raporlar listesi, tekrar çalıştır
+- [x] Token bütçesi + LlmUsage kaydı; agent kapalıysa "rapor talebi" manuel görevi
 
 > **FlexAI 2.0'dan not (3 Kasım 2026 — Ahmet):** 86 (işlem yapan asistan) aynı rapor araçlarını kullanacak; araç tanımlarını
 > ajandan ayrı tut (MCP sunucusunda), ajan yalnız çağırsın.
+
+> **📌 Modül 24 tamamlandı (16 Kasım 2026 — Ali Kemal).**
+>
+> **Kararlar (kullanıcı):** kayıtlı rapor **göreli dönemle, AI'sız** yeniden çalışır ("geçen ay" her ay kayar, token
+> harcamaz); kayıtlı raporlar **kişisel + paylaşılabilir**; kapsam **mevcut rapor araçları** (doluluk, oda geliri / ADR /
+> RevPAR, oda tipi ve kaynak kırılımı, 30 günlük tahmin, bütçe sapması).
+>
+> **Mimari — rakamı model üretmez:** ajan soruyu bir **rapor tanımına** çevirir (`contracts/report-chat.js`
+> `reportSpecSchema`: rapor + göreli dönem ya da sabit tarih + gruplama), raporu `run_report` ile görür, `present_report`
+> ile tanım + grafik (çizgi / sütun / tablo, en fazla 3 seri) + kısa yorum sunar. Tabloyu **sistem** çalıştırır:
+> `resolveReportSpec` (o günün tarihine göre) → `reports/mcp.js` `callReportingTool` (MCP sunucusu süreç içi istemciyle —
+> 86'nın notuna uygun: araç tanımları MCP'de, ajan yalnız çağırır) → `report-chat/datasets.js` (sütun türlü tablo).
+> Geçersiz tanım / seri modele araç hatası olarak döner, model düzeltir; geçersiz seri ayıklanır, raporun varsayılan
+> grafiği devreye girer. Model araç şemaları OpenAI katı kipine uygun (her alan zorunlu, boş = null).
+>
+> **Ajan** (`shared/agents/report-agent`, ürün bilmez; talimat / araçlar / kabul otel servisinden): soru başına en fazla
+> 6 model çağrısı; her çağrı `callModel` ile (otelin AI açık mı, günlük bütçe, `LlmUsage` kaydı). Kapsam dışı soru
+> (restoran, personel…) metinle cevaplanır (kaydedilemez). Devam sorusu ("bunu aylık göster") önceki raporun tanımını
+> bağlam alır. **Ajan yoksa / AI kapalıysa / model seçilmemişse / bütçe bittiyse / ajan kapalıysa** soru "cevaplanamadı"
+> olur ve **"Rapor talebi" manuel görevi** açılır (`reports.view` yetkilisine; başlık sorudan). Model otelin ana modeli
+> (aktör panelinde görünür).
+>
+> **Veri** (migration `20261116150000_report_chat`): `ReportQuestion` (soran, soru, devam bağı, durum izi CHECK'li,
+> tanım / grafik / cevap anındaki tablo / dönem adı, model çağrısı sayısı) ve `SavedReport` (sahip, başlık, soru, tanım,
+> grafik, paylaşım, son çalıştırma). Bekleyen soru 3 dakikada "zamanında cevaplanmadı" sayılır; kişi başı en fazla 3
+> bekleyen soru, 100 kayıtlı rapor.
+>
+> **API** `/report-chat`: sorular (sor / geçmiş / tek soru — soru kişiseldir), kayıtlı raporlar (liste kendi / paylaşılan,
+> kaydet, başlık / paylaşım, sil — yalnız sahibi; çalıştır — sahibi ya da paylaşılmışsa herkes). Yeni izin `reports.ask`
+> (MANAGER + ACCOUNTING; soru AI bütçesi harcar); kayıtlıyı görmek / çalıştırmak `reports.view`. Olaylar
+> `report.question.asked` (ajan dinler) / `report.question.completed` / `report.saved.changed`, kanal `report-chat.changed`.
+>
+> **Ekranlar:** menüde "Raporlar" grubu (Gelir raporları, **Rapor asistanı** `/raporlar/asistan`, **Kayıtlı raporlar**
+> `/raporlar/kayitli`). Sohbet: örnek sorular, cevap kartı (başlık, rapor · dönem, yorum, özet, SVG grafik, tablo, notlar),
+> Kaydet (otelle paylaş), Excel'e aktar, "Bunu değiştir" (devam sorusu); AI kapalıyken uyarı + "Rapor talebi gönder".
+> Kayıtlı raporlar: benim / paylaşılan, çalıştır (aynı sonuç bloğu), yeniden adlandır, paylaş, sil.
+>
+> **Test:** sözleşme 5 (dönem hesabı, tanım → araç, şemalar), tablo 5, ajan 6 (araç → cevap, ret → düzeltme, metin,
+> döngü sınırı, AI yok / model yok → devir, kapalı → rapor talebi görevi), entegrasyon 4 (ajan yokken görev; sahte modelle
+> soru → MCP → haftalık tablo + LlmUsage; kaydet / paylaş / AI'sız çalıştır / sahiplik; devam + metin cevap; bekleyen
+> sınırı + izinler), ön yüz 6. Tarayıcıda: AI kapalı yolu (rapor talebi) ve servis üzerinden yazılan cevaplar gerçek
+> demo verisiyle (grafik, tablo, kaydet, paylaş, çalıştır). **Not:** local'de `OPENAI_API_KEY` yok — gerçek modelle
+> deneme canlıda yapılmalı (prompt'un model davranışı gerçek modelle ölçülmedi).
+>
+> **Devir:** yeni araçlar (restoran / POS satışı, acente üretimi — 26'nın rapor tasarımcısıyla birlikte düşünülebilir),
+> kayıtlı raporun zamanlanmış e-postası (email-gateway stub).
 
 ### 25. Günlük durum — forecast — arkadaşın
 **Gün sonu:** Dashboard'da önümüzdeki 30 günün doluluk ve gelir tahmini görünüyor; riskli günler işaretli.
@@ -1969,12 +2113,58 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 26. Rapor tasarımcısı + Excel — Ali Kemal
 **Gün sonu:** Kullanıcı kendi raporunu kolon seçerek kuruyor, Excel indiriyor; Excel'den toplu misafir / fiyat yükleyebiliyor.
-- [ ] Backend: ReportDefinition tablosu; kaynak tanımları (rezervasyon, folyo, misafir, ödeme) ve izin verilen kolonlar
-- [ ] Backend: dinamik sorgu üretici (kolon, filtre, grupla, sırala; SQL injection'a kapalı)
-- [ ] Backend: Excel export (xlsx), Excel import (misafir listesi, fiyat planı) + doğrulama raporu
-- [ ] Ekran: Tasarımcı (kaynak seç → kolon sürükle → filtre ekle → önizle → kaydet)
-- [ ] Ekran: Kayıtlı raporlar + çalıştır + Excel indir
-- [ ] Ekran: Excel yükleme sihirbazı (dosya seç → kolon eşleştir → hataları göster → içe aktar)
+- [x] Backend: ReportDefinition tablosu; kaynak tanımları (rezervasyon, folyo, misafir, ödeme) ve izin verilen kolonlar
+- [x] Backend: dinamik sorgu üretici (kolon, filtre, grupla, sırala; SQL injection'a kapalı)
+- [x] Backend: Excel export (xlsx), Excel import (misafir listesi, fiyat planı) + doğrulama raporu — xlsx diğer modüller gibi
+  tarayıcıda üretilir (sunucunun çalıştırdığı tablodan); içe aktarmada dosya tarayıcıda okunur, doğrulama ve yazma sunucuda
+- [x] Ekran: Tasarımcı (kaynak seç → kolon sürükle → filtre ekle → önizle → kaydet)
+- [x] Ekran: Kayıtlı raporlar + çalıştır + Excel indir
+- [x] Ekran: Excel yükleme sihirbazı (dosya seç → kolon eşleştir → hataları göster → içe aktar)
+
+> **📌 Modül 26 tamamlandı (16 Kasım 2026 — Ali Kemal).**
+>
+> **Kararlar (kullanıcı):** kaynaklar **rezervasyon, folyo kalemi, misafir, ödeme**; tasarım raporları **"Kayıtlı raporlar"da
+> rapor asistanının raporlarıyla birlikte** (kişisel + otelle paylaşılabilir); Excel'den misafirde **mevcut kişi atlanır ve
+> raporlanır** (mevcut karta dokunulmaz); fiyat planında **çakışan satır reddedilir** (mevcut fiyat habersiz değişmez).
+>
+> **Sorgu üretici — SQL enjeksiyonuna kapalı:** sütun kataloğu sözleşmede (`contracts/report-designer.js`: anahtar, ad, tür,
+> seçenekler), SQL ifadeleri yalnız sunucuda (`report-designer/catalog.js`; modül yüklenirken katalogdaki her sütunun ifadesi
+> olduğu denetlenir). Kullanıcıdan gelen yalnız katalogla doğrulanmış anahtar ve **parametre** değer; LIKE jokerleri
+> kaçışlanır; takma adlar sıralı (`c0…`, `a0…`), gruplama sıra no. Rapor ekranlarıyla aynı **salt okunur işlem + süre
+> sınırı**. İşleçler türe göre (metin: içerir / eşittir / boş / dolu; seçenek: şunlardan biri / dışında; tarih: **göreli dönem**
+> (M24'ün dönemleri — kayıtlı rapor çalıştığı güne göre kayar) / arasında / önce / sonra; sayı / tutar: eşittir / en az / en
+> çok / arasında). Gruplu modda boyut + adet / toplam / ortalama / en az / en çok. Kayıt anları otelin saat diliminde güne
+> çevrilir (dilim parametre). Kaynağın kendi yetkisi her çalıştırmada denetlenir (misafir kaynağı `guests.view`); paylaşılan
+> rapor yetkisize "yetkiniz yok" olarak görünür. Belge numarası tasarımcıda yok (kişisel veri).
+>
+> **Excel yükleme** (`/imports/:kind`): sihirbaz sütunları başlık adlarından (eş anlamlılarla) önerir; satırlar sözleşmenin
+> sıkı şemasıyla (GG.AA.YYYY / ISO tarih, "2.500,00" tutar, pansiyon kodu ya da adı, belge türü adı, TC kimlik sağlaması)
+> denetlenir; **ya hep ya hiç**; yükleme kimliği `DataImport` kaydının kimliği — aynı yükleme ikinci kez yazılmaz. Misafir
+> eşleşmesi rezervasyondaki misafir aramasıyla aynı kural (e-posta küçük harf, telefon son 7 hane + `phoneMatchScore`, belge
+> no); dosyada tekrar eden kişi bir kez. Fiyat planı oda tipini kodla ya da adla bulur; M28'in çakışma kuralı (kapalı planlar
+> dahil) sistemde ve dosyada; yazılan planlar ayar olaylarıyla fiyat önbelleğini tazeler + tek `rate.changed`. Yetki: misafir
+> `guests.manage`, fiyat planı `settings.manage`. Yükleme geçmişi listelenir.
+>
+> **Veri** (migration `20261116180000_report_designer`): `ReportDefinition` (sahip, başlık, kaynak, tasarım, paylaşım, son
+> çalıştırma) ve `DataImport` (kimlik = yükleme kimliği, tür, dosya adı, sayılar, satır sonuçları). Olaylar
+> `report.definition.changed` (kanal `report-chat.changed`) ve `data.import.completed`.
+>
+> **Ekranlar:** Raporlar kabuğu dört sekme (asistan, tasarımcı, kayıtlı, gelir). **Rapor tasarımcısı** `/raporlar/tasarim`
+> (kaynak → sütunlar (ok / sürükle-bırak sırası) → gruplama → filtreler → sıralama + satır sınırı → önizle (100 satır) / Excel
+> (5000'e kadar) / kaydet; sahibi değilse "farklı kaydet"). **Kayıtlı raporlar**: asistan + tasarım birlikte (tür rozeti),
+> tasarımda düzenle. **Excel'den yükle** `/ice-aktar` (Yönetim): tür → şablon → dosya → eşleştirme (örnek değerlerle) →
+> denetim (hazır / zaten var / hatalı süzgeçli) → içe aktar → geçmiş.
+>
+> **Test:** sözleşme 7 (tasarım şeması, başlık önerisi, hücre biçimleri, satır şemaları, "I" harfi tuzağı), sorgu 5
+> (enjeksiyon, LIKE kaçışı, gruplu SQL, saat dilimi, çıktı), ön yüz 8; entegrasyon 7 (kataloğun **her sütunu** gerçek
+> veritabanında gruplu / gruplamasız; filtre + gruplama + toplam doğruluğu; kaynak yetkisi; kaydet / paylaş / sahiplik;
+> misafir atla / tekrar / hata / tekrar gönderim; fiyat çakışması + önbellek; yetkiler). Tarayıcıda gerçek demo verisiyle:
+> tasarım (kaynağa göre adet + tutar), kaydet, kayıtlı raporlarda çalıştır, misafir Excel'i (hazır / mevcut / hatalı → içe aktar).
+> Bulunup düzeltilen: rezervasyonun 21 sütunu 20 sınırını aşıyordu; pansiyon / belge türü kodunda Türkçe küçük harf "I" →
+> "ı" eşleşmeyi bozuyordu; "Cep Telefonu" gibi yazımlar eş anlamlılara eklendi; misafir eşleşmesi sistemin telefon kuralına
+> bağlandı.
+>
+> **Devir:** yeni kaynaklar (adisyon, demirbaş — katalog genişletilir), kayıtlı raporun zamanlanmış e-postası.
 
 ### 27. Bütçe yönetimi — arkadaşın
 **Gün sonu:** Yıllık bütçe ay ay giriliyor; gerçekleşenle sapma raporu çıkıyor; AI sapmayı yorumluyor.
@@ -2039,12 +2229,57 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 28. Paket / pansiyon tipleri — Ali Kemal
 **Gün sonu:** RO/BB/HB/FB/AI pansiyon tipleri ve tarih bazlı fiyat planları tanımlı; rezervasyon fiyatı bunlardan hesaplanıyor.
-- [ ] Backend: RatePlan genişletme (oda tipi × pansiyon × tarih aralığı × fiyat, min. gece, kişi başı ek), Package tablosu
-- [ ] Backend: fiyat hesaplama servisini RatePlan'a bağla (sezon çarpanı yerine plan fiyatı)
-- [ ] Ekran: Pansiyon tipi tanımları
-- [ ] Ekran: Fiyat planı tablosu (satır oda tipi, sütun tarih aralığı, hücre fiyat; toplu düzenleme)
-- [ ] Ekran: Paket tanımı (oda + SPA + transfer gibi bileşenler, toplam fiyat)
-- [ ] Rezervasyon formuna pansiyon ve paket seçimi
+- [x] Backend: RatePlan genişletme (oda tipi × pansiyon × tarih aralığı × fiyat, min. gece, kişi başı ek), Package tablosu
+- [x] Backend: fiyat hesaplama servisini RatePlan'a bağla (sezon çarpanı yerine plan fiyatı)
+- [x] Ekran: Pansiyon tipi tanımları (pansiyon tipleri sabit enum — `BOARD_TYPES`; plan ve paket ekranlarında seçilir)
+- [x] Ekran: Fiyat planı tablosu (oda tipi × pansiyon × dönem; fiyat + kişi başı ek)
+- [x] Ekran: Paket tanımı (oda + ek hizmet bileşenleri, gecelik fiyat)
+- [x] Rezervasyon formuna pansiyon ve paket seçimi
+
+> **📌 Modül 28 tamamlandı (14 Kasım 2026 — Ali Kemal).** `flex-ali` dalı.
+>
+> **Kararlar:** Pansiyon tipleri **sabit enum** (`BOARD_TYPES`: RO/BB/HB/FB/AI/UAI — Türk otelciliği + kanal/acente ile ortak);
+> kullanıcı tanımlı değil. **Fiyat planı** = oda tipi × pansiyon × tarih aralığında sabit gecelik fiyat; bir geceye düşerse
+> **sezon çarpanının yerine geçer** (çarpan uygulanmaz), yoksa eski sezon davranışı birebir korunur (geriye uyumlu).
+> Fiyat `baseOccupancy` kişi içindir; fazla yetişkin `extraAdultRate`, çocuk `childRate` ile eklenir (kişi başı ek).
+> **Paket** = oda + ek hizmet (SPA, transfer...) demeti, **sabit gecelik fiyat**; seçilince pansiyon paketten gelir ve
+> gece fiyatı paketin gecelik fiyatıdır (sezon/plan/kişi farkı uygulanmaz). Bileşenler (`components`) bilgi amaçlı (ayrı
+> folyo satırı değil — folyoya yansıması ileride). Fiyat **önceliği**: elle > acente kontratı > **paket** > **fiyat planı** >
+> sezon × taban. Paket acente/elle fiyat/kuponla **birleşmez** (net demet fiyatı; sözleşme ve servis reddeder).
+>
+> **Veri** (migration `20261114090000_rate_plans_packages`): mevcut `RatePlan` genişletildi (`baseOccupancy`,
+> `extraAdultRate`, `childRate` + lookup index); **aynı oda tipi + pansiyonda yayındaki planların dönemleri çakışmaz**
+> (`RatePlan_no_overlap` EXCLUDE, silinmiş plan hariç). Yeni `Package` (kod otel içinde tekil — kısmi unique, silinince
+> yeniden kullanılır; `nightlyPrice`, `components` JSON, soft-delete). `Reservation.packageId` (FK restrict; `boardType`
+> paketliyse paketten). CHECK'ler: pozitif fiyat, geçerli dönem, kişi farkı ≥ 0.
+>
+> **Fiyat kuralları** (`reservations/rules.js`): `priceStay` artık opsiyonel `ratePlans` + `roomTypeId` + `boardType` +
+> `occupancy` alır (gece gece: plan varsa plan fiyatı + kişi başı ek, çarpan `null`, `seasonName` = plan adı; yoksa sezon).
+> `findRatePlanForNight`, `ratePlanNightAmount`, `pricePackageStay` eklendi. Servis (`reservations/service.js`):
+> `loadContext` planları (`getActiveRatePlans`, cache'li) yükler; `priceRoomLine`/`priceRooms`/`repriceFor`/`quote`
+> plan + paket farkında; `applyPackages` (açma) ve `resolvePackageForEdit` (düzenleme) paketi oda satırına uygular.
+> Paketli oda promosyon/kupon almaz (`priceRooms`/`rediscount`). Acente yolu (modül 29) **dokunulmadı** — kontrat fiyatı
+> ayrı kalır.
+>
+> **Modül** `backend/src/modules/pricing/` (yeni): `service.js` (plan + paket CRUD + sıcak okumalar), `rules.js`
+> (çakışma), `routes.js` (`/pricing/rate-plans`, `/pricing/packages`, `/packages/active` seçici). Olaylar
+> `settings.rate_plan.*` / `settings.package.*` (prefix sayesinde ayar cache'i + canlı sürüm otomatik geçersiz kılınır) +
+> `rate.changed` (kanal senkronu/modül 33). İzinler: yönetim `settings.view`/`settings.manage` (sezon gibi); paket seçici
+> `reservations.manage` ya da `settings.view`. Oda tipi silme koruması zaten fiyat planını sayıyordu.
+>
+> **Ekran:** `/ayarlar/fiyat-planlari` (plan tablosu), `/ayarlar/paketler` (paket tanımı); rezervasyon formuna paket
+> seçici (paket seçilince pansiyon sabit, fiyat notu), rezervasyon detayında paket adı.
+>
+> **Test:** kurallar 35 birim (`rules.test.js`: plan bulma, kişi başı ek, plan→sezon düşüş, paket sabit fiyat);
+> entegrasyon 7 (`pricing/service.integration.test.js`: plan CRUD, çakışma reddi, rezervasyonun plan fiyatı + kişi ek,
+> sezon geriye uyumu, paket CRUD, paketli rezervasyon pansiyon/fiyat, pasif paket reddi). Rezervasyon entegrasyonu 29/30
+> (kalan tek test — bekleme listesi "zil" zamanlaması — yalnız koşunca geçiyor; M28 ile ilgisiz flake).
+>
+> **Devir:** Gelen kanal rezervasyonu (`channel-manager/bookings.js` → `createReservation`) plan fiyatını otomatik alır.
+> OTA'lara **giden** ARI fiyatı (`channel-manager/ari.js`) hâlâ **sezon-bazlı** (board-başına plan farkı ARI'nin oda-tipi
+> düzeyindeki tek fiyat yapısını değiştirmeyi gerektirir — **modül 33 işi**). Paket bileşenlerinin folyoya ayrı kalem
+> olarak yansıması ve fiyat planı ekranında "toplu/satır-sütun" düzenleme ileride. Modül 34 (dinamik fiyat) plan fiyatını
+> giriş noktası alabilir.
 
 ### 29. Kontrat & acente yönetimi — arkadaşın
 **Gün sonu:** Acenteler kayıtlı, kontrat fiyatları girili; acente adına açılan rezervasyon kontrat fiyatını otomatik alıyor.
@@ -2109,12 +2344,74 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 30. Grup & allotment — Ali Kemal
 **Gün sonu:** Acenteye ayrılan oda kotası tanımlı; müsaitlik hesabı kotayı düşüyor; rooming list yüklenip toplu check-in yapılıyor.
-- [ ] Backend: Allotment, ReservationGroup tabloları + API
-- [ ] Backend: `checkAvailability`'ye allotment düşümü; serbest bırakma tarihinde kota geri açılır
-- [ ] Backend: rooming list import (Excel: ad, soyad, oda tipi, tarih)
-- [ ] Ekran: Allotment tanımı (acente, tarih aralığı, oda tipi, adet, release günü)
-- [ ] Ekran: Kota kullanım tablosu (verilen / kullanılan / kalan)
-- [ ] Ekran: Grup dosyası (grup adı, rezervasyonlar, toplu check-in, toplu folyo)
+- [x] Backend: Allotment tablosu + API (ReservationGroup modül 4'ten vardı; grup dosyası API'si eklendi)
+- [x] Backend: müsaitliğe allotment düşümü; release tarihinde kota kendiliğinden geri açılır
+- [x] Backend: rooming list (satır misafirli grup açma; Excel parse tarayıcıda — bütçe modülü kalıbı)
+- [x] Ekran: Allotment tanımı (acente kartında sekme: oda tipi, dönem, adet, release günü)
+- [x] Ekran: Kota kullanım tablosu (gün gün verilen / kullanılan / kalan / release)
+- [x] Ekran: Grup dosyası (rezervasyonlar, toplu oda atama / check-in / check-out, folyo bakiyeleri)
+
+> **📌 Modül 30 tamamlandı (14 Kasım 2026 — Ali Kemal).** `flex-ali` dalı.
+>
+> **Kararlar (kullanıcı, 14 Kasım 2026):** Kota bir **garantidir, tavan değil** — acentenin kotası dolunca satış genel
+> havuzdan devam eder (fiziksel yer varsa açılır). **Release tarihi = giriş gecesi − `releaseDays`; o günden itibaren
+> (dahil) kullanılmamış kota genel havuza döner** (`releaseDays = 0`: gelecek geceler girişe kadar tutulur, günün gecesi
+> serbest — same-day satış herkese açık). Rooming list **ortak tarihli** (grubun giriş/çıkışı; satır başına tarih ileriki
+> sürüm); satır başına misafir adı. **Kullanım ayrı bağla tutulmaz, türetilir:** acentenin aynı oda tipinde o geceyi
+> kapsayan geçerli (PENDING/CONFIRMED/CHECKED_IN) rezervasyonları kotaya mahsup edilir — rezervasyonda allotment FK yok,
+> iptal kota hakkını kendiliğinden geri açar.
+>
+> **Veri** (migration `20261114130000_allotments`): `Allotment` (acente × oda tipi × dönem [iki uç dahil] × adet ×
+> releaseDays, soft-delete). Aynı acente + tipte yayındaki dönemler çakışmaz (EXCLUDE `Allotment_no_overlap`); CHECK'ler
+> adet 1–500, release 0–365, dönem ≤ 1100 gün. Yazmalar acenteyi **özel** kilitler (kontrat/stop-sale düzeni; kilit
+> sırası korunur: rezervasyon → oda tipi → acente). Envanter anlık görüntüsü (`loadInventorySnapshot`) artık `agencyId`
+> de döner (kullanım sayımı için).
+>
+> **Müsaitlik:** saf kurallar `agencies/allotment-rules.js` (`isNightHeld`, `allotmentHolds`, `allotmentUsage`; satış
+> bağlamı: satan acentenin kendi kotası düşülmez, diğerlerinin **kullanılmamış + release edilmemiş** kotası düşülür).
+> Tek kapı `allotments.holdsForSale` (kota yoksa null — sıfır ek yük). Tüketiciler: **rezervasyon guard'ı**
+> (`overbookingViolations` → `findNewOverbooking` opsiyonel `holds` tabanıyla; 4 çağrı noktası: açma, grup, düzenleme,
+> iptal geri alma; ihlal mesajı "N oda acente kotasında tutulu" der), **teklif** (iki dal), **bekleme listesi** (zil
+> kotalı odaya çalmaz), **oda kapısı** `getStayAvailability` (webchat/concierge), **ARI** (OTA'ya giden free'den tutulu
+> kota düşülür — kanal kotalı odayı satamaz; release olunca gündelik tam eşitleme + olay penceresi kanala açar).
+> `availabilityForStay` artık 0'a kıskaçlı (negatif dönmez).
+>
+> **Olay:** `agency.allotment.changed` (agencyId, allotmentId, roomTypeId, from/to, change) — `AGENCY_EVENTS` (acente
+> ekranı canlı), `INVENTORY_CHANGED_EVENTS` (kanal senkronu + oda planı canlı sürüm) ve `INVENTORY_RELEASING_EVENTS`
+> (kota azalınca bekleme listesi taranır) listelerine eklendi; channel-sync-worker olayın dönem penceresini hassas
+> kirletir. Kısıt mesajları `errors.js`'e işlendi (M28'in RatePlan/Package kısıtları da bu vesileyle eklendi — tabloda
+> eksiklerdi).
+>
+> **API:** `/agencies/:agencyId/allotments` (GET sayfalı, POST), `/agencies/allotments/:id` (PUT sürümlü, DELETE),
+> `/agencies/allotments/:id/usage` (gün gün verilen/kullanılan/kalan/release + özet). İzinler `agencies.view/manage`.
+>
+> **Grup dosyası** (`reservations/groups.js`): `GET /reservations/groups` (arama, sayfalı; oda sayısı, açık/içeride,
+> tarih aralığı), `GET /reservations/groups/:id` (rezervasyonlar + folyo bakiyeleri [TRANSFERRED hariç, denormalize
+> `Folio.balance`] + durum dağılımı + toplamlar — decimal toplama). **Toplu check-in** `POST /front-desk/stays/check-in-batch`
+> (en fazla 50; toplu çıkış kalıbı): kimlik ve refakatçiler **karttan okunup geri verilir** (toplu giriş kayıtlı kimliği /
+> online check-in refakatçisini silmez); odasızlık, kimlik politikası, erken giriş ücreti gibi ayrıntı isteyen kayıt
+> sebebiyle atlanır (tek tek alınır). Toplu oda atama (autoAssignBatch) ve toplu çıkış modül 51'den vardı.
+>
+> **Rooming list:** grup satırına opsiyonel `guest` (ad-soyad yeter; `groupLineGuestSchema` — iletişim zorunlu değil,
+> iletişim grup sorumlusunda; `guestInputSchema` iletişim şartı korunarak ikiye bölündü). `resolveLineGuests`: satır
+> misafiri kendi kartına açılır (`forceNewGuest` — isim çakışması bütün grubu düşürmesin; aynı ad + iletişim yine mevcut
+> kartı bulur). Excel parse **tarayıcıda** (`read-excel-file/browser`, bütçe kalıbı): şablon [Ad, Soyad, Oda tipi kodu,
+> Pansiyon, Yetişkin, Çocuk]; hatalı satırlar numarasıyla listelenir, geçerliler grup satırlarına dolar.
+>
+> **Ekran:** acente kartına "Kota" sekmesi (CRUD + kullanım tablosu), `/gruplar` + `/gruplar/:id` (grup dosyası: seçimli
+> toplu oda atama / giriş / çıkış, sonuç sebepleriyle; grup iptali), grup formuna satır misafiri + rooming list
+> import/şablon.
+>
+> **Test:** kurallar 11 birim (`allotment-rules.test.js`: release sınırları, mahsup, satış bağlamı, kota taşması);
+> entegrasyon 7 (`allotments.integration.test.js`: CRUD + çakışma, guard — genel satış kotaya takılır / acente kendi
+> kotasını kullanır / taşma genel havuzdan / release sonrası serbest, kullanım tablosu, satır misafirli acente grubu
+> [kontrat fiyatıyla], toplu check-in kısmi başarı). Rooms kuralları 74 ve rezervasyon kuralları 35 birim yeşil (holds
+> geriye uyumlu).
+>
+> **Devir:** Oda planı ekranı kota düşümünü **göstermiyor** (satış guard'ı ve ARI düşüyor; planda "boş" görünen oda
+> satışta kotaya takılabilir — kota görünürlüğü kullanım tablosunda). Grup **master folyo** (tek folyoya toplama) modül
+> 15/16'nın folyo birleştirmesiyle yapılır; grup dosyası bakiyeleri okur. Satır başına tarihli rooming list ileriki
+> sürüm. Modül 33 ARI'si artık kota-farkında; board-başına plan fiyatı devri (M28) ayrıca duruyor.
 
 ### 31. Promosyon & kupon — arkadaşın
 **Gün sonu:** "Erken rezervasyon %15", "3 gece kal 1 gece bedava" gibi kurallar tanımlanıyor; kupon kodu girilince fiyat düşüyor.
@@ -2191,12 +2488,55 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 32. Online rezervasyon motoru — Ali Kemal
 **Gün sonu:** Otel sitesindeki widget'tan misafir tarih seçip fiyat görüyor, bilgilerini girip rezervasyon yapıyor; chat balonu da aynı widget'ta.
-- [ ] Backend: public API (müsaitlik, fiyat, rezervasyon talebi; rate limit; API key)
-- [ ] Widget: ayrı küçük React uygulaması (tek script ile gömülür)
-- [ ] Widget: adımlar (tarih + kişi → oda tipi + fiyat listesi → misafir bilgileri → özet → onay)
-- [ ] Widget: kupon alanı, pansiyon seçimi, çoklu dil hazırlığı
-- [ ] Widget: 8'deki chat balonunu içine al
-- [ ] Rezervasyon `source=WIDGET` ile reservation-worker zincirine düşer, onay e-postası gider
+- [x] Backend: public API (müsaitlik, fiyat, rezervasyon talebi; rate limit; anahtar + origin)
+- [x] Widget: tek script ile gömülür (React değil — M8 balonuyla aynı bağımlılıksız Shadow DOM kalıbı; aşağıda)
+- [x] Widget: adımlar (tarih + kişi → oda tipi + fiyat listesi → misafir bilgileri → özet → onay kodu)
+- [x] Widget: kupon alanı, pansiyon seçimi, çoklu dil hazırlığı (tüm metinler tek nesnede, tr/en)
+- [x] Widget: 8'deki chat balonunu içine al (aynı anahtarla balonu sayfaya enjekte eder; `data-chat="off"` kapatır)
+- [x] Rezervasyon `source=WIDGET` ile düşer (onay e-postası: aşağıdaki dürüstlük notu)
+
+> **📌 Modül 32 tamamlandı (15 Kasım 2026 — Ali Kemal).** `flex-ali` dalı.
+>
+> **Kararlar:** Widget **ayrı React uygulaması değil** — M8 balonuyla aynı bağımlılıksız, Shadow DOM'lu tek vanilya
+> dosya (`shared/channels/webchat-gateway/widget/booking-widget.js`): yeni build altyapısı yok, görünüm/güvenlik kalıbı
+> balonla bire bir. Kimlik ve güvenlik **M8'in web chat kanalından**: aynı genel anahtar (`wc_...`), aynı izinli site
+> listesi; kanal ayarına tek alan eklendi (`bookingEnabled`). Rezervasyon **PENDING** açılır (ödeme yok — modül 50;
+> resepsiyon onaylar), kanal isteği yolundan gider: **onaya gitmez**, yer yoksa sebepli reddedilir, `requestId`
+> idempotenstir (ağ hatasında tekrar gönderim ikinci rezervasyon açmaz).
+>
+> **Public API** (`/public/booking/:key`, modül `backend/src/modules/public-booking/`): `GET /options` (otel, oda
+> tipleri + kapasite, pansiyonlar, görünüm), `POST /quote`, `POST /reserve`, `GET /widget.js` (betik, 5 dk cache).
+> Koruma: anahtar → kanal (60 sn cache'li; kapalı/bilinmeyen anahtar aynı 404), Origin ∈ izinli siteler (403), IP hız
+> sınırı (okuma 30/dk, yazma 5/dk + misafir kapsamının ortak IP tavanı), yanıtlar `no-store`. Global CORS, panel
+> origin'lerine ek olarak web chat kanallarının izinli sitelerini dinamik kabul eder (`webchatOrigins()` — CORS tek
+> başına kapı değil, diğer uçlar oturum ister).
+>
+> **Kırpılmış teklif** (`rules.js` → `trimQuoteForPublic`, birim testli): personel teklifinin public hâli — promosyon /
+> kupon / acente kimlikleri ve gece dökümü dönmez; indirim yalnız tutar + etiket; `available` 0–5'e kırpılır (ekran
+> "Son N" / "5+" gösterir, gerçek envanter sızmaz); kapasiteye uymayan tip `fits:false`. Kupon geri bildirimi yalnız
+> durum + misafir mesajı.
+>
+> **Teklif düzeltmesi (M28 boşluğu):** personel teklifinin satırları kişi sayısız fiyatlanıyordu — fiyat planının kişi
+> başı eki (`extraAdultRate`/`childRate`) önizlemeye yansımıyordu, kayıtta yansıyordu (misafir X görüp Y öderdi).
+> `quoteReservation` satırları artık satırın kendi kişi sayısıyla fiyatlar; personel ekranı da düzeldi.
+>
+> **Widget akışı:** tarih + kişi + pansiyon + kupon → tip kartları (fiyat, indirim etiketi, "Son N", sığmayan soluk) →
+> seçimle kesin toplam (kişi başı ek dahil) → misafir formu (ad, soyad, e-posta zorunlu, telefon/not isteğe bağlı) →
+> özet → **onay kodu ekranda** (misafir not alır). Renk/başlık kanal ayarından. Chat balonu ayrı script olarak
+> enjekte edilir (kod kopyası yok). Ayar ekranında (Mesaj kanalları → Web chat) motor aç/kapa + ayrı gömme kodu.
+>
+> **Dürüstlük notu — onay e-postası:** `reservation.created` olayı yayınlanır ve bildirim kuyruğuna düşer, ama
+> **email-gateway stub** (gerçek gönderici yok) — misafire e-posta fiilen gitmez. Bu yüzden widget onay kodunu ekranda
+> gösterir ve "otel onaylayınca e-posta ile bilgi verilecek" der. E-posta geçidi canlandırıldığında zincir hazır.
+>
+> **Test:** entegrasyon 6 (`public-booking.integration.test.js`): kapı (yanlış origin 403 / kapalı motor 404 /
+> bilinmeyen anahtar 404), options, kırpılmış teklif (sızma + 5 kırpması + kapasite), kişi başı ekli seçim toplamı,
+> PENDING + source WIDGET + idempotens, yer yokken 422. Contracts 536 yeşil; rezervasyon + promosyon regresyonu yeşil
+> (teklif düzeltmesi dahil).
+>
+> **Devir:** Ödeme (modül 50) gelince `reserve` akışına ödeme adımı eklenir ve durum CONFIRMED açılabilir. Döviz
+> (modül 60) gelince fiyatlar otel para biriminden çevrilir. Widget'ta paket (M28) satışı ileriki sürüm (şu an oda +
+> pansiyon). Gerçek çoklu dil: metinler tek nesnede (tr/en hazır), dil seçici eklenebilir.
 
 ### 33. Kanal yönetimi / Channel Manager — arkadaşın
 **Gün sonu:** Müsaitlik ve fiyat değişince OTA'ya gidiyor, OTA'dan gelen rezervasyon sisteme düşüyor; oda tipleri eşleştirilmiş.
@@ -2287,12 +2627,66 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 34. Dinamik fiyat / yield — Ali Kemal
 **Gün sonu:** Sistem günde bir fiyat önerisi üretiyor, gerekçesiyle onaya düşüyor; onaylanınca fiyat değişip kanallara gidiyor.
-- [ ] Kural tabanlı yield (worker): doluluk > %80 → +%10, < %30 ve 7 gün kaldı → −%15 (parametreler ayarlardan)
-- [ ] pricing-agent paketi (günde 1 çalışır; doluluk, kalan gün, geçen yıl, etkinlik takvimi okur; öneri + gerekçe; `approval.requested`)
-- [ ] Backend: PriceSuggestion tablosu; onaylanınca RatePlan güncelle → `rate.changed`
-- [ ] Ekran: Öneriler listesi (tarih, oda tipi, mevcut, önerilen, gerekçe) + onayla / reddet / düzenle
-- [ ] Ekran: Yield kuralları ayarı
-- [ ] Ekran: Fiyat geçmişi grafiği
+- [x] Kural tabanlı yield (günlük iş): doluluk ≥ %80 → +%10, ≤ %30 ve ≤7 gün → −%15 (parametreler ayarlardan)
+- [x] pricing-agent paketi (günlük olayla çalışır; doluluk, kalan gün, geçen yıl okur; öneri + gerekçe; onaya düşer — etkinlik takvimi girdisi devirde)
+- [x] Backend: PriceSuggestion + PriceAdjustment; onaylanınca gece çarpanı uygulanır → `rate.changed` (RatePlan'a dokunulmaz — aşağıdaki karar)
+- [x] Ekran: Öneriler listesi (dönem, oda tipi, mevcut, önerilen, gerekçe + yapılandırılmış girdiler) + onayla / reddet / düzenle
+- [x] Ekran: Yield kuralları ayarı
+- [x] Ekran: Fiyat geçmişi grafiği
+
+> **📌 Modül 34 tamamlandı (15 Kasım 2026 — Ali Kemal).** `flex-ali` dalı.
+>
+> **Kararlar:** **Hiçbir fiyat kendiliğinden değişmez** — kural işi de ajan da yalnız öneri üretir; her öneri M11 onay
+> kuyruğuna düşer (`BULK_PRICE_CHANGE` tipi zaten vardı) ve karar olayını (`approval.granted/denied/expired`) pricing
+> subscriber'ı uygular. Görev metnindeki "onaylanınca RatePlan güncelle"den **bilinçli sapma:** uygulama hedefi
+> `PriceAdjustment` — **gece hassasiyetli çarpan katmanı** (tip × gece × çarpan, bir geceye tek ayar/upsert). Gerekçe:
+> yield doğası gereği gün bazlıdır; RatePlan dönemlerini bölmek EXCLUDE kısıtlarıyla kırılgandır ve pansiyon başına ayrı
+> satır gerektirirdi — çarpan tüm pansiyonlara oransal uygulanır, M28 planları bozulmaz. Çarpan plan VE sezon fiyatını
+> ölçekler; **acente kontratı, paket ve elle fiyat nettir, etkilenmez** (M29/M28 ilkeleri). Emniyet aralığı 0.5–3
+> (CHECK + sözleşme + ajan çıktı doğrulaması): hiçbir onay fiyatı yarıdan aşağı/3 katından yukarı taşıyamaz.
+>
+> **Veri** (migration `20261115090000_dynamic_pricing`): `PriceSuggestion` (tip × dönem × çarpan; gösterim için
+> mevcut/önerilen fiyat; `reason` serbest metin + **`inputs` yapılandırılmış girdiler** — FlexAI 2.0 notu gereği gün gün
+> doluluk/satılabilir/satılan/kalan gün/geçen yıl ayrı alanlar, 90/91 buraya ekleyecek; kaynak RULE|AGENT; durum
+> PENDING→APPROVED/REJECTED/EXPIRED; `approvalId` tekil). `PriceAdjustment` (`@@unique [hotel, tip, gece]`; sıcak yol
+> indeksi `[hotelId, date]`). Yield parametreleri **`Hotel.settings.yield`** (boştaki Json kolonu — yeni kolon yok).
+>
+> **Kural motoru** (`pricing/yield-rules.js`, saf, 11 birim test): eşik kararları (`evaluateDay`), **ardışık aynı-çarpanlı
+> günleri tek öneriye birleştirme** (`evaluateYield` — 2500 odalı otelde onay kuyruğu gün × tip kalemiyle boğulmasın),
+> takvim→girdi dönüşümü (`calendarToYieldDays`: satılabilir = toplam − arızalı, satılan = satılabilir − boş; geçen yıl
+> 364 gün önce = haftanın aynı günü, forecast kalıbı). Üretim (`yield-service.js` `generateSuggestions`): otel başına
+> **tek** envanter anlık görüntüsü + **tek** gruplu geçen-yıl sorgusu; idempotent (çakışan bekleyen öneri ve "zaten aynı
+> çarpan uygulanmış" dönem atlanır) — iş 6 saatte bir koşar (`pricing/jobs.js`), kuyruk şişmez, kaçan gün telafi edilir.
+>
+> **Satış yolu:** `priceStay` opsiyonel `adjustments` alır (gece → çarpan; kuruşa yuvarlama); `loadContext` cache'li
+> `getActiveAdjustments` ile besler (5 dk TTL, `settings.` olay önekiyle geçersiz). Tüketiciler: açma/grup/düzenleme/
+> teklif + **ARI** (onaylı çarpan OTA'ya da gider — misafir sitede ne görüyorsa kanal onu satar; `rate.changed` dönem
+> penceresiyle senkronu tetikler). Teklif/önizleme de aynı çarpanı gösterir.
+>
+> **pricing-agent** (`hotel/agents/pricing-agent/`, stub canlandı): budget-agent kalıbı (`BaseLlmAgent`, model =
+> `conciergeModel`, OPENAI_API_KEY yoksa kayıt olmaz — **kural tabanlı yield LLM'siz bağımsız çalışır**, kimse fiyatsız
+> kalmaz). Günlük `pricing.review.requested` olayıyla uyanır; **kompakt girdi** (`agentReviewInputs`: yalnız eşiklere
+> yakın günler, ≤120 satır — istem maliyeti sınırı; bekleyen dönemler verilir ki mükerrer önermesin). Çıktı katı JSON;
+> `parseAgentSuggestions` (4 birim test) satır satır doğrular: bilinmeyen tip / pencere dışı tarih / emniyet dışı yüzde /
+> bekleyen dönemle çakışma **yalnız o satırı** düşürür — LLM hatası onay kuyruğuna taşmaz. Öneriler kural işiyle **aynı
+> kapıdan** (`createSuggestions`) girer; ajan fiyat değiştirme yetkisine hiçbir yerde sahip değildir.
+>
+> **API** (`/pricing`): öneriler listesi + çarpan düzenleme (karar vermeden; taban öneriden türetilir), fiyat geçmişi,
+> yield ayarları. İzinler: öneri/geçmiş `approvals.view`, düzenleme `approvals.decide` (öneri bir onay nesnesidir; karar
+> M11 onay uçlarından), ayarlar `settings.view/manage`. Olaylar `settings.yield.updated`, `settings.price_adjustment.changed`
+> (+ Activity Feed Türkçe adları — bekçi test).
+>
+> **Ekran:** `/fiyat-onerileri` (süzgeçli liste, gerekçe + girdi tablosu, onayla/reddet/düzenle), fiyat geçmişi grafiği,
+> `/ayarlar` altında "Dinamik fiyat" (yield kuralları).
+>
+> **Test:** kurallar 11 + ajan çıktı doğrulama 4 birim; entegrasyon 8 (`yield.integration.test.js`): yüksek doluluk →
+> öneri + onay kaydı + idempotens, son-dakika indirimi, kapalıyken sessizlik, **onay → gece çarpanları + `rate.changed` +
+> yeni rezervasyon onaylı fiyattan** (öncesi taban fiyattan — onaysız değişmezlik testin kendisiyle kanıtlı), red →
+> sıfır yazım, düzenlenen çarpanın uygulanması, ayar kaydet/cache, geçmiş.
+>
+> **Devir:** Etkinlik takvimi (banket M37) ve no-show riski / rakip fiyatı (90/91) `inputs`'a alan olarak eklenecek —
+> yapı hazır. Öneri ekranındaki grafik uygulanmış çarpanları gösterir; "etkin satış fiyatı" eğrisi (plan+sezon+çarpan
+> bileşke) ileriki sürüm. Ajan için ayrı model/bütçe alanı gerekirse `AiSettings`'e eklenir (şimdilik otelin ana modeli).
 
 > **FlexAI 2.0'dan not (3 Kasım 2026 — Ahmet):** `PriceSuggestion`'ın gerekçesini serbest metnin yanında yapılandırılmış girdi
 > olarak da sakla (doluluk, forecast, geçen yıl… ayrı alanlar): 90 no-show riskini, 91 rakip fiyatını bu girdilere
@@ -2364,12 +2758,68 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 36. Call center & satış CRM — Ali Kemal
 **Gün sonu:** Telefonla gelen her talep kayıtlı; teklif gönderiliyor; takip görevleri hatırlatıyor.
-- [ ] Backend: Lead, CallLog, Quote tabloları + API
-- [ ] Backend: teklif PDF + e-posta gönderimi (notification-worker)
-- [ ] Ekran: Arama kaydı formu (arayan, telefon, talep, sonuç)
-- [ ] Ekran: Fırsat panosu (yeni / teklif verildi / bekliyor / kazanıldı / kaybedildi)
-- [ ] Ekran: Teklif oluştur (tarih, oda, fiyat) → gönder → kabul edilince rezervasyona çevir
-- [ ] Ekran: Hatırlatmalar (bugün aranacaklar)
+- [x] Backend: Lead, CallLog, Quote tabloları + API
+- [x] Backend: teklif PDF (pdfkit, gömülü Türkçe font) — e-posta: aşağıdaki dürüstlük notu
+- [x] Ekran: Arama kaydı formu (arayan, telefon, talep, sonuç; FlexAI alanlarıyla)
+- [x] Ekran: Fırsat panosu (yeni / teklif verildi / bekliyor / kazanıldı / kaybedildi)
+- [x] Ekran: Teklif oluştur (tarih, oda, fiyat) → gönder → kabul edilince rezervasyona çevir
+- [x] Ekran: Hatırlatmalar (bugün aranacaklar listesi + günde tek birleşik zil)
+
+> **📌 Modül 36 tamamlandı (15 Kasım 2026 — Ali Kemal).** `flex-ali` dalı.
+>
+> **Kararlar:** **Teklifin fiyatı hazırlandığı anda kilitlenir** — gece gece anlık görüntü (`nightsSnapshot`) o anki
+> sistem fiyatıyla (M28 planı + M34 onaylı çarpan dahil) yazılır; sonradan zam/indirim müşteriye verilen sözü bozmaz
+> (testle kanıtlı: teklif sonrası 5× zam, kabul yine teklif toplamından). Kabulde rezervasyon bu toplamla **elle fiyat**
+> olarak açılır (`priceNote: "Teklif TKF-XXXXXX"`; elle fiyat yetkisi teklife ve `sales.manage`e dayanır, ayrıca
+> `reservations.price_override` istenmez — iz teklif kodundadır). **Pano sonuçları elle oynanamaz:** WON yalnız teklif
+> kabulüyle (`wonReservationId` zorunlu CHECK), LOST sebep ister; kapanmış fırsat taşınamaz (saf kurallar + CHECK).
+> Kabul **idempotent**: rezervasyon `requestId = quote.id` ile açılır — iki adımın (rezervasyon + işaretleme) arasında
+> kopan istek tekrarında ikinci rezervasyon açılmaz.
+>
+> **FlexAI 2.0 hazırlığı:** `CallLog` baştan kanallı — `channel (STAFF | VOICE_AI)`, `recordingRef`, zorunlu `summary`
+> (ekle-yalnız günlük; düzeltme yeni kayıtla): 101 sesli santral çağrılarını ve geri aramaları buraya yazacak; 90 grup
+> değerlendirmesi teklif ekranına öneri koyacak.
+>
+> **Veri** (migration'lar `20261115150000_sales_crm`, `20261115151000_sales_alert_kind`): `Lead` (durum NEW→QUOTED→
+> WAITING→WON/LOST; iletişim CHECK — telefon ya da e-posta; misafir kartına opsiyonel bağ M22; istenen konaklama
+> alanları teklifi önceden doldurur; `followUpAt` takip), `CallLog` (ekle-yalnız), `Quote` (kod `TKF-XXXXXX` — onay
+> kodu alfabesi, otel içinde tekil; durum izleri CHECK'li: gönderilmişlik, karar zamanı, kabul→rezervasyon).
+> `StaffAlertKind`'a `SALES_FOLLOW_UP` eklendi. Kısıt mesajları `errors.js`'te.
+>
+> **Akış:** teklif DRAFT (düzenlenir, fiyat yeniden kilitlenir) → SENT (`sentAt`; fırsat NEW→QUOTED) → ACCEPTED
+> (rezervasyon CONFIRMED + fırsat WON; yer yoksa sebepli red, teklif SENT kalır) / REJECTED (sebep) / EXPIRED
+> (30 dk'lık süpürme işi: `validUntil` geçen gönderilmişler, olaylı). Misafir kartı: fırsat karta bağlıysa o;
+> değilse ad bölünüp (son kelime soyad) iletişimle açılır (`forceNewGuest` — kabul akışı kesilmez; CRM birleştirme M22).
+> Süresi dolan teklif kabul edilemez (`QUOTE_EXPIRED`); geçerlilik en fazla 60 gün.
+>
+> **Hatırlatma:** "bugün aranacaklar" = açık fırsatların `followUpAt ≤ iş günü` listesi (`dueOnly` süzgeci + pano
+> şeridi) + süpürme işinin **günde tek birleşik zili** (`dedupeKey = sales-follow:{otel}:{gün}` — 30 dk'lık tur mükerrer
+> çalmaz; zil `sales.manage` iznine, linki listeye). Arama sonucu "tekrar aranacak" fırsatın takibini aynı işlemde günceller.
+>
+> **PDF** (`sales/pdf.js`, pdf-writer/banket kalıbı): otel + KONAKLAMA TEKLİFİ başlığı, müşteri/dönem/oda/kişi/geçerlilik,
+> gece gece tablo, toplam, not, geçerlilik metni; anlık görüntüden çizilir — sistem fiyatı değişse de belge değişmez.
+>
+> **Dürüstlük notu — e-posta:** teklif e-postası **bilinçli devirde**: `Notification.source` enum'una QUOTE eklemek ve
+> şablon makinesine bağlamak, geçit (email-gateway) stub'ken sembolik kalırdı (M32'yle aynı durum). "Gönderildi" düğmesi
+> kaydı tutar (`sentAt`), PDF indirilip elle gönderilir; geçit canlanınca kuyruğa bağlama tek iştir.
+>
+> **API** (`/sales`): pano özeti, fırsat listesi (durum/kaynak/arama/`dueOnly`) + dosya (aramalar + teklifler) + durum
+> geçişi, arama kaydı, teklif yaşam döngüsü + PDF. Yeni izinler `sales.view` / `sales.manage` (grup "Satış CRM";
+> varsayılan MANAGER + FRONT_DESK — telefonu açan resepsiyon kayıt girer). Olaylar `sales.lead.changed` /
+> `sales.quote.changed` + Activity Feed Türkçe adları (bekçi test yeşil).
+>
+> **Ekran:** `/satis` panosu (durum sütunları — sürükle-bırak bilinçli yok, kart menüsüyle geçiş; özet şeridi + "bugün
+> aranacak" süzgeci; yeni fırsat formu), `/satis/:leadId` dosyası (arama akışı + ekleme, teklif kartları: hazırla /
+> düzenle / gönder / kabul [onay kodu + rezervasyon linki] / reddet / PDF indir).
+>
+> **Test:** kurallar 7 birim (pano geçişleri — WON elle verilemez, kapanmış taşınamaz; teklif yaşam döngüsü; kod; ad
+> bölme); entegrasyon 5 (`sales.integration.test.js`): yaşam döngüsü + özet + LOST sebebi, arama + takip, **fiyat
+> kilidi + kabul → CONFIRMED rezervasyon (elle fiyat, teklif kodu gerekçeli) + WON + misafir kartı**, geçersiz
+> geçişler + kapanmış fırsata teklif reddi, süpürme (süre doldurma + tek birleşik zil). PDF smoke (21 KB geçerli belge).
+>
+> **Devir:** Teklif e-postası (geçit canlanınca `NotificationSource.QUOTE` + şablon), 101 sesli santralin `CallLog`
+> yazması (alanlar hazır), 90'ın teklif önerisi, kaynak/temsilci bazlı dönüşüm raporu (veri `source`/`createdBy`/
+> `lostReason`'da birikmekte).
 
 > **FlexAI 2.0'dan not (3 Kasım 2026 — Ahmet):** `CallLog`'a kanal (PERSONEL / SESLİ AI), kayıt referansı ve özet alanı düşün:
 > 101 (sesli santral) çağrılarını ve geri arama görevlerini buraya yazacak. 90 grup değerlendirmesi teklif ekranına öneri koyacak.
@@ -2552,11 +3002,11 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 40. Mutfak ekranı (KDS) — Ali Kemal
 **Gün sonu:** Mutfaktaki tablette siparişler sırayla görünüyor, süre sayıyor, "hazır" deyince garsona haber gidiyor.
-- [ ] Backend: Order durum geçişleri (NEW → PREPARING → READY → SERVED), istasyon alanı
-- [ ] Backend: socket kanalı `kitchen`
-- [ ] Ekran: Sipariş kartları (masa, kalemler, geçen süre; renk: yeni / hazırlanıyor / gecikti)
-- [ ] Ekran: Kart butonları (Başla / Hazır), istasyon filtresi (sıcak / soğuk / bar)
-- [ ] Ekran: Garson tarafında "hazır" bildirimi
+- [x] Backend: Order durum geçişleri (NEW → PREPARING → READY → SERVED), istasyon alanı
+- [x] Backend: socket kanalı `kitchen`
+- [x] Ekran: Sipariş kartları (masa, kalemler, geçen süre; renk: yeni / hazırlanıyor / gecikti)
+- [x] Ekran: Kart butonları (Başla / Hazır), istasyon filtresi (sıcak / soğuk / bar)
+- [x] Ekran: Garson tarafında "hazır" bildirimi
 
 > **📌 Ali için not (41'den, Ahmet):** oda servisi turları da `fnb.order.placed` ile gelir; yükte yeni, isteğe bağlı iki alan var:
 > `roomNumber` (teslim edilecek oda) ve `deliverAt` (istenen teslim anı; hemen ise boş) — kartta "Oda 412 · 07:30" gösterilebilir.
@@ -2564,6 +3014,27 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 > (`NEW → PREPARING → READY`, teslimde `SERVED`); KDS de ilerletirse çakışmaz. İptal edilen oda servisi siparişinin kalemleri iptal
 > düzeltmesiyle düşer, tur durumu değişmez — KDS tamamen iptal edilmiş turu göstermemeli. Tepsi ücreti kalemi istasyonu `NONE`
 > (mutfağa gitmez). Planlı (kahvaltı) sipariş zamanı gelene kadar **tur yazılmaz**; mutfak ekranı yalnızca düşmüş turu görür.
+
+> **📌 Modül 40 tamamlandı (16 Kasım 2026 — Ali Kemal).**
+>
+> **Veri:** yeni tablo / migration yok — M39'un tur modeli (`PosOrder.status`, kalem `station`) ve mevcut pano indeksi
+> (`[hotelId, outletId, status, sentAt]`). Pano: açık adisyonların servis edilmemiş turları, en eski önde (üst sınır 300);
+> kalemde iptal düşülür, `NONE` (tepsi ücreti) ve tamamen iptal edilmiş tur görünmez.
+>
+> **Kurallar** (`pos/kitchen.js`): yalnız ileri; sürümle (iki tablet aynı kartta → bayat yazım); kapanmış adisyonda yok.
+> Salonda "hazır" → adisyonun garsonunun **ziline** (`POS`, adisyon başına tek uyarıda toplanır; hesabı kapatılmış garsona zil
+> yok). **Oda servisi turu:** KDS'de SERVED yok (teslim oda servisi panosunun); `RoomServiceOrder` aynı yalnız-ileri kuralla ve
+> **adım damgalarıyla** (`preparingAt` / `readyAt` — durum izi CHECK'i) senkronlanır; sipariş ancak mutfakta bekleyen (görünür
+> kalemli) başka tur kalmayınca "hazır" olur; yoldakine dokunulmaz. Kilit sırası M41 ile aynı (sipariş → tur).
+>
+> **Olay / kanal:** `fnb.order.status_changed` (yük: tur, durum, masa / oda); `kitchen.changed` kanalı = `fnb.order.placed` +
+> `fnb.order.status_changed` + `pos.check.changed`; POS kanalı da `fnb.order.status_changed`'i dinler (adisyon ekranı).
+>
+> **API:** `GET /pos/kitchen/board?outletId&station`, `POST /pos/kitchen/orders/:id/advance` (`pos.operate` — mutfak tableti
+> garsonla aynı izinle girer). **Ekran:** `/pos/mutfak-ekrani` (kabuksuz tam genişlik; süzgeçler adres çubuğunda), kart rengi
+> 10 dk sarı / 20 dk kırmızı / hazır yeşil, "Başla / Hazır / Servis edildi". Adisyon ekranında her turun mutfak durumu rozeti
+> ve hazır turda garsona "Servis edildi". Testler: entegrasyon 10 (pano, geçişler, zil, bayat sürüm, oda servisi senkronu,
+> çok turlu oda servisi), saf kurallar 6 (`lib/kds.test.js`).
 
 ### 41. Oda servisi — arkadaşın
 **Gün sonu:** Odaya sipariş giriliyor, mutfağa düşüyor, teslim edilince folyoya yazılıyor.
@@ -2665,11 +3136,47 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 42. Online paket sipariş — Ali Kemal
 **Gün sonu:** Dışarıdan gelen paket siparişler aynı POS zincirinden geçiyor; kurye ataması ve teslim takibi var.
-- [ ] Backend: Order `source=ONLINE`, DeliveryInfo tablosu (adres, telefon, kurye, durum)
-- [ ] Ekran: Dış sipariş formu (müşteri, adres, ürünler, ödeme tipi)
-- [ ] Ekran: Sipariş panosu (hazırlanıyor / yolda / teslim)
-- [ ] Ekran: Kurye atama
-- [ ] (opsiyonel) Public sipariş sayfası
+- [x] Backend: Order `source=ONLINE`, DeliveryInfo tablosu (adres, telefon, kurye, durum)
+- [x] Ekran: Dış sipariş formu (müşteri, adres, ürünler, ödeme tipi)
+- [x] Ekran: Sipariş panosu (hazırlanıyor / yolda / teslim)
+- [x] Ekran: Kurye atama
+- [ ] (opsiyonel) Public sipariş sayfası — **kullanıcı kararı:** şimdilik yok (personel girer); yol haritasında
+
+> **📌 Modül 42 tamamlandı (16 Kasım 2026 — Ali Kemal).**
+>
+> **Kararlar (kullanıcı):** ödeme **kapıda (nakit / kart) + önceden** (kart / havale referansıyla; gerçek online tahsilat
+> yok); kurye **otel personeli** (açık vardiyası olan; kapı parası kuryenin kasasına); public sayfa **şimdilik yok**; **sabit
+> paket ücreti + en az sipariş tutarı** (politika).
+>
+> **Veri** (migration `20261116090000_delivery_kinds` + `20261116090100_delivery_orders`): `PosOutletKind.DELIVERY`,
+> `PosSystemItem.DELIVERY_FEE` ("Paket servis ücreti", gizli sistem ürünü — tepsi ücretiyle ortak `ensureSystemItem`),
+> politika `deliveryFee` / `deliveryMinOrder` / `deliveryOrderMinutes` (CHECK'li), **`DeliveryOrder`** (PS-yıl-sıra; adisyonla
+> 1:1; kaynak telefon / mesaj / web-platform; müşteri, telefon **otelin ülke koduyla rakam** (tekrar gelen müşteri bunla
+> bulunur), adres + tarif, kapı yöntemi + bozuk para, teslim hedefi, kurye + atanma, adım damgaları; durum izi / alan /
+> kurye CHECK'leri; pano, geçmiş, telefon ve trigram index'leri).
+>
+> **Akış** (`pos/delivery.js`, kurallar `delivery-rules.js` birim testli): sipariş alınınca girenin vardiyasında masasız adisyon
+> + tur (+ ücret kalemi) — mutfak ekranına düşer; en az tutar ücret hariç ürün toplamına bakar. Ön ödeme girenin kasasına;
+> **tamamı ödense de adisyon teslime kadar açık** (`closeIfSettled` paket siparişi bitmeden kapatmaz — mutfak ve kurye görür);
+> kalan varsa kapı yöntemi şart. Kurye atanınca ziline düşer; kapıda para varsa yola çıkış kuryenin açık vardiyasını ister.
+> **Teslim tek transaction:** kapı ödemeleri kuryenin kasasına ve kalanı tam kapatır (açık hesap / odaya yaz yok), adisyon
+> kapanır, turlar servis edildi; tekrar teslim aynı sonuç. İptal: mutfak başladıysa şef garson + zayi; ön ödemeli siparişte önce
+> ödeme iptali. Adisyon ekranı (`delivery-guards.js`): bölme / taşıma / birleştirme / teslimden önce ödeme-kapatma yok; tur
+> eklenebilir (hazır → mutfağa döner, yoldayken yok); paket noktasında düz adisyon açılmaz; açık paket varken nokta türü
+> değişmez / kapanmaz. Kilit sırası vardiya → adisyon → sipariş → tur. **Mutfak ekranı** (M40) paket turunu da gösterir
+> ("Paket · müşteri"), SERVED vermez, siparişi oda servisiyle ortak tabloyla senkronlar.
+>
+> **Olay:** `pos.delivery.changed` (`pos.changed` kanalı). Zil: kuryeye atama (`POS`, sipariş başına tek uyarı).
+>
+> **API** (`/pos/delivery`): pano (+ günün özeti: teslim, iptal, zamanında %), geçmiş (durum / gün / arama: telefon birebir,
+> numara / ad parçası), sipariş (aç / ekran / adım / kurye / teslim / iptal), tekrar gelen müşteri (`/customers?phone`). Kurye
+> listesi mevcut `/pos/shifts/open-waiters`. **Ekranlar:** `/pos/paket` (pano), `/pos/paket/gecmis`, `/pos/paket/yeni` (form:
+> telefonla önceki ad / adres, kapıda nakit / kart / önceden ödendi, bozuk para, ücret ve en az tutar önizlemesi),
+> `/pos/paket/siparis/:id`; tanımlarda politika alanları ve "Paket servis" nokta türü; masa planı yalnız salon noktalarını
+> gösterir. Testler: entegrasyon 7, kurallar 6, sözleşme 9, ekran kuralları 8.
+>
+> **Bilinçli olarak yok:** gecikme / bekleme zili (pano kırmızıyla gösterir), paket raporu (satış raporu paket noktasını zaten
+> kapsar), public sipariş sayfası ve platform (Yemeksepeti vb.) entegrasyonu.
 
 ### 43. Banket F&B planlaması — arkadaşın
 **Gün sonu:** Etkinliğin menüsü seçiliyor; kişi sayısına göre malzeme ihtiyacı ve maliyet çıkıyor.
@@ -2772,15 +3279,80 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 44. Stok & maliyet analizi — Ali Kemal
 **Gün sonu:** Depodaki her ürünün miktarı ve hareketli ortalama maliyeti izleniyor; satılan yemek reçeteden stoğu düşüyor; sayım farkları görünüyor.
-- [ ] Backend: Warehouse, StockItem, StockMovement, StockCount tabloları + API
-- [ ] Backend: hareketli ortalama maliyet hesabı (her girişte güncelle)
-- [ ] Backend: transfer, fire, sayım düzeltme servisleri
-- [ ] Ekran: Depo tanımları
-- [ ] Ekran: Stok kartları (ürün, birim, mevcut, min. seviye, ortalama maliyet)
-- [ ] Ekran: Hareket listesi + manuel hareket formu
-- [ ] Ekran: Sayım ekranı (fiziksel gir, fark listesi, onayla)
-- [ ] Ekran: Maliyet raporu (ürün / reçete bazlı)
-- [ ] Aktör: inventory-worker paketi (`order.paid` → reçete satırlarını düş; stok < min → `purchase.request.suggested`)
+- [x] Backend: Warehouse, StockItem, StockMovement, StockCount tabloları + API — depo / malzeme / hareket çekirdeği 45'te (Ahmet), `StockCount` + `StockCountLine` + hareket türleri burada
+- [x] Backend: hareketli ortalama maliyet hesabı (her girişte güncelle) — 45'te; **çıkışlar maliyeti değiştirmez** (o anki ortalamayla değerlenir)
+- [x] Backend: transfer, fire, sayım düzeltme servisleri (`stock/manual.js`, `stock/counts.js`, ortak yazıcı `postStockMovements`)
+- [x] Ekran: Depo tanımları — 45'te; buraya **satış noktası → depo** eşlemesi eklendi
+- [x] Ekran: Stok kartları (ürün, birim, mevcut, min. seviye, ortalama maliyet) — 43 (kart) + 45 (mevcut ekranı)
+- [x] Ekran: Hareket listesi + manuel hareket formu (tür süzgeci, kaynak bağları: mal kabul / sayım / adisyon; "Hareket gir": çıkış / fire / transfer)
+- [x] Ekran: Sayım ekranı (fiziksel gir, fark listesi, onayla) — `/stok/sayim`, `/stok/sayim/:countId`
+- [x] Ekran: Maliyet raporu (ürün / reçete bazlı) — `/stok/maliyet`: malzeme bazlı + ürün bazlı (ciro, reçete maliyeti, brüt kâr, yemek maliyeti %)
+- [x] Aktör: inventory-worker paketi (`fnb.order.paid` → reçeteden düşüm; `stock.changed` → minimum altı → `STOCK` kaynaklı satın alma talebi + zil)
+
+> **📌 Modül 44 tamamlandı (24 Kasım 2026 — Ali Kemal).**
+>
+> **Kararlar:** çıkış / fire / transfer / sayım farkı / satış düşümü **birim maliyeti değiştirmez** — hareketli ortalama yalnız mal
+> kabulde güncellenir, diğer hareketler o anki ortalamayla değerlenir (45'in kuralı korundu). Elle hareketler depodaki mevcuttan
+> fazla çıkamaz; **yalnız satış düşümü eksiye iner** (adisyon gerçek, kayıt geride kalmıştır — sayım düzeltir). Satış düşümünde
+> hangi depo: `Hotel.settings.stock.outletWarehouses` eşlemesi, yoksa **varsayılan depo** (Json ayar, yeni kolon yok — 34'ün yield
+> kalıbı). Minimum altı önerisi fiilen **talep açar** (kaynak `STOCK`; Ahmet'in 45 notundaki yol) — ayrı `purchase.request.suggested`
+> olayı yok, mevcut `purchase.request.changed` + `staff.alert.raised` (`STOCK`) yeter.
+>
+> **Veri** (migration `20261124090000_stock_movements`): `StockMovementKind` += `ISSUE`, `WASTE`, `TRANSFER_OUT`, `TRANSFER_IN`,
+> `COUNT_ADJUST`, `SALE`; `StockMovement.menuItemId` (satış düşümünde hangi menü ürünü için — ürün bazlı rapor); `StockCount`
+> (`SYM-yıl-sıra`, `PurchaseSequence` ile; depoda **tek açık sayım** — kısmi tekil indeks; durum izi CHECK) + `StockCountLine`
+> (beklenen = açılıştaki depo mevcudu, sayılan, onayda yazılan fark, birim maliyet); `StaffAlertKind.STOCK`.
+>
+> **Hareket yazıcısı** (`stock/movements.js` → `postStockMovements`): giriş dışı her tür için tek yol — kartları kimlik sırasıyla
+> kilitler, depo satırını tek ifadede upsert eder, kart `onHand`'ini günceller, değişmez hareket kaydını (hareket sonrası mevcut /
+> ortalama) yazar; `allowNegative` yalnız satış ve sayımda. Transfer = kaynakta `TRANSFER_OUT` (eksi) + hedefte `TRANSFER_IN`
+> (artı), kart toplamı sabit. Saf kurallar `rules.js`: `applyDelta`, `countDifference`, `saleRequirements`, `saleDeltas` (birim testli).
+>
+> **Elle hareket** (`manual.js`): formun ürettiği `requestId` tekrar işleme anahtarı (`sourceType = ManualMovement`): çift gönderimde
+> ikinci istek hareket yazmaz, ilk özeti döner (`duplicate: true`). Fire sebebi sözleşmede zorunlu. Yetersiz stok `INSUFFICIENT_STOCK`
+> (satır alanlarıyla). Kilit sırası: depo(lar) paylaşımlı → kartlar.
+>
+> **Sayım** (`counts.js`): açılışta deponun sıfır olmayan mevcutları + o anki maliyet dondurulur; sayarken listede olmayan malzeme
+> eklenir (beklenen = o anki depo mevcudu). Satır yazımı sayımın sürüm damgasıyla (iki sayımcı: ikincisi güncel listeyi görür —
+> `STALE_WRITE`). **Onayda fark = sayılan − onay anındaki depo mevcudu** (beklenen değil: sayım sürerken satış / çıkış devam eder);
+> sıfır olmayan fark `COUNT_ADJUST`; sayılmayan satıra dokunulmaz; iptal hiçbir şeye dokunmaz. Kilit: depo paylaşımlı → sayım
+> `FOR UPDATE` → kartlar.
+>
+> **Satış düşümü** (`sales.js` → `consumeSale`, inventory-worker çağırır): `fnb.order.paid` ürünleri → `MenuItem.recipe` →
+> `loadRecipeGraph` + `demandCalculator` (43'ün açılımı: ara reçeteler, fire payı brüt) → (satılan + ikram + zayi) × birim ihtiyaç,
+> binde bire yuvarlı. Reçetesiz ürün ve sistem ürünleri (tepsi / paket ücreti) atlanır, özette sayılır. Hareketler `sourceType =
+> PosCheck`, `menuItemId`'li. **Adisyon başına son yayın esas:** yeniden açılıp kapanınca hedef tüketim − daha önce düşülen = düzeltme
+> hareketi (artı / eksi); daha yeni kapanış işlenmişse eski yayın atlanır (`occurredAt` = kapanış anı). Depo yoksa / pasifse
+> `NO_WAREHOUSE` / `WAREHOUSE_INACTIVE` (4xx → aktör manuel göreve düşürür).
+>
+> **Öneri** (`suggestions.js` → `suggestPurchases`): miktarı düşen malzemelerden minimumun altına inenler (45'in öneri hesabıyla —
+> yoldaki ve siparişe dönmemiş talep düşülür, `stockSuggestion` yuvarlaması) için **tek** `STOCK` talebi (ihtiyaç bugün + 2 gün) +
+> `STOCK` zili (`purchasing.request` iznine, talebe bağlantı). Açılan talep "talep edilen"e sayıldığı için aynı malzeme yeniden
+> önerilmez; talep iptalinde bir sonraki hareket yeniden önerir.
+>
+> **Aktör** `hotel/workers/inventory-worker` (BaseWorker, servis dışarıdan; birim testli): `fnb.order.paid` → `consumeSale`;
+> `stock.changed` → yalnız `SALE` / `MOVEMENT` / `COUNT` + malzeme listesi doluysa kabul (`accepts`; mal kabul / depo / minimum / ayar
+> haberi iz bırakmaz) → `suggestPurchases`. Kapalıyken satış düşümü **"Stok" manuel görevine** düşer (`stock.manage`; görev adisyon
+> numarasını taşır, elle çıkışla tamamlanır); öneri `skipWhenDisabled` (satın alma öneri ekranı aynı hesabı her an gösterir).
+> Aktör kendi yayınladığı `stock.changed`'i de dinler; öneri işi `stock.changed` yayınlamaz → döngü yok.
+>
+> **Maliyet raporları** (`reports.js`): malzeme bazlı — dönemde giriş / satış düşümü / çıkış / fire / sayım farkı / transfer (depo
+> süzgecinde net) miktar + tutar, bugünkü mevcut ve değer (depo süzgecinde deponun mevcudu × kartın ortalaması); tüketim = satış +
+> çıkış + fire. Ürün bazlı — `PosOrderLine.businessDate` aralığından satılan adet / ciro (liste fiyatı, iptal / ikram düşülmüş) ve
+> `SALE` hareketlerinden ürün maliyeti → brüt kâr, yemek maliyeti % (43'ün eşikleri). Aralık en fazla 366 gün (sözleşme).
+>
+> **Ekranlar:** `/stok/hareketler` (tür süzgeci, kaynak bağları, "Hareket gir" diyaloğu — malzeme arama + miktar satırları, tür
+> çipleri, transferde hedef depo), `/stok/sayim` + `/stok/sayim/:countId` (satır başına beklenen / şu anki / sayılan / fark + değer,
+> kaydet → onayla, listede olmayan malzeme ekle, iptal sebepli), `/stok/maliyet` (malzeme / ürün görünümü, özet kutuları, depo
+> süzgeci), `/stok/depolar` altında satış noktası → depo kartı. Olay `stock.changed` `change` += `MOVEMENT`, `COUNT`, `SALE`,
+> `SETTINGS`. İzin: hepsi mevcut `stock.manage` / `stock.view` (yeni izin açılmadı).
+>
+> **Testler:** `stock/rules.test.js` (+4 kural), `inventory-worker.test.js` (7), `stock/stock.integration.test.js` (8: elle hareket,
+> transfer, sayım, satış düşümü + yeniden yayın, eşleme, öneri, raporlar, izinler).
+>
+> **Bilinçli bırakılan:** satış noktası deposu otel ayarında (satış noktası kartına kolon eklenmedi — POS ekranına dokunmamak için);
+> ürün bazlı raporda ciro KDV dahil liste fiyatıyla (POS vergi dökümü 39'da adisyon düzeyinde); fire için ayrı sebep sözlüğü yok
+> (serbest metin, raporda tutar); `shared/workers/inventory-worker` yalnız işaretçi (klinik için ortak sürüm sonra).
 
 > **📌 Ali'ye not (modül 43, 27 Ekim 2026 — Ahmet):** `StockItem` tablosu ve API'si (`/recipes/stock-items`, izin `recipes.manage`)
 > modül 43'te kuruldu; depo / hareket / sayım ve hareketli ortalama maliyet bunun **üstüne** eklenir (birim maliyeti siz yazarsınız;
@@ -2864,12 +3436,60 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 46. Demirbaş & amortisman — Ali Kemal
 **Gün sonu:** Otelin sabit kıymetleri barkodlu kayıtlı; konumları, garanti bitişleri ve amortisman tablosu görünüyor.
-- [ ] Backend: Asset, AssetMovement, Depreciation tabloları + API; amortisman hesabı (doğrusal)
-- [ ] Ekran: Demirbaş kartı (barkod, ad, kategori, konum/oda, alış tarihi, tutar, garanti bitiş, zimmet)
-- [ ] Ekran: Barkod etiketi yazdırma
-- [ ] Ekran: Sayım (barkod okut, eksikleri listele)
-- [ ] Ekran: Amortisman tablosu (yıllık)
-- [ ] Ekran: Garantisi bitecekler uyarısı
+- [x] Backend: Asset, AssetMovement, Depreciation tabloları + API; amortisman hesabı (doğrusal)
+- [x] Ekran: Demirbaş kartı (barkod, ad, kategori, konum/oda, alış tarihi, tutar, garanti bitiş, zimmet)
+- [x] Ekran: Barkod etiketi yazdırma
+- [x] Ekran: Sayım (barkod okut, eksikleri listele)
+- [x] Ekran: Amortisman tablosu (yıllık)
+- [x] Ekran: Garantisi bitecekler uyarısı
+
+> **📌 Modül 46 tamamlandı (16 Kasım 2026 — Ali Kemal).**
+>
+> **Kararlar (kullanıcı):** amortisman **VUK usulü, yıllık doğrusal** (alındığı yıl tam yıl, elden çıkarıldığı yıl ayrılmaz;
+> aylık raporlar için yıllık / 12 gösterilir); etiket **QR + kod yazısı** (kamerayla okutunca kart açılır; 2D el okuyucusu
+> sayımda okutur; 1D lazer okuyucu okuyamaz); giriş **elle + Excel toplu yükleme**; zimmet **bordro personel kartına**.
+>
+> **Veri** (migration `20261116120000_assets` + `20261116120100_asset_alert_kind`): `AssetCategory` (varsayılan ömür),
+> `AssetArea` (oda dışı yer; adlar harf duyarsız tekil — ifade indeksi), **`Asset`** (kod `DM-000001` kesintisiz sıra; yer
+> tam olarak bir oda ya da alan; zimmet `Employee`; açılış amortismanı + yılı; garanti + zil damgası; elden çıkarma izi
+> ve dondurulmuş net değer — CHECK'li), `AssetMovement` (ekle-yalnız; yer / zimmet o anki adlarıyla), `AssetDepreciationRun`
+> + `AssetDepreciation` (yıl başına tek kayıt, kart başına satır), `AssetCount` + `AssetCountItem` (sayım; beklenenler
+> açılışta dondurulur), `AssetSequence`. `StaffAlertKind.ASSET`.
+>
+> **Amortisman** (saf kurallar `contracts/assets.js`, kuruş BigInt): yılın payı = kalan net değer / ömrün kalan yılı (son
+> yıl kalanın tamamı) — yolunda giden kartta `maliyet / ömür`, açılışla gelen kartta kalan kalan yıllara yayılır. Yıl
+> kaydı **ardışık** (ilk kayıt geçmiş ya da bu yıl; gelecek yıl kaydedilemez), kartları kilitleyerek yazılır; kaydedilen yıl
+> kilitli: kartın alış / tutar / ömür / açılışı değişmez, o yıla ya da öncesine elden çıkarma yazılamaz. **Yalnız son yıl
+> geri alınır**; o kayıttan sonra elden çıkarılan kart varsa alınamaz (dondurulan net değer o kaydı içerir).
+>
+> **Sayım:** kapsam tüm otel / alan / oda; sayımcı "şu an buradayım" seçip okutur (okuyucu klavye gibi yazar; QR
+> bağlantısı da kod da olur; kamerayla okutma `BarcodeDetector` olan tarayıcıda). Sonuç: yerinde / başka yerde / fazla /
+> tekrar / elden çıkarılmış / bilinmeyen (son üçü hata değil sonuç). Birden çok sayımcı aynı anda okutur (paylaşımlı kilit;
+> aynı etiketi ilk okutan kazanır). Kapanışta başka yerde bulunanlar istenirse bulunduğu yere taşınır (geçmişe sayım
+> numarasıyla); **eksikler kendiliğinden düşmez** — elden çıkarma ayrı ve yetkili işlem.
+>
+> **Garanti zili:** 6 saatlik iş; garantisi 30 gün içinde bitecek kart **kart + bitiş tarihi başına bir kez** (garanti
+> uzatılırsa yeniden), aynı günün kartları tek zilde (`assets.manage` iznine, link `/demirbas/garanti`).
+>
+> **İzinler:** `assets.view` / `assets.count` (sayımda okut) / `assets.manage` (kart, Excel, taşıma, zimmet, etiket, sayım
+> aç-kapat, tanımlar) / `assets.finance` (yıl kaydı / geri alma, elden çıkarma). Varsayılan: MANAGER + ACCOUNTING hepsi.
+> Olaylar `asset.changed` / `asset.count.changed` / `asset.depreciation.changed` / `asset.settings.changed`, kanal
+> `assets.changed`.
+>
+> **Ekranlar** (`/demirbas`): liste (süzgeç, arama — QR bağlantısı da yapıştırılabilir, toplu etiket), kart (bilgiler,
+> değer + yıl yıl tablo, hareket geçmişi, düzelt / taşı / zimmetle / iade / elden çıkar), QR yönlendirmesi
+> (`/demirbas/k/:kod`), Excel yükleme (şablon, önizleme satır satır hata, ya hep ya hiç; tekrar gönderim yeni kart açmaz),
+> etiket (50 × 30 mm etiket yazıcısı ya da A4 3 × 8 + başlangıç konumu), sayım listesi + sayım ekranı, amortisman tablosu
+> (yıl, kategori özeti, aylık pay, Excel'e aktar, kaydet / geri al), garanti listesi, tanımlar. Bordro: işten çıkış
+> penceresinde zimmetli demirbaş uyarısı (engellemez).
+>
+> **Test:** sözleşme 14 birim (kod / QR ayrıştırma, amortisman tablosu, şemalar); entegrasyon 7 (kart yaşam döngüsü,
+> VUK kuralları, sayım, Excel, garanti zili, tanımlar, HTTP izin + şema); ön yüz 11 birim (etiket belgesi, Excel okuma).
+> Tarayıcıda uçtan uca denendi (tanımlar → kart → Excel → etiket → QR → sayım → amortisman kaydet / geri al → garanti).
+>
+> **Bilinçli devir:** muhasebe fişi yok (47'de genel muhasebe / hesap planı yok — amortisman ve elden çıkarma kâr / zararı
+> tabloda; ay kapanışı (§ 7) "amortisman yapıldı mı"yı yıl kaydından okuyabilir); zimmet tutanağı PDF'i; satın almadan
+> (45) otomatik kart (satın alma yalnız stok kalemi taşıyor); azalan bakiyeler usulü.
 
 ---
 

@@ -23,6 +23,7 @@ import { createReadCache } from '../../lib/read-cache.js';
 import { containsText, isFuzzyToken, MATCH_NOTHING, matchGuestIds, matchRoomIdsByNumber, searchTokens } from '../../lib/search.js';
 import { writeWithEvents } from '../../lib/write.js';
 import { AgencySaleError, loadAgencySale, stayDays } from '../agencies/sale.js';
+import { holdsForSale } from '../agencies/allotments.js';
 import { requestApproval } from '../approvals/service.js';
 import { applyOffer, discountLabel, evaluatePromotion } from '../promotions/rules.js';
 import { PromotionError, loadPromotionSale, readCoupon } from '../promotions/sale.js';
@@ -30,6 +31,8 @@ import { PHONE_MATCH_DIGITS } from '../messaging/rules.js';
 import { availabilityForStay, buildAvailabilityCalendar, findNewOverbooking, fitsCapacity } from '../rooms/rules.js';
 import { assignRoomInTransaction, getAvailabilityCalendar, loadInventorySnapshot, roomConflictForStay } from '../rooms/service.js';
 import { getActiveRoomTypes, getActiveSeasons, getActiveTaxes, getHotelSettings } from '../settings/service.js';
+import { getActiveRatePlans } from '../pricing/service.js';
+import { getActiveAdjustments } from '../pricing/yield-service.js';
 import { findGuestsByContact, guestFullName, resolveGuest, toGuestDto } from './guests.js';
 import {
   cancellationTerms,
@@ -39,6 +42,7 @@ import {
   generateConfirmationCode,
   noShowFee,
   priceStay,
+  pricePackageStay,
   roomTaxBreakdown,
   stayChanged,
   totalOf,
@@ -118,6 +122,7 @@ const RESERVATION_SELECT = Object.freeze({
   adults: true,
   children: true,
   boardType: true,
+  packageId: true,
   totalPrice: true,
   currency: true,
   priceMode: true,
@@ -155,6 +160,7 @@ const RESERVATION_SELECT = Object.freeze({
   room: { select: { id: true, number: true } },
   group: { select: { id: true, code: true, name: true } },
   agency: { select: { id: true, code: true, name: true } },
+  package: { select: { id: true, code: true, name: true, boardType: true } },
   promotion: { select: { id: true, name: true } },
   coupon: { select: { id: true, code: true } },
 });
@@ -191,6 +197,8 @@ function toListDto(row) {
     priceMode: row.priceMode,
     group: row.group ? { id: row.group.id, code: row.group.code, name: row.group.name } : null,
     agency: row.agency ? { id: row.agency.id, code: row.agency.code, name: row.agency.name } : null,
+    // Paket (modül 28): seçiliyse pansiyon ve fiyat paketten.
+    package: row.package ? { id: row.package.id, code: row.package.code, name: row.package.name, boardType: row.package.boardType } : null,
     // İndirim (modül 31): uygulanan promosyon, kuponla geldiyse kupon kodu.
     promotion: row.promotion ? { id: row.promotion.id, name: row.promotion.name, couponCode: row.coupon?.code ?? null } : null,
     discountTotal: money(row.discountTotal),
@@ -212,6 +220,7 @@ function snapshot(row) {
     adults: row.adults,
     children: row.children,
     boardType: row.boardType,
+    packageId: row.packageId ?? null,
     totalPrice: money(row.totalPrice),
     priceMode: row.priceMode,
     priceNote: row.priceNote ?? null,
@@ -249,13 +258,15 @@ const dotted = (value) => {
  * @param {string} hotelId
  */
 async function loadContext(hotelId) {
-  const [hotel, businessDate, seasons, roomTypes] = await Promise.all([
+  const [hotel, businessDate, seasons, roomTypes, ratePlans, adjustments] = await Promise.all([
     getHotelSettings(hotelId),
     getBusinessDate(hotelId),
     getActiveSeasons(hotelId),
     getActiveRoomTypes(hotelId),
+    getActiveRatePlans(hotelId),
+    getActiveAdjustments(hotelId),
   ]);
-  return { hotel, businessDate, seasons, roomTypes, typeById: new Map(roomTypes.map((type) => [type.id, type])) };
+  return { hotel, businessDate, seasons, ratePlans, adjustments, roomTypes, typeById: new Map(roomTypes.map((type) => [type.id, type])) };
 }
 
 /**
@@ -303,14 +314,16 @@ async function agencySaleFor(tx, hotelId, hotel, agencyId, stay) {
  *
  * @param {object} args
  * @param {{ basePrice: string, name: string }} args.type
- * @param {{ roomTypeId: string, boardType: string }} args.room
+ * @param {{ roomTypeId: string, boardType: string, adults?: number, children?: number }} args.room
  * @param {{ checkIn: Date, checkOut: Date }} args.stay
  * @param {Array<{ name: string, startDate: Date | string, endDate: Date | string, multiplier: string }>} args.seasons
+ * @param {Array<object>} [args.ratePlans] oda tipi × pansiyon × dönem fiyat planları (modül 28)
  * @param {{ total: string } | null} args.manual
  * @param {Awaited<ReturnType<typeof agencySaleFor>>} args.agencySale
+ * @param {{ nightlyPrice: string, name: string } | null} [args.pkg] seçilen paket (modül 28)
  * @returns {{ nights: ReturnType<typeof priceStay>['nights'], total: string }}
  */
-function priceRoomLine({ type, room, stay, seasons, manual, agencySale }) {
+function priceRoomLine({ type, room, stay, seasons, ratePlans = [], adjustments = null, manual, agencySale, pkg = null }) {
   const days = agencySale ? stayDays(stay.checkIn, stay.checkOut) : [];
   const line = { roomTypeId: room.roomTypeId, roomTypeName: type.name, boardType: room.boardType, days };
   if (manual) {
@@ -321,7 +334,22 @@ function priceRoomLine({ type, room, stay, seasons, manual, agencySale }) {
     const nights = agencySale.price(line);
     return { nights, total: totalOf(nights) };
   }
-  return priceStay({ basePrice: type.basePrice, seasons, checkIn: stay.checkIn, checkOut: stay.checkOut });
+  // Paket (modül 28): oda gece fiyatı paketin sabit gecelik fiyatı; pansiyon paketten.
+  if (pkg) {
+    return pricePackageStay(pkg, stay.checkIn, stay.checkOut);
+  }
+  // Standart: fiyat planı (varsa) sezon çarpanının yerine geçer; kişi başı ek dahil.
+  return priceStay({
+    basePrice: type.basePrice,
+    seasons,
+    ratePlans,
+    adjustments,
+    roomTypeId: room.roomTypeId,
+    boardType: room.boardType,
+    occupancy: { adults: room.adults, children: room.children },
+    checkIn: stay.checkIn,
+    checkOut: stay.checkOut,
+  });
 }
 
 /**
@@ -357,10 +385,11 @@ async function promotionSaleFor(tx, hotelId, { businessDate, couponCode, agencyS
  * @param {object} args
  * @returns {Array<{ nights: Array<object & { discount: string }>, total: string, offer: import('../promotions/rules.js').Offer | null }>}
  */
-function priceRooms({ rooms, typeById, stay, seasons, manual, agencySale, promo, source }) {
+function priceRooms({ rooms, typeById, stay, seasons, ratePlans, adjustments, manual, agencySale, promo, source }) {
   const priced = rooms.map((room) => {
-    const listed = priceRoomLine({ type: typeById.get(room.roomTypeId), room, stay, seasons, manual, agencySale });
-    if (!promo) return { nights: applyOffer(listed.nights, null), total: listed.total, offer: null, coupon: null };
+    const listed = priceRoomLine({ type: typeById.get(room.roomTypeId), room, stay, seasons, ratePlans, adjustments, manual, agencySale, pkg: room.pkg ?? null });
+    // Paketli oda net demet fiyatıdır: promosyon / kupon uygulanmaz (acente ve elle fiyat gibi).
+    if (!promo || room.pkg) return { nights: applyOffer(listed.nights, null), total: listed.total, offer: null, coupon: null };
     const plan = promo.offerFor({ roomTypeId: room.roomTypeId, boardType: room.boardType, source, checkIn: toIsoDay(stay.checkIn), nights: listed.nights });
     const nights = applyOffer(listed.nights, plan.offer);
     return { nights, total: totalOf(nights), offer: plan.offer, coupon: plan.coupon };
@@ -432,11 +461,24 @@ function noShowCharge(row, nights) {
  * @param {string} hotelId
  * @param {{ roomTypeIds: string[], from: Date, to: Date, apply: (reservations: object[]) => object[] }} change
  */
-async function overbookingViolations(tx, hotelId, { roomTypeIds, from, to, apply }) {
+async function overbookingViolations(tx, hotelId, { roomTypeIds, from, to, apply, agencyId = null, businessDate }) {
   const snap = await loadInventorySnapshot(tx, hotelId, from, to, { roomTypeIds });
   const before = buildAvailabilityCalendar({ ...snap, from, to, roomTypeIds });
   const after = buildAvailabilityCalendar({ ...snap, reservations: apply(snap.reservations), from, to, roomTypeIds });
-  return findNewOverbooking(before, after, roomTypeIds);
+  // Allotment (modül 30): başka acentelere tutulan (release edilmemiş,
+  // kullanılmamış) kota bu satışa kapalı sayılır. Satışı yapan acentenin kendi
+  // kotası düşülmez; kota dolunca acente genel havuzdan devam eder (garanti,
+  // tavan değil). Kullanım anlık görüntüdeki acenteli rezervasyonlardan türetilir.
+  const holds = await holdsForSale(tx, hotelId, {
+    from,
+    to,
+    days: after.days,
+    roomTypeIds,
+    saleAgencyId: agencyId,
+    today: businessDate ?? (await getBusinessDate(hotelId)),
+    agencyStays: snap.reservations,
+  });
+  return findNewOverbooking(before, after, roomTypeIds, holds);
 }
 
 /**
@@ -450,7 +492,10 @@ function noAvailabilityError(violations, typeById) {
   const nights = new Set(violations.map((violation) => violation.day)).size;
   return new ConflictError(
     `${type?.name ?? 'Seçilen tip'} için ${dotted(first.day)} gecesi${nights > 1 ? ` (ve ${nights - 1} gece daha)` : ''} yer yok: ` +
-      `${first.sellable} satılabilir odanın hepsi dolu. Başka tip ya da tarih seçin ya da misafiri bekleme listesine alın.`,
+      `${first.sellable} satılabilir odanın hepsi dolu` +
+      // Allotment (modül 30): fiziksel oda var ama başka acenteye tutulu.
+      `${first.held > 0 ? ` (${first.held} oda acente kotasında tutulu)` : ''}. ` +
+      `Başka tip ya da tarih seçin ya da misafiri bekleme listesine alın.`,
     'NO_AVAILABILITY',
     { shortfall: shortfallDetails(violations, typeById) },
   );
@@ -668,13 +713,15 @@ async function insertReservations(tx, stage, { hotelId, hotel, input, guest, roo
     const row = await tx.reservation.create({
       data: {
         hotelId,
-        guestId: guest.id,
+        // Satır misafiri (modül 30, rooming list) varsa oda onun kartına açılır.
+        guestId: room.guestRow?.id ?? guest.id,
         roomTypeId: room.roomTypeId,
         checkIn: input.checkIn,
         checkOut: input.checkOut,
         adults: room.adults,
         children: room.children,
         boardType: room.boardType,
+        packageId: room.packageId ?? null,
         status: input.status,
         // Acente adına açılan rezervasyonun kaynağı her zaman "Acente"dir (raporlar buna dayanır).
         source: agencySale ? 'AGENCY' : input.source,
@@ -761,7 +808,7 @@ export async function createReservation(hotelId, input, options = {}) {
   if (prior) return withReservation(hotelId, prior);
 
   const context = await loadContext(hotelId);
-  const { hotel, businessDate, seasons, typeById } = context;
+  const { hotel, businessDate, seasons, ratePlans, adjustments, typeById } = context;
   assertArrivalNotPast(input.checkIn, businessDate);
   assertLineFits(typeById, input);
   const manual = manualPrice(input, options);
@@ -781,8 +828,8 @@ export async function createReservation(hotelId, input, options = {}) {
       agencySale?.assertActive();
       // Promosyon ve kupon (modül 31): uymayan ya da dolmuş kupon da yer aramadan önce reddedilir.
       const promo = await promotionSaleFor(tx, hotelId, { businessDate, couponCode: input.couponCode, agencySale, manual });
-      const rooms = [{ ...pickLine(input), requestId: input.requestId, roomId: input.roomId ?? null }];
-      const pricing = priceRooms({ rooms, typeById, stay: input, seasons, manual, agencySale, promo, source: input.source });
+      const rooms = await applyPackages(tx, hotelId, [{ ...pickLine(input), requestId: input.requestId, roomId: input.roomId ?? null }]);
+      const pricing = priceRooms({ rooms, typeById, stay: input, seasons, ratePlans, adjustments, manual, agencySale, promo, source: input.source });
       const { guest } = await resolveGuest(tx, hotelId, input, hotel);
 
       const violations = await overbookingViolations(tx, hotelId, {
@@ -790,6 +837,8 @@ export async function createReservation(hotelId, input, options = {}) {
         from: input.checkIn,
         to: input.checkOut,
         apply: (reservations) => [...reservations, ...placeholders(rooms, input)],
+        agencyId: input.agencyId ?? null,
+        businessDate,
       });
       if (violations.length > 0 && !options.allowOverbooking) {
         if (input.roomId) throw noAvailabilityError(violations, typeById);
@@ -840,7 +889,7 @@ export async function createGroupReservation(hotelId, input, options = {}) {
   if (prior) return withReservation(hotelId, prior);
 
   const context = await loadContext(hotelId);
-  const { hotel, businessDate, seasons, typeById } = context;
+  const { hotel, businessDate, seasons, ratePlans, adjustments, typeById } = context;
   assertArrivalNotPast(input.checkIn, businessDate);
   input.lines.forEach((line, index) => assertLineFits(typeById, line, `lines.${index}.roomTypeId`));
   const rooms = expandGroupLines(input.lines).map((room, index) => ({ ...room, requestId: `${input.requestId}:${index}`, roomId: null }));
@@ -854,20 +903,29 @@ export async function createGroupReservation(hotelId, input, options = {}) {
       await lockRoomTypes(tx, hotelId, roomTypeIds);
       const duplicate = await findDuplicateInTransaction(tx, hotelId, input.requestId);
       if (duplicate) return duplicate;
+      // Paket seçili satırlarda pansiyon ve fiyat paketten gelir (modül 28).
+      const applied = await applyPackages(tx, hotelId, rooms);
       // Acente grubu (modül 29): her oda satırı kendi oda tipi + pansiyonunun kontrat fiyatını alır;
       // biri satılamıyorsa grubun hiçbiri açılmaz.
       const agencySale = await agencySaleFor(tx, hotelId, hotel, input.agencyId, input);
       agencySale?.assertActive();
       // Promosyon (modül 31): her oda kendi tipi + pansiyonuyla değerlendirilir; kupon her odada bir kullanım.
       const promo = await promotionSaleFor(tx, hotelId, { businessDate, couponCode: input.couponCode, agencySale, manual: null });
-      const pricing = priceRooms({ rooms, typeById, stay: input, seasons, manual: null, agencySale, promo, source: input.source });
+      const pricing = priceRooms({ rooms: applied, typeById, stay: input, seasons, ratePlans, adjustments, manual: null, agencySale, promo, source: input.source });
       const { guest } = await resolveGuest(tx, hotelId, input, hotel);
+      // Satır misafirleri (modül 30, rooming list): misafiri verilen oda kendi
+      // kartına açılır (iletişimsiz kart olabilir; iletişim grup sorumlusunda).
+      // `forceNewGuest`: isim çakışması tek odayı değil bütün grubu düşürürdü;
+      // aynı ad + iletişim yine mevcut kartı bulur.
+      const withGuests = await resolveLineGuests(tx, hotelId, applied, hotel);
 
       const violations = await overbookingViolations(tx, hotelId, {
         roomTypeIds,
         from: input.checkIn,
         to: input.checkOut,
-        apply: (reservations) => [...reservations, ...placeholders(rooms, input)],
+        apply: (reservations) => [...reservations, ...placeholders(applied, input)],
+        agencyId: input.agencyId ?? null,
+        businessDate,
       });
       if (violations.length > 0 && !options.allowOverbooking) {
         if (hotel.overbookingPolicy === 'APPROVAL' && options.approvalAllowed !== false) {
@@ -877,7 +935,7 @@ export async function createGroupReservation(hotelId, input, options = {}) {
             kind: 'group',
             input,
             guest,
-            rooms,
+            rooms: applied,
             violations,
             typeById,
             total: totalOf(pricing.map((room) => ({ amount: room.total }))),
@@ -904,7 +962,7 @@ export async function createGroupReservation(hotelId, input, options = {}) {
         hotel,
         input,
         guest,
-        rooms,
+        rooms: withGuests,
         pricing,
         bookedOn: toIsoDay(businessDate),
         createdBy,
@@ -935,13 +993,82 @@ async function withReservation(hotelId, result) {
   return { ...result, groupId: result.groupId ?? reservation.group?.id ?? null, reservation };
 }
 
-/** @param {{ roomTypeId: string, adults: number, children?: number, boardType: string }} input */
+/** @param {{ roomTypeId: string, adults: number, children?: number, boardType: string, packageId?: string | null }} input */
 const pickLine = (input) => ({
   roomTypeId: input.roomTypeId,
   adults: input.adults,
   children: input.children ?? 0,
   boardType: input.boardType,
+  packageId: input.packageId ?? null,
 });
+
+/**
+ * Seçilen paketi (modül 28) oda satırına uygular: paket yayındaysa pansiyonu
+ * paketin pansiyonu olur ve fiyat paketin gecelik fiyatından hesaplanır.
+ * Silinmiş / pasif paket seçilemez. Her oda satırı için `tx` ile kilit altında
+ * çağrılır (paket ayarı nadir değişir; cache yerine kesin okuma).
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {Array<{ packageId?: string | null, boardType: string }>} rooms
+ * @returns {Promise<Array<object>>} pkg ve (gerekirse) pansiyonu güncellenmiş odalar
+ */
+async function applyPackages(tx, hotelId, rooms) {
+  const ids = [...new Set(rooms.map((room) => room.packageId).filter(Boolean))];
+  if (ids.length === 0) return rooms;
+  const found = await tx.package.findMany({ where: { id: { in: ids }, hotelId, deletedAt: null, isActive: true } });
+  const byId = new Map(found.map((pkg) => [pkg.id, pkg]));
+  return rooms.map((room) => {
+    if (!room.packageId) return room;
+    const pkg = byId.get(room.packageId);
+    if (!pkg) throw new ValidationError('Seçilen paket bulunamadı ya da yayında değil', { field: 'packageId' });
+    return { ...room, boardType: pkg.boardType, pkg: { nightlyPrice: pkg.nightlyPrice.toString(), name: pkg.name } };
+  });
+}
+
+/**
+ * Grup satırlarının misafirlerini çözer (modül 30, rooming list): misafiri
+ * verilen satır kendi kartına açılır. İletişimsiz (yalnız ad-soyad) kart
+ * doğrudan açılır; iletişimli satırda aynı ad + iletişim mevcut kartı bulur,
+ * farklı ada kayıtlı iletişim yeni kart açar (`forceNewGuest` — isim çakışması
+ * bütün grubu düşürmesin). Misafirsiz satır grup sorumlusuna kalır.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {Array<{ guest?: object | null }>} rooms
+ * @param {{ phoneCountryCode: string }} hotel
+ */
+async function resolveLineGuests(tx, hotelId, rooms, hotel) {
+  const resolved = [];
+  for (const room of rooms) {
+    if (!room.guest) {
+      resolved.push(room);
+      continue;
+    }
+    const { guest } = await resolveGuest(tx, hotelId, { guestId: null, guest: room.guest, forceNewGuest: true }, hotel);
+    resolved.push({ ...room, guestRow: guest });
+  }
+  return resolved;
+}
+
+/**
+ * Düzenlemede paketi çözer (modül 28). Yeni seçim yayında olmalı; mevcut paket
+ * değişmediyse (uzatma gibi) pasifleşmiş paketle de fiyatlanır. Paketsizse `null`.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} db
+ * @param {string} hotelId
+ * @param {string | null} packageId
+ * @param {boolean} packageChanged yeni seçildi / değişti mi
+ * @returns {Promise<{ nightlyPrice: string, name: string, boardType: string } | null>}
+ */
+async function resolvePackageForEdit(db, hotelId, packageId, packageChanged) {
+  if (!packageId) return null;
+  const row = await db.package.findFirst({ where: { id: packageId, hotelId } });
+  if (!row || (packageChanged && (row.deletedAt || !row.isActive))) {
+    throw new ValidationError('Seçilen paket bulunamadı ya da yayında değil', { field: 'packageId' });
+  }
+  return { nightlyPrice: row.nightlyPrice.toString(), name: row.name, boardType: row.boardType };
+}
 
 /**
  * Müsaitlik hesabına eklenecek yeni rezervasyonlar (henüz yazılmamış).
@@ -1065,6 +1192,8 @@ export async function applyReservationUpdate(hotelId, reservationId, input, opti
                 ? { ...row, checkIn: next.checkIn, checkOut: next.checkOut, roomTypeId: next.roomTypeId, roomId: releaseRoom ? null : row.roomId }
                 : row,
             ),
+          agencyId: nextAgencyId,
+          businessDate,
         });
         if (violations.length > 0) {
           if (!options.allowOverbooking) throw noAvailabilityError(violations, typeById);
@@ -1198,7 +1327,7 @@ function assertPriceOverride(input, options) {
  * @param {any} input
  */
 async function planUpdate(db, context, current, input) {
-  const { hotelId, hotel, businessDate, seasons, typeById, lock } = context;
+  const { hotelId, hotel, businessDate, seasons, ratePlans, adjustments, typeById, lock } = context;
   assertAction('edit', current, businessDate);
   const inHouse = current.status === 'CHECKED_IN';
 
@@ -1217,13 +1346,27 @@ async function planUpdate(db, context, current, input) {
     throw new ValidationError('Misafir içeride; oda tipi yerine oda planından oda değiştirin', { field: 'roomTypeId' });
   }
 
+  // Paket (modül 28): verilmezse değişmez, null kaldırır. Seçiliyse pansiyon
+  // paketten gelir; acente / elle fiyatla birleşmez.
+  const nextPackageId = input.packageId === undefined ? current.packageId : input.packageId;
+  const packageChanged = nextPackageId !== current.packageId;
+  if (nextPackageId && nextAgencyId) {
+    throw new ValidationError('Acente satışında paket seçilemez (fiyat kontrattan gelir)', { field: 'packageId' });
+  }
+  if (nextPackageId && input.price?.mode === 'MANUAL') {
+    throw new ValidationError('Elle fiyat girilen rezervasyonda paket seçilemez', { field: 'packageId' });
+  }
+  const pkg = await resolvePackageForEdit(db, hotelId, nextPackageId, packageChanged);
+
   const next = {
     checkIn: input.checkIn ?? current.checkIn,
     checkOut: input.checkOut ?? current.checkOut,
     roomTypeId: input.roomTypeId ?? current.roomTypeId,
     adults: input.adults ?? current.adults,
     children: input.children ?? current.children,
-    boardType: input.boardType ?? current.boardType,
+    // Paket seçiliyse pansiyon paketten; değilse girdi ya da mevcut.
+    boardType: pkg ? pkg.boardType : input.boardType ?? current.boardType,
+    packageId: nextPackageId,
     notes: input.notes === undefined ? current.notes : input.notes,
   };
   if (toUtcDayStart(next.checkOut) <= toUtcDayStart(next.checkIn)) {
@@ -1255,8 +1398,8 @@ async function planUpdate(db, context, current, input) {
   }
   if (agencyChanged) agencySale?.assertActive();
 
-  const pricing = repriceFor({ current, next, input, changedStay, inHouse, businessDate, seasons, typeById, agencySale, agencyChanged });
-  const discount = await rediscount(db, { hotelId, businessDate, current, next, input, pricing, nextAgencyId, agencyChanged, boardChanged, lock });
+  const pricing = repriceFor({ current, next, input, changedStay, inHouse, businessDate, seasons, ratePlans, adjustments, typeById, agencySale, agencyChanged, pkg, packageChanged });
+  const discount = await rediscount(db, { hotelId, businessDate, current, next, input, pricing, nextAgencyId, hasPackage: Boolean(nextPackageId), agencyChanged, boardChanged, lock });
   return { inHouse, next, nextAgencyId, agencyChanged, changedStay, roomTypeIds, agencySale, discount, priced: finalPricing(current, pricing, discount) };
 }
 
@@ -1298,7 +1441,7 @@ function finalPricing(current, pricing, discount) {
  * @param {any} db
  * @param {object} args
  */
-async function rediscount(db, { hotelId, businessDate, current, next, input, pricing, nextAgencyId, agencyChanged, boardChanged, lock }) {
+async function rediscount(db, { hotelId, businessDate, current, next, input, pricing, nextAgencyId, hasPackage, agencyChanged, boardChanged, lock }) {
   const hadPromotion = Boolean(current.promotionId);
   const request = input.discount;
   const listed = pricing ? pricing.nights : listedNights(current.nights);
@@ -1308,13 +1451,16 @@ async function rediscount(db, { hotelId, businessDate, current, next, input, pri
   if (request?.mode === 'COUPON') {
     if (nextAgencyId) throw new PromotionError('Acente satışında kupon kullanılmaz (kontrat fiyatı nettir)', 'PROMO_AGENCY', 'discount.code');
     if (mode === 'MANUAL') throw new PromotionError('Elle fiyat girilen rezervasyonda kupon kullanılmaz', 'PROMO_MANUAL_PRICE', 'discount.code');
+    if (hasPackage) throw new PromotionError('Pakette kupon kullanılmaz (paket fiyatı her şey dahildir)', 'PROMO_PACKAGE', 'discount.code');
   }
-  if (nextAgencyId || mode === 'MANUAL') {
+  if (nextAgencyId || mode === 'MANUAL' || hasPackage) {
     if (!hadPromotion) return null;
     return removal(
       nextAgencyId
         ? { code: 'PROMO_AGENCY', message: 'Acente satışında promosyon uygulanmaz; indirim kalkar' }
-        : { code: 'PROMO_MANUAL_PRICE', message: 'Elle fiyatta promosyon uygulanmaz; indirim kalkar' },
+        : hasPackage
+          ? { code: 'PROMO_PACKAGE', message: 'Pakette promosyon uygulanmaz; indirim kalkar' }
+          : { code: 'PROMO_MANUAL_PRICE', message: 'Elle fiyatta promosyon uygulanmaz; indirim kalkar' },
     );
   }
   if (request?.mode === 'REMOVE') return hadPromotion ? removal(null) : null;
@@ -1393,7 +1539,7 @@ function discountMessage(discount, previous) {
  * Düzenlemede yeni gece fiyatları (liste fiyatıyla, indirimsiz); fiyat değişmiyorsa `null`.
  * @param {object} args
  */
-function repriceFor({ current, next, input, changedStay, inHouse, businessDate, seasons, typeById, agencySale, agencyChanged }) {
+function repriceFor({ current, next, input, changedStay, inHouse, businessDate, seasons, ratePlans = [], adjustments = null, typeById, agencySale, agencyChanged, pkg = null, packageChanged = false }) {
   const dates = () => eachNight(next.checkIn, next.checkOut);
   const days = dates().map(toIsoDay);
   const today = toIsoDay(businessDate);
@@ -1405,7 +1551,7 @@ function repriceFor({ current, next, input, changedStay, inHouse, businessDate, 
   // Fiyatın kaynağı değişti mi: oda tipi, acente (ya da kaldırıldı) ya da acente kontratında
   // pansiyon (kontrat fiyatı pansiyona göre). O zaman bütün geceler yeniden fiyatlanır;
   // içerideki misafirin geçmiş geceleri her durumda anlaşılan fiyatında kalır.
-  const sourceChanged = next.roomTypeId !== current.roomTypeId || agencyChanged || (Boolean(agencySale) && next.boardType !== current.boardType);
+  const sourceChanged = next.roomTypeId !== current.roomTypeId || agencyChanged || packageChanged || (Boolean(agencySale) && next.boardType !== current.boardType);
   const pastKept = (date) => inHouse && date < today;
   /** Yeniden satılan geceler: eski fiyatı korunmayanlar (stop-sale ve kontrat fiyatı bunlara bakar). */
   const resold = (keep) => days.filter((date) => !(existingByDate.has(date) && keep(date)));
@@ -1415,9 +1561,21 @@ function repriceFor({ current, next, input, changedStay, inHouse, businessDate, 
   const build = (keep) => {
     const sold = resold(keep);
     const soldSet = new Set(sold);
-    const fresh = agencySale
-      ? agencySale.price(lineFor(sold))
-      : priceStay({ basePrice: type.basePrice, seasons, checkIn: next.checkIn, checkOut: next.checkOut }).nights.filter((night) => soldSet.has(night.date));
+    const fresh = pkg
+      ? pricePackageStay(pkg, next.checkIn, next.checkOut).nights.filter((night) => soldSet.has(night.date))
+      : agencySale
+        ? agencySale.price(lineFor(sold))
+        : priceStay({
+            basePrice: type.basePrice,
+            seasons,
+            ratePlans,
+            adjustments,
+            roomTypeId: next.roomTypeId,
+            boardType: next.boardType,
+            occupancy: { adults: next.adults, children: next.children },
+            checkIn: next.checkIn,
+            checkOut: next.checkOut,
+          }).nights.filter((night) => soldSet.has(night.date));
     const freshByDate = new Map(fresh.map((night) => [night.date, night]));
     const nights = days.map((date) => {
       const previous = existingByDate.get(date);
@@ -1633,6 +1791,8 @@ export async function reinstateReservation(hotelId, reservationId, { expectedUpd
           ...reservations,
           { ...current, roomId: releaseRoom ? null : current.roomId, status },
         ],
+        agencyId: current.agencyId ?? null,
+        businessDate,
       });
       if (violations.length > 0) throw noAvailabilityError(violations, typeById);
 
@@ -2013,7 +2173,7 @@ export async function getReservationHistory(hotelId, reservationId, query = {}) 
  * @param {object} input `reservationQuoteSchema` çıktısı
  */
 export async function quoteReservation(hotelId, input) {
-  const { hotel, businessDate, seasons, roomTypes, typeById } = await loadContext(hotelId);
+  const { hotel, businessDate, seasons, ratePlans, adjustments, roomTypes, typeById } = await loadContext(hotelId);
   const taxes = await getActiveTaxes(hotelId);
   const excluded = input.excludeReservationId
     ? await prisma.reservation.findFirst({
@@ -2022,6 +2182,17 @@ export async function quoteReservation(hotelId, input) {
       })
     : null;
   if (!excluded) assertArrivalNotPast(input.checkIn, businessDate);
+
+  // Allotment (modül 30): başka acentelere tutulan kota teklifte de satılabilir
+  // görünmesin — form "3 boş" deyip kayıt anında reddetmesin.
+  const quoteNights = eachNight(input.checkIn, input.checkOut).map(toIsoDay);
+  const holds = await holdsForSale(prisma, hotelId, {
+    from: input.checkIn,
+    to: input.checkOut,
+    days: quoteNights,
+    saleAgencyId: input.agencyId ?? null,
+    today: businessDate,
+  });
 
   let availability;
   if (excluded) {
@@ -2033,15 +2204,16 @@ export async function quoteReservation(hotelId, input) {
       to: input.checkOut,
       roomTypeIds: roomTypes.map((type) => type.id),
     });
-    availability = (typeId) => availabilityForStay(calendar, typeId, input.checkIn, input.checkOut);
+    availability = (typeId) => availabilityForStay(calendar, typeId, input.checkIn, input.checkOut, holds);
   } else {
     const calendar = await getAvailabilityCalendar(hotelId, { from: input.checkIn, to: input.checkOut });
     const byType = new Map(calendar.roomTypes.map((type) => [type.id, type]));
     availability = (typeId) => {
       const entry = byType.get(typeId);
       if (!entry) return 0;
-      const days = Object.values(entry.days);
-      return days.length ? Math.min(...days.map((day) => day.free)) : 0;
+      // Negatif değer korunur (overbooking göstergesi) — yalnızca tutulan kota düşülür.
+      const values = quoteNights.map((day) => (entry.days[day]?.free ?? 0) - (holds?.[typeId]?.[day] ?? 0));
+      return values.length ? Math.min(...values) : 0;
     };
   }
 
@@ -2081,7 +2253,7 @@ export async function quoteReservation(hotelId, input) {
     if (preview) {
       priced = { nights: preview.nights, total: preview.sellable ? totalOf(preview.nights) : null };
     } else {
-      const listed = priceStay({ basePrice: type.basePrice, seasons, checkIn: input.checkIn, checkOut: input.checkOut });
+      const listed = priceStay({ basePrice: type.basePrice, seasons, ratePlans, adjustments, roomTypeId: type.id, boardType: quoteBoard, checkIn: input.checkIn, checkOut: input.checkOut });
       listedByType.set(type.id, listed.nights);
       const plan = offerOn(type.id, quoteBoard);
       typePlans.push(plan);
@@ -2116,10 +2288,31 @@ export async function quoteReservation(hotelId, input) {
     if (own) {
       unitTotal = own.sellable ? totalOf(own.nights) : null;
     } else {
-      const plan = offerOn(line.roomTypeId, line.boardType ?? quoteBoard);
+      // Satır kendi kişi sayısıyla fiyatlanır (modül 28: fiyat planının kişi başı
+      // eki satıra yansır; tip kartı taban doluluk fiyatını gösterir). Önizleme
+      // kayıttaki fiyatla birebir aynı olsun — misafir X görüp Y ödemesin.
+      const lineType = typeById.get(line.roomTypeId);
+      const listedLine = priceStay({
+        basePrice: lineType.basePrice,
+        seasons,
+        ratePlans,
+        adjustments,
+        roomTypeId: line.roomTypeId,
+        boardType: line.boardType ?? quoteBoard,
+        occupancy: { adults: line.adults, children: line.children },
+        checkIn: input.checkIn,
+        checkOut: input.checkOut,
+      });
+      const plan = promo.offerFor({
+        roomTypeId: line.roomTypeId,
+        boardType: line.boardType ?? quoteBoard,
+        source,
+        checkIn: checkInDay,
+        nights: listedLine.nights,
+      });
       linePlans.push(plan);
       if (plan.offer?.couponId) couponRooms += line.quantity;
-      unitTotal = totalOf(applyOffer(listedByType.get(line.roomTypeId), plan.offer));
+      unitTotal = totalOf(applyOffer(listedLine.nights, plan.offer));
       discount = discountOf(plan.offer);
     }
     return {

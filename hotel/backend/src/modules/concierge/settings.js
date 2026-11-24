@@ -1,7 +1,9 @@
+import { pricingAgentManifest } from '@hotelos/pricing-agent';
 import { budgetAgentManifest } from '@hotelos/budget-agent';
 import { insightAgentManifest } from '@hotelos/insight-agent';
 import { conciergeAgentManifest } from '@hotelos/concierge-agent';
 import { currentActor } from '@hotelos/core';
+import { reportAgentManifest } from '@hotelos/report-agent';
 import { routerAgentManifest } from '@hotelos/router-agent';
 import { prisma } from '../../db.js';
 import { isActorEnabledCached } from '../../lib/actor-settings.js';
@@ -39,6 +41,10 @@ const AGENT_MODEL_FIELDS = Object.freeze({
   [budgetAgentManifest.name]: 'conciergeModel',
   // Geri bildirim ajanı (modül 55) da otelin ana modelini kullanır.
   [insightAgentManifest.name]: 'conciergeModel',
+  // Fiyat ajanı (modül 34) da otelin ana modelini kullanır.
+  [pricingAgentManifest.name]: 'conciergeModel',
+  // Rapor ajanı (modül 24) da.
+  [reportAgentManifest.name]: 'conciergeModel',
 });
 
 /**

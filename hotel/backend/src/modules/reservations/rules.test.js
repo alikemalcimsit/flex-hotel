@@ -11,9 +11,12 @@ import {
   distributeTotal,
   expandGroupLines,
   generateConfirmationCode,
+  findRatePlanForNight,
   mergeNights,
   noShowFee,
   priceStay,
+  pricePackageStay,
+  ratePlanNightAmount,
   roomTaxBreakdown,
   sameGuestName,
   stayChanged,
@@ -76,6 +79,121 @@ describe('priceStay — taban fiyat × sezon çarpanı × gece', () => {
       nights: [],
       total: '0.00',
     });
+  });
+});
+
+const PLANS = [
+  { roomTypeId: 'STD', boardType: 'BB', name: 'Yaz BB', startDate: '2026-07-01', endDate: '2026-08-31', price: '3000', baseOccupancy: 2, extraAdultRate: '750', childRate: '300', isActive: true, deletedAt: null },
+  { roomTypeId: 'STD', boardType: 'HB', name: 'Yaz HB', startDate: '2026-07-01', endDate: '2026-08-31', price: '3800', baseOccupancy: 2, extraAdultRate: '900', childRate: '400', isActive: true, deletedAt: null },
+];
+
+describe('findRatePlanForNight — oda tipi + pansiyon + tarihe düşen plan', () => {
+  it('eşleşen planı bulur; dönem iki uçtan kapalı', () => {
+    assert.equal(findRatePlanForNight(PLANS, { roomTypeId: 'STD', boardType: 'BB', date: '2026-08-31' })?.name, 'Yaz BB');
+    assert.equal(findRatePlanForNight(PLANS, { roomTypeId: 'STD', boardType: 'HB', date: '2026-07-01' })?.name, 'Yaz HB');
+  });
+
+  it('pansiyon / oda tipi / tarih uymazsa null', () => {
+    assert.equal(findRatePlanForNight(PLANS, { roomTypeId: 'STD', boardType: 'BB', date: '2026-09-01' }), null);
+    assert.equal(findRatePlanForNight(PLANS, { roomTypeId: 'DLX', boardType: 'BB', date: '2026-08-01' }), null);
+  });
+
+  it('pasif ya da silinmiş planı görmez', () => {
+    const plans = [{ ...PLANS[0], isActive: false }, { ...PLANS[1], roomTypeId: 'STD', boardType: 'BB', deletedAt: new Date() }];
+    assert.equal(findRatePlanForNight(plans, { roomTypeId: 'STD', boardType: 'BB', date: '2026-08-01' }), null);
+  });
+});
+
+describe('ratePlanNightAmount — kişi başı ek', () => {
+  it('dahil kişi içinde ek yok', () => {
+    assert.equal(ratePlanNightAmount(PLANS[0], { adults: 2, children: 0 }), '3000.00');
+  });
+
+  it('fazla yetişkin ve çocuk eklenir', () => {
+    // 3000 + 1×750 (3. yetişkin) + 2×300 (çocuk) = 4350
+    assert.equal(ratePlanNightAmount(PLANS[0], { adults: 3, children: 2 }), '4350.00');
+  });
+
+  it('ek tutar yoksa plan fiyatı sabittir', () => {
+    assert.equal(ratePlanNightAmount({ price: '1200' }, { adults: 5, children: 3 }), '1200.00');
+  });
+});
+
+describe('priceStay — fiyat planı sezon çarpanının yerine geçer', () => {
+  it('planlı gece plan fiyatını alır (çarpan null), plansız gece sezona düşer', () => {
+    // 30-31 Ağu plan (Yaz BB, 2 kişi = 3000), 1 Eylül plansız → Bayram sezonu 1000×1.333
+    const { nights, total } = priceStay({
+      basePrice: '1000',
+      seasons: SEASONS,
+      ratePlans: PLANS,
+      roomTypeId: 'STD',
+      boardType: 'BB',
+      occupancy: { adults: 2, children: 0 },
+      checkIn: '2026-08-30',
+      checkOut: '2026-09-02',
+    });
+    assert.deepEqual(
+      nights.map((night) => [night.date, night.amount, night.multiplier, night.seasonName]),
+      [
+        ['2026-08-30', '3000.00', null, 'Yaz BB'],
+        ['2026-08-31', '3000.00', null, 'Yaz BB'],
+        ['2026-09-01', '1333.00', '1.333', 'Bayram'],
+      ],
+    );
+    assert.equal(total, '7333.00');
+  });
+
+  it('kişi başı ek plan tutarına yansır; baseRate plan fiyatıdır', () => {
+    const { nights } = priceStay({
+      basePrice: '1000',
+      seasons: [],
+      ratePlans: PLANS,
+      roomTypeId: 'STD',
+      boardType: 'HB',
+      occupancy: { adults: 3, children: 1 },
+      checkIn: '2026-07-10',
+      checkOut: '2026-07-11',
+    });
+    // 3800 + 1×900 + 1×400 = 5100
+    assert.deepEqual([nights[0].amount, nights[0].baseRate, nights[0].multiplier], ['5100.00', '3800.00', null]);
+  });
+
+  it('onaylı dinamik çarpan (modül 34) plan ve sezon fiyatının ikisini de ölçekler', () => {
+    const adjustments = { STD: { '2026-07-10': '1.100', '2026-08-30': '1.100' } };
+    // Plan gecesi: 3800 × 1.10 = 4180; plansız sezon gecesi (Yaz 1.5): 1000 × 1.5 × 1.10 = 1650.
+    const planned = priceStay({
+      basePrice: '1000', seasons: SEASONS, ratePlans: PLANS, roomTypeId: 'STD', boardType: 'HB',
+      occupancy: { adults: 2, children: 0 }, adjustments, checkIn: '2026-07-10', checkOut: '2026-07-11',
+    });
+    assert.equal(planned.nights[0].amount, '4180.00');
+    const seasonal = priceStay({
+      basePrice: '1000', seasons: SEASONS, ratePlans: [], roomTypeId: 'STD', boardType: 'BB',
+      adjustments, checkIn: '2026-08-30', checkOut: '2026-08-31',
+    });
+    assert.equal(seasonal.nights[0].amount, '1650.00');
+    // Ayarı olmayan gece etkilenmez.
+    const untouched = priceStay({
+      basePrice: '1000', seasons: [], ratePlans: [], roomTypeId: 'STD', adjustments, checkIn: '2026-10-01', checkOut: '2026-10-02',
+    });
+    assert.equal(untouched.nights[0].amount, '1000.00');
+  });
+
+  it('ratePlans verilmezse eski sezon davranışı birebir korunur', () => {
+    const withPlans = priceStay({ basePrice: '1000', seasons: SEASONS, ratePlans: [], roomTypeId: 'STD', boardType: 'BB', checkIn: '2026-07-10', checkOut: '2026-07-12' });
+    const legacy = priceStay({ basePrice: '1000', seasons: SEASONS, checkIn: '2026-07-10', checkOut: '2026-07-12' });
+    assert.deepEqual(withPlans, legacy);
+  });
+});
+
+describe('pricePackageStay — sabit gecelik paket fiyatı', () => {
+  it('her gece paket fiyatı; sezon / plan uygulanmaz', () => {
+    const { nights, total } = pricePackageStay({ nightlyPrice: '5000', name: 'Balayı' }, '2026-07-10', '2026-07-13');
+    assert.deepEqual(nights.map((night) => [night.amount, night.baseRate, night.multiplier, night.seasonName]), [
+      ['5000.00', '5000.00', null, 'Balayı'],
+      ['5000.00', '5000.00', null, 'Balayı'],
+      ['5000.00', '5000.00', null, 'Balayı'],
+    ]);
+    assert.equal(total, '15000.00');
   });
 });
 

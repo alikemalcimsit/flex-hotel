@@ -24,6 +24,16 @@ export function widgetSnippet(apiUrl, publicKey) {
 }
 
 /**
+ * Online rezervasyon widget'ının kodu (modül 32): aynı anahtar, chat balonunu
+ * da içerir — ikisi birden isteniyorsa yalnızca bu kod yapıştırılır.
+ * @param {string} apiUrl
+ * @param {string} publicKey
+ */
+export function bookingWidgetSnippet(apiUrl, publicKey) {
+  return `<script src="${apiUrl.replace(/\/$/, '')}/public/booking/widget.js" data-key="${publicKey}" async></script>`;
+}
+
+/**
  * Webhook'un tam adresi (Meta paneline girilir).
  * @param {string} apiUrl
  * @param {string} path sunucunun verdiği yol (`/webhooks/whatsapp/:id`)

@@ -1,5 +1,5 @@
 import { currentActor, toDecimal } from '@hotelos/core';
-import { MAX_MENU_CATEGORIES, MAX_MENU_ITEMS, MAX_POS_OUTLETS, MAX_POS_TABLES_PER_OUTLET, ROOM_SERVICE_ACTIVE_STATUSES } from '@hotelos/hotel-contracts';
+import { DELIVERY_ACTIVE_STATUSES, MAX_MENU_CATEGORIES, MAX_MENU_ITEMS, MAX_POS_OUTLETS, MAX_POS_TABLES_PER_OUTLET, ROOM_SERVICE_ACTIVE_STATUSES } from '@hotelos/hotel-contracts';
 import { recordAudit } from '../../lib/audit.js';
 import { ConflictError, NotFoundError, StaleWriteError, ValidationError, rethrowPrismaError } from '../../lib/errors.js';
 import { buildPage, toSkipTake } from '../../lib/pagination.js';
@@ -25,8 +25,11 @@ import { iso, loadPosSettings, money, prisma } from './shared.js';
 const SYSTEM_CATEGORY_NAME = 'Sistem kalemleri';
 /** Tepsi ücretinin adisyonda / folyoda görünen adı. */
 export const TRAY_CHARGE_ITEM_NAME = 'Oda servisi ücreti';
-/** Tepsi ücretinin vergi kategorisi (yiyecek-içecek hizmeti). */
-const TRAY_CHARGE_TAX_CATEGORY = 'FNB';
+/** Paket servis ücretinin (modül 42) adisyonda görünen adı. */
+export const DELIVERY_FEE_ITEM_NAME = 'Paket servis ücreti';
+/** Sistem ürünlerinin adı; vergi kategorisi ikisinde de yiyecek-içecek hizmeti. */
+const SYSTEM_ITEM_NAMES = Object.freeze({ TRAY_CHARGE: TRAY_CHARGE_ITEM_NAME, DELIVERY_FEE: DELIVERY_FEE_ITEM_NAME });
+const SYSTEM_ITEM_TAX_CATEGORY = 'FNB';
 
 const OUTLET_SELECT = Object.freeze({ id: true, code: true, name: true, kind: true, allowRoomCharge: true, isActive: true, sortOrder: true, updatedAt: true });
 const TABLE_SELECT = Object.freeze({ id: true, outletId: true, name: true, seats: true, zone: true, isActive: true, sortOrder: true, updatedAt: true });
@@ -139,14 +142,16 @@ export function updateOutlet(hotelId, outletId, input) {
       }
       const kind = data.kind ?? before.kind;
       assertRoomServiceCharges(kind, data.allowRoomCharge);
-      // Tür değişirken ya da oda servisi noktası kapanırken yarıda iş kalmasın (sipariş panosu / masa planı).
-      if (kind !== before.kind || (before.kind === 'ROOM_SERVICE' && before.isActive && !data.isActive)) {
-        const [openChecks, activeOrders] = await Promise.all([
+      // Tür değişirken ya da oda servisi / paket noktası kapanırken yarıda iş kalmasın (sipariş panosu / masa planı).
+      if (kind !== before.kind || (before.kind !== 'DINING' && before.isActive && !data.isActive)) {
+        const [openChecks, activeOrders, activeDeliveries] = await Promise.all([
           kind !== before.kind ? tx.posCheck.count({ where: { hotelId, outletId, status: 'OPEN' } }) : 0,
           tx.roomServiceOrder.count({ where: { hotelId, outletId, status: { in: [...ROOM_SERVICE_ACTIVE_STATUSES] } } }),
+          tx.deliveryOrder.count({ where: { hotelId, outletId, status: { in: [...DELIVERY_ACTIVE_STATUSES] } } }),
         ]);
         if (openChecks) throw new ConflictError('Bu satış noktasında açık adisyon var; tür değiştirmeden önce kapatın.', 'OUTLET_IN_USE');
         if (activeOrders) throw new ConflictError(`Bu noktada ${activeOrders} açık oda servisi siparişi var; önce teslim edin ya da iptal edin.`, 'OUTLET_IN_USE');
+        if (activeDeliveries) throw new ConflictError(`Bu noktada ${activeDeliveries} açık paket sipariş var; önce teslim edin ya da iptal edin.`, 'OUTLET_IN_USE');
       }
       const row = await tx.posOutlet.update({ where: { id: outletId }, data, select: OUTLET_SELECT });
       return { id: outletId, audit: { entity: 'PosOutlet', action: 'UPDATE', before: outletDto(before), after: outletDto(row) }, result: outletDto(row) };
@@ -394,8 +399,9 @@ export async function updateSettings(hotelId, input) {
     if (before && (!expectedUpdatedAt || before.updatedAt.getTime() !== expectedUpdatedAt.getTime())) throw new StaleWriteError();
     if (!before && expectedUpdatedAt) throw new StaleWriteError();
     const after = before ? await tx.posSettings.update({ where: { hotelId }, data }) : await tx.posSettings.create({ data: { hotelId, ...data } });
-    // Tepsi ücreti açıldı / değişti: sistem ürünü (otel satırı kilitli; ilk açılış iki kez yapılmaz).
+    // Tepsi / paket ücreti açıldı / değişti: sistem ürünü (otel satırı kilitli; ilk açılış iki kez yapılmaz).
     if (toDecimal(String(after.trayCharge)).greaterThan(0)) await ensureTrayItem(tx, hotelId, money(after.trayCharge));
+    if (toDecimal(String(after.deliveryFee)).greaterThan(0)) await ensureSystemItem(tx, hotelId, 'DELIVERY_FEE', money(after.deliveryFee));
     const snapshot = (row) =>
       row
         ? {
@@ -406,6 +412,9 @@ export async function updateSettings(hotelId, input) {
             prepLeadMinutes: row.prepLeadMinutes,
             trayAlertMinutes: row.trayAlertMinutes,
             guestOrderingEnabled: row.guestOrderingEnabled,
+            deliveryFee: money(row.deliveryFee),
+            deliveryMinOrder: money(row.deliveryMinOrder),
+            deliveryOrderMinutes: row.deliveryOrderMinutes,
           }
         : null;
     return { id: hotelId, audit: { entity: 'PosSettings', action: before ? 'UPDATE' : 'CREATE', before: snapshot(before), after: snapshot(after) }, result: null };
@@ -414,22 +423,23 @@ export async function updateSettings(hotelId, input) {
 }
 
 /**
- * Tepsi ücreti sistem ürünü (yoksa gizli sistem grubuyla açılır; fiyatı politikadaki ücrete eşitlenir). Çağıran otel
- * satırını kilitlemiş olmalı (politika kaydı) ya da ürün yokken kilitler (oda servisi siparişi): eşzamanlı ilk
- * açılış tekil index'e çarpıp işlemi düşürmesin.
+ * Sistem ürünü — tepsi ücreti (modül 41) ya da paket servis ücreti (modül 42); yoksa gizli sistem grubuyla açılır,
+ * fiyatı politikadaki ücrete eşitlenir. Çağıran otel satırını kilitlemiş olmalı (politika kaydı) ya da ürün yokken
+ * kilitler (sipariş): eşzamanlı ilk açılış tekil index'e çarpıp işlemi düşürmesin.
  *
  * @param {import('@prisma/client').Prisma.TransactionClient} tx
  * @param {string} hotelId
+ * @param {'TRAY_CHARGE' | 'DELIVERY_FEE'} kind
  * @param {string} price 0'dan büyük
  * @param {{ lockHotel?: boolean }} [options]
  * @returns {Promise<{ id: string, name: string, taxCategory: string }>}
  */
-export async function ensureTrayItem(tx, hotelId, price, { lockHotel = false } = {}) {
+export async function ensureSystemItem(tx, hotelId, kind, price, { lockHotel = false } = {}) {
   const select = { id: true, name: true, price: true, taxCategory: true };
-  let item = await tx.menuItem.findFirst({ where: { hotelId, system: 'TRAY_CHARGE' }, select });
+  let item = await tx.menuItem.findFirst({ where: { hotelId, system: kind }, select });
   if (!item && lockHotel) {
     await tx.$executeRaw`SELECT 1 FROM "Hotel" WHERE "id" = ${hotelId} FOR UPDATE`;
-    item = await tx.menuItem.findFirst({ where: { hotelId, system: 'TRAY_CHARGE' }, select });
+    item = await tx.menuItem.findFirst({ where: { hotelId, system: kind }, select });
   }
   if (item) {
     if (money(item.price) !== money(price)) await tx.menuItem.update({ where: { id: item.id }, data: { price } });
@@ -440,15 +450,21 @@ export async function ensureTrayItem(tx, hotelId, price, { lockHotel = false } =
   if (!category) {
     const taken = await tx.menuCategory.findFirst({ where: { hotelId, name: SYSTEM_CATEGORY_NAME }, select: { id: true } });
     category = await tx.menuCategory.create({
-      data: { hotelId, name: taken ? `${SYSTEM_CATEGORY_NAME} (oda servisi)` : SYSTEM_CATEGORY_NAME, system: true, sortOrder: 999, createdBy: actor },
+      data: { hotelId, name: taken ? `${SYSTEM_CATEGORY_NAME} (sistem)` : SYSTEM_CATEGORY_NAME, system: true, sortOrder: 999, createdBy: actor },
       select: { id: true },
     });
   }
   return tx.menuItem.create({
-    data: { hotelId, categoryId: category.id, name: TRAY_CHARGE_ITEM_NAME, price, taxCategory: TRAY_CHARGE_TAX_CATEGORY, station: 'NONE', system: 'TRAY_CHARGE', createdBy: actor },
+    data: { hotelId, categoryId: category.id, name: SYSTEM_ITEM_NAMES[kind], price, taxCategory: SYSTEM_ITEM_TAX_CATEGORY, station: 'NONE', system: kind, createdBy: actor },
     select,
   });
 }
+
+/**
+ * Tepsi ücreti sistem ürünü (modül 41). @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId @param {string} price @param {{ lockHotel?: boolean }} [options]
+ */
+export const ensureTrayItem = (tx, hotelId, price, options) => ensureSystemItem(tx, hotelId, 'TRAY_CHARGE', price, options);
 
 /* ══════════════════ Terminal ══════════════════ */
 

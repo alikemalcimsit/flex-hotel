@@ -21,6 +21,7 @@ import { requestApproval } from '../approvals/service.js';
 import { chargePostingStatus } from '../extras/posting-status.js';
 import { raiseStaffAlert } from '../notifications/staff-alerts.js';
 import { getActiveTaxes, getHotelSettings } from '../settings/service.js';
+import { assertDeliverySettlable, assertNotDelivery, deliveryHoldsCheck, onDeliveryRound } from './delivery-guards.js';
 import { assertNotRoomService, assertRoomServiceSettlable, onRoomServiceRound } from './room-service-guards.js';
 import { menuLineErrors } from './room-service-rules.js';
 import { adjustmentNeedsApproval, adjustmentValue, checkBalance, checkTotals, lineFreeQuantity, splitPlan } from './rules.js';
@@ -170,6 +171,8 @@ export async function closeIfSettled(tx, stage, { hotelId, checkId, today }) {
   if (check.status !== 'OPEN' || check._count.lines === 0) return false;
   const balance = toDecimal(checkBalance({ grandTotal: String(check.grandTotal), paidTotal: String(check.paidTotal), roomChargeTotal: String(check.roomChargeTotal) }));
   if (!balance.isZero()) return false;
+  // Önceden ödenmiş paket sipariş (modül 42) teslime kadar açık kalır: mutfak ve kurye onu görür.
+  if (await deliveryHoldsCheck(tx, checkId)) return false;
   const pending = await pendingState(tx, checkId);
   if (pending.adjustments || pending.payments || pending.voids) return false;
   const actor = currentActor();
@@ -292,7 +295,8 @@ export async function getCheck(hotelId, checkId) {
       table: { select: { id: true, name: true } },
       splitFrom: { select: { id: true, number: true } },
       roomService: { select: { id: true, number: true, status: true, roomNumber: true, guestName: true, deliverAt: true } },
-      orders: { orderBy: { seq: 'asc' }, select: { id: true, seq: true, status: true, sentAt: true, sentBy: true } },
+      delivery: { select: { id: true, number: true, status: true, customerName: true } },
+      orders: { orderBy: { seq: 'asc' }, select: { id: true, seq: true, status: true, sentAt: true, sentBy: true, updatedAt: true } },
       lines: {
         orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
         select: {
@@ -307,7 +311,7 @@ export async function getCheck(hotelId, checkId) {
           voidedQuantity: true,
           compedQuantity: true,
           note: true,
-          order: { select: { id: true, seq: true, status: true, sentAt: true, sentBy: true } },
+          order: { select: { id: true, seq: true, status: true, sentAt: true, sentBy: true, updatedAt: true } },
         },
       },
       adjustments: {
@@ -356,6 +360,7 @@ export async function getCheck(hotelId, checkId) {
     reopenReason: row.reopenReason,
     splitFrom: row.splitFrom,
     roomService: row.roomService ? { ...row.roomService, deliverAt: iso(row.roomService.deliverAt) } : null,
+    delivery: row.delivery ?? null,
     totals: {
       subtotal: money(row.subtotal),
       compTotal: money(row.compTotal),
@@ -369,7 +374,7 @@ export async function getCheck(hotelId, checkId) {
     },
     orders: [...new Map([...row.orders, ...row.lines.map((line) => line.order)].map((order) => [order.id, order])).values()]
       .sort((a, b) => a.sentAt - b.sentAt || a.seq - b.seq)
-      .map((order) => ({ ...order, sentAt: iso(order.sentAt) })),
+      .map((order) => ({ ...order, sentAt: iso(order.sentAt), updatedAt: iso(order.updatedAt) })),
     lines: row.lines.map((line) => ({
       id: line.id,
       orderId: line.orderId,
@@ -563,6 +568,7 @@ export async function openCheck(hotelId, input) {
       const outlet = await tx.posOutlet.findFirst({ where: { id: input.outletId, hotelId }, select: { id: true, isActive: true, kind: true } });
       if (!outlet || !outlet.isActive) throw new ValidationError('Satış noktası bulunamadı ya da kapalı', { field: 'outletId' });
       if (outlet.kind === 'ROOM_SERVICE') throw new ValidationError('Oda servisi noktasında adisyon oda servisi siparişiyle açılır', { field: 'outletId' });
+      if (outlet.kind === 'DELIVERY') throw new ValidationError('Paket servis noktasında adisyon paket siparişiyle açılır', { field: 'outletId' });
       if (input.tableId) {
         const table = await tx.posTable.findFirst({ where: { id: input.tableId, hotelId }, select: { outletId: true, isActive: true } });
         if (!table || table.outletId !== outlet.id || !table.isActive) throw new ValidationError('Masa bu satış noktasında değil ya da kapalı', { field: 'tableId' });
@@ -635,8 +641,12 @@ export async function sendOrder(hotelId, checkId, input) {
       const check = await lockedCheck(tx, hotelId, checkId);
       // Aynı istek eşzamanlı geldiyse ikincisi kilidi bekledi: ilki turu yazdı.
       if (await sent()) return;
-      // Oda servisi adisyonuysa (modül 41) sipariş de güncellenir; mutfak olayı odayı taşır.
-      await addOrderRound(tx, stage, { hotelId, check, lines: input.lines, sourceKey, roomService: (items) => onRoomServiceRound(tx, stage, { hotelId, checkId, items }) });
+      // Oda servisi (modül 41) ya da paket (modül 42) adisyonuysa sipariş de güncellenir; mutfak olayı odayı taşır.
+      const onRound = async (items) => {
+        await onDeliveryRound(tx, stage, { hotelId, checkId });
+        return onRoomServiceRound(tx, stage, { hotelId, checkId, items });
+      };
+      await addOrderRound(tx, stage, { hotelId, check, lines: input.lines, sourceKey, roomService: onRound });
     });
   } catch (error) {
     rethrowPrismaError(error);
@@ -965,6 +975,7 @@ export async function splitCheck(hotelId, checkId, input) {
     targetId = await writeWithEvents(async (tx, stage) => {
       const check = await lockedCheck(tx, hotelId, checkId, { expectedUpdatedAt: input.expectedUpdatedAt });
       await assertNotRoomService(tx, [checkId], 'bölünmez');
+      await assertNotDelivery(tx, [checkId], 'bölünmez');
       const [lines, pending] = await Promise.all([
         tx.posOrderLine.findMany({ where: { checkId }, select: { id: true, orderId: true, menuItemId: true, name: true, station: true, taxCategory: true, unitPrice: true, quantity: true, voidedQuantity: true, compedQuantity: true, note: true } }),
         pendingState(tx, checkId),
@@ -1026,6 +1037,7 @@ export async function moveCheck(hotelId, checkId, input) {
   await writeWithEvents(async (tx, stage) => {
     const check = await lockedCheck(tx, hotelId, checkId, { expectedUpdatedAt: input.expectedUpdatedAt });
     await assertNotRoomService(tx, [checkId], 'masaya taşınmaz');
+    await assertNotDelivery(tx, [checkId], 'masaya taşınmaz');
     if (input.tableId) {
       const table = await tx.posTable.findFirst({ where: { id: input.tableId, hotelId }, select: { outletId: true, isActive: true, name: true } });
       if (!table || table.outletId !== check.outletId || !table.isActive) throw new ValidationError('Masa bu satış noktasında değil ya da kapalı', { field: 'tableId' });
@@ -1054,6 +1066,7 @@ export async function mergeChecks(hotelId, targetId, input) {
     const source = await lockedCheck(tx, hotelId, input.sourceCheckId);
     if (source.outletId !== target.outletId) throw new ValidationError('Yalnızca aynı satış noktasının adisyonları birleştirilir', { field: 'sourceCheckId' });
     await assertNotRoomService(tx, [target.id, source.id], 'birleştirilmez');
+    await assertNotDelivery(tx, [target.id, source.id], 'birleştirilmez');
     const [payments, rooms, pending] = await Promise.all([
       tx.posPayment.count({ where: { checkId: source.id, status: { in: ['POSTED', 'PENDING'] } } }),
       tx.posRoomCharge.count({ where: { checkId: source.id } }),
@@ -1119,6 +1132,7 @@ export async function closeCheck(hotelId, checkId, { expectedUpdatedAt }) {
   await writeWithEvents(async (tx, stage) => {
     const check = await lockedCheck(tx, hotelId, checkId, { expectedUpdatedAt });
     await assertRoomServiceSettlable(tx, checkId);
+    await assertDeliverySettlable(tx, checkId);
     const lines = await tx.posOrderLine.count({ where: { checkId } });
     if (lines === 0) throw new ConflictError('Kalemi olmayan adisyon kapatılmaz; boş adisyonu iptal edin.', 'EMPTY_CHECK');
     const balance = checkBalance({ grandTotal: money(check.grandTotal), paidTotal: money(check.paidTotal), roomChargeTotal: money(check.roomChargeTotal) });

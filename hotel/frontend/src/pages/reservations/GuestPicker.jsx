@@ -5,6 +5,7 @@ import { api, withQuery } from '../../lib/api.js';
 import { formatDate } from '../../lib/format.js';
 import { reservationKeys } from '../../lib/reservations.js';
 import { statusLabel } from './reservationTheme.js';
+import { GuestCrmPreview } from './GuestCrmPreview.jsx';
 
 const SEARCH_DEBOUNCE_MS = 300;
 /** Sunucu 3 harften kısa ad aramaz; telefon/e-posta için en az 2 karakter yeter. */
@@ -59,6 +60,7 @@ export function GuestPicker({ value, onChange, errors = {}, disabled = false }) 
         <Button variant="outline" size="sm" icon="refresh" disabled={disabled} onClick={() => onChange({ ...value, mode: 'search', guest: null })}>
           Misafiri değiştir
         </Button>
+        <GuestCrmPreview guestId={value.guest.id} />
       </div>
     );
   }

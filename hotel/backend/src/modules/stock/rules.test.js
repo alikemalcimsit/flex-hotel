@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
+import { toDecimal } from '@hotelos/core';
 import { describe, it } from 'node:test';
-import { applyReceipts, movingAverageCost, stockValue } from './rules.js';
+import { applyDelta, applyReceipts, countDifference, movingAverageCost, saleDeltas, saleRequirements, stockValue } from './rules.js';
 
 describe('movingAverageCost', () => {
   it('elde stok yoksa alış fiyatı', () => {
@@ -67,5 +68,68 @@ describe('stockValue', () => {
   it('eksi ya da 0 mevcut 0 değer', () => {
     assert.equal(stockValue('-3', '10').toString(), '0');
     assert.equal(stockValue('0', '10').toString(), '0');
+  });
+});
+
+describe('applyDelta — giriş dışı hareket', () => {
+  it('miktarı işaretli ekler, birim maliyeti değiştirmez, tutarı o anki ortalamayla yazar', () => {
+    const out = applyDelta({ onHand: '10', unitCost: '42.5' }, '-2.5');
+    assert.equal(out.onHand.toString(), '7.5');
+    assert.equal(out.unitCost.toString(), '42.5');
+    assert.equal(out.totalCost.toFixed(2), '-106.25');
+    const back = applyDelta({ onHand: '7.5', unitCost: '42.5' }, '0.5');
+    assert.equal(back.onHand.toString(), '8');
+    assert.equal(back.totalCost.toFixed(2), '21.25');
+  });
+  it('eksiye inebilir (satış düşümü) ve sıfır miktarı reddeder', () => {
+    assert.equal(applyDelta({ onHand: '1', unitCost: '3' }, '-4').onHand.toString(), '-3');
+    assert.throws(() => applyDelta({ onHand: '1', unitCost: '3' }, '0'), RangeError);
+  });
+});
+
+describe('countDifference — sayım farkı', () => {
+  it('sayılan − mevcut; sayılmayan ve sıfır fark hareket üretmez', () => {
+    assert.equal(countDifference('9.5', '10').toString(), '-0.5');
+    assert.equal(countDifference('12', '10').toString(), '2');
+    assert.equal(countDifference(null, '10'), null);
+    assert.equal(countDifference('', '10'), null);
+    assert.equal(countDifference('10', '10.000'), null);
+  });
+});
+
+describe('saleRequirements / saleDeltas — reçeteden düşüm', () => {
+  const recipes = new Map([
+    ['m1', { recipeId: 'r1', perUnit: new Map([['dana', toDecimal('0.2')], ['yumurta', toDecimal('2')]]) }],
+    ['m2', { recipeId: 'r2', perUnit: new Map([['dana', toDecimal('0.05')]]) }],
+  ]);
+  it('satılan + ikram + zayi çarpanıyla, ürün × malzeme anahtarında toplar; reçetesizi atlar', () => {
+    const { required, skipped } = saleRequirements(
+      [
+        { menuItemId: 'm1', name: 'Köfte', sold: 3, comped: 1, wasted: 1 },
+        { menuItemId: 'm2', name: 'Çorba', sold: 2, comped: 0, wasted: 0 },
+        { menuItemId: 'm3', name: 'Kola', sold: 4, comped: 0, wasted: 0 },
+        { menuItemId: 'm1', name: 'Köfte (0)', sold: 0, comped: 0, wasted: 0 },
+      ],
+      recipes,
+    );
+    assert.deepEqual([...required].map(([key, value]) => [key, value.toString()]), [
+      ['m1:dana', '1'],
+      ['m1:yumurta', '10'],
+      ['m2:dana', '0.1'],
+    ]);
+    assert.deepEqual(skipped, ['Kola']);
+  });
+  it('yeniden yayında yalnız farkı yazar: tüketim artınca eksi, azalınca artı; aynıysa hareket yok', () => {
+    const required = new Map([['m1:dana', toDecimal('0.6')], ['m1:yumurta', toDecimal('6')]]);
+    const consumed = new Map([['m1:dana', toDecimal('1')], ['m1:yumurta', toDecimal('6')], ['m2:dana', toDecimal('0.1')]]);
+    assert.deepEqual(
+      saleDeltas(required, consumed).map((delta) => [delta.menuItemId, delta.stockItemId, delta.quantity.toString()]),
+      [
+        ['m1', 'dana', '0.4'],
+        ['m2', 'dana', '0.1'],
+      ],
+    );
+    assert.deepEqual(saleDeltas(new Map([['m1:dana', toDecimal('2')]]), new Map()).map((delta) => delta.quantity.toString()), ['-2']);
+    assert.deepEqual(saleDeltas(required, required), []);
   });
 });

@@ -34,15 +34,16 @@ export function TerminalPage() {
   const [params, setParams] = useSearchParams();
   if (terminal.isPending || terminal.isError) return <QueryFallback query={terminal} errorTitle="Masa planı yüklenemedi" />;
   const { outlets: allOutlets, currency } = terminal.data;
-  // Oda servisi noktasının masası yok: teslim panosundadır (modül 41). Vardiya çubuğu bütün noktaları seçtirir.
-  const outlets = allOutlets.filter((outlet) => outlet.kind !== 'ROOM_SERVICE');
+  // Oda servisi (modül 41) ve paket servis (modül 42) noktalarının masası yok: kendi panolarındadır. Vardiya çubuğu
+  // bütün noktaları seçtirir.
+  const outlets = allOutlets.filter((outlet) => outlet.kind === 'DINING');
   if (outlets.length === 0) {
     return (
       <Card>
         <EmptyState
           icon="utensils"
           title={allOutlets.length ? 'Masa planlı satış noktası yok' : 'Satış noktası yok'}
-          description={allOutlets.length ? 'Yalnızca oda servisi noktası tanımlı; siparişler oda servisi panosunda.' : 'Restoran, lobi bar gibi satış noktalarını ve masalarını tanımlayın; menüyü ekleyin.'}
+          description={allOutlets.length ? 'Yalnızca oda servisi / paket servis noktası tanımlı; siparişler kendi panolarında.' : 'Restoran, lobi bar gibi satış noktalarını ve masalarını tanımlayın; menüyü ekleyin.'}
           action={
             allOutlets.length ? (
               <Link to="/pos/oda-servisi"><Button icon="bed">Oda servisi panosu</Button></Link>
@@ -148,7 +149,7 @@ function Floor({ outletId, currency }) {
       )}
 
       {tableless.length > 0 && (
-        <Card title="Masasız adisyonlar" description="Bar tezgâhı, paket servis; masaya bağlı olmayan açık adisyonlar.">
+        <Card title="Masasız adisyonlar" description="Bar tezgâhı, gel-al; masaya bağlı olmayan açık adisyonlar.">
           <ul className="divide-y divide-line">
             {tableless.map((check) => (
               <li key={check.id}>

@@ -124,3 +124,6 @@ export { createRateLimiter } from './rate-limit.js';
 
 /** Balon betiğinin dosya yolu (backend bunu `/webchat/widget.js` olarak sunar). */
 export const WIDGET_PATH = new URL('./widget/widget.js', import.meta.url);
+
+/** Rezervasyon widget'ının dosya yolu (modül 32; backend `/public/booking/widget.js` olarak sunar). */
+export const BOOKING_WIDGET_PATH = new URL('./widget/booking-widget.js', import.meta.url);
