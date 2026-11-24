@@ -138,3 +138,11 @@ tekrar kullanılamayan kodlar ve sessizce yanlış fiyat hesapları.
   `modules/approvals/service.js → requestApproval(tx, stage, …)` çağırır. Onaylanan
   olay bus'a **yeniden verilmez**; yalnızca isteyen aktöre `ctx.approval` ile döner
   (diğer aktörler işi ikinci kez yapmasın). HTTP'den onay açan uç yoktur.
+
+## Kılavuz (uygulama içi döküman)
+
+Menüdeki **Kılavuz** (`/kilavuz`) sayfası `hotel/frontend/src/guide/*.md` dosyalarını gösterir: başlangıç, mimari
+("arka planda ne oluyor"), modül modül kullanım, uçtan uca senaryolar, SSS. `90-teknik-referans.md` koddan üretilir
+(`npm run kilavuz -w @hotelos/hotel-frontend`; `dev` / `build` öncesi otomatik). Yeni ekran eklenip kılavuzda anlatılmazsa
+`hotel/frontend/src/guide/guide.test.js` düşer — kılavuz kodla birlikte güncellenir.
+

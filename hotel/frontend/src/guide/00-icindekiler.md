@@ -24,6 +24,12 @@ Sol taraftaki bölümler sırayla okunacak şekilde dizildi; ama her bölüm ken
 | Arka ofis | Muhasebe, İK | Faturalar ve e-belge, ön muhasebe, personel ve bordro, demirbaş ve amortisman |
 | Uçtan uca senaryolar | Herkes | Bir misafirin yolculuğu, bir yemeğin yolculuğu, gün kapanışı, OTA rezervasyonu, arıza, fiyat önerisi |
 | Sık sorulan sorular | Herkes | Hata mesajları, sorun giderme, modül durumu tablosu |
+| Teknik referans (otomatik) | Yönetici, teknik ekip | Koddan her derlemede üretilir: menü haritası ve izinler, rol varsayılanları, aktör bildirgeleri, olay kataloğu, zamanlanmış işler, tablolar, modül durumu |
+
+## Kılavuz nasıl güncel kalır
+
+- **Teknik referans** bölümü elle yazılmaz; her derlemede koddan yeniden üretilir. Yeni bir ekran, izin, olay, aktör ya da tablo eklendiğinde orada kendiliğinden görünür.
+- **Anlatım bölümleri** geliştirmeyle birlikte güncellenir: menüye eklenen bir sayfa kılavuzda anlatılmamışsa otomatik test düşer ve değişiklik tamamlanmış sayılmaz. Yani bu kılavuzda olmayan bir ekran, sistemde de yok demektir.
 
 ## Nasıl okunmalı
 

@@ -5,6 +5,13 @@ Paylaşım: **Tek numaralar = arkadaşın, çift numaralar = Ali Kemal.**
 Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddeler = yapılacak işler, sırayla.
 "Backend" = API + servis + tablo. "Ekran" = React sayfası. "Aktör" = worker/agent kodu.
 
+**Kılavuz kuralı (24 Kasım 2026):** uygulama içi kılavuz `hotel/frontend/src/guide/*.md` (menüde "Kılavuz", `/kilavuz`).
+Bir modül bitince ya da bir ekran / otomatik davranış değişince **ilgili bölüm aynı commit'te güncellenir**: ekranın yolu,
+adım adım kullanım, "arka planda ne olur" ve en az bir somut örnek. Bekçi: `hotel/frontend/src/guide/guide.test.js`
+(menüdeki her sayfa elle yazılan bölümlerde anılmalı; yoksa `npm test` düşer). Teknik referans (`90-teknik-referans.md`)
+koddan otomatik üretilir (`npm run kilavuz`; `dev` ve `build` öncesi kendiliğinden) — menü, izin / rol, aktör bildirgeleri,
+olay kataloğu, zamanlanmış işler, tablolar, modül durumu; elle düzenlenmez.
+
 ---
 
 ## 1. ÖN BÜRO (temel)

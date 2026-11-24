@@ -26,6 +26,20 @@ Bunların üstüne iki katman daha gelir:
 
 Bu sırayı akılda tutmak çoğu "fiyat neden böyle çıktı?" sorusunu cevaplar. Rezervasyon formundaki fiyat önizlemesi ve rezervasyon detayındaki gece dökümü her gecenin hangi kaynaktan fiyatlandığını (plan adı, sezon adı, kontrat adı, paket) gösterir.
 
+### Örnek: aynı konaklama, beş fiyatlama yolu
+
+Veri: Standart oda, 10–12 Temmuz (2 gece), 3 yetişkin. Taban fiyat 2.500 TL; Temmuz sezon çarpanı 1,4. Fiyat planı "Yaz BB": 4.000 TL / gece, 2 kişi için, fazla yetişkin 800. Paket "Aile": 5.200 TL / gece, BB. Acente "Mavi Tur" kontratı Standart BB 3.200 TL / gece. Onaylı dinamik çarpan 10 Temmuz için 1,10 (11 Temmuz'da yok). Promosyon "Erken rezervasyon %10" yayında ve koşullar tutuyor.
+
+| Yol | Gece 10 Tem | Gece 11 Tem | Toplam | Nasıl hesaplandı |
+|-----|-------------|-------------|--------|------------------|
+| 1. Yalnız sezon × taban (plan silinmiş olsa) | 2.500 × 1,4 × 1,10 = 3.850 | 2.500 × 1,4 = 3.500 | 7.350 | Çarpan yalnız 10 Temmuz'a; promosyon üstüne %10 düşerse 6.615 |
+| 2. Fiyat planı (resepsiyon, promosyon uygun) | (4.000 + 800) × 1,10 = 5.280 | 4.000 + 800 = 4.800 | 10.080 → promosyon −1.008 = **9.072** | Plan + kişi başı ek; çarpan; promosyon liste üzerinden |
+| 3. Paket "Aile" | 5.200 | 5.200 | **10.400** | Sabit paket fiyatı; kişi farkı, çarpan, promosyon yok |
+| 4. Acente Mavi Tur | 3.200 | 3.200 | **6.400** | Kontrat fiyatı; çarpan ve promosyon yok; komisyon %12 rezervasyona kopyalanır |
+| 5. Elle fiyat (yetkili, gerekçeli) | 4.500 | 4.500 | **9.000** | Yazılan tutar; hiçbir katman uygulanmaz |
+
+Aynı iki gece için beş farklı toplam çıkması hata değil, kuralın kendisidir: her yolun kendi sözleşmesi vardır. Gece dökümünde her gecenin yanında kaynağı ("Yaz BB planı", "Mavi Tur — Yaz 2027 kontratı", "Aile paketi", "elle: Teklif TKF-…") yazar.
+
 ## Fiyat planları ve paketler
 
 ### Fiyat planları
@@ -45,7 +59,31 @@ Pansiyon tipleri sabittir ve kullanıcı tanımlı değildir: **RO** (sadece oda
 5. Gecelik fiyatı girin. Fiyatın kaç kişi için olduğunu ("taban kişi sayısı") ve fazla yetişkin / çocuk başına ekleri yazın. Ekler sıfır olabilir.
 6. Kaydedin.
 
-**Arka planda:** Plan kaydedilince fiyat hesabının önbelleği tazelenir ve kanal aktörüne "fiyat değişti" haberi gider (bkz. Kanallar). Aynı oda tipi + pansiyonda **dönemleri çakışan iki yayındaki plan olamaz**; ekran hangi planla çakıştığını söyler, veritabanı da son savunma olarak reddeder.
+**Form alanları:**
+
+| Alan | Ne anlama gelir | Örnek |
+|------|-----------------|-------|
+| Ad | Gece dökümünde "sezon adı" yerine görünür | Yaz 2027 Standart BB |
+| Oda tipi | Plan yalnızca bu tipe | Standart |
+| Pansiyon | RO / BB / HB / FB / AI / UAI — yalnızca bu pansiyona | BB |
+| Başlangıç – bitiş | İki uç dahil | 15.06.2027 – 15.09.2027 |
+| Gecelik fiyat | Vergi dahil, taban kişi sayısı için | 4.000 |
+| Taban kişi sayısı | Fiyatın kapsadığı kişi | 2 |
+| Fazla yetişkin eki | Taban üstü her yetişkin için gece başına | 800 |
+| Çocuk eki | Her çocuk için gece başına | 400 |
+| Aktif | Pasif plan fiyat hesabına girmez | Evet |
+
+**Kişi başı ek örneği:** 2 yetişkin + 1 çocuk, 3 gece: (4.000 + 400) × 3 = **13.200 TL**. 3 yetişkin: (4.000 + 800) × 3 = 14.400 TL. 1 yetişkin: 4.000 × 3 = 12.000 TL (taban altı kişi indirimi yoktur).
+
+**Arka planda:**
+
+| Ne tetikler | Ne olur | Nerede görünür | Hatada |
+|-------------|---------|----------------|--------|
+| Plan kaydedildi / değişti / silindi | Fiyat hesabının önbelleği tazelenir; "fiyat değişti" olayı yayınlanır | Rezervasyon önizlemesi anında yeni fiyat | Çakışan dönem varsa kayıt reddedilir, hangi planla çakıştığı yazılır |
+| "Fiyat değişti" olayı | Kanal aktörü senkrondaki kanalları planın dönemi için "gönderilecek var" işaretler | Kanallar → Senkron logu (5–10 sn içinde) | Kanal aktörü kapalıysa atlanır; açılınca tam eşitleme |
+| Rezervasyon açılıyor | O gece için uygun plan aranır; varsa plan fiyatı + kişi başı ek, sezon çarpanı uygulanmaz | Gece dökümünde plan adı | Plan yoksa sezon × taban |
+
+Aynı oda tipi + pansiyonda **dönemleri çakışan iki yayındaki plan olamaz**; ekran hangi planla çakıştığını söyler, veritabanı da son savunma olarak reddeder.
 
 **Dikkat:**
 
@@ -66,7 +104,20 @@ Pansiyon tipleri sabittir ve kullanıcı tanımlı değildir: **RO** (sadece oda
 2. Bileşenleri yazın (SPA, transfer, akşam yemeği…). Bileşenler **bilgi amaçlıdır**: folyoya ayrı kalem olarak düşmez; misafire ve personele "pakete ne dahil" demek için vardır.
 3. Aktif işaretleyip kaydedin. Pasif paket rezervasyonda seçilemez.
 
+**Form alanları:**
+
+| Alan | Ne anlama gelir |
+|------|-----------------|
+| Kod | Otel içinde tekil; silinen paketin kodu yeniden kullanılabilir |
+| Ad | Rezervasyon formunda ve detayda görünür |
+| Pansiyon | Paket seçilince rezervasyonun pansiyonu bu olur, değiştirilemez |
+| Gecelik fiyat | Vergi dahil, sabit; kişi sayısına göre değişmez |
+| Bileşenler | Serbest liste (SPA 50 dk, transfer, oda süslemesi); bilgi amaçlı |
+| Aktif | Pasif paket seçilemez; eski rezervasyonlar bozulmaz |
+
 **Rezervasyon formunda:** Kaynak resepsiyon ise "Paket" seçicisi görünür. Paket seçilince pansiyon alanı kilitlenir ve fiyat notunda "paket fiyatı" yazar. Rezervasyon detayında paket adı görünür.
+
+**Örnek:** "Balayı" paketi Deluxe, BB, 7.500 TL / gece. 3 gece, 2 yetişkin: **22.500 TL**. Aynı 3 gece için Deluxe fiyat planı 6.000 olsa da misafir pakette SPA ve transferi alır, resepsiyon tek fiyatla konuşur. Aynı rezervasyona kupon girilirse önizleme "paketli oda kupon almaz" der; kaydetmeye çalışılsa sunucu reddeder.
 
 **Dikkat:**
 
@@ -114,6 +165,32 @@ Kural tetiklenince fiyat **değişmez**; öneri üretilir ve onay kuyruğuna dü
 
 **Onaylanınca arka planda:** Dönemin her gecesine oda tipi için **gece çarpanı** yazılır (bir geceye tek ayar; yenisi eskisinin üstüne). Fiyat hesabı önbelleği tazelenir; **yeni rezervasyonlar** onaylı fiyattan açılır; kanal aktörüne "fiyat değişti" gider, OTA'lara giden fiyat da aynı çarpanla çıkar (misafir sitede ne görüyorsa kanal onu satar). Reddedilince hiçbir şey yazılmaz. Süresi dolan öneri de uygulanmaz.
 
+**Örnek — bir önerinin ömrü:**
+
+| Adım | Ne olur | Sayılar |
+|------|---------|---------|
+| 1. Kural işi koşar (06:00) | 18–20 Temmuz Standart doluluğu okunur | 40 oda, 2 arızalı → satılabilir 38; boş 6 → satılan 32 → doluluk **%84** (≥ %80) |
+| 2. Öneri üretilir | Üç gün aynı çarpan → tek öneri | Çarpan **1,10** (+%10), kaynak: kural "Yüksek doluluk"; mevcut fiyat 4.000 → önerilen 4.400 |
+| 3. Onay kaydı açılır | "Toplu fiyat değişikliği" tipinde onay | Onaylar → Bekleyen'de ve Fiyat önerileri'nde görünür |
+| 4. Ajan da aynı günü değerlendirir | Bekleyen dönemi bilir, çakışan satır üretmez; 21 Temmuz için ayrı öneri yapabilir | Örneğin 21 Tem +%15 → çarpan 1,15, gerekçe "geçen yıl aynı hafta %92 dolmuştu" |
+| 5. Müdür düzenler | 1,10 yerine 1,15 yazar (emniyet 0,5–3 içinde) | Önerilen 4.600 |
+| 6. Onaylar | Karar olayı → 18, 19, 20 Temmuz Standart gecelerine çarpan 1,15 yazılır; "fiyat değişti" yayınlanır | Fiyat geçmişi grafiğinde üç amber çubuk; Senkron logunda OTA'ya 4.600 gider |
+| 7. Yeni rezervasyon | 19 Temmuz Standart BB, 2 kişi: plan 4.000 × 1,15 = **4.600**; 3 kişi: (4.000 + 800) × 1,15 = 5.520 | Gece dökümü "Yaz BB planı · dinamik +%15" |
+| 8. Mavi Tur aynı gece | Kontrat 3.200 — **değişmez** | Çarpan kontratı etkilemez |
+| 9. Ertesi gün iş yeniden koşar | Aynı dönem için "zaten aynı çarpan uygulanmış" → atlar | Kuyruk şişmez |
+
+Reddedilseydi 6. adımda hiçbir şey yazılmazdı; onay kuyruğundaki bekleme süresi dolarsa öneri "süresi doldu" olur ve yine hiçbir şey yazılmaz.
+
+**Arka planda — özet tablo:**
+
+| Ne tetikler | Ne olur | Nerede görünür | Kapalıysa / hatada |
+|-------------|---------|----------------|--------------------|
+| 6 saatlik kural işi | Doluluk okunur, eşik kuralları → öneri + onay kaydı | Fiyat önerileri, Onaylar | Dinamik fiyat ayarı kapalıysa sessiz; hata bir oteli etkiler, diğerleri devam eder |
+| Günlük "fiyat değerlendirmesi" olayı | Fiyat ajanı eşiklere yakın günleri alır, öneri üretir | Fiyat önerileri (kaynak: ajan) | Ajan kayıtsız / kapalı → yalnız kural işi; bozuk satır düşer, kuyruğa taşmaz |
+| Onay verildi | Gece çarpanları yazılır; "fiyat değişti" | Fiyat geçmişi, yeni rezervasyon fiyatı, OTA | Uygulama hatası loglanır; onay kaydı durur, karar yeniden verilebilir |
+| Onay reddedildi / süresi doldu | Öneri kapanır, yazım yok | Fiyat önerileri durumu | — |
+| Yield ayarı kaydedildi | Önbellek tazelenir | Sonraki iş yeni eşiklerle | — |
+
 **Neden fiyat planı değil, çarpan?** Yield gün bazlıdır. Fiyat planlarının dönemlerini bölmek kırılgan olur ve pansiyon başına ayrı satır isterdi. Çarpan bütün pansiyonlara oransal uygulanır, planlarınız bozulmaz.
 
 **Dikkat:**
@@ -156,6 +233,36 @@ Acente silinmez, **pasife alınır**. Pasif acente adına yeni rezervasyon açı
 - Kontrat para birimi otelin para birimidir.
 - Kişi başı ek, tek kişi farkı, çocuk indirimi kontratta yoktur; kontrat fiyatı oda başınadır.
 
+**Acente kartı alanları:**
+
+| Alan | Ne anlama gelir |
+|------|-----------------|
+| Kod, ad | Otel içinde tekil; rezervasyon formunda aranır |
+| Yetkili, telefon, e-posta | İletişim |
+| Vergi no / dairesi | Fatura ve cari için |
+| Komisyon % | Rezervasyon açılırken rezervasyona **kopyalanır**; prim ve cari hesabında kullanılır |
+| Vade (gün) | "Cariye aktarılan" tutarın vadesi: çıkış + vade |
+| Aktif / pasif | Pasif acente adına satış yapılmaz |
+
+**Kontrat fiyat tablosu örneği (Yaz 2027, 1 Haziran – 30 Eylül):**
+
+| Dönem | Standart BB | Standart HB | Deluxe BB | Deluxe HB |
+|-------|-------------|-------------|-----------|-----------|
+| 1 Haz – 30 Haz | 2.800 | 3.300 | 3.900 | 4.400 |
+| 1 Tem – 31 Ağu | 3.200 | 3.700 | 4.500 | 5.000 |
+| 1 Eyl – 30 Eyl | 2.600 | — | 3.600 | — |
+
+Eylül'de HB hücreleri boş: Mavi Tur Eylül'de HB satamaz; HB istenirse satış reddedilir ("kontratta fiyat yok: 12.09, 13.09"). Stop-sale 14–15 Temmuz (bütün tipler): o geceleri kapsayan acente rezervasyonu açılmaz; elle fiyatla da aşılmaz.
+
+**Arka planda:**
+
+| Ne tetikler | Ne olur | Nerede görünür |
+|-------------|---------|----------------|
+| Kontrat satışa açıldı | Acente adına açılan rezervasyonlar bu tabloyu kullanır | Rezervasyon formunda canlı kontrat fiyatı |
+| Satıştaki kontratın fiyatı değişti | Denetim izine eklenen / kaldırılan / değişen satır yazılır; yalnız sonradan açılan rezervasyonlar etkilenir | Aktivite → Denetim kaydı |
+| Stop-sale eklendi | Acente özel kilitlenir; aynı anda gelen rezervasyon ya eski ya yeni durumu görür | Kontrat ekranı Stop-sale bölümü |
+| Acente pasife alındı | Yeni satış ve iptal geri alma engellenir; mevcut rezervasyonlar durur | Acente listesi |
+
 ### Acente adına rezervasyon
 
 Rezervasyon formunda kaynak "**Acente**" seçilince aramalı acente seçici açılır; kontrat fiyatı canlı gösterilir, satılamayan oda tipi sebebiyle işaretlenir ("kontratta fiyat yok", "stop-sale", "kontrat yok", "acente pasif"). Hata mesajı hangi gecelerin sorunlu olduğunu söyler.
@@ -185,6 +292,18 @@ Acente kartının "Rezervasyonlar ve cari" sekmesinde: dönemde satış, komisyo
 3. **Kullanım tablosu** gün gün verilen / kullanılan / kalan / release durumunu gösterir.
 
 **Release nasıl çalışır:** Release tarihi = giriş gecesi − release günü. **O günden itibaren (dahil)** kullanılmamış kota genel havuza döner. Release günü 0 ise gelecek geceler girişe kadar tutulur, günün gecesi serbesttir (same-day satış herkese açık).
+
+**Örnek — 10 oda garanti, release 3 gün:** Mavi Tur, Standart, 1–31 Temmuz, 10 oda, release 3 gün. Otelde 40 Standart oda. 20 Temmuz gecesine bakalım:
+
+| Tarih (bugün) | Mavi Tur'un 20 Tem rezervasyonu | Tutulu kota | Genel satışın görebildiği Standart | Açıklama |
+|---------------|---------------------------------|-------------|------------------------------------|----------|
+| 1 Temmuz | 0 | 10 | 40 − dolu − 10 | Release tarihi 17 Temmuz; kota tamamen tutulu |
+| 10 Temmuz | 4 | 6 | 40 − dolu − 6 | Kullanılan 4 düşüldü; 6 hâlâ tutulu |
+| 16 Temmuz | 7 | 3 | 40 − dolu − 3 | Release'e bir gün var |
+| **17 Temmuz** | 7 | **0** | 40 − dolu | Release tarihi (20 − 3) geldi: kalan 3 oda genel havuza ve OTA'ya açılır |
+| 18 Temmuz | Mavi Tur 2 oda daha ister | 0 | — | Yer varsa genel havuzdan açılır (kota garanti, tavan değil) |
+
+Mavi Tur 10 Temmuz'da 11. odayı isterse de reddedilmez: 10 oda kotadan, 11. genel havuzdan (fiziksel yer varsa). Kullanım tablosu 20 Temmuz satırında "verilen 10 / kullanılan 7 / kalan 3 / release 17.07" gösterir.
 
 **Arka planda:** Kullanım ayrı bir sayaçta tutulmaz, **türetilir**: acentenin aynı oda tipinde o geceyi kapsayan geçerli (bekleyen / onaylı / içeride) rezervasyonları kotaya mahsup edilir. İptal kota hakkını kendiliğinden geri açar. Kota değişince: rezervasyon açma denetimi ("N oda acente kotasında tutulu" mesajı), fiyat teklifi, bekleme listesi (kotalı odaya zil çalmaz), misafir kanalı müsaitliği ve **kanal yöneticisine giden müsaitlik** (OTA kotalı odayı satamaz; release olunca kanala açılır) hepsi güncellenir. Kota azalınca bekleme listesi taranır.
 
@@ -229,6 +348,15 @@ Acente kartının "Rezervasyonlar ve cari" sekmesinde: dönemde satış, komisyo
 
 Dilimli hesapta gece ölçütünün dilimi "dilimdeki gece × dönemin ortalama gece geliri" ile tutara çevrilir; sezon sonundaki pahalı geceler primi şişirmez. Prim yuvarlanmış dilimlerin toplamıdır; raporda dilimler toplamı primi her zaman tutar.
 
+**Örnek — iki uygulama biçimi, aynı üretim:** Kural: ciro ölçütü, kademeler 1.000.000 → %2, 1.500.000 → %3, 2.000.000 → %4. Dönem üretimi (vergisiz oda geliri) 1.750.000 TL.
+
+| Biçim | Hesap | Prim |
+|-------|-------|------|
+| Tüm üretime | Ulaşılan en yüksek kademe %3 (1.500.000 ≤ 1.750.000 < 2.000.000) → 1.750.000 × %3 | **52.500** |
+| Yalnız aşan kısma (dilimli) | 1.000.000–1.500.000 dilimi: 500.000 × %2 = 10.000; 1.500.000–1.750.000 dilimi: 250.000 × %3 = 7.500 | **17.500** |
+
+Tavan 15.000 olsaydı dilimli hesapta 15.000 ödenirdi. Gece ölçütünde (örneğin 1.000 gece eşiği) dilimdeki gece sayısı dönemin ortalama gece geliriyle tutara çevrilir: 1.200 gece, ortalama 3.500 TL → 200 aşan gece × 3.500 = 700.000 matrah × %2 = 14.000.
+
 ### Akış (arka plan)
 
 - Zamanlanmış iş **30 dakikada bir** yürürlükteki kuralların ilerlemesini (gerçekleşen gece / ciro / puan / kademe) yazar; **kademe yükselince** yetkiliye bir kez zil çalar.
@@ -254,6 +382,15 @@ Dilimli hesapta gece ölçütünün dilimi "dilimdeki gece × dönemin ortalama 
 ### Temel kural: bir rezervasyona tek indirim
 
 Uygun **kendiliğinden** promosyonlar ve girilen **kuponun** promosyonu arasından misafire **en avantajlısı** seçilir. Kupon daha avantajlı değilse kullanılmaz ve **hakkı düşmez**. Eşitlikte kendiliğinden promosyon kazanır (kupon hakkı harcanmaz).
+
+**Örnek — kupon %10'a karşı kendiliğinden promosyon:** Yayında iki kampanya: "Erken rezervasyon %15" (kendiliğinden; girişten ≥ 45 gün önce, ≥ 3 gece) ve "Kurumsal kupon %10" (kuponla; KURUM-7X2K kodu, 20 kullanım). Misafir 50 gün önceden 3 gece Standart BB (liste 3 × 4.000 = 12.000) açtırıyor ve kupon kodunu veriyor.
+
+| Teklif | Koşul tutuyor mu | İndirim | Sonuç |
+|--------|------------------|---------|-------|
+| Erken rezervasyon %15 | Evet (50 ≥ 45 gün, 3 ≥ 3 gece) | 1.800 | **Seçilir** |
+| Kupon %10 | Evet | 1.200 | Daha az avantajlı → kullanılmaz, **hak düşmez** (20 kullanım kalır) |
+
+Önizleme: "Kupon KURUM-7X2K geçerli ama daha avantajlı promosyon uygulanıyor." Misafir 2 gece isteseydi erken rezervasyon şartı (≥ 3 gece) bozulur, kupon %10 seçilir, hak 19'a düşer. Aynı misafir sonradan 2 geceyi 1'e kısaltırsa kupon koşulu yine tutuyorsa indirim yeni toplama göre (400) yeniden hesaplanır; kupon "en az 2 gece" isteseydi indirim **kalkar** ve fark folyoya düzeltme olur — önizleme bunu önceden söyler.
 
 ### Promosyon tanımı
 
@@ -281,6 +418,16 @@ Rezervasyon açma, grup, misafir kanalı istekleri (WhatsApp / web chat / widget
 ### Kupon hakkı
 
 Kullanım sayaçla tutulmaz: kuponla açılmış **geçerli** rezervasyonlar sayılır. İptal / gelmeyen hakkı kendiliğinden geri açar. Tek kullanımlık kuponu aynı anda iki rezervasyon alamaz (kilit altında sayım). İptal geri alınırken kupon yeniden sayılır; başkası kullandıysa geri alma reddedilir. Grupta her oda bir kullanımdır; hak yetmezse grubun hiçbiri açılmaz.
+
+**Arka planda:**
+
+| Ne tetikler | Ne olur | Nerede görünür |
+|-------------|---------|----------------|
+| Rezervasyon açılıyor | Yayındaki kendiliğinden promosyonlar + kupon değerlendirilir; en avantajlısı seçilir; koşullar rezervasyona kopyalanır | Önizlemede liste fiyatı / indirim; detayda promosyon, kupon, gece indirimi |
+| Kuponlu rezervasyon iptal / gelmedi | Hak kendiliğinden geri açılır (sayaç yok, geçerli rezervasyonlar sayılır) | Kuponlar sekmesinde "kullanılmamış" |
+| Konaklama düzenlendi (tarih, pansiyon, fiyat) | Kopyadaki koşullar yeniden denetlenir; tutmuyorsa indirim kalkar, fark folyoya | Düzenleme penceresi "indirimin akıbeti" |
+| Erken çıkış | Kalan gecelerle şart denetlenir | Çıkış penceresi uyarısı |
+| Promosyon durduruldu | Yeni rezervasyon almaz; açılmış rezervasyonların sözü değişmez | Liste durumu |
 
 ### Kullanım raporu
 
@@ -328,6 +475,30 @@ API anahtarı ve webhook sırrı **şifreli saklanır**, hiçbir ekranda görün
 - Yapılamayan adım (eşleşmeyen plan, içerideki / çıkmış misafirde değişiklik, geçmiş giriş, elle fiyatlı rezervasyonun tarih değişikliği) **"elle işlenmeli"** olur ve resepsiyona **manuel görev** düşer (Görevler menüsü, "Kanal rezervasyonu" modülü). Para birimi farkı ve iCal tutarı "**doğrulanmalı**" işaretlenir. Müdür gereğini yapınca kaydı notla kapatır.
 - Aktör kapalıyken gelen rezervasyonlar da manuel göreve düşer; hiçbir rezervasyon kaybolmaz.
 
+**Örnek — Booking.com'dan rezervasyon geldiğinde adım adım:**
+
+1. Misafir Booking'de 2 Deluxe oda, 5–7 Ağustos, 2 gece, toplam 2 × 2 × 4.800 = 19.200 TL (Booking'in tutarı) rezervasyon yapar.
+2. Channex webhook'u sunucuya "yeni revizyon var" der; akış hemen okunur (webhook gelmese de en geç 60 sn içinde).
+3. Revizyon ortak biçime çevrilir, **saklanır**, Channex'e teyit edilir; "kanal rezervasyonu alındı" olayı yayınlanır. Kanal kartı → Rezervasyonlar sekmesinde "işleniyor" satırı.
+4. Kanal aktörü oda tipi eşleşmesine bakar: Channex "Deluxe Double" ↔ bizim Deluxe; fiyat planı "Deluxe BB" ↔ BB.
+5. **Oda başına bir rezervasyon** açılır: 2 onaylı rezervasyon, her biri 2 gece 4.800 (elle fiyat, gerekçe "kanal: Booking.com"), pansiyon BB, misafir kartı (ad, e-posta, telefon) açılır / bulunur, nota "Booking.com · 1234567890 · ödeme otelde" yazılır. Rezervasyon listesinde kaynak "Kanal", detayda kanal adı ve kodu.
+6. Rezervasyon açılması müsaitliği değiştirir → aynı aktör kanalı yeniden "gönderilecek var" işaretler; 5–10 sn içinde Deluxe müsaitliği Channex'e (ve oradan diğer OTA'lara) düşürülmüş olarak gider.
+7. **Yer yoksa:** 5 Ağustos'ta Deluxe tamamen doluysa rezervasyon yine açılır ve resepsiyona kritik "overbooking: Deluxe, 5 Ağustos, 1 oda" uyarısı düşer; resepsiyon üst tipe taşır ya da misafirle görüşür.
+8. **Değişiklik gelirse** (misafir 6–8 Ağustos'a kaydırır): bekleyen / onaylı rezervasyon güncellenir, geceler yeniden yazılır; misafir içerideyse yapılamaz → "elle işlenmeli" + manuel görev.
+9. **İptal gelirse:** cezasız iptal, iptal eden "kanal: Booking.com"; müsaitlik geri açılır ve kanala gider.
+10. Para birimi farklıysa (OTA EUR gönderdi, otel TRY) rezervasyon "doğrulanmalı" işaretlenir; müdür tutarı kontrol edip kaydı notla kapatır.
+
+**Arka planda — kanal yöneticisi özet tablosu:**
+
+| Ne tetikler | Ne olur | Nerede görünür | Kapalıysa / hatada |
+|-------------|---------|----------------|--------------------|
+| Müsaitlik olayı (rezervasyon, iptal, giriş / çıkış, arıza, kota) | Kanal "kirli" işaretlenir; 5 sn'lik iş farkı gönderir | Senkron logu | Aktör kapalı → atlanır, açılınca tam eşitleme; kanal hatası → bekleme + 3 hatada zil |
+| "Fiyat değişti" (taban, sezon, plan, onaylı çarpan) | Fiyat penceresi kirli | Senkron logu | Aynı |
+| Gece 02–05 | Tam eşitleme (500 gün, 2 çağrı) | Senkron logu "tam eşitleme" | — |
+| Channex revizyonu | Saklanır, teyit edilir, aktör işler | Kanal rezervasyonları, rezervasyon listesi | Aktör kapalı → manuel görev; işlenemeyen → "elle işlenmeli" görevi |
+| iCal okuma (15 dk) | Yeni / değişen / kalkan kayıt revizyon olur | Kanal rezervasyonları | Takvim birden boşsa toplu iptal yok, uyarı |
+| 6 saatte bir | 90 günden eski log silinir | — | — |
+
 ### iCal
 
 - **Dışa aktarma:** Eşleştirme sekmesinde oda tipi başına kopyalanabilir takvim adresi (`…/channel-ical/<gizli belirteç>.ics`). Satılamayan günler (boş odası olmayan ya da stop-sale) "dolu" görünür. Kanal yaklaşık 1–3 saatte bir okur.
@@ -373,6 +544,16 @@ Tarih + kişi + pansiyon + kupon → oda tipi kartları (fiyat, indirim etiketi,
 - Koruma: anahtar → kanal, Origin ∈ izinli siteler, IP hız sınırı (okuma 30/dk, yazma 5/dk), yanıtlar önbelleksiz.
 - Rezervasyon kaynağı **WIDGET** olarak düşer; rezervasyon listesinde görünür.
 
+**Örnek — misafirin gördüğü:** 3 yetişkin, 10–12 Temmuz, BB, kupon yok. Standart kartı: "4.800 TL / gece" (plan 4.000 + 800 ek; 10 Temmuz'da onaylı çarpan varsa 5.280), "Son 3" (gerçek müsaitlik 3), Ekonomik oda kartı soluk ("2 kişilik"). Erken rezervasyon promosyonu uygunsa kartta "−%10" etiketi ve indirimli fiyat; promosyonun adı ve kimliği dönmez. Seçimde toplam: 5.280 + 4.800 = 10.080 → −1.008 = **9.072 TL**. Formu doldurur, onay kodu "**RZV-7KQ2MA**" ekranda; rezervasyon listesinde bekleyen, kaynak WIDGET; resepsiyon onaylar.
+
+**Arka planda:**
+
+| Ne tetikler | Ne olur | Nerede görünür | Hatada |
+|-------------|---------|----------------|--------|
+| Widget fiyat sorar | Personel teklif hesabı çalışır, public yanıt kırpılır | — | İzinsiz site → 403; motor kapalı / bilinmeyen anahtar → 404; dakikada 30'dan çok → 429 |
+| Misafir "Rezervasyon yap" | Bekleyen rezervasyon açılır (kaynak WIDGET), "rezervasyon açıldı" olayı | Rezervasyonlar → Liste; bildirim kuyruğu | Yer yoksa 422 sebepli red; aynı istek tekrarı ikinci kayıt açmaz |
+| Rezervasyon açıldı | Müsaitlik değişti → kanal aktörü OTA'ya gönderir | Kanallar → Senkron logu | — |
+
 **Dürüstlük notu — onay e-postası:** Rezervasyon olayı yayınlanır ve bildirim kuyruğuna düşer, ancak e-posta geçidi henüz **stub** (gerçek gönderici yok). Misafire e-posta fiilen gitmez. Bu yüzden widget onay kodunu ekranda gösterir ve "otel onaylayınca bilgi verilecek" der. E-posta geçidi canlandığında zincir hazırdır.
 
 **Dikkat:**
@@ -406,6 +587,28 @@ Kurallar: **Kazanıldı elle verilemez** — yalnızca teklif kabulüyle (rezerv
 3. **Taslak** düzenlenebilir (fiyat yeniden kilitlenir) → "**Gönderildi**" işaretle (fırsat Yeni → Teklif verildi) → **PDF indir** (otel başlığı, "Konaklama teklifi", gece gece tablo, toplam, geçerlilik; Türkçe font gömülü).
 4. Müşteri kabul ederse "**Kabul**": rezervasyon **onaylı** açılır, toplam teklif toplamıdır (elle fiyat, gerekçe "Teklif TKF-XXXXXX"), fırsat **Kazanıldı** olur, onay kodu ve rezervasyon bağlantısı görünür. Yer yoksa sebepli red; teklif gönderilmiş kalır.
 5. "Reddet" sebep ister. Geçerliliği geçen gönderilmiş teklif **30 dakikalık** süpürme işiyle "süresi doldu" olur; kabul edilemez.
+
+**Örnek — fiyat kilidi:**
+
+| Tarih | Olay | Sistem fiyatı (Standart BB, 2 kişi, 20 Tem) | Teklif |
+|-------|------|----------------------------------------------|--------|
+| 10 Haziran | Teklif hazırlanır: 19–22 Temmuz, 10 Standart, 3 gece | Plan 4.000, çarpan yok → 4.000 | Gece gece 4.000; toplam 10 × 3 × 4.000 = **120.000** kilitlenir |
+| 12 Haziran | "Gönderildi"; PDF e-postayla elden gönderilir | — | Fırsat "Teklif verildi" |
+| 25 Haziran | Dinamik öneri onaylanır: 18–21 Tem +%15 | 4.600 | Teklif **120.000 kalır** |
+| 1 Temmuz | Yeni fiyat planı: 4.200 | 4.830 | Teklif 120.000 kalır |
+| 3 Temmuz | Müşteri kabul eder | — | 10 onaylı rezervasyon, toplam 120.000, her gece 4.000 **elle fiyat**, gerekçe "Teklif TKF-K7QXNA"; fırsat **Kazanıldı** |
+| 3 Temmuz | Aynı anda walk-in misafir 20 Tem Standart ister | 4.830 | Walk-in 4.830 öder; teklif misafiri 4.000 |
+
+Teklif taslakken "Düzenle" denirse fiyat **yeniden** kilitlenir (o günkü fiyattan). Gönderilmiş teklif düzenlenemez; yeni teklif hazırlanır. Geçerlilik 10 Temmuz olsaydı ve müşteri 11 Temmuz'da kabul etmek isteseydi teklif "süresi doldu" olurdu; yeni teklif gerekir.
+
+**Arka planda:**
+
+| Ne tetikler | Ne olur | Nerede görünür |
+|-------------|---------|----------------|
+| Teklif kaydedildi | Gece gece fiyat anlık görüntüsü yazılır (plan + çarpan dahil) | Teklif kartı gece dökümü, PDF |
+| "Gönderildi" | Gönderim anı kaydedilir; fırsat Yeni → Teklif verildi | Pano sütunu |
+| Kabul | Rezervasyonlar onaylı açılır (teklif kimliği tekrar işleme anahtarı); fırsat Kazanıldı; misafir kartı bulunur / açılır | Rezervasyon listesi, pano |
+| 30 dk'lık süpürme | Geçerliliği geçen gönderilmiş teklifler "süresi doldu"; takip tarihi gelen fırsatlar için günde tek zil | Teklif durumu; zil → pano "bugün aranacak" |
 
 Kabul **idempotenttir**: aynı istek tekrarlansa ikinci rezervasyon açılmaz. Misafir kartı fırsata bağlıysa o kullanılır; değilse ad bölünüp (son kelime soyad) iletişimle yeni kart açılır; sonradan CRM birleştirmesiyle düzenlenir.
 
@@ -446,6 +649,28 @@ Kabul **idempotenttir**: aynı istek tekrarlansa ikinci rezervasyon açılmaz. M
 - **Oda geliri sapması doluluk etkisi ve fiyat etkisine ayrılır** (ayrıştırma kartı).
 - Plan yılın onaylı bütçesinden, yoksa taslaktan (işaretli).
 
+**Örnek — Temmuz sapması:**
+
+| Kalem | Plan | Gerçekleşen | Fark | Fark % | Yorum |
+|-------|------|-------------|------|--------|-------|
+| Oda geliri | 4.200.000 | 4.536.000 | +336.000 | +%8,0 | Olumlu (yeşil) |
+| Doluluk % | 82 | 86 | +4 puan | — | Hedef aşıldı |
+| ADR | 4.100 | 4.220 | +120 | +%2,9 | Hedef aşıldı |
+| Restoran geliri | 900.000 | 845.000 | −55.000 | −%6,1 | Olumsuz (kırmızı) |
+| Gıda gideri | 420.000 | 455.000 | +35.000 | +%8,3 | Giderde fazlası olumsuz |
+| Enerji gideri | 180.000 | (girilmemiş) | — | — | "Eksik" işareti |
+
+Oda geliri ayrıştırma kartı: doluluk etkisi ≈ (86 − 82) × satılabilir oda-gece × plan ADR; fiyat etkisi ≈ (4.220 − 4.100) × gerçekleşen oda-gece; ikisinin toplamı +336.000'e yakın çıkar (kalan "karışık etki"). Ay ortasında bakılırsa plan kapanmış gün oranında (örneğin 15/31) alınır ve ekran bunu işaretler.
+
+**Arka planda:**
+
+| Ne tetikler | Ne olur | Nerede görünür |
+|-------------|---------|----------------|
+| Gece kapanışı | O günün oda geliri / satılan oda gerçekleşene girer (yalnız kapanmış günler) | Sapma raporu ertesi gün |
+| Bütçe onaylandı | Taslak kilitlenir; sapma onaylıyı referans alır | Plan ekranı kilit, sapma "onaylı" etiketi |
+| Revize açıldı | Önceki onaylı "eski sürüm" olur, yeni taslak düzenlenir | Plan ekranı |
+| "Yorum iste" | Bütçe ajanına olay; yorum gelince karta düşer | Sapma → AI yorum kartı |
+
 ### Yapay zekâ yorumu (bütçe ajanı)
 
 "Yorum iste" düğmesi bütçe ajanına olay gönderir; ajan sapma tablosunu okuyup yorum paragrafı yazar ve karta düşer. Model otelin ana modelidir; günlük AI bütçesi ortak. Ajan kapalı / anahtar yok / bütçe doldu → istek "yazılamadı" ile kapanır (askıda kalmaz; 5 dk zaman aşımı). Rapor yorumsuz da eksiksizdir. Modele **kişisel veri gitmez**.
@@ -463,6 +688,8 @@ Kabul **idempotenttir**: aynı istek tekrarlansa ikinci rezervasyon açılmaz. M
 **Kritik günler:** fazla satış (eldeki > satılabilir), tahmin > yüksek eşik (varsayılan %95), tahmin < düşük eşik (varsayılan %30). Düşük doluluk için tahmin verisi gerekir (karşılaştırma yokken uzak günün az eldekisi "riskli" sayılmaz). Kritik günler listesi "ne yapılabilir" önerisi ve oda planına bağlantı verir.
 
 Grafik: eldeki dolu çubuk, tahmin kesikli çizgi, eşikler yatay çizgi, kritik günler eksen üstünde (▼ düşük, ▲ yüksek, ! fazla satış). Tablo görünümü ve "tahminin kaynağı" notu vardır. Cevap bir dakika önbelleklidir; rezervasyon ya da ayar değişince anında tazelenir.
+
+**Örnek — 20 Temmuz tahmini (bugün 5 Temmuz, 15 gün kala):** Satılabilir 120 oda; eldeki 78 (%65). Geçen yıl aynı haftanın aynı günü (364 gün önce ± 1 hafta, 15 gün kala) eldeki ortalama %60'tı ve son 15 günde net %28 daha satılmıştı → pickup %28 × 120 ≈ 34 oda. **Tahmin = 78 + 34 = 112 oda (%93)**. Yüksek eşik %95 → kritik değil; %97'ye çıkarsa ▲ işareti ve "fiyat artışı düşünün" notu. Gelir tahmini: eldeki 78 gecenin fiyatları (vergi ayrılmış) + 34 × o günün eldeki ADR'si. Aynı gün dinamik fiyat kuralı doluluğa (eldeki %65) bakar, %80 eşiğini geçmediği için öneri üretmez — tahmin ve kural farklı girdilere bakar; bu bilinçlidir.
 
 **Bilinen sınır:** sonradan uzatılan konaklamanın eklenen gecesi açılış anından beri eldeymiş sayılır (pickup bir miktar az görünür).
 

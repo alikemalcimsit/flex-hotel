@@ -5,8 +5,11 @@
   "type": "module",
   "description": "HotelOS web arayüzü (Vite + React + Tailwind)",
   "scripts": {
+    "kilavuz": "node scripts/kilavuz-referans.mjs",
+    "predev": "node scripts/kilavuz-referans.mjs",
     "dev": "vite",
     "dev:guest": "vite -c vite.guest.config.js",
+    "prebuild": "node scripts/kilavuz-referans.mjs",
     "build": "vite build && vite build -c vite.guest.config.js",
     "preview": "vite preview",
     "test": "node --test \"src/**/*.test.js\""
