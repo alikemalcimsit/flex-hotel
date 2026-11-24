@@ -2,8 +2,6 @@
 
 > Bu bölüm **koddan üretilir**; elle düzenlenmez. Her derlemede (`npm run build`) ve geliştirme sunucusu açılışında yenilenir: menüye sayfa, sisteme izin, olay, aktör, zamanlanmış iş ya da tablo eklendiğinde burada kendiliğinden görünür. Anlatım için soldaki diğer bölümlere bakın.
 
-Son üretim: 2026-11-24 10:24 (UTC).
-
 ## Menü haritası
 
 Sol menüdeki her sayfa, yolu ve görmek için gereken izin. Bir sayfa menüde yoksa ya izniniz yoktur ya da sayfa başka bir sayfadan (bağlantıyla) açılır.

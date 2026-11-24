@@ -228,8 +228,6 @@ const parts = [
   '',
   '> Bu bölüm **koddan üretilir**; elle düzenlenmez. Her derlemede (`npm run build`) ve geliştirme sunucusu açılışında yenilenir: menüye sayfa, sisteme izin, olay, aktör, zamanlanmış iş ya da tablo eklendiğinde burada kendiliğinden görünür. Anlatım için soldaki diğer bölümlere bakın.',
   '',
-  `Son üretim: ${new Date().toISOString().slice(0, 16).replace('T', ' ')} (UTC).`,
-  '',
 ];
 for (const [name, build] of sections) {
   try {

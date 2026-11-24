@@ -20,6 +20,8 @@ log() { printf '\n\033[1;34m▶ %s\033[0m\n' "$*"; }
 cd "$REPO"
 log "Depo güncelleniyor ($BRANCH)"
 git fetch --quiet origin
+# Derleme öncesi üretilen kılavuz referansı ağacı kirletebilir; depodaki sürüme dönülür (yeniden üretilecek).
+git checkout --quiet -- hotel/frontend/src/guide/90-teknik-referans.md 2>/dev/null || true
 git checkout --quiet "$BRANCH"
 git pull --ff-only --quiet origin "$BRANCH"
 git log -1 --format='  %h %ad %s' --date=short
