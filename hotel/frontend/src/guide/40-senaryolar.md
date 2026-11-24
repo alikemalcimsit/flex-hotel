@@ -13,6 +13,23 @@ Okumaya başlamadan iki hatırlatma:
 - **Aktör** arka planda kendi kendine çalışan işçidir; kapatılsa işi "Görevler" ekranına düşer, kaybolmaz.
 - **İş günü** otelin "bugün"üdür ve gün kapanışı yapılmadan değişmez. Oda ücretleri, kasa günü ve raporlar iş gününe göre işler; faturanın tarihi ise takvim günüdür.
 
+## Senaryo haritası
+
+| Senaryo | Kim okusun | Dokunduğu ekranlar | Devreye giren aktörler |
+| --- | --- | --- | --- |
+| A — Bir misafirin yolculuğu | Resepsiyon, yönetici | Widget, Rezervasyonlar, Online check-in, Gelecekler / Gidecekler, Folyolar, Kasa, Minibar, Restoran, Gün kapanış, Faturalar, Ön muhasebe, Anketler | Oda, folyo, muhasebe, bildirim, kat hizmetleri, kanal aktörleri |
+| B — Bir yemeğin yolculuğu | F&B, satın alma, muhasebe | Mutfak (reçete), Menü ve tanımlar, Masa planı, Adisyon, Mutfak ekranı, Vardiyalar, Stok, Satın alma, Maliyet raporu | Stok (inventory) ve muhasebe aktörleri |
+| C — Bir günün kapanışı | Gece görevlisi, müdür | Gün kapanış sihirbazı, Folyolar, Kasa, Panel | Folyo aktörü (ön basım); kapanış servisi |
+| D — OTA rezervasyonu | Resepsiyon, gelir yöneticisi | Kanallar, Rezervasyonlar, Oda planı, Görevler | Kanal, oda, bildirim aktörleri |
+| E — Arıza | Resepsiyon, teknik, kat | Mesajlar, İstekler, Teknik servis, Oda planı, Kat hizmetleri | Kat hizmetleri aktörü, kanal aktörü (envanter) |
+| F — Fiyat önerisi | Gelir yöneticisi, müdür | Ayarlar → Dinamik fiyat, Fiyat önerileri, Onaylar, Kanallar | Kural işi, AI fiyat ajanı, kanal aktörü |
+| G — Aktör kapalıyken | Yönetici | Aktörler, Görevler, Folyolar | Hepsi (kapalı hâli) |
+| H — Banket satışı | Satış, muhasebe, mutfak | Etkinlikler, Salon takvimi, Mutfak, Satın alma, Kasa, Faturalar, Ön muhasebe | Muhasebe aktörü |
+| I — Misafir şikâyeti | Resepsiyon, kat, misafir ilişkileri | Mesajlar, İstekler, Kat hizmetleri, Misafirler, Anketler | Router ve concierge ajanları, kat hizmetleri aktörü, içgörü ajanı |
+| J — Stok sayımı ve maliyet | Depo, F&B, muhasebe | Stok → Sayım, Hareketler, Maliyet raporu, Bütçe | Stok aktörü |
+| K — Acente grubu toplu giriş | Resepsiyon şefi, muhasebe | Acenteler (kontrat, kota), Yeni rezervasyon (grup, rooming list), Gruplar, Folyolar, Faturalar, Ön muhasebe, Acente primleri | Oda, folyo, muhasebe, kanal aktörleri |
+| L — Bordro onayı ve ödemesi | İK, müdür, muhasebe | Bordro (puantaj, servis payı, bordro ekranı, ayarlar), Personel, Onaylar, Ön muhasebe, Demirbaş | Muhasebe aktörü |
+
 ## Senaryo A — Bir misafirin yolculuğu
 
 **Kahraman:** Ayşe Demir, İstanbul'dan, 2 yetişkin, 14–16 Mart (2 gece), Deluxe oda. Otel sitesindeki widget'tan rezervasyon yapıyor. Deluxe taban fiyat 3.000 TL / gece, Mart sezonu çarpanı 1,0.
@@ -78,9 +95,28 @@ Telefonla gelen rezervasyonda 1–3. adımların yerine resepsiyon **Rezervasyon
 
 **Özet:** Ayşe'nin yolculuğunda personel beş kez tıkladı (onayla, online check-in onayı, giriş, çıkış + ödeme, fatura kes). Geri kalan on beş adım aktörlerin işiydi. Her adımın izi Aktivite → Canlı akış'ta aynı zincir kimliğiyle görülür.
 
+### Ters giderse (Senaryo A)
+
+| Durum | Ne olur | Ne yapılır |
+| --- | --- | --- |
+| Widget'ta yer yok | Rezervasyon açılmaz, misafire sebepli ret ("bu tarihlerde uygun oda kalmadı"); onaya gitmez | Misafir başka tarih dener; resepsiyon isterse Bekleme listesi'ne alır |
+| Aynı anda son odaya iki istek | Envanter kilidi: biri açılır, diğeri `NO_AVAILABILITY` | Normal; ikinci misafire alternatif önerilir |
+| Ayşe gelmedi | Gün kapanışında rezervasyon **Gelmedi** olur; folyo aktörü **gelmedi ücreti** (ilk gece 3.000) yazar; personel gerekçeyle vazgeçebilir (denetim izinde politika tutarı kalır) | Gün kapanış → adım 1; Rezervasyonlar → Gelmedi |
+| Ayşe 2 gün önce iptal etti | İptal politikası ("X gün öncesine kadar ücretsiz") içindeyse ücretsiz; dışındaysa toplam × ceza oranı; folyo aktörü **iptal ücreti** kalemi; envanter geri açılır, kanala fark gider | Rezervasyon → İptal (gerekçe) |
+| Online check-in'de belge fotoğrafı okunmuyor | Resepsiyon **Düzeltme iste** (sebep misafire kendi dilinde görünür); misafir yeniden yükler, kayıt yeniden incelemeye düşer | Ön büro → Online check-in |
+| Oda 204 giriş sabahı arızalı çıktı | Giriş engellenir ("oda arızalı"); oda aktörü atamayı kaldırmış olabilir | Oda planı'nda başka Deluxe'e sürükle; sonra Check-in |
+| Folyo aktörü kapalıyken giriş | `guest.checked_in` **"Folyo" görevine** düşer: "folyo açılacak, teminat işlenecek" | Görevler → üstlen → folyo ekranından yap → tamamla (aynı anahtar, çift kayıt yok) |
+| Minibar fişi yanlış odaya yazıldı | Fiş silinmez / değişmez; düzeltme **folyodaki kalemin iptali** (dört göz) ve doğru odaya yeni fiş | Folyo → kalem → İptal iste; onaylar |
+| Çıkıştaki 6.170 TL kart ödemesi otelin **büyük ödeme eşiğini** aşıyor | Satır "onay bekliyor"; **bakiyeye ve kasaya girmez**; çıkış yapılamaz (onay bekleyen ödemeli folyo kapanmaz) | Onaylar → Bekleyen → başka yetkili onaylar → çıkış tamamlanır. Reddedilirse ödeme hiç işlenmez, yeniden alınır |
+| Ödeme yanlış tutarla girildi | **Ödeme iptali** (ters kayıt, onaylı); iade değil — para zaten alınmamışsa iptal, misafire geri verildiyse **iade** | Folyo → ödeme satırı → İptal iste |
+| Çıkıştan 1 saat sonra "unuttuğumuz bir minibar" | Çıkmış misafirin **açık** folyosu varsa geç kalem; folyo kapandıysa folyo yetkilisine görev (fatura kesildiyse önce iptal) | Görevler; gerekirse yeni serbest fatura |
+| Çıkış yanlışlıkla yapıldı | **Aynı gün** geri alınabilir; oda bu arada başka misafire verildiyse alınamaz; faturası kesilmiş folyo yeniden açılmaz (önce fatura iptali) | Konaklayanlar / Gidecekler → Çıkışı geri al |
+| Fatura e-Arşiv "reddedildi" | Alıcı bilgisi hatalı; zil fatura yetkilisine | Düzelt → Tekrar gönder; ya da İptal iste → Yeni taslak |
+| Anket gitmedi | Kanal + şablon ya da portal adresi yok → tur başlamaz; misafir "bildirim istemiyor" → satır gönderilmedi | Anketler → Ayarlar; Bildirimler → Kanallar |
+
 ## Senaryo B — Bir yemeğin yolculuğu
 
-**Kahraman:** "Izgara Levrek" — menüde 450 TL (KDV %10 dahil). Reçete: 1 porsiyon = 300 g levrek fileto (fire %10 → brüt 333 g), 20 ml zeytinyağı, 150 g roka. Depo: Mutfak ana depo. Levrek minimum seviyesi 5 kg.
+**Hikâye:** Otelin restoranında en çok satan ana yemek "Izgara Levrek". Menüde 450 TL (KDV %10 dahil). Şef Selin reçetesini şöyle kurmuş: 1 porsiyon = 300 g levrek fileto (temizleme firesi %10 → depodan 333 g çıkar), 20 ml zeytinyağı, 150 g roka. Levrek "Mutfak ana depo"da tutuluyor; minimum seviye 5 kg; tedarikçi Deniz Balıkçılık, vade 30 gün. Bu senaryo bir tabağın menüden depoya, depodan satın almaya ve ay sonu maliyet raporuna kadar bütün izini takip eder: garson Mehmet'in gönderdiği sipariş mutfak ekranına düşer, ödeme kasaya, satış reçete üzerinden stoğa, stok minimumun altına inince satın alma talebine, talep teklif turuna, sipariş mal kabule, mal kabul tedarikçi carisine ve nihayet rapora dönüşür. Aradaki bütün hesaplar (hareketli ortalama, KDV, yemek maliyeti yüzdesi) sayılarla gösterilir.
 
 ### B1. Tanımlar (bir kez yapılır)
 
@@ -130,9 +166,29 @@ Telefonla gelen rezervasyonda 1–3. adımların yerine resepsiyon **Rezervasyon
 | 20 | Ay sonu muhasebe Stok → **Maliyet raporu** → dönem Mart, görünüm **Malzeme**: levrek — giriş 10 kg / 4.400 TL, satış düşümü 9,2 kg, fire 0,3 kg, sayım farkı −0,15 kg; tüketim = satış + çıkış + fire; bugünkü mevcut ve değer. | Rapor hareketlerden; depo süzgecinde deponun mevcudu × kartın ortalaması. Aralık en fazla 366 gün. | Stok → Maliyet raporu. |
 | 21 | Görünüm **Ürün**: Izgara Levrek — satılan 48 adet, ciro 21.600 TL (liste fiyatı, iptal / ikram düşülmüş), ürün maliyeti (SALE hareketlerinden) ≈ 7.100 TL → brüt kâr 14.500, **yemek maliyeti %32,9**. | Ciro KDV dahil liste fiyatıyla (bilinçli sınır). Eşikler reçete modülünün eşikleri. | Aynı ekran, Excel'e aktar. |
 
+### Ters giderse (Senaryo B)
+
+| Durum | Ne olur | Ne yapılır |
+| --- | --- | --- |
+| Mehmet'in açık vardiyası yok | Adisyon açılamaz ("vardiyasız işlem yok") | Restoran → Vardiyalar → Vardiya aç (avansla) |
+| İki garson aynı masaya çift dokundu | İstek kimliği: ikinci dokunuş ikinci adisyon / tur açmaz | Hiçbir şey |
+| Mutfak levrek bitti dedi | Ürün **"tükendi"** işaretlenir (Menü ve tanımlar / terminal); misafire alternatif; kalem **iptal + zayi** (şef garson gerekçe; eşik üstü dört göz) | Adisyon → kalem → iptal |
+| Misafir "yemek kötüydü" — ikram | Şef garson yetkisi + gerekçe; politikadaki eşiğe eşit / üstüyse `POS_ADJUSTMENT` onayı; onay bekleyen düzeltme varken ödeme alınmaz | Adisyon → ikram; Onaylar |
+| Nakit yerine yanlışlıkla kart girildi | Ödeme **iptal isteği** (`POS_PAYMENT` dört göz) → ters kayıt → doğru yöntemle yeniden; iptal kaydı parayı alanın kasasına | Adisyon → ödeme → İptal iste |
+| Adisyon kapandı, sonra bir kalem daha istendi | **Yeniden aç** (aynı iş günü, vardiya açık, odaya yazılmamış); yeniden kapanınca `fnb.order.paid` yeniden yayınlanır, stok aktörü **son yayını esas alır** (fark düzeltmesi) | Adisyonlar → yeniden aç |
+| Stok aktörü kapalı | Satış düşümü **"Stok" manuel görevine** düşer (adisyon numarasıyla); öneri sessizce atlanır | Görevler → Stok → Hareket gir (çıkış) ile tamamla |
+| Satış noktasının deposu yok / pasif | `NO_WAREHOUSE` / `WAREHOUSE_INACTIVE` → manuel görev | Stok → Depolar → eşleme |
+| Levrek eksiye düştü (−0,4 kg) | Yalnız satış düşümü eksiye iner; mal kabul girilmemiş ya da reçete hatalı | Mal kabulü gir; sayım düzeltir |
+| Ucuz ama geç teklif seçmek istiyorum | En uygun dışı seçim **gerekçe** ister; süresi dolmuş teklif / pasif tedarikçi hiç seçilmez | Karşılaştırma → seç → gerekçe |
+| Sipariş 25.000 TL eşiğini aştı | `PURCHASE_ORDER` onayı; isteyen onaylayamaz; **3 gün** karar yoksa reddedilmiş sayılır, satırlar tura döner | Onaylar → Bekleyen |
+| Mal 11 kg geldi (sipariş 10) | Tartılan malzemede +%5 tolerans (10,5 kg); fazlası reddedilir | Gelen miktarı 10,5 ile kabul, kalanı irsaliyede not / iade |
+| Mal 8 kg geldi, kalan gelmeyecek | **Eksik kapat**; talep durumu satırlardan türer | Sipariş ekranı → Eksik kapat |
+| Muhasebe aktörü kapalı | "Mal kabul tedarikçi carisine işlenecek" görevi | Ön muhasebe → Ayarlar → Eşitle → görevi tamamla |
+| Tedarikçi çeki karşılıksız döndü | Çek "karşılıksız"; cariye borcumuz geri doğar | Çek / senet → satır → Karşılıksız |
+
 ## Senaryo C — Bir günün kapanışı (night audit)
 
-**Kahraman:** gece görevlisi Can, 14 Mart gecesi 23:45. Otelde 42 dolu oda, bugün gelecek 3 rezervasyon gelmedi, resepsiyon kasasında nakit tahsilat 18.400 TL beklenen.
+**Hikâye:** 14 Mart gecesi 23:45. Gece görevlisi Can resepsiyonda tek başına. Otelde 42 dolu oda var; bugün gelmesi gereken 3 rezervasyon henüz gelmedi; resepsiyon kasasında sistemin beklediği nakit 18.400 TL, bir de 200 EUR. Can'ın işi günü **kapatmak**: gelmeyenleri düşmek, 42 odanın gece ücretini bastırmak, kasayı saymak, farkı açıklamak ve iş gününü 15 Mart'a ilerletmek. Bu kapanış yapılmadan sistemde "bugün" değişmez; bu yüzden gece kapanışı bir formalite değil, günün muhasebesinin kesinleşmesidir. Aşağıda beş adımlı sihirbazın her adımında arkada ne döndüğü anlatılır.
 
 | Adım | Ekranda ne yapılır | Arka planda ne olur | Nerede görünür |
 | --- | --- | --- | --- |
@@ -148,9 +204,25 @@ Telefonla gelen rezervasyonda 1–3. adımların yerine resepsiyon **Rezervasyon
 
 **Kapanış yapılmazsa ne olur?** İş günü ilerlemez: 15 Mart sabahı sistem hâlâ "14 Mart" der, oda ücretleri işlenmez, gelecekler listesi kaymaz, kasa günü uzar. Sistem bunu bilerek yapar — gün kapatılmadan rapor kesinleşmez. Gün kapanışı geç yapılsa bile **fatura tarihi etkilenmez** (takvim günü).
 
+### Ters giderse (Senaryo C)
+
+| Durum | Ne olur | Ne yapılır |
+| --- | --- | --- |
+| Başka görevli kapanışı başlatmış | Gün **IN_PROGRESS**; ikinci kişi başlatamaz | Tek kişi sürdürür; yarım kalan kapanış aynı sihirbazdan devam eder |
+| "Gün gelmedi" (`DAY_NOT_ARRIVED`) | Takvimden ileri gün kapatılamaz (otel saatine göre gece yarısı geçmemiş) | Bekleyin |
+| "Zaten kapatıldı" (`ALREADY_CLOSED`) | Aynı gün iki kez kapatılamaz | Gün kapanış → Geçmiş'ten raporu alın |
+| İki gün kapanış yapılmadı | İş günü 14 Mart'ta kaldı; oda ücretleri kuyrukta, gelecekler listesi kaymadı | **Sırayla** 14'ü, sonra 15'i kapatın; her kapanış kendi gecesini işler |
+| Kasa farkı −50 TL | Kapanış engellenmez; fark ve not devir raporuna yazılır | Açıklama yazın; müdür raporu görür |
+| Onay bekleyen 12.000 TL kart ödemesi var | Para çekmecede değil, defterde de değil; "onay bekleyenler" ayrı listelenir | Onaylar'dan karar çıkınca onay günü kasa günüdür |
+| Gelmeyen misafir "yoldayım" dedi | Sihirbazda gelmedi işaretlemeyin; rezervasyonu gece girişine bırakın (giriş günü gelmiş misafir ertesi gün de girebilir) | Rezervasyon → tarih / not |
+| Sunucu kapanışın ortasında kapandı | Kapanış **tek işlemdir**: ya hep ya hiç; yeniden başlatınca sihirbaz kaldığı yerden | Yeniden Kapat |
+| Folyo aktörü kapalı | Kapanış oda ücretlerini **kendisi** basar (servis çağrısı), aktöre bağlı değil; yalnız gece öncesi ön basım atlanır | Hiçbir şey; kapanış sonrası eksik gece varsa Folyolar → "Oda ücretlerini işle" |
+| Kur girilmedi, dövizli ödeme reddediliyor | Kur iş gününe kadar girilmiş en son kur, **3 günden eski olamaz** | Kasa → Döviz kurları → günün kuru (kapanışta da girilebilir) |
+| Devir raporu PDF açılmıyor | `night_audit.view` izni gerekir | Rol matrisi |
+
 ## Senaryo D — Bir OTA rezervasyonu geldiğinde
 
-**Kahraman:** Booking.com üzerinden John Smith, 20–23 Nisan, Standart oda, OTA tutarı 9.600 TL (3 gece). Otel Channex.io üzerinden bağlı (Booking, Expedia, Airbnb… Channex'e, biz Channex'e).
+**Hikâye:** Otel geçen ay Channex.io üzerinden Booking.com'a bağlandı (Booking, Expedia, Airbnb ve Agoda Channex'e bağlanır; biz yalnız Channex'e bağlanırız — Booking'e doğrudan bağlantı ayrı sertifika isterdi). Londra'dan John Smith, Booking'de 20–23 Nisan için bir Standart oda alıyor; Booking'in gösterdiği tutar 3 gece 9.600 TL. Bu senaryo rezervasyonun Booking'den sisteme nasıl düştüğünü, oda atamasını, müsaitliğin Booking'e geri nasıl yansıdığını, John'un tarih değiştirmesini ve iptalini anlatır; sonunda iCal (Airbnb) yolunun farkı özetlenir.
 
 | Adım | Ekranda ne yapılır | Arka planda ne olur | Nerede görünür |
 | --- | --- | --- | --- |
@@ -167,9 +239,25 @@ Telefonla gelen rezervasyonda 1–3. adımların yerine resepsiyon **Rezervasyon
 
 **iCal alternatifi (Airbnb):** dışa aktarma adresi `/channel-ical/<belirteç>.ics` (satılamayan günler "dolu"); içe aktarma 15 dk'da bir — iCal'deki dolu günler **onaylı rezervasyon** olarak açılır ("Airbnb misafiri HM…", fiyat geçici sistem fiyatı, kayıt "doğrulanmalı"); takvimden kalkan, henüz gelinmemiş kayıt iptal edilir; takvim birden boş gelirse toplu iptal yapılmaz, uyarı düşer.
 
+### Ters giderse (Senaryo D)
+
+| Durum | Ne olur | Ne yapılır |
+| --- | --- | --- |
+| 20–23 Nisan'da Standart kalmamış | Rezervasyon **yine açılır** (OTA rezervasyonu reddedilmez), kapasite aşılır, resepsiyona **kritik overbooking** uyarısı | Misafiri üst tipe planlayın ya da başka otelde yer bulun; Booking'de kapatmayı (stop-sale) kontrol edin |
+| Webhook gelmedi (Meta / Channex kesintisi) | Revizyon akışı **dakikada bir** okunur; webhook yalnız hızlandırır | Beklemek yeterli |
+| Fiyat planı eşlenmemiş | Kayıt **"elle işlenmeli"**; "Kanal rezervasyonu" görevi | Kanal kartı → Eşleştirme → planı eşle; rezervasyonu elle açıp kaydı notla kapat |
+| John zaten içeride, Booking tarihi değiştirdi | İçerideki misafirde değişiklik otomatik uygulanmaz → "elle işlenmeli" | Rezervasyon ekranından çıkışı uzat / kısalt |
+| Booking tutarı EUR, otel TRY | Kayıt **"doğrulanmalı"**; rezervasyon açılır, fiyat kontrol ister | Rezervasyon → fiyatı gerekçeyle düzelt; kaydı kapat |
+| Channex 429 (hız sınırı) | 1 dk bekleme, pencere geri işaretlenir; kayıp yok | Hiçbir şey |
+| API anahtarı değişti | Anahtar hatasında 30 dk bekleme + müdüre uyarı; 3 art arda hata → uyarı | Kanal kartı → Ayarlar → yeni anahtar → bağlantı yeniden doğrulanır |
+| Kanal aktörü kapalı | Gönderim atlanır (açılınca **tam eşitleme**); gelen rezervasyon **göreve düşer** | Aktörler → aç; Görevler |
+| Airbnb iCal takvimi birden boş geldi | Toplu iptal **yapılmaz**, uyarı düşer (takvim hatası olabilir) | Kanal kartı → logu inceleyin |
+| Airbnb "Not available" kapatması | Rezervasyon açmaz (otelin kendi kapatması) | — |
+| Kendi dışa aktardığımız iCal Booking'den geri yansıdı | UID sonekiyle tanınır, döngü olmaz | — |
+
 ## Senaryo E — Bir arıza bildirildiğinde
 
-**Kahraman:** oda 204'te klima bozuk. İki giriş yolu: misafir WhatsApp'tan yazar ya da kat görevlisi "Sorun var" der.
+**Hikâye:** Nisan ortası, oda 204'te klima soğutmuyor. Aynı arıza iki ayrı kapıdan sisteme girebilir: içerideki misafir Ayşe Demir WhatsApp'tan "oda çok sıcak" yazabilir ya da sabah temizliğe giren kat görevlisi Zeynep telefonundan "Sorun var" diyebilir. Her iki yol da teknik servis biletine çıkar. Senaryo, odanın envanterden düşürülmesini (arızalı oda satılamaz), içerideki misafirin taşınmasını, teknisyen Ali'nin işi bitirmesini ve odanın temizlik yoluyla satışa dönmesini adım adım izler; sonunda periyodik bakım planının bu akışa nasıl bağlandığı gösterilir.
 
 | Adım | Ekranda ne yapılır | Arka planda ne olur | Nerede görünür |
 | --- | --- | --- | --- |
@@ -183,9 +271,24 @@ Telefonla gelen rezervasyonda 1–3. adımların yerine resepsiyon **Rezervasyon
 | 6 | Ali telefonundan **Başla**, kompresörü değiştirir, fotoğraf ekler, **Çözüldü** (not: "kompresör değişti"). | `maintenance.ticket.resolved`. `removeBlock`: süren kayıt **bugün biter**, oda **Kirli**'ye düşer → `room.unblocked ENDED` → **kat hizmetleri aktörü** `DEEP_CLEAN` görevi açar. 204 envantere döner → kanala müsaitlik +1. İstek **Tamamlandı**; misafire konuşmadan bilgi yazılır. Kapanmış bilet fotoğrafları günlük işle silinir. | Kat hizmetleri → görev "Derin temizlik 204"; İstekler → tamamlandı; Mesajlar. |
 | 7 | **Periyodik bakım:** Teknik servis → **Planlama**: "Klima filtre kontrolü — aylık, kontrol listesi". | 6 saatte bir çalışan iş, süresi gelen planlardan **bilet üretir** (plan başına tek açık bilet). | Teknik servis → Arızalar (kaynak "plan"). |
 
+### Ters giderse (Senaryo E)
+
+| Durum | Ne olur | Ne yapılır |
+| --- | --- | --- |
+| "Odayı kapat" işaretli, oda dolu | 409 — bilet açılmaz; ekran "misafiri taşıyın" der | Oda planı → sürükle → yeniden bilet |
+| Odanın o tarihlerde rezervasyonu var | `HAS_RESERVATIONS` (örnek rezervasyonlarla) | Rezervasyonları başka odaya atayın ya da bloğu kısaltın |
+| Blok overbooking yaratacak | `WOULD_OVERBOOK` — zaten eksi olan gün daha kötüleşemez | **Hizmet dışı (OUT_OF_SERVICE)** türü kullanın: envanterden düşmez, odaya misafir yerleştirilmez |
+| Geçmiş tarihli blok | Açılamaz (iş günü) | Bugünden başlatın |
+| Çakışan iki blok | `BLOCK_OVERLAP` | Mevcut kaydı uzatın |
+| Bilet yanlış açıldı | **İptal** (`maintenance.manage`); başlamamış blok iptal olur, süren blok bugün biter | Teknik servis → bilet → İptal |
+| Teknisyene zil gelmedi | Zil `MAINTENANCE` türü atananın kişisine gider; izin / susturma kontrolü | Zil tercihleri |
+| Misafir isteği kapanmadı | Bilete bağlı istek bilet çözülünce **Tamamlandı** olur; bağ yoksa istek elle kapatılır | İstekler → tamamla |
+| Kat hizmetleri aktörü kapalı | Blok bitince `DEEP_CLEAN` görevi açılmaz; manuel görev düşer | Görevler → kat şefi görevi elle açar |
+| Plan işi bilet üretmedi | Planın `lastRunOn`'u iş gününe göre; plan başına tek açık bilet (öncekini kapatmadan yenisi açılmaz) | Önceki bileti çözün |
+
 ## Senaryo F — Fiyat önerisi onaylandığında
 
-**Kahraman:** 28–30 Nisan hafta sonu, Deluxe tipinde doluluk %84'e çıktı. Yield kuralı: doluluk ≥ %80 → +%10; ≤ %30 ve ≤ 7 gün kala → −%15 (Ayarlar → Dinamik fiyat).
+**Hikâye:** 28–30 Nisan bir uzun hafta sonu; Deluxe tipinde doluluk %84'e çıkmış. Gelir yöneticisi Deniz, Ayarlar → Dinamik fiyat'ta kuralları çoktan girmiş: doluluk ≥ %80 ise +%10, doluluk ≤ %30 ve 7 günden az kalmışsa −%15. Senaryo, sistemin bu kuraldan nasıl **öneri** ürettiğini (asla kendiliğinden fiyat değiştirmez), önerinin onay kuyruğuna düşmesini, Deniz'in onayını, onaylı çarpanın web sitesi / resepsiyon / OTA'ya aynı anda yansımasını ve acente kontratlarının neden etkilenmediğini anlatır. AI fiyat ajanının bu akışa nasıl eklendiği de gösterilir.
 
 | Adım | Ekranda ne yapılır | Arka planda ne olur | Nerede görünür |
 | --- | --- | --- | --- |
@@ -198,9 +301,23 @@ Telefonla gelen rezervasyonda 1–3. adımların yerine resepsiyon **Rezervasyon
 | 7 | Resepsiyon 28–30 Nisan Deluxe için yeni rezervasyon açar: önizleme **3.300 / gece**. Acente kontratıyla açılan rezervasyon kontrat fiyatında kalır. | Satış yolu etkin çarpanları 5 dk önbellekle okur; ayar olayı önbelleği düşürür. | Rezervasyonlar → Yeni rezervasyon (fiyat önizlemesi). |
 | 8 | Öneri **reddedilirse** ya da süresi dolarsa. | Sıfır yazım; bir sonraki kural turunda koşullar sürüyorsa yeni öneri (reddedilen dönem için bekleyen yok). | Onaylar → Geçmiş. |
 
+### Ters giderse (Senaryo F)
+
+| Durum | Ne olur | Ne yapılır |
+| --- | --- | --- |
+| Öneri reddedildi | Sıfır yazım; sonraki turda koşul sürüyorsa yeni öneri | Onaylar → Geçmiş (not) |
+| Öneri süresi doldu | `EXPIRED`; "yapılmadı" zili; fiyat değişmez | Yeni turu bekleyin ya da elle çarpan düzenleyip onaylayın |
+| Çarpan 3,5 girildi | Emniyet aralığı 0,5–3: veritabanı kısıtı + sözleşme reddeder | 3 ve altı |
+| AI ajanı yanlış tip / tarih önerdi | **Yalnız o satır** düşer; LLM hatası onay kuyruğuna taşmaz | Aktörler → pricing-agent → son işler |
+| Aynı dönem için bekleyen öneri varken yeni tur | Çakışan dönem atlanır (kuyruk şişmez) | — |
+| `OPENAI_API_KEY` yok | Ajan kayıt olmaz; **kural tabanlı yield çalışır**, kimse fiyatsız kalmaz | Aktörler'de sebep yazar |
+| Kanal fiyatı güncellenmedi | `rate.changed` kanalı kirletti ama 429 / anahtar hatası bekletiyor | Kanallar → Senkron logu; Elle senkron |
+| Acente rezervasyonu hâlâ 2.200 | Doğru: kontrat, paket ve elle fiyat **net**tir, çarpan onları ölçeklemez | — |
+| Onaylı çarpanı geri almak | Yeni öneri (çarpan 1,0) düzenle + onayla; ya da süresi dolmasını bekle | Fiyat önerileri → Düzenle |
+
 ## Senaryo G — Aktör kapalıyken ne olur (manuel görev akışı)
 
-**Kahraman:** yönetici Burak, folyo aktöründe şüphelendiği bir davranış için aktörü bir saat kapatıyor. Bu arada misafir Mehmet Kaya oda 310'a giriş yapıyor.
+**Hikâye:** Yönetici Burak, folyo aktörünün bir kalemi beklenmedik şekilde yazdığından şüpheleniyor ve incelemek için aktörü **bir saat kapatıyor**. Sistem durmaz: bu bir saat içinde misafir Mehmet Kaya oda 310'a giriş yapıyor, restoran 310'a odaya yaz yapıyor, bir ödeme alınıyor. Senaryo, kapalı aktörün işlerinin nasıl kaybolmadan personelin önüne düştüğünü, personelin aynı işi elle nasıl yaptığını (ve neden çift kayıt oluşmadığını), aktör yeniden açılınca ne olduğunu ve AI ajanlarının kapalı olmasının farkını anlatır. "Görevler" ekranı bu senaryonun ana sahnesidir.
 
 | Adım | Ekranda ne yapılır | Arka planda ne olur | Nerede görünür |
 | --- | --- | --- | --- |
@@ -215,9 +332,21 @@ Telefonla gelen rezervasyonda 1–3. adımların yerine resepsiyon **Rezervasyon
 
 **Manuel görev kuralları (özet):** görev işin modülüne yetkili olana görünür (oda atama → oda işlemleri yetkisi, mesaj → mesaj yazma, muhasebe → ön muhasebe); üstlen / bırak / tamamla / gerek kalmadı; satır kilidi; görev açılınca olay gövdesi **maskesiz** gelir (işi yapan misafirin iletişimine ihtiyaç duyar). Aktörün **iş kuralı hatası** (ör. "eşleme yok", "cari seçilmemiş") beklemeden göreve düşer; **geçici hata** (ağ) 3 kez 400 ms arayla denenir.
 
+### Ters giderse (Senaryo G)
+
+| Durum | Ne olur | Ne yapılır |
+| --- | --- | --- |
+| İki kişi aynı görevi tamamladı | Satır kilidi: ikinci "tamamla" 409; kapanmış görev yeniden açılmaz | — |
+| Görev artık gereksiz (misafir iptal etti) | **Gerek kalmadı** (gerekçe zorunlu) | Görevler → gerek kalmadı |
+| Görevi göremiyorum | Görev işin modülünün iznine görünür (folyo → `folio.post`); izin yoksa listede yok | Rol matrisi |
+| Aktörü açtım, görevler duruyor | Beklenen davranış: eski olaylar yeniden işlenmez; görevler personelin | Elle tamamlayın (muhasebe için Eşitle) |
+| Aktör kayıttan kalkmış (paket yok) | Onaylanmış işi bekleyen aktör yoksa iş **"Onay kuyruğu"** modüllü göreve düşer | Görevler |
+| Görev listesi 2500 odalı otelde yüzlerce | Liste imleçli, modül / aktör süzgeci; zil görevle bağlantılı | Süzgeç kullanın |
+| Aktörü kim kapattı? | Satırda kim / ne zaman / gerekçe; denetim kaydında da | Aktörler; Aktivite → Denetim kaydı |
+
 ## Senaryo H — Bir etkinlik (banket) satışı
 
-**Kahraman:** Yılmaz Holding, 120 kişilik bayi toplantısı, 12 Mayıs 09:00–17:00, "Boğaz Salonu" (bölünebilir: A + B), U düzeni, projeksiyon + ses, öğle yemeği set menü. Kişi başı menü 850 TL, salon kirası tam gün 25.000 TL.
+**Hikâye:** Yılmaz Holding'in satış müdürü arıyor: 12 Mayıs'ta 120 kişilik bayi toplantısı, 09:00–17:00, U düzeni, projeksiyon ve ses sistemi, öğle yemeği set menü. Otelin "Boğaz Salonu" bölünebilir (A + B parçaları); tam gün kirası 25.000 TL, kişi başı set menü 850 TL, teknik ekipman 4.000 TL. Satış sorumlusu Ece dosyayı açar. Senaryo, bir etkinliğin **talep → opsiyon → teklif → sözleşme → kesin → menü ve malzeme → depozito → gerçekleşme → fatura → tahsilat** zincirini; salon takviminin "sıralı opsiyon" mantığını; depozitonun ve bedelin müşteri carisine nasıl işlendiğini ve iptal durumunda iptal bedelinin nasıl hesaplandığını anlatır. Etkinliğin **kendi hesabı** vardır, folyo kullanılmaz.
 
 | Adım | Ekranda ne yapılır | Arka planda ne olur | Nerede görünür |
 | --- | --- | --- | --- |
@@ -235,9 +364,26 @@ Telefonla gelen rezervasyonda 1–3. adımların yerine resepsiyon **Rezervasyon
 | 12 | Kalan 121.000 TL havale gelir → Ön muhasebe → cari kartı → **Tahsilat fişi** (ya da dosya → Ödemeler → Tahsilat; ikisi de cariyi kapatır — birini kullanın). | Cari sıfırlanır. | Cari ekstresi; Yaşlandırma'dan düşer. |
 | 13 | **İptal varyantı:** müşteri 5 gün kala iptal eder → dosya **İptal**; iptal kademesi (politika: "en az N gün kala %X") iptal bedeli üretir. | `banquet.event.changed CANCELLED` → cari bedel **iptal bedeline** düzeltme farkıyla eşitlenir; alınmış depozito bedelden fazlaysa fazlası onaylı **iade**. Bedelli proforma; iptal bedeli faturası taslağı satırlarıyla açılır. | Dosya; cari; Faturalar. |
 
+### Ters giderse (Senaryo H)
+
+| Durum | Ne olur | Ne yapılır |
+| --- | --- | --- |
+| Salon aynı saatte başka dosyada 1. opsiyonda | Ece'nin dosyası **2. opsiyon** olur; yalnız 1. kesinleşebilir; 1. düşerse / bırakılırsa Ece'ye zil | Bekleyin ya da başka salon / saat |
+| Sözleşme imzalanmadan kesinleştir | Politika "imzalı sözleşme şart" ise reddedilir | Belgeler → sözleşme → İmzalandı |
+| 120 kişi U düzeninde salon kapasitesini aşıyor | Kesinleştirme kilit altında kapasiteyi denetler, reddeder | Düzen / salon değiştir (A + B bütün) |
+| Projeksiyon stoğu o gün başka etkinlikte | Ekipman tepe kullanımı aşılır → reddedilir | Ekipman ekle / kirala / başka kalem |
+| Opsiyon süresi doldu | 15 dk'lık iş opsiyonu düşürür; sırası yükselenin sorumlusuna zil | Yeniden opsiyona al (yer varsa) |
+| Depozito 10.000 yerine 100.000 girildi | Tutar eşiğin üstünde → `EVENT_PAYMENT` dört göz; hatalı giriş **iptal kaydı** (onaylı) | Onaylar; Ödemeler → İptal iste |
+| Müşteri 5 gün kala iptal etti | İptal kademesi ("en az N gün kala %X"; politika 0 günü içerir) → iptal bedeli; cari bedel düzeltilir; depozito bedelden fazlaysa fazlası onaylı iade | Dosya → İptal → iptal bedeli faturası taslağı |
+| Dosya "kaybedildi" (rakip otel) | Borçsuz; yazılmış bedel varsa geri alınır | Dosya → Kaybedildi |
+| Gerçekleşen 115 kişi, fatura kaça? | **En çok (garanti 120, gerçekleşen 115) = 120** | — |
+| Taksit gecikti | Günde bir zil (`BANQUET`) | Ödemeler → tahsilat |
+| Muhasebe aktörü kapalı | "Etkinlik tahsilatı … işlenecek", "Etkinlik bedeli … işlenecek" görevleri | Eşitle |
+| Fatura e-Fatura alıcısı posta kutusu yok | GİB reddi → "reddedildi" + zil | Alıcıyı düzelt → Tekrar gönder |
+
 ## Senaryo I — Bir misafir şikâyeti (WhatsApp → AI → personel → istek → anket)
 
-**Kahraman:** oda 512'deki Elif Aydın, 22:40'ta WhatsApp'tan yazar: "Odamız temizlenmemiş, havlular eksik, çok memnun değilim."
+**Hikâye:** Saat 22:40. Oda 512'deki Elif Aydın WhatsApp'tan yazıyor: "Odamız temizlenmemiş, havlular eksik, çok memnun değilim." Otelin AI concierge'i açık; ama bu bir **şikâyet** ve sistem şikâyeti modele bırakmaz, doğrudan personele devreder. Gece resepsiyoncusu Deniz konuşmayı alır, kat hizmetlerine acil istek açar, görevli havluları götürür, istek kapanır; Elif'in tercihi karta yazılır. İki gün sonra Elif çıkış yapar, anket gelir, düşük puan verir; sistem takip kaydı açar, misafir ilişkileri telafi teklif eder. Senaryo mesajdan ankete uzanan bu zincirin her halkasında hangi aktörün devreye girdiğini ve nelerin **bilerek** otomatik yapılmadığını gösterir.
 
 | Adım | Ekranda ne yapılır | Arka planda ne olur | Nerede görünür |
 | --- | --- | --- | --- |
@@ -252,9 +398,24 @@ Telefonla gelen rezervasyonda 1–3. adımların yerine resepsiyon **Rezervasyon
 | 9 | Misafir ilişkileri takip kaydını **üstlenir**, Elif'i arar, not yazar (değişmez), sonuç "telafi: bir sonraki konaklamada ücretsiz kahvaltı" ile **kapatır**. | Takip kapanışı sonuç + açıklama ister (veritabanı kısıtı). İşlem kaydına yorum metni yazılmaz. | Anketler → Takip → kapanmış. |
 | 10 | Ay sonu müdür Anketler → **Rapor**: NPS eğilimi, bölüm puanları ("temizlik" düşük), AI konu dökümü ("havlu" teması 6 yorumda), takip özeti. | Rapor indekslerden (1 yıl ~0,2 sn). Dönem özeti AI isteği `surveys.setup` yetkisiyle. | Anketler → Rapor. |
 
+### Ters giderse (Senaryo I)
+
+| Durum | Ne olur | Ne yapılır |
+| --- | --- | --- |
+| Elif 24 saattir yazmamış, Deniz ilk yazan | WhatsApp 24 saat penceresi kapalı → "gönderilemedi" + sebep | Misafir yazınca pencere açılır; telefonla arayın |
+| AI günlük bütçesi dolmuş | Konuşma zaten personelde (şikâyet); bütçe dolunca bütün AI konuşmaları personele geçer, yönetime `AI_BUDGET` zili | Ayarlar → AI asistanı → bütçe |
+| Misafir telefonu kartta yok | Konuşma misafire bağlanamaz; personel ekranda oda seçip konaklamaya bağlar | Mesajlar → konuşma → bağla |
+| İstek 15 dk'da kapanmadı | Gecikme zili isteğin sahibine, yoksa istek yönetenlere; rozet kırmızı; başlatılmış işi geri almak süreyi **sıfırlamaz** | İstekler → ata / tamamla |
+| Kat görevlisi görevi görmedi | `GUEST_REQUEST` görevi kat hizmetleri panosunda; kat hizmetleri aktörü kapalıysa oda durumu güncellemesi göreve düşer, istek yine görev bitince kapanır | Kat hizmetleri → Görevler |
+| Anket daveti gitmedi | Portal adresi / kanal / şablon eksik → tur başlamaz; misafir bildirim istemiyor → satır gönderilmedi; aynı misafire `minDaysBetweenSurveys` günden sık anket gitmez | Anketler → Ayarlar; Bildirimler → Kanallar |
+| Elif anketi iki kez doldurmaya çalıştı | Davet başına **tek cevap** (tekil kısıt) | — |
+| Takip 48 saatte kapanmadı | Hedef süre aşımı listede kırmızı | Anketler → Takip → üstlen / kapat |
+| AI etiketi gelmedi | AI kapalı / anahtar yok → yorum "etiketlenemedi" (30 dk); rapor AI'sız eksiksiz | — |
+| Düşük puan ara ankette (misafir hâlâ içeride) | Zil **kritik**, hedef **2 saat** | Hemen misafirle temas |
+
 ## Senaryo J — Ay sonu stok sayımı ve maliyet raporu
 
-**Kahraman:** Mutfak ana depo, 30 Nisan akşamı. Depo sorumlusu Hakan ve aşçı Selin birlikte sayıyor. Depoda 86 malzeme.
+**Hikâye:** 30 Nisan akşamı, servis bitimine doğru. Depo sorumlusu Hakan ve aşçı Selin "Mutfak ana depo"yu sayacak; depoda 86 malzeme var, ikisi iki tabletle aynı sayımı paylaşacak. Restoran bu arada kapanmamış: sayım sürerken birkaç levrek daha satılacak. Senaryo, sayımın açılışta "beklenen"i nasıl dondurduğunu, iki sayımcının birbirinin kaydını nasıl ezmediğini, onayda farkın neden **onay anındaki** mevcuda göre hesaplandığını, farkın stoğa ve satın alma önerisine nasıl yansıdığını ve ay sonu maliyet raporunun (malzeme ve ürün görünümleri) nasıl okunduğunu anlatır; en sonda rakamın bütçeye nasıl taşındığı gösterilir.
 
 | Adım | Ekranda ne yapılır | Arka planda ne olur | Nerede görünür |
 | --- | --- | --- | --- |
@@ -270,6 +431,169 @@ Telefonla gelen rezervasyonda 1–3. adımların yerine resepsiyon **Rezervasyon
 | 10 | Bütçe → **Gerçekleşen**: Nisan "Yiyecek maliyeti" gider kalemine raporun tüketim tutarı elle girilir. | Gider gerçekleşeni bu sürümde elle (satın alma / ön muhasebeden otomatik beslenme yol haritasında). Bütçe → **Sapma**: plan / gerçek / fark; AI yorumu istenebilir. | Bütçe → Sapma. |
 
 **Fire ve transfer:** Stok → Hareketler → **Hareket gir**: tür çipleri **çıkış / fire / transfer**; fire sebebi zorunlu; transferde hedef depo (kaynakta eksi, hedefte artı, kart toplamı sabit). Formun istek kimliği çift gönderimde ikinci hareket yazmaz. Elle hareket mevcuttan fazla çıkamaz (`INSUFFICIENT_STOCK`).
+
+### Ters giderse (Senaryo J)
+
+| Durum | Ne olur | Ne yapılır |
+| --- | --- | --- |
+| Depoda açık sayım var | Yeni sayım açılmaz (depoda tek açık sayım) | Eskisini onayla ya da iptal et |
+| Hakan ve Selin aynı satırı aynı anda yazdı | İkincisi "başkası değiştirdi" (`STALE_WRITE`) ve güncel listeyi görür | Yeniden gir |
+| Sayım sürerken satış devam etti | Beklenen değişmez, "şu anki" değişir; **fark onay anına göre** | Onaydan hemen önce kritik satırları yeniden say |
+| Yanlış depoda açıldı | **İptal** (sebep) — hiçbir hareket yazılmaz | Doğru depoda yeniden aç |
+| Sayılmayan satır | Dokunulmaz (fark yazılmaz) | Eksik saymayın; sayılmayanı bilerek bırakın |
+| Fark eksiye indiriyor | Sayım düzeltmesi eksiye inebilir (gerçek mevcut) | Normal |
+| Stok aktörü kapalı | Öneri sessizce atlanır; satın alma → min. stok önerileri ekranı aynı hesabı gösterir | Elle talep aç |
+| Fire sebebi boş | Sözleşme reddeder (fire sebebi zorunlu) | Sebep yaz |
+| Transfer hedef depo pasif | Reddedilir | Depoyu aktifle |
+| Rapor 400 günlük aralık | En fazla 366 gün | Aralığı daralt |
+
+## Senaryo K — Acente grubunun rooming list ile toplu girişi
+
+**Hikâye:** Mavi Tur acentesi 5–8 Haziran (3 gece) için 12 Standart oda, 24 kişi, oda-kahvaltı istiyor. Acentenin kontratında Standart × oda-kahvaltı × Haziran dönemi için **oda başı gecelik 2.200 TL** var; ayrıca acenteye Haziran ayı için 15 odalık **kota (allotment)**, release 7 gün tanımlı. Acente rooming list'i (misafir adları) Excel ile gönderiyor. Resepsiyon şefi Murat grubu açıyor, giriş günü 12 odayı toplu check-in yapıyor, çıkışta acente hesabını kapatıp acenteye tek fatura kesiyor. Senaryo kota, kontrat fiyatı, grup dosyası, toplu işlemler, acente carisi ve acente primi zincirini anlatır.
+
+| Adım | Ekranda ne yapılır | Arka planda ne olur | Nerede görünür |
+| --- | --- | --- | --- |
+| 1 | (Önceden) Müdür Acenteler → Mavi Tur → **Kontrat**: Standart × oda-kahvaltı × 1–30 Haziran = 2.200 TL / oda / gece; komisyon %10; vade 30 gün. **Kota** sekmesi: Standart, 1–30 Haziran, 15 oda, release 7 gün. | Kota bir **garantidir, tavan değil**: acentenin kotası dolunca satış genel havuzdan sürer. Release tarihi = giriş gecesi − 7; o günden itibaren kullanılmamış kota genel havuza döner. Aynı acente + tipte çakışan dönem olamaz. Kota değişikliği kanal yöneticisine gider: **OTA'ya giden boş sayıdan tutulu kota düşülür** (kanal kotalı odayı satamaz). | Acenteler → Mavi Tur → Kontrat / Kota; **Kota kullanım tablosu** (gün gün verilen / kullanılan / kalan / release). |
+| 2 | Murat, Rezervasyonlar → **Yeni rezervasyon** → **Grup** → acente Mavi Tur, 5–8 Haziran → **Rooming list** → şablonu indirir, acentenin gönderdiği dosyayı yükler (sütunlar: Ad, Soyad, Oda tipi kodu, Pansiyon, Yetişkin, Çocuk). | Excel **tarayıcıda** okunur; hatalı satırlar numarasıyla listelenir ("satır 7: oda tipi kodu tanınmadı"), geçerliler grup satırlarına dolar. Rooming list **ortak tarihli**dir (grubun giriş / çıkışı). Satır misafiri **kendi kartına** açılır (ad soyad yeter; iletişim grup sorumlusunda); isim çakışması bütün grubu düşürmez. | Grup formu: 12 satır, her satırda misafir adı. |
+| 3 | Fiyat önizlemesi: 12 oda × 3 gece × **2.200** = 79.200 TL (kontrat). Kaydet. | Envanter kilidi altında müsaitlik: satan acentenin **kendi kotası düşülmez**, diğer acentelerin kullanılmamış kotası düşülür. Kontratta fiyatı olmayan gece reddedilir; stop-sale elle fiyatla da aşılmaz. Grup `ReservationGroup` (ad, kod); 12 rezervasyon onaylı, kaynak acente. Kota kullanımı **türetilir**: acentenin o geceyi kapsayan geçerli rezervasyonları kotaya mahsup edilir (iptal kota hakkını kendiliğinden geri açar). `reservation.created` × 12 → oda aktörü 12 Standart oda atar. | **Gruplar** (`/gruplar`) → Mavi Tur 5–8 Haziran: 12 rezervasyon, odalar, durum dağılımı. Kota tablosu: 5–7 Haziran kullanılan 12 / kalan 3. |
+| 4 | Giriş günü 5 Haziran 14:00: otobüs gelir. Murat Gruplar → dosya → tümünü seç → **Toplu oda atama** (gerekirse) → **Toplu check-in**. | `check-in-batch` (en fazla 50): kimlik ve refakatçiler **misafir kartından okunur**. **Kimlik politikası:** sahibinin kimlik belgesi zorunludur; rooming list yalnız ad taşıdığı için kimliği kartta olmayan satır **atlanır** ("kimlik eksik") ve sonuç listesinde sebebiyle görünür. Odasız, erken giriş ücreti isteyen kayıtlar da atlanır — bunlar tek tek alınır. | Grup dosyası: sonuç listesi (girildi / atlandı + sebep). |
+| 5 | Murat atlanan 12 kaydı tek tek açar: misafir kimliğini girer (otobüste toplanan kimlik fotokopileri), **Check-in**. Pratik yol: acenteden kimlik bilgilerini önceden alıp **Misafirler** ekranından kartlara işlemek ya da misafirlere portal daveti gönderip online check-in yaptırmak (iletişim bilgisi olan misafirde). | Her giriş `guest.checked_in` → oda aktörü dolu; **folyo aktörü 12 folyo açar**; bildirim aktörü hoş geldiniz (iletişim yoksa gönderilmez). | Konaklayanlar: 12 oda; Folyolar. |
+| 6 | Murat grup hesabını düzenler: her folyoda **ödeyen** "Mavi Tur" (kontrat fiyatı acente öder; misafir ekstraları ayrı pencere) — folyoyu **böl**: pencere 1 oda ücreti (ödeyen Mavi Tur), pencere 2 ekstralar (misafir). İsterse 12 odanın pencere 1'lerini grup liderinin folyosuna **birleştirir** (grup hesabı). | Yönlendirme: gece ücreti pencere 1'e, restoran / minibar pencere 2'ye. Birleştirmede kaynakların kalem ve ödemeleri hedefe taşınır, kaynak `TRANSFERRED` (geri alınmaz). Misafir portalı **şirket / acente penceresini göstermez** (kontrat fiyatı sızmaz), yalnız varlığını söyler. | Folyo ekranı: pencere sekmeleri, yönlendirme satırı. |
+| 7 | Gece kapanışları: 5, 6, 7 Haziran. | Folyo aktörü her oda için 2.200 TL gece ücreti (vergi dökümü dahil; kontrat fiyatı). Kota tablosunda 8 Haziran'dan itibaren kalan 15. | Folyo kalemleri. |
+| 8 | 8 Haziran çıkış: misafirler ekstralarını (pencere 2) kartla öder; Murat Gruplar → **Toplu check-out** (acente pencereleri hâlâ 6.600 TL / oda borçlu). | Toplu çıkış bakiye sıfır olmayan folyoyu çıkaramaz → Murat önce acente penceresini kapatır: **Ödeme al → yöntem "Acente / cari"**, cari **Mavi Tur** (varsayılan rezervasyonun acentesi), tutar 6.600 × 12 = **79.200**. Para girmez; `payment.received` → **muhasebe aktörü** Mavi Tur carisine **79.200 borç**, vade = 8 Haziran + 30 = 8 Temmuz. Sonra toplu çıkış: `guest.checked_out` × 12 → odalar boş + kirli, 12 çıkış temizliği görevi, folyolar kapanır (`folio.closed` × 12). | Kasa → Günlük kasa: "Acente / cari" satırları (nakit değil); Ön muhasebe → Cariler → Mavi Tur (B) 79.200; Yaşlandırma: vadesi gelmemiş. |
+| 9 | Folyo aktörü 12 taslak açar; alıcı **cari** (Mavi Tur — şirket). Muhasebe **toplu kesim**: Taslaklar → 12 taslağı seç → **Seçilenleri kes**. (Acente tek fatura isterse: pencere 1'ler grup liderine birleştirilmişse tek folyo → tek fatura.) | Her taslak tek kesimin kuralıyla; mükellef sorgusu Mavi Tur → e-Fatura; 12 numara açılış sırasıyla. `invoice.issued` × 12 → muhasebe aktörü **her faturanın numarasını Mavi Tur carisindeki ilgili 6.600 TL borç satırına yazar**. | Faturalar → Kesilenler; cari ekstresinde her satırda fatura no. |
+| 10 | 8 Temmuz: Mavi Tur 79.200 TL havale eder. Muhasebe → Mavi Tur → **Tahsilat fişi** → banka 79.200. | Cari sıfırlanır. Vadesi geçseydi yaşlandırmada 1–30 dilimine düşerdi. | Cari ekstresi; Kasa / banka. |
+| 11 | Dönem sonu: Acente primleri → Mavi Tur Haziran kuralı (hedef 100 gece, %5 prim) → **Hesapla**: üretim = gerçekten kalınan geceler (36 gece bu gruptan), matrah vergisiz oda geliri → hak ediş → **Onaya gönder** → başka yetkili onaylar. | `agency.bonus.changed APPROVED` → muhasebe aktörü Mavi Tur carisine **alacak** (prim borcumuz; fark kaydıyla). Ödenince "ödendi". | Acente primleri; cari ekstresi (A). |
+
+### Ters giderse (Senaryo K)
+
+| Durum | Ne olur | Ne yapılır |
+| --- | --- | --- |
+| Acente 16. odayı istiyor (kota 15) | Kota tavan değil: fiziksel yer varsa genel havuzdan açılır | — |
+| Başka acente / web sitesi 5 Haziran'da Standart istiyor, 3 oda boş ama 15 kota tutulu | Guard "N oda acente kotasında tutulu" der; **release** (29 Mayıs) öncesi genel satış kotaya takılır; release sonrası serbest | Release tarihini bekleyin ya da kotayı küçültün |
+| Rooming list satırı hatalı | Satır numarasıyla hata; geçerliler dolar | Dosyayı düzelt, yeniden yükle |
+| Toplu check-in'de 12 kayıt da atlandı: "kimlik eksik" | Kimlik politikası; toplu giriş kimliği karttan okur | Kimlikleri karta işle (Misafirler) ya da tek tek giriş |
+| Aynı adlı iki misafir | Satır misafiri **kendi kartına** açılır (isim çakışması grubu düşürmez); aynı ad + iletişim varsa mevcut kart | Sonradan Misafirler → birleştir |
+| Bir oda gelmedi | Grup içinde tek rezervasyon **Gelmedi**; folyo aktörü gelmedi ücreti (kontrat / politika) | Rezervasyon → gelmedi |
+| Acente çıkışta "faturayı tek kes" dedi ama 12 folyo var | 12 fatura ya da önceden pencere birleştirme (grup hesabı) | Çıkıştan önce birleştirin |
+| "Acente / cari" ödemesinde cari seçilmedi | Reddedilir (cari zorunlu; referans zorunlu değil) | Cari seçin |
+| Muhasebe aktörü kapalı | "Folyo tahsilatı muhasebeye işlenecek" × 12 görevi | Eşitle |
+| Fatura iptali gerekti | Dört göz; cari hareketteki bağ çözülür; folyo yeniden açılabilir | Faturalar → İptal iste |
+| Prim hak edişini hesaplayan onaylamaya çalıştı | Dört göz: gönderen onaylayamaz | Başka yetkili |
+
+## Senaryo L — Personel bordrosunun onayı ve ödenmesi
+
+**Hikâye:** Nisan 2026 bordrosu. Otelde 45 personel, 8 departman. İK sorumlusu Merve puantajı ve ek ödemeleri girer, servis payı havuzunu dağıtır, bordroyu hesaplar ve onaya gönderir; genel müdür Burak onaylar; muhasebe Hande 5 Mayıs'ta bankadan öder, iki personelin maaşını elden verir, ay sonunda SGK ve vergi borcunu kapatır. Örnek personel: aşçı Selin Kaya, brüt 30.000 TL, 2.000 TL avans; garson Mehmet Yıldız, net anlaşmalı 25.000 TL, 12 saat fazla mesai, servis payı. Senaryo bordronun **hesapla → onaya gönder → dört göz → öde** akışını, yasal parametre teyidini, ay kilidini, fark bordrosunu ve ön muhasebeye düşen kayıtları anlatır.
+
+| Adım | Ekranda ne yapılır | Arka planda ne olur | Nerede görünür |
+| --- | --- | --- | --- |
+| 1 | (Bir kez) Burak, Bordro → **Ayarlar**: işyeri (ünvan, SGK sicil, vergi dairesi, sektör), **Hazır setleri yükle** (2026: 1 Ocak, 17 Nisan, 1 Temmuz setleri), her seti Resmî Gazete / SGK / GİB metniyle karşılaştırıp **Teyit ettim**; departmanlar; kalemler. | Set "teyitsiz" başlar; teyitsiz setle hesaplanan bordro **onaya gidemez**. Nisan ayı **30 Nisan'da yürürlükte olan** setle hesaplanır (17 Nisan seti: yemek SGK istisnası). Onaylı bordronun seti artık değiştirilemez / teyidi kaldırılamaz. | Bordro → Ayarlar → parametre setleri (durum rozeti). |
+| 2 | Merve, Bordro → **Puantaj ve kalemler** → Nisan: Selin eksik gün 0, çalışılan gün 22; Mehmet fazla çalışma 12 saat, hafta tatili çalışması 1 gün. **Kaydet** (değişen satırlar birlikte). Kalemler: Selin'e "performans primi" 1.500 TL; Mehmet'e "yol" 1.200 TL. | Puantaj satırları `PayrollAttendance`; kalemler ayın girdisi. Ay onaydaysa / onaylıysa sunucu reddeder. Girdi değişikliği ayın hesaplanmış açık bordrosunu "yeniden hesaplanmalı" işaretler. | Puantaj tablosu; kalem listesi. |
+| 3 | **Servis payı**: Nisan havuzu 60.000 TL, dağıtım puanla (Mehmet 3 puan, komi 1 puan…), çalışılan güne göre ağırlıklı → **Dağıt**. | Paylar ayın "Servis payı" kalemine yazılır; kuruş artığı en büyük paydan dağıtılır, toplam havuza eşit. Ay kilitliyse dağıtım değişmez. | Servis payı ekranı: kişi başı pay. |
+| 4 | Personel → Selin Kaya → **Avanslar**: 2.000 TL, 15 Nisan, kasadan (`payroll.pay`). | Kasadan çıkış; **Selin'in personel carisine borç 2.000** (muhasebe aktörü değil, bordro servisi; cari yoksa açılır). Onayda mahsup edilecek. | Kasa / banka hareketleri; Selin carisi (B) 2.000. |
+| 5 | Bordro → Bordrolar → Nisan → **Bordro aç** → **Hesapla**. | Hesap motoru her personel için (kuruş tam sayı): prime esas kazanç, SGK işçi / işsizlik, GV matrahı (yıl içi birikmiş matrah **Ocak–Mart onaylı bordrolarından**), tarife, asgari ücret GV / DV istisnası, DV, net; Mehmet'te **net → brüt** çözümü (en küçük brüt, ikili arama), fazla çalışma saat ücreti × 1,5 (aylık / 225), hafta tatili günlük × 1,5; işveren payları, Hazine indirimi. Önceki ay onaylanmamışsa hesap durur. Eşzamanlı ikinci hesap sırayı bekler. | `/bordro/:id`: toplamlar (brüt, SGK, GV, DV, net, maliyet), departman icmali, 45 satır; satırda **hesap izi**. |
+| 6 | Merve uyarıları okur: "parametre seti teyitli", "önceki aylar onaylı", "yeniden hesaplanmalı" yok. **Onaya gönder**. | Onay kuyruğuna `Bordro` türünde iş (özet: Nisan, 45 kişi, net toplam); durum **onayda**; ay **kilitlenir** (puantaj / kalem / servis payı değişmez). | Onaylar → Bekleyen; üst bar sayacı. |
+| 7 | Burak, Onaylar → Bekleyen → bordro → ayrıntı (toplamlar, departman icmali bağlantısı) → **Onayla**. Merve'nin kendi "Onayla" düğmesi kapalıdır (dört göz). | `approval.granted` → bordro dinleyicisi: durum **onaylı**; **avans taksitleri ve icra / nafaka kesintileri kesinleşir** (Selin'in 2.000 TL avansı bu bordrodan düşer). `payroll.run.approved` yayınlanır. | Bordro ekranı "onaylı"; Onaylar → Geçmiş. |
+| 8 | — | **Muhasebe aktörü** ay sonu (30 Nisan) tarihli **tahakkuk** yazar, 250 kişilik parçalarla: her personelin carisine net ücret alacak (Selin 21.447,30 → avans borcu 2.000 ile cari bakiyesi (A) 19.447,30), **SGK carisine** işçi + işveren payları − indirimler (45 kişinin toplamı), **vergi dairesi carisine** GV + DV, **BES şirketine** katkılar, **icra dosyalarına** kesintiler. Eksik personel carileri toplu açılır. | Ön muhasebe → Cariler (tür personel / kurum): SGK (A), vergi dairesi (A); personel ekstreleri. |
+| 9 | Merve **Çıktılar**: bordro listesi PDF, pusulalar PDF (departman departman), departman icmali, **banka dosyası** (Excel; IBAN + ödenecek), müşavir tablosu. Onaylı olduğu için "TASLAK" damgası yok. | PDF'ler sunucuda; 2.500 kişilik bordro ~5 sn. | Bordro ekranı → Çıktılar. |
+| 10 | Hande 5 Mayıs: Bordro ekranı → **Öde** → yöntem banka, hesap "İş Bankası TRY", tarih 5 Mayıs (bugünü geçemez). Bankaya dosyayı yükler. | Ödeme kaydı; `payroll.run.changed PAID` → **muhasebe aktörü**: İş Bankası hesabından **tek çıkış** (banka ödemelilerin toplamı), her personelin carisine **borç** → cariler sıfırlanır. | Kasa / banka → İş Bankası (kaynak "Bordro"); personel ekstreleri 0. |
+| 11 | İki personel elden alıyor: **Öde → elden → Resepsiyon kasası**. | Elden ödeme **yalnız kasadan**; kasa yetersizse reddedilir ("kasa eksiye düşmez"). Kasadan çıkış + iki personel carisi kapanır. | Kasa hareketleri. |
+| 12 | Ay sonu Hande, Ön muhasebe → Cariler → **SGK** → **Ödeme fişi** → banka (tutar carinin bakiyesi); aynı şekilde **vergi dairesi**. | Fişler eşik üstüyse dört göz onayı. Cari borçlar kapanır. **Gider tarafı** (personel gideri, SGK işveren payı hesapları) bu sürümde yok — genel muhasebe (48) ile. | Fişler; cari ekstreleri. |
+| 13 | 12 Mayıs: Mehmet'in Nisan fazla mesaisi 12 değil 20 saatmiş. Merve Nisan → **Fark bordrosu aç** → kalem: fazla çalışma +8 saat → Hesapla → Onaya gönder → Burak onaylar → öde. | Fark bordrosu: ay onaylı girdi + yeni kalemlerle baştan hesaplanır, önceki onaylı tutarlar çıkarılır (fark eksi olabilir). BES / avans / icra kesintisi yapılmaz. Tahakkuk ve ödeme aynı yolla (eksi tutarda ters taraf). | Bordrolar listesi: Nisan aylık (onaylı, ödendi) + Nisan fark. |
+| 14 | 31 Mayıs: komi Ahmet Çelik işten çıkıyor. Personel → Ahmet → **İşten çıkış** → tarih, sebep → **önizleme**: kıdem (yalnız DV, tavanlı; tavan çıkış gününde yürürlükteki setten), ihbar (GV + DV, SGK yok), kullanılmayan izin 6 gün (tam tabi) → **Kaydet**. Pencerede **zimmetli demirbaş uyarısı**: "DM-000087 El terminali — iade alınmadı" (engellemez). | Kalemler Mayıs bordrosuna düşer; çıkış geri alınabilir. Demirbaş → kart → **İade al** ayrıca yapılır. | Mayıs bordrosu satırı; Demirbaş kartı. |
+
+### Ters giderse (Senaryo L)
+
+| Durum | Ne olur | Ne yapılır |
+| --- | --- | --- |
+| "Parametre seti teyit edilmedi" | Hesap yapılır ama **onaya gidemez** | Ayarlar → set → Teyit ettim (resmî metinle karşılaştırarak) |
+| "Mart onaylı değil" | Nisan hesaplanamaz / onaya gidemez (birikmiş matrah) | Mart'ı onaylayın; yıl ortası geçişte **matrah devri** girin |
+| Burak reddetti ("prim tutarı yanlış") | Bordro **hesaplandı**ya döner, ay kilidi açılır; not görünür | Kalemi düzelt → Hesapla → Onaya gönder |
+| Onaylandı, sonra hata fark edildi | Onaylı ay **kilitli**; düzeltme **fark bordrosu** | Fark bordrosu aç |
+| Merve kendi bordrosunu onaylamaya çalıştı | Dört göz: hazırlayan onaylayamaz (düğme kapalı, sebebi yazılı) | Başka yetkili |
+| Elden ödemede kasa yetersiz | "Kasa eksiye düşmez" → reddedilir | Ön muhasebe → Virman (banka → kasa) |
+| Ödeme tarihi 10 Mayıs girildi (bugün 5 Mayıs) | Tarih bugünü geçemez | Bugün ya da geçmiş |
+| Muhasebe aktörü kapalı | "Onaylanan bordro carilere tahakkuk ettirilecek" / "Maaş ödemesi … işlenecek" görevleri | Ön muhasebe → Ayarlar → Eşitle (Nisan) |
+| Muhasebe başlangıç günü 1 Mayıs (bordro 30 Nisan tarihli) | Tahakkuk **işlenmez** (başlangıçtan önce); açılış bakiyesiyle gelir | Personel / SGK / vergi carilerine açılış girin |
+| Personel kartında ücret görünmüyor | `payroll.view` yok | Rol matrisi |
+| Hesap 2.500 kişide uzun sürüyor | ~3,6 sn normal; aynı anda ikinci hesap bekler | Bekleyin |
+| İşten çıkışta zimmet uyarısı | Engellemez; demirbaş iadesi ayrı işlem | Demirbaş → kart → İade al |
+
+## Senaryolarda geçen olaylar, aktörler, onaylar ve görevler
+
+Bu bölüm senaryoları başkasına anlatırken "bunu kim yapıyor?" sorusuna hızlı cevap için bir başvuru tablosudur. Olay adları Aktivite → Olaylar ekranında Türkçe karşılıklarıyla görünür; buradaki teknik adlar yalnız eşleştirmek içindir.
+
+### Olay → kim yayınlar → kim dinler
+
+| Olay | Yayınlayan | Dinleyen ve yaptığı iş | Senaryo |
+| --- | --- | --- | --- |
+| `reservation.created` | Rezervasyon servisi (widget, resepsiyon, kanal aktörü, concierge) | Oda aktörü → oda atar; bildirim aktörü → onay bildirimi (bekleyende onaylanınca); kanal aktörü → envanter farkı | A, D, K |
+| `reservation.confirmed` / `cancelled` / `no_show` / `reinstated` | Rezervasyon servisi, gün kapanışı | Folyo aktörü → iptal / gelmedi ücreti (geri alınırsa düşer); kanal aktörü → envanter; bekleme listesi taraması | A, C, D |
+| `guest.checked_in` | Giriş servisi | Oda aktörü → dolu; folyo aktörü → folyo + erken giriş ücreti + teminat ödemesi; bildirim → hoş geldiniz; online check-in → "giriş yapıldı" | A, G, K |
+| `guest.checked_out` | Çıkış servisi | Oda aktörü → boş + kirli; kat hizmetleri aktörü → çıkış temizliği; folyo aktörü → kalan gece / geç çıkış, kapanış; bildirim → teşekkür; anket işi → çıkış sonrası anket | A, I, K |
+| `guest.check_in_reverted` / `check_out_reverted` | Geri alma | Oda aktörü doluluğu düzeltir; folyo aktörü ücreti / teminatı ters kayıtla düşer, folyoyu yeniden açar | A |
+| `folio.room_charges.due` | Gün dönüşü zamanlayıcısı | Folyo aktörü → eksik geceler (100'lük parçalar) | A, C |
+| `night.audit.started` / `night.audit.closed` | Gün kapanışı | Folyo aktörü → ön basım; (2.0: gece müdürü, kârlılık, dış muhasebe) | C |
+| `fnb.order.placed` | POS (adisyon turu, oda servisi, paket) | Mutfak ekranı panosu | B |
+| `fnb.order.status_changed` | Mutfak ekranı | POS adisyon ekranı rozeti; garson zili ("hazır") | B |
+| `fnb.order.charged` | POS "odaya yaz", oda servisi teslimi | Folyo aktörü → folyo kalemi (vergi kategorisiyle) | A, G |
+| `fnb.order.paid` | POS adisyon kapanışı | Stok aktörü → reçeteden satış düşümü (son yayın esas) | A, B |
+| `pos.payment.changed` / `banquet.payment.changed` / `spa.payment.changed` | POS, banket, spa ödemeleri | Muhasebe aktörü → kasa / banka (+ etkinlikte müşteri carisi); yalnız işlenmiş / iptal | B, H |
+| `minibar.consumed` / `laundry.charged` / `spa.charged` | Minibar fişi, çamaşır teslimi, spa randevusu | Folyo aktörü → kalem (çıkmış misafirde açık folyoya geç kalem) | A |
+| `payment.received` / `refunded` / `voided` | Ödeme servisi | Muhasebe aktörü → kasa / banka ya da cari; folyo aktörü → bitmiş konaklamanın sıfırlanan folyosunu kapatır | A, K |
+| `folio.closed` | Folyo aktörü / kapatma | Folyo aktörü → fatura taslağı | A, K |
+| `invoice.issued` / `invoice.cancelled` | Fatura kesimi / iptali | Muhasebe aktörü → numara cari harekete / serbest fatura alacağı / ters kayıt | A, H, K |
+| `stock.changed` | Stok hareketleri (mal kabul, satış, sayım, elle) | Stok aktörü (yalnız SALE / MOVEMENT / COUNT) → minimum altı talebi + zil | B, J |
+| `purchase.goods.received` | Mal kabul | Muhasebe aktörü → tedarikçi carisine KDV dahil borç, vade | B |
+| `purchase.request.changed` | Satın alma talebi | Ekranlar; zil | B |
+| `agency.bonus.changed` | Prim hak edişi | Muhasebe aktörü → acente carisine alacak (fark kaydı) | K |
+| `banquet.event.changed` | Etkinlik durumu | Muhasebe aktörü → müşteri carisine bedel / iptal bedeli / geri alma | H |
+| `payroll.run.approved` / `payroll.run.changed PAID` | Bordro onayı / ödemesi | Muhasebe aktörü → tahakkuk / ödeme kayıtları | L |
+| `rate.changed` | Fiyat planı, sezon, onaylı fiyat önerisi, Excel fiyat yüklemesi | Kanal aktörü → fiyat farkı; fiyat önbelleği tazelenir | F |
+| `agency.allotment.changed` | Kota tanımı | Kanal aktörü → OTA'ya giden boş sayıdan kota düşülür; bekleme listesi taraması | K |
+| `channel.booking.received` | Channex revizyonu / iCal | Kanal aktörü → rezervasyon açar / günceller / iptal eder | D |
+| `room.assigned` / `room.blocked` / `room.unblocked` | Oda aktörü, blok servisi | Bildirim (oda bilgisi, giriş günü); kat hizmetleri aktörü (blok bitince derin temizlik); kanal aktörü (envanter) | A, E |
+| `housekeeping.issue.reported` | Kat görevlisi "Sorun var" | Teknik servis dinleyicisi → arıza bileti | E |
+| `housekeeping.task.completed` / `room.inspected` | Kat görevi | Kat hizmetleri aktörü → oda temiz / kontrol edildi; isteğe bağlı görev isteği kapatır | A, I |
+| `maintenance.ticket.created` / `assigned` / `resolved` | Teknik servis | Zil (atanan); isteğe bağlı bilet isteği işlemde / tamamlandı | E |
+| `guest.message.received` / `guest.intent.detected` / `guest.message.reply` | Mesaj geçitleri, router ajanı, personel / AI | Router ajanı → niyet; concierge → cevap ya da devir; geçit → gönderim | I |
+| `guest.request.created` / `updated` | İstek servisi, AI, oda servisi | Kat hizmetleri (görev), teknik servis (bilet), oda servisi (sipariş) | E, I |
+| `pricing.review.requested` | Günlük iş | AI fiyat ajanı → öneri | F |
+| `approval.requested` / `granted` / `denied` / `expired` | Onay kuyruğu | İsteyen aktör / modül dinleyicisi → işi bitirir ya da vazgeçer | A, F, H, L |
+| `manual_task.created` | Aktör taban sınıfı (kapalı / yapamadı) | Görevler ekranı, zil | G |
+| `survey.*` | Anket | Takip kaydı, zil (düşük puan), içgörü ajanı | I |
+
+### Senaryolarda geçen onay türleri (dört göz)
+
+| Onay türü | Kim ister | Ne zaman | Senaryo |
+| --- | --- | --- | --- |
+| Folyo kalemi iptali | Folyo yetkilisi | Her elle kalem iptali | A |
+| İade | Ödeme alan | Her iade | A, H |
+| Büyük ödeme | Ödeme servisi | Folyo ödemesi eşiğe eşit / üstü (Ayarlar → Genel parametreler) | A |
+| Ödeme iptali | Ödeme alan | Hatalı giriş | A, B |
+| Fatura iptali | Fatura yetkilisi | Her fatura iptali | A, H, K |
+| POS düzeltmesi / POS ödemesi | Şef garson / garson | İkram, iptal, indirim eşik üstü; büyük tahsilat ve ödeme iptali | B |
+| Satın alma siparişi | Satın almacı | KDV dahil tutar politika eşiğinde / üstünde; 3 gün | B |
+| Ödeme fişi | Muhasebeci | Ön muhasebe ödeme fişi eşik üstü | B, L |
+| Etkinlik ödemesi | Satış / ön büro | Büyük tahsilat, iade, iptal kaydı | H |
+| Toplu fiyat değişikliği | Kural işi / AI fiyat ajanı | Her fiyat önerisi | F |
+| Bordro | Bordroyu hazırlayan | Her bordro ve fark bordrosu | L |
+| Acente primi | Prim hesaplayan | Her hak ediş | K |
+| Kapasite aşımı (overbooking) | Rezervasyon açan | Politika "onaya gönder" ise yer yokken | A |
+
+### Senaryolarda geçen manuel görev başlıkları (aktör kapalıysa)
+
+| Modül (görev sütunu) | Örnek başlık | Kim görür | Nasıl tamamlanır |
+| --- | --- | --- | --- |
+| Folyo | "Misafir girişi: folyo açılacak, teminat işlenecek"; "Restoran adisyonu folyoya yazılacak"; "Kapanan folyonun fatura taslağı açılacak" | `folio.post` | Folyo ekranından aynı iş; Faturalanacaklar'dan taslak |
+| Ön muhasebe | "Folyo tahsilatı muhasebeye işlenecek (kasa / banka ya da cari)"; "Mal kabul tedarikçi carisine işlenecek"; "Onaylanan bordro carilere tahakkuk ettirilecek" | `accounting.manage` | Eşleme / cari düzelt → Ayarlar → Eşitle |
+| Oda işlemleri | "Rezervasyona oda atanacak"; "Oda dolu olarak işaretlenecek" | `rooms.operate` | Oda atama / oda planı |
+| Kat hizmetleri | Oda durumu güncellemesi | Kat yetkisi | Kat haritasından |
+| Stok | "Adisyon ADS-… için satış düşümü yapılacak" | `stock.manage` | Hareket gir (çıkış) |
+| Kanal rezervasyonu | "Elle işlenmeli: eşleşmeyen fiyat planı" | `reservations.manage` | Rezervasyonu elle aç / düzenle; kaydı notla kapat |
+| Mesajlar | Cevapsız konuşma (AI kapalı / bütçe) | Mesaj yazma yetkisi | Konuşmayı personel yürütür |
+| Rapor talebi | "Rapor talebi: geçen ayın haftalık doluluğu" | `reports.view` | Raporu elle hazırlayıp kişiye iletme |
+| Onay kuyruğu | Aktörü kayıttan kalkmış onaylanan iş | Ayar yöneticisi | İşi elle yap |
 
 ## Senaryoların ortak dersleri
 

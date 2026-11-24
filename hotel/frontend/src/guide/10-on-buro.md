@@ -54,6 +54,24 @@ Bir aktör kapalıysa ya da hata verirse işi **kaybolmaz**: yan menüdeki **Gö
 
 **Dikkat:** liste sayfalıdır; toplam sayı 2000'de kesilir (büyük otelde "2000+" görürsünüz). Üç harften kısa adla arama yapılmaz.
 
+#### Ekranda gördüğünüz alanlar
+
+| Alan | Anlamı |
+| --- | --- |
+| Onay kodu | Rezervasyonun kimliği (misafire söylenen kod); aramada tam eşleşir |
+| Misafir | Ad soyad; tıklayınca misafir kartı |
+| Giriş / Çıkış · gece | Konaklama aralığı ve gece sayısı (çıkış günü sayılmaz) |
+| Oda tipi · Oda | Tip kodu; oda atanmışsa numarası, atanmamışsa "oda bekliyor" |
+| Kişi | "2+1" = 2 yetişkin, 1 çocuk |
+| Pansiyon | RO / BB / HB / FB / AI / UAI |
+| Kaynak | Resepsiyon, Telefon, E-posta, Acente (acente adı), Web chat, WhatsApp, Web sitesi, Online kanal |
+| Durum rozeti | Opsiyonlu · Kesin · İçeride · Çıktı · İptal · Gelmedi |
+| Toplam | Gecelerin toplamı (indirim düşülmüş); fiyat elle girilmişse işaretli |
+| Grup | Grup adı / kodu; tıklayınca grup dosyası |
+| Açılış | Açan kişi ve zaman |
+
+**Örnek — listeyi okumak:** 14 Kasım sabahı "Bugün gelecek" görünümünde 6 satır: 4'ü Kesin ve odası atanmış, 1'i Kesin ama "oda bekliyor" (Oda aktörü uygun oda bulamamış — Odalar → Oda atama'dan elle verilir), 1'i Opsiyonlu (misafir onaylamadı; gelmezse akşam "Gelmedi" değil, önce onay durumu sorgulanır). "Bugün gidecek" görünümünde 5 satır, birinin çıkışı 13 Kasım'dı ve hâlâ İçeride (gecikmiş çıkış; Gidecekler listesinde üstte kırmızı görünür).
+
 ### Rezervasyon ayrıntısı
 
 Bara ya da satıra tıklayınca açılan sayfa dört kart gösterir:
@@ -67,6 +85,20 @@ Bara ya da satıra tıklayınca açılan sayfa dört kart gösterir:
 **İşlemler:** Onayla (opsiyonludan kesine), Düzenle, İptal, Gelmedi, İptali / gelmediyi geri al. Hangi düğmenin açık olduğuna **sunucu** karar verir; kapalı düğmenin yanında sebebi yazar.
 
 **Geçmiş** sekmesi: bu rezervasyona dokunan her işlemin adımları — kim yaptı, hangi aktör ne zaman devreye girdi, hangi alan neye değişti. Şikâyet incelemesinde ilk bakılacak yer burasıdır.
+
+#### İşlem düğmeleri — ne zaman açık
+
+| Düğme | Açık olduğu durum | Kapalıysa yazan sebep (örnek) |
+| --- | --- | --- |
+| Onayla | Opsiyonlu | "Rezervasyon zaten kesin" |
+| Düzenle | Opsiyonlu, Kesin, İçeride (yalnız çıkış ve not) | "Çıkmış rezervasyon düzenlenemez" |
+| İptal | Opsiyonlu, Kesin | "İçerideki misafir iptal edilemez — çıkış yapın" |
+| Gelmedi | Opsiyonlu / Kesin ve giriş günü gelmiş | "Giriş günü gelmedi" |
+| İptali / gelmediyi geri al | İptal / Gelmedi ve çıkış tarihi geçmemiş | "Çıkış tarihi geçti" |
+| Ön ödeme al | Gelmeden önce | — |
+| Oda değiştir / ata | Odası olan ya da olmayan açık rezervasyon | "Konaklama bitti" |
+
+**Örnek — geçmiş okuması:** FLX-3M8K: "01.02 10:12 Ayşe — açıldı (Kesin, 8.415 TL, kupon BAHAR15)" → "01.02 10:12 Oda aktörü — oda 405 atandı" → "01.02 10:12 Bildirim — onay e-postası kuyruğa" → "20.02 15:40 Mehmet — düzenlendi: çıkış 18.03 → 19.03; eklenen gece 3.300 (plan), indirim yeniden hesaplandı −1.980 → toplam 11.220" → "20.02 15:40 Oda aktörü — 405 uygun (18.03 boş), atama korundu" → "15.03 14:05 Ayşe — giriş yapıldı, oda 405, teminat nakit 1.000" → "15.03 14:05 Folyo aktörü — folyo açıldı, teminat ödemesi işlendi".
 
 ### Yeni rezervasyon formu
 
@@ -104,6 +136,20 @@ Bunların üstüne iki katman daha gelir:
 
 **Vergi dökümü** formda ve ayrıntıda görünen bilgi amaçlı bir hesaptır; gerçek tahsilat folyodan yapılır.
 
+#### Örnek — 15–18 Mart, 2 yetişkin 1 çocuk, Deluxe
+
+Otelin tanımları: Deluxe taban fiyatı 2.000 TL; "Yüksek sezon" 15 Mart–30 Nisan çarpanı 1,20; Deluxe × BB fiyat planı 1 Mart–31 Mart: 3.000 TL / gece, 2 kişi için, fazla yetişkin 600, çocuk 300; "Erken rezervasyon %10" promosyonu: 30 gün önce alınan, en az 3 gece, BB; kupon `BAHAR15`: %15, tek kullanımlık. Form 1 Şubat'ta dolduruluyor.
+
+1. Giriş 15.03, çıkış 18.03 → **3 gece** (15, 16, 17 Mart). Çıkış günü 18 Mart sayılmaz.
+2. Kaynak Resepsiyon, tür Tek oda. Sistem müsaitliği hesaplar: Deluxe her gece için 3 boş.
+3. Oda tipi kartı Deluxe: pansiyon BB seçildi. Gece fiyatı **fiyat planından** gelir (plan varsa sezon çarpanı uygulanmaz): 3.000 + çocuk 300 = **3.300 TL / gece** → 3 gece **9.900 TL** liste.
+4. Promosyon: 30 gün önce (1 Şubat → 15 Mart = 42 gün ✓), 3 gece ✓, BB ✓ → %10 = 990 TL. Kupon `BAHAR15` girildi → %15 = 1.485 TL; kupon daha avantajlı → **kupon uygulanır**, promosyon uygulanmaz. Tip kartı: "Liste 9.900 · İndirim −1.485 (BAHAR15) · Toplam **8.415 TL**". Kupon kartında "uygulanıyor".
+5. Gece dökümü (ayrıntıda): 15.03 3.300 − 495 = 2.805; 16.03 2.805; 17.03 2.805 (kaynak: "Deluxe BB planı", indirim BAHAR15). Vergi dökümü (bilgi): %10 dahil → net 7.650,00, KDV 765,00.
+6. Pansiyon HB seçilseydi ve Deluxe × HB planı yoksa: 2.000 × 1,20 (Yüksek sezon) = 2.400 TL / gece, kişi başı ek yok (plan yok), 3 gece 7.200; promosyon BB şartı tutmaz, kupon şartı yoksa %15 → 6.120.
+7. Kaynak **Acente** "Tur A.Ş." seçilseydi: kontratın Deluxe × BB dönem fiyatı (ör. 2.600) × 3 = 7.800; kupon ve promosyon **uygulanmaz**; 16 Mart stop-sale ise form "16.03 gecesi satışa kapalı" der ve kaydetmez.
+8. "Fiyatı elle gir" 8.000 + gerekçe "kurumsal anlaşma" → geceler 2.666,67 / 2.666,67 / 2.666,66; indirim kalkar (elle fiyatta promosyon yok); fiyat modu "Elle girilen fiyat".
+9. Kaydet → "Rezervasyon açıldı · FLX-3M8K". Arka planda Oda aktörü 15–18 Mart'ta boş, kapasitesi 3 olan bir Deluxe seçer (ör. 405) ve atar; bildirim merkezi onay bildirimini kuyruğa alır (kesin olduğu için hemen).
+
 #### Düzenleme kuralları
 
 - Anlaşılan geceler anlaşılan fiyatında kalır; **eklenen geceler** güncel fiyatla hesaplanır. Oda tipi değişirse bütün geceler yeni tipin fiyatıyla yeniden hesaplanır.
@@ -120,6 +166,16 @@ Bunların üstüne iki katman daha gelir:
 
 **Arka planda:** iptal / gelmedi ücreti **folyo aktörü** tarafından folyoya "İptal ücreti" / "Gelmedi ücreti" kalemi olarak işlenir ("Diğer" vergisiyle); geri alınınca aynı aktör ters kayıtla düşer.
 
+| Tetikleyici | Aktör / kim | Sonuç | Nerede görünür | Kapalıysa |
+| --- | --- | --- | --- | --- |
+| İptal | Sunucu | Durum İptal; oda ataması kalkar; envanter döner; kupon hakkı açılır; bekleme listesi taranır | Liste (İptal rozeti), oda planı (bar kalkar) | — |
+| İptal (ceza > 0) | Folyo aktörü | "İptal ücreti" kalemi (folyo yoksa açılır) | Folyo; Folyolar → Açık bakiye | "Folyo" manuel görevi |
+| Gelmedi | Sunucu + folyo aktörü | Durum Gelmedi; ilk gece ücreti kalemi; oda satışa döner | Liste, folyo | Manuel görev |
+| Geri al | Sunucu + folyo aktörü | Yer denetlenir; durum Kesin / Opsiyonlu; ücret ters kayıtla düşer; eski oda doluysa atama kalkar → oda aktörü yeniden atar | Liste, folyo, şerit | Manuel görev |
+| Gün kapanışı "Gelmeyenler" adımı | Gece görevlisi | Toplu Gelmedi (ücret "uygulama" seçeneğiyle) | Rezervasyonlar, folyolar | — |
+
+**Örnek — iptal cezası:** Politika "3 gün öncesine kadar ücretsiz, sonrası %50". FLX-3M8K (15 Mart giriş, toplam 8.415) 13 Mart'ta iptal ediliyor → süre içinde değil → ceza 8.415 × %50 = **4.207,50 TL** pencerede gösterilir. Sebep "misafir hastalandı"; resepsiyon "cezayı uygulama" işaretler → denetim izinde "politika tutarı 4.207,50, uygulanmadı". Uygulansaydı: folyo aktörü folyoyu açar, "İptal ücreti 4.207,50" kalemi ("Diğer" vergisiyle); misafirden tahsil edilince folyo kapanır ve fatura taslağı çıkar. Kupon BAHAR15 hakkı geri açılır; 15–18 Mart Deluxe envantere döner; bekleme listesinde Deluxe bekleyen varsa zil çalar. 10 Mart'ta iptal edilseydi ceza 0 olurdu.
+
 #### Opsiyonlu rezervasyon
 
 "Opsiyonlu (onay bekliyor)" durumla açılan rezervasyon envanteri tutar ama misafire onay bildirimi **gitmez**; "Rezervasyonu onayla" düğmesiyle kesine çevrilince bildirim gider. Web sitesi widget'ından gelen rezervasyonlar da opsiyonlu açılır (ödeme adımı henüz olmadığı için); resepsiyon onaylar.
@@ -132,6 +188,21 @@ Ayarlar → Genel parametreler → "Kapasite aşımı" iki seçenek sunar:
 - **Onaya gönder:** istek Yönetim → Onaylar kuyruğuna düşer. Yönetici onaylarsa aynı istek kapasite aşılarak açılır (açan: isteyen personel; onaylayan ayrıca kayıtlıdır); isteyenin ziline sonuç düşer. Reddedilirse açılmaz.
 
 Düzenleme, geri alma ve **kanaldan gelen istekler** (WhatsApp, OTA, widget) onaya gitmez; yer yoksa reddedilir.
+
+**Adım adım — onaya giden rezervasyon:**
+
+1. Politika "Onaya gönder". 20 Mart'ta Standart odanın tümü (10 oda) satılmış; resepsiyonist 20–21 Mart Standart rezervasyon açmaya çalışır.
+2. Form yer olmadığını gösterir (Standart kartı kırmızı, "0 boş") ama kaydetmeye izin verir. Kaydet → cevap: **"İstek yönetici onayına gönderildi"**; rezervasyon henüz açılmamıştır, listede görünmez.
+3. Yönetim → Onaylar → Bekleyen'de "Kapasite aşımı — Standart, 20–21 Mart, 1 oda, isteyen: Ayşe" satırı; yöneticinin ziline düşer. Ayşe kendi isteğini onaylayamaz.
+4. Yönetici **Onayla** → aynı istek kimliğiyle rezervasyon **kapasite aşılarak** açılır (Standart 20 Mart: −1 → müsaitlik tablosunda kırmızı); açan "Ayşe", onaylayan "Müdür" kayıtlıdır; Ayşe'nin ziline "onaylandı" düşer; oda aktörü oda bulamaz → rezervasyon "oda bekliyor" (oda planı şeridinde). Resepsiyon o gün bir iptal / yükseltme ile çözer.
+5. Yönetici **Reddet** → hiçbir şey açılmaz; Ayşe'nin ziline "reddedildi"; misafire bekleme listesi önerilir.
+
+| Tetikleyici | Aktör / kim | Sonuç | Nerede görünür | Kapalıysa |
+| --- | --- | --- | --- | --- |
+| Yer yok + politika Reddet | Sunucu | "Yer yok" hatası; "bekleme listesine al" önerisi | Form | — |
+| Yer yok + politika Onaya gönder | Sunucu → onay kuyruğu | Onay kaydı; rezervasyon yok | Onaylar → Bekleyen; yönetici zili | — |
+| Onaylandı | Onaylayan yönetici | Rezervasyon açılır (kapasite aşımı), isteyene zil | Liste, oda planı şeridi | Aktör işi değil; onay sunucuda açar |
+| Reddedildi / süresi doldu | Yönetici / zaman | Açılmaz; isteyene zil | Onaylar → Geçmiş | — |
 
 **Teknik güvence:** son odaya aynı saniyede gelen iki rezervasyondan yalnızca biri açılır; ikincisi "yer yok" alır. Aynı fiziksel odaya çakışan iki rezervasyon veritabanı seviyesinde engellenir.
 
@@ -152,6 +223,27 @@ Düzenleme, geri alma ve **kanaldan gelen istekler** (WhatsApp, OTA, widget) ona
 
 **Görünümler:** varsayılan açık kayıtlar (en yakın giriş önce); "Kapananlar" çevrilen, vazgeçilen ve tarihi geçenleri gösterir.
 
+#### Ekranda gördüğünüz alanlar
+
+| Alan | Anlamı |
+| --- | --- |
+| Misafir / iletişim | Ad, telefon ya da e-posta (aramak için) |
+| Oda tipi · tarih · kişi | İstenen konaklama |
+| Durum | Yer bekliyor · **Yer açıldı** · Rezervasyona çevrildi · Vazgeçildi · Tarihi geçti |
+| Yer açıldı zamanı | Zilin çaldığı an; "Yer bekliyor"a geri dönmüşse boşalır |
+| Rezervasyona çevir | Formu kayıtla dolu açar |
+| Kapat | Vazgeçildi olarak kapatır |
+
+| Tetikleyici | Ne olur | Nerede görünür | Not |
+| --- | --- | --- | --- |
+| İptal, gelmedi, erken çıkış, tarih kısaltma, arıza kaydı kapanması, acente kotası azalması | Sistem 2 sn içinde otelin bekleme listesini tarar (ayrıca her 5 dk güvenlik taraması) | — | Birleştirilmiş tarama: 50 iptal 50 tarama demek değildir |
+| Kayda uyan yer açıldı | Durum **Yer açıldı**; rezervasyon yetkililerinin ziline "bekleme listesinde yer açıldı" | Zil, liste | Acente kotasında tutulu odaya çalmaz |
+| Yer tekrar doldu (başkası aldı) | Durum **Yer bekliyor**'a döner | Liste | — |
+| Giriş tarihi geçti | **Tarihi geçti** | Kapananlar | — |
+| Rezervasyona çevrildi | Kapanır | Kapananlar | — |
+
+**Örnek:** 20–21 Mart Standart dolu; misafir Kemal B. listeye alınır (telefon, 2 kişi). 18 Mart 14:02'de başka bir misafirin 20–22 Mart Standart rezervasyonu iptal edilir → 14:02:02 tarama → Kemal B. "Yer açıldı", resepsiyon ziline bildirim. 14:05 resepsiyon arar, "Rezervasyona çevir" → form 20–21 Mart, Standart, 2 kişi, Kemal B. ile dolu; kaydet → rezervasyon açılır, bekleme kaydı "Rezervasyona çevrildi". Resepsiyon aramadan 14:30'da web sitesinden başka biri 20 Mart Standart alırsa kayıt "Yer bekliyor"a döner — zil çaldığında hızlı davranmak gerekir.
+
 ### Grup rezervasyonu ve grup dosyası
 
 **Nerede:** Yeni rezervasyon formunda tür "Grup"; grup dosyaları Rezervasyonlar → Gruplar (`/gruplar`, dosya `/gruplar/<kimlik>`).
@@ -163,6 +255,21 @@ Düzenleme, geri alma ve **kanaldan gelen istekler** (WhatsApp, OTA, widget) ona
 **Grup dosyası ekranı:** grubun rezervasyonları, durum dağılımı, folyo bakiyeleri ve toplamlar; seçimli **toplu oda atama**, **toplu check-in** (en fazla 50; kimlik bilgisi karttan ya da online check-in'den okunur), **toplu check-out**, grup iptali. Toplu işlemler tek tek işlemin aynı kurallarından geçer: odası atanmamış ya da kimliği eksik kayıt "ayrıntı ister" diye **atlanır** ve sebebiyle listelenir — o kayıtları tek tek alırsınız.
 
 **Grup master folyo:** grubun hesabını tek folyoda toplamak için folyo ekranındaki **Birleştir** kullanılır (bkz. Folyo bölümü); grup dosyası yalnızca bakiyeleri okur.
+
+#### Grup dosyası — ekranda gördüğünüz alanlar
+
+| Alan | Anlamı |
+| --- | --- |
+| Grup adı / kodu, tarih aralığı | Grubun kimliği |
+| Durum dağılımı | Kaç oda Kesin / İçeride / Çıktı / İptal |
+| Toplamlar | Rezervasyon toplamı, folyo borç / ödenen / **bakiye** (birleştirilmiş pencereler hariç) |
+| Rezervasyon satırı | Misafir, tip, oda, durum, bakiye; seçim kutusu |
+| Toplu oda atama | Seçili odasız rezervasyonlara otomatik oda |
+| Toplu check-in | Seçili rezervasyonlar (≤ 50); sonuç listesi: giren / atlanan (sebebiyle) |
+| Toplu check-out | Seçili içerideki rezervasyonlar; bakiyesi açık olan atlanır |
+| Grup iptali | Açık odaların tümü, sebep zorunlu |
+
+**Örnek — 20 odalık tur grubu:** "Baltık Turu" 10–13 Nisan, acente "Tur A.Ş.", 20 Standart BB, rooming list Excel'den 20 satır (18 geçerli, 2 satırda oda tipi kodu yanlış → düzeltilip yeniden yüklenir). Kontrat fiyatı 2.600 × 3 gece × 20 = 156.000 TL. Acentenin Standart kotası 15 ise: 15 oda kotadan, 5 oda genel havuzdan (yer varsa) açılır; kota dolmuş diye reddedilmez. 10 Nisan 14:00 otobüs gelir: grup dosyasında 20 satır seçilir → **Toplu oda atama** → 20 oda; **Toplu check-in** → 17 giriş yapılır, 3 atlanır: 2'sinde kimlik bilgisi eksik (rooming list'te belge yok; karttan da okunamadı), 1'inde oda Arızalı çıktı. Bu 3'ü Gelecekler'den tek tek alınır. Giriş yapılan 17 odanın folyoları açılır; acente ödeyeceği için her odada 2. pencere yerine daha pratik yol: rehberin odasında **Birleştir** ile 20 odanın "Oda" kalemlerini master folyoya toplamak ve ödeyeni "Tur A.Ş." yapmak; ekstralar her odanın 1. penceresinde kalır. 13 Nisan çıkışta **Toplu check-out**: ekstrası ödenmemiş 2 oda atlanır, resepsiyon tahsil eder, sonra çıkarır.
 
 **Acente kotası (allotment):** acente kartındaki "Kota" sekmesinde tanımlanır. Kota bir **garantidir, tavan değil**: acentenin kotası dolunca satış genel havuzdan devam eder. Release günü (giriş gecesi − release gün sayısı) gelince kullanılmamış kota herkese açılır. Yeni rezervasyon formunda "N oda acente kotasında tutulu" mesajı görürseniz sebebi budur. **Oda planı kota düşümünü göstermez**; planda boş görünen oda satışta kotaya takılabilir — kota görünürlüğü acente kartındaki kullanım tablosundadır.
 
@@ -191,6 +298,29 @@ Düzenleme, geri alma ve **kanaldan gelen istekler** (WhatsApp, OTA, widget) ona
 - Ekran canlıdır: başka bir resepsiyonist bir şey değiştirince birkaç saniye içinde yansır. Bağlantı koparsa rozet "canlı değil" olur ve ekran periyodik tazelemeye düşer.
 - Üstteki günlük özet (giriş / çıkış / doluluk) sayfalanmaz; otelin tamamından hesaplanır. Doluluk paydası satılabilir odadır (toplam − arızalı); oda bekleyen rezervasyonlar paya dahildir. Öğleden sonra "8 çıkıştan 5'i yapıldı" gibi okunur.
 
+### Ekranda gördüğünüz alanlar
+
+| Alan | Anlamı |
+| --- | --- |
+| Günlük özet (üst) | Giriş (yapılan / beklenen), çıkış (yapılan / beklenen), doluluk %, satılabilir oda; otelin tamamından |
+| Pencere düğmeleri | 7 / 14 / 30 gün; "Bugün"; tarih seçici; ok tuşları |
+| Süzgeçler | Kat, oda tipi, durum; ad / onay kodu arama |
+| Satır başı | Oda numarası, tip; doluluk noktası (dolu / boş) ve kat hizmeti rengi; arıza işareti |
+| Bar | Misafir adı, kişi sayısı, durum rengi (opsiyonlu / kesin / içeride / çıktı); "devam ediyor" oku; taşınma işaretleri |
+| Şerit (arıza) | Kayıt türü ve sebebi; tarih aralığı |
+| Oda bekleyenler şeridi | Odası olmayan rezervasyon kartları: misafir, tip, tarih; "Otomatik ata" |
+| Çekmece | Misafir, konaklama, **toplam bakiye** (bütün pencereler), oda geçmişi, işlemler (açık / kapalı sebebiyle), "Rezervasyon sayfası" |
+| Canlı rozeti | "Canlı" / "Canlı değil — periyodik tazeleme" |
+
+| Tetikleyici | Aktör / kim | Sonuç | Nerede görünür | Kapalıysa |
+| --- | --- | --- | --- | --- |
+| Yeni rezervasyon açıldı | Oda aktörü | Uygun oda atanır → bar ızgaraya iner | Izgara (önce şeritte görünür, saniyeler sonra satıra) | Kart şeritte kalır; "Otomatik ata" ya da sürükleme |
+| Şeritten odaya sürüklendi | Sunucu (oda değişikliği servisi) | Atama; kapasite / arıza / overbooking denetimi | Bar satırda | — |
+| İçerideki misafir taşındı | Sunucu | Aynı işlemde eski oda boş + kirli, yeni oda dolu; oda geçmişi | İki bar; kat haritası | Aktör işi değil |
+| Herhangi bir rezervasyon / oda değişikliği | Canlı yayın | Açık planlar birkaç saniyeye yayılarak tazelenir | Rozet | Bağlantı yoksa 15 sn içinde periyodik tazeleme |
+
+**Örnek:** 14 Kasım, 14 günlük pencere. Satır 305: 12–15 Kasım "Demir, A. (2)" barı (içeride, yeşil), 15 Kasım boş, 16–19 Kasım "Yılmaz, B." (kesin, mavi). Satır 311: 14–16 Kasım kırmızı şerit "Arızalı — klima". Şeritte "Kaya, C. · Deluxe · 15–17 Kasım" kartı. Resepsiyon kartı 305'e sürükler: 15 Kasım'da 305 boş ama 16'da Yılmaz var → çerçeve kırmızı, sunucu "15–17 Kasım'da 305 başkasına ait" der. 404'e sürükler → yeşil → atanır. Demir, A. 14 Kasım'da "klima gürültülü" der → barı 305'ten 307'ye sürükle → onay penceresi, sebep "misafir talebi" → 305 boş + kirli (sabah listesine düşer), 307 dolu; 305 satırında 12–13 Kasım "Demir, A. — taşındı" barı kalır, 307'de 14 Kasım'dan başlayan bar. Çekmecede "Oda geçmişi: 305 (12–14), 307 (14–)".
+
 **Dikkat:** sürükle-bırakla **tarih** değiştirme yoktur; tarih değişikliği rezervasyon ayrıntısındaki Düzenle ile yapılır. Bitmiş konaklamanın oda ataması kaldırılamaz.
 
 ## Giriş / çıkış
@@ -204,6 +334,18 @@ Düzenleme, geri alma ve **kanaldan gelen istekler** (WhatsApp, OTA, widget) ona
 **Görünümler:** "Bekleniyor" (girişi bugün olan ve geç kalanlar — dün gelmesi gerekip gelmeyen ertesi gün de girer) ve "Bugün girenler" (aynı gün yapılan giriş buradan geri alınır).
 
 Satırda: misafir, oda (yoksa "oda verilmemiş"), odanın hazırlığı (temiz / kirli / arızalı), kimlik durumu, online check-in rozeti, "Giriş yap" düğmesi.
+
+#### Ekranda gördüğünüz alanlar (Gelecekler)
+
+| Alan | Anlamı |
+| --- | --- |
+| Misafir · kişi | Ad, yetişkin + çocuk |
+| Onay kodu · kaynak | Rezervasyon kimliği, nereden geldi |
+| Giriş → çıkış | Geç kalan misafirde giriş tarihi dünkü (ya da daha eski) görünür |
+| Oda | Numara + kat hizmeti rozeti (Kontrol edildi / Temiz / Kirli / Temizleniyor) + arıza işareti; yoksa "Oda verilmemiş" |
+| Kimlik | "Kayıtlı" (karttan), "Online check-in — onaylı / inceleme bekliyor", "Eksik" |
+| Teminat / ön ödeme | Varsa ön ödeme tutarı |
+| Giriş yap | Pencereyi açar; "Bugün girenler"de yerine "Geri al" |
 
 ### Check-in penceresi
 
@@ -225,6 +367,17 @@ Satırda: misafir, oda (yoksa "oda verilmemiş"), odanın hazırlığı (temiz /
 - **Bildirim merkezi** "hoş geldiniz" bildirimini kuyruğa alır (kanal ve şablon kurulmuşsa).
 - Online check-in kaydı varsa "Giriş yapıldı" olur.
 - Kimlik numarası listelerde ve denetim izinde **maskeli** gösterilir (KVKK).
+
+| Tetikleyici | Aktör | Sonuç | Nerede görünür | Kapalıysa / hatada |
+| --- | --- | --- | --- | --- |
+| "Giriş yap" | Oda aktörü | Oda **Dolu** | Oda listesi, kat haritası, oda planı satır başı | "Oda dolu olarak işaretlenecek" manuel görevi; Odalar ekranında doluluk düğmesi yok — görev tamamlanınca sistem yazar |
+| "Giriş yap" | Folyo aktörü | Folyo açılır; erken giriş ücreti kalemi; nakit / havale teminatı **ödeme** (kaynak "Giriş teminatı") | Konaklama folyosu; Kasa → Günlük kasa | "Folyo" manuel görevi; folyo ekranında "Teminatı işle" şeridi |
+| Teminat ≥ büyük ödeme eşiği | Folyo aktörü → onay kuyruğu | Ödeme "Onay bekliyor" | Onaylar; folyo "Giriş teminatı onay bekliyor" | — |
+| "Giriş yap" | Bildirim merkezi | "Hoş geldiniz" bildirimi (kanal + şablon varsa) | Bildirimler → Gönderim geçmişi | Kanal yoksa satır açılmaz |
+| "Giriş yap" | Online check-in | Kayıt "Giriş yapıldı" | Online check-in sekmesi | — |
+| Giriş geri alındı | Oda aktörü / folyo aktörü | Oda Boş; erken giriş ücreti ve teminat ödemesi ters kayıtla düşer; online check-in "Onaylandı"ya döner | Folyo, oda listesi | Manuel görevler |
+
+**Örnek — teminat 1.000 TL nakit:** 14 Kasım 13:30, Deluxe 405, 3 gece 3.300 TL / gece, otelin giriş saati 14:00, erken giriş ücreti "gecelik fiyatın %20'si". Check-in penceresi: oda 405 "Kontrol edildi" (hazır); kimlik: TC kimlik no girilir (sağlama geçer); refakatçi 1 yetişkin (politika "yalnızca sahibi" — belge istenmez), 1 çocuk; plaka 34 ABC 123; **Teminat: Nakit 1.000 TL**; **Erken giriş ücreti: 660,00 TL** uyarısı (3.300 × %20) — resepsiyon "Ücret uygulama" işaretler (oda hazırdı). "Giriş yap". 13:30:02 oda aktörü 405'i Dolu yapar. 13:30:02 folyo aktörü folyoyu açar: kalem yok (ücretten vazgeçildi; denetim izinde "politika tutarı 660, uygulanmadı"), **ödeme: Nakit 1.000,00 · Giriş teminatı · İşlendi**. Folyo: Harcamalar 0,00 · Ödenen 1.000,00 · **Bakiye −1.000,00** (misafir alacaklı). Kasa 14 Kasım: Nakit tahsilat +1.000 (kaynak Konaklama, alan: resepsiyonist). Gece kapanışlarıyla 3 × 3.300 işlenir → çıkışta bakiye 9.900 − 1.000 = **8.900 TL** ödenecek. Teminat **kart provizyonu** seçilmiş olsaydı: ödeme yazılmaz, folyoda "Provizyon var — çıkışta kartla tahsil edin" şeridi; çıkışta 9.900 kartla çekilir. Eşik 500 TL olsaydı nakit teminat "Onay bekliyor" kalır, müdür onaylayınca kasaya girerdi.
 
 ### Gidecekler
 
@@ -254,9 +407,49 @@ Satırda folyo bakiyesi (folyoya bağlantı) ve alınan teminat görünür.
 - **Bildirim merkezi** teşekkür mesajını kuyruğa alır; **anket** işi çıkış sonrası anketi ayardaki gün ve saatte gönderir.
 - Portal bağlantısı çıkıştan 14 gün sonra kapanır; belge fotoğrafları saklama süresi sonunda silinir.
 
+#### Check-out penceresi — ekranda gördüğünüz alanlar
+
+| Alan | Anlamı |
+| --- | --- |
+| "Çıkış yapılamaz" uyarısı | Yapısal engel (zaten çıkmış, iptal) — sebebi yazar |
+| Erken ayrılış uyarısı + onay kutusu | "N gece bırakılacak"; indirimin akıbeti; kutu işaretlenmeden çıkış olmaz |
+| Gecikmiş çıkış uyarısı | "Çıkış N gün gecikmiş"; tarih değişmez |
+| Geç çıkış ücreti | Tutar + "Ücret uygulama" kutusu; otelde ücret tanımlı değilse bilgi notu |
+| Folyo bakiyesi | Pencere bazında; birleştirilmiş pencereler hariç |
+| Çıkışta işlenecekler | Kalan geceler (bugünkü gece dahil), geç çıkış ücreti — vergileriyle |
+| Onay bekleyen ödeme | Henüz düşülmemiş tutar |
+| **Ödenecek** | Bakiye + işlenecekler − (yönlendirmeyle başka konaklamaya düşecekler) |
+| Ödeme al | Tek açık pencerede doğrudan; çok pencerede folyoya yönlendirir |
+| Bakiyeyle çıkış yap + Gerekçe | Yetkili; yönetime zil |
+| Uyarı kutuları | Teslim edilmemiş çamaşır, kayıp eşya (eşleşmiş / odada bulunmuş), teminat, açık spa randevusu / borcu |
+| Çıkış yap | İşlemi yapar |
+
+| Tetikleyici | Aktör | Sonuç | Nerede görünür | Kapalıysa / hatada |
+| --- | --- | --- | --- | --- |
+| "Çıkış yap" | Oda aktörü | Oda **Boş + Kirli** | Kat haritası kırmızı, oda listesi | Manuel görev |
+| "Çıkış yap" | Kat hizmeti aktörü | **Çıkış temizliği** görevi (Yüksek); açık konaklama temizliği varsa yükseltir | Kat hizmetleri → Görev panosu | Manuel görev; şef elle açar |
+| "Çıkış yap" | Folyo aktörü | Kalan geceler + geç çıkış ücreti kalemleri; bakiye 0 → folyo **Kapalı** → **fatura taslağı**; bakiye kaldıysa folyo yetkilisine zil | Folyo; Faturalar → Taslaklar | Manuel görev; Faturalanacaklar listesi |
+| "Çıkış yap" | Bildirim merkezi | Teşekkür bildirimi | Gönderim geçmişi | — |
+| "Çıkış yap" | Anket işi | Çıkış sonrası anket, ayardaki gün + saatte | Anketler → Rapor (davet) | Portal adresi / kanal yoksa gitmez |
+| "Çıkış yap" | Spa | Açık randevu / borç varsa spa ziline | Spa | — |
+| Çıkış geri alındı (aynı gün) | Oda / folyo aktörü | Oda Dolu; folyo yeniden açılır, geç çıkış ücreti düşer; çıkış temizliği iptal | Folyo, pano | Manuel görevler |
+
+**Örnek — erken ayrılış ve geç çıkış:** 405'teki misafir (3 gece, 14–17 Kasım, 3.300 / gece, 1.000 nakit teminat) 16 Kasım 13:40'ta ayrılmaya karar verir; otelin çıkış saati 12:00, geç çıkış ücreti "gecelik %30". Pencere: "Erken ayrılış: 1 gece bırakılacak (16.11)" + onay kutusu; "Geç çıkış ücreti: 990,00 TL" (3.300 × %30) + "Ücret uygulama" kutusu; folyo bakiyesi: 14 ve 15 Kasım geceleri işlenmiş 6.600 − teminat 1.000 = **5.600**; çıkışta işlenecek: 16 Kasım gecesi **yok** (bırakılıyor), geç çıkış 990 → **Ödenecek 6.590 TL**. Minibar 110 TL fişi 13:00'te kesilmişse bakiyeye dahildir → 6.700. Resepsiyon "Ödeme al" → 6.700 kart, slip no → bakiye 0 → "Çıkış yap" → oda aktörü 405 Boş + Kirli; kat aktörü çıkış temizliği; folyo aktörü geç çıkış 990 kalemini yazar (zaten ödendiği için bakiye 0) → folyo Kapalı → fatura taslağı (alıcı: misafir). 16 Kasım gecesi envantere döner: bekleme listesinde Deluxe bekleyen varsa zil çalar. Misafir 20 dakika sonra "eşyamı unuttum, bir gece daha kalırım" derse: çıkış **geri alınamaz** şekilde bırakılan gece geri gelmez; aynı gün geri alma yalnızca folyoyu ve odayı eski hâline getirir, 16 Kasım gecesi için rezervasyon ayrıntısından çıkış tarihi 17'ye uzatılır (yer varsa).
+
 ### Konaklayanlar
 
 Şu an içeride olan herkes: oda, giriş, çıkış, bakiye. Sıralama: çıkışı yakın olan önce / son giren önce / oda numarası. Tarih aralığı süzgeci "şu tarihlerde kim içerideydi" sorusuna da cevap verir.
+
+| Alan | Anlamı |
+| --- | --- |
+| Oda · misafir · kişi | İçerideki konaklama |
+| Giriş → çıkış · kalan gece | Bugün çıkacaklar "0 gece" |
+| Bakiye | Bütün pencerelerin toplamı; tıklayınca folyo |
+| Teminat | Girişte alınan (nakit / havale işlenmiş; provizyon hatırlatma) |
+| Etiketler | Misafir kartından (VIP, Sadık…) |
+| Sıralama | Çıkışı yakın olan önce / Son giren önce / Oda numarası |
+
+**Örnek — gece vardiyası kullanımı:** 23:30'da gece görevlisi "Çıkışı yakın olan önce" ile bakar: sabah 8 çıkış var; 3'ünün bakiyesi açık (toplam 14.200 TL) — sabah yoğunluğu öngörülür; biri VIP etiketli → geç çıkış sorulacak notu alınır. Tarih aralığı 10–12 Kasım seçilince "o günlerde kim içerideydi" listesi gelir — kayıp eşya ya da güvenlik sorusu için.
 
 ### Girişi / çıkışı geri alma
 
@@ -267,6 +460,17 @@ Satırda folyo bakiyesi (folyoya bağlantı) ve alınan teminat görünür.
 - **Çıkış**, oda bu arada başka misafire verildiyse geri alınmaz. Erken ayrılışta bırakılan geceler geri **gelmez**. Geri alınınca folyo yeniden açılır, geç çıkış ücreti düşer; oda yeniden dolu olur.
 - Daha sonraki düzeltmeler rezervasyon düzenlemesiyle yapılır.
 
+| Tetikleyici | Aktör | Sonuç | Nerede görünür | Kapalıysa |
+| --- | --- | --- | --- | --- |
+| Giriş geri alındı | Oda aktörü | Oda Boş (kat hizmeti değişmez) | Oda listesi, plan | Manuel görev |
+| Giriş geri alındı | Folyo aktörü | Erken giriş ücreti ters kayıt; teminat ödemesi iptal kaydı (onay bekleyense isteği geri çekilir); folyo açık kalır (kalem yoksa) | Folyo | Manuel görev |
+| Giriş geri alındı | Online check-in | "Onaylandı"ya döner | Sekme | — |
+| Çıkış geri alındı | Oda aktörü | Oda Dolu | Plan | Manuel görev |
+| Çıkış geri alındı | Kat hizmeti aktörü | Çıkış temizliği görevi iptal | Pano | Manuel görev |
+| Çıkış geri alındı | Folyo aktörü | Folyo yeniden açılır; geç çıkış ücreti düşer; fatura taslağı varsa durdurulur (fatura **kesilmişse** geri alma engellenir) | Folyo, Faturalar | Manuel görev |
+
+**Örnek:** 14 Kasım 13:30'da 405'e yanlışlıkla "Kaya, C." yerine "Demir, A." giriş yapıldı (ikisi de Deluxe bekliyor). 13:35 Gelecekler → "Bugün girenler" → Demir, A. → **Geri al**, sebep "yanlış misafir". Oda aktörü 405'i Boş yapar; folyo aktörü 1.000 TL nakit teminat ödemesini iptal kaydıyla düşer (kasa: +1.000 ve −1.000 aynı gün, net 0); folyoda kalem yoktu, açık kalır; denetim izinde geri alma ve sebep. Ardından Kaya, C. için giriş yapılır; Demir, A. başka Deluxe'e girer. Aynı misafire folyoda resepsiyon ödemesi alınmış olsaydı (ör. 2.000 TL "Resepsiyon" kaynağıyla) geri alma **engellenir**: önce ödeme iptali (onaylı), sonra geri alma. Gün kapanmış olsaydı geri alma yoktur; çözüm rezervasyon düzenlemesi ve folyo aktarmasıyla.
+
 ## Online check-in ve misafir portalı
 
 **Nerede (personel):** Ön büro → Giriş / çıkış → **Online check-in** sekmesi; rezervasyon ayrıntısındaki **Misafir portalı** kartı; portal ayarları (yetkili için). **Misafir tarafı:** `/misafir/p/<bağlantı>` adresindeki küçük misafir uygulaması (TR, EN, DE, RU; dil uyruğa göre açılır, misafir değiştirebilir).
@@ -276,6 +480,18 @@ Satırda folyo bakiyesi (folyoya bağlantı) ve alınan teminat görünür.
 Misafir, rezervasyonuna özel imzalı bağlantıyla (ya da QR'la) açar; şifre yoktur. Sayfalar: **Rezervasyonum**, **Online check-in**, **Folyom** (yalnızca misafirin ödediği pencereler; şirket / acente penceresi gösterilmez, yalnızca varlığı söylenir), **İstek gönder** (misafir istekleri ekranına "Misafir portalı" kaynağıyla düşer), **Oda servisi** (içerideki misafire; QR menü ve sipariş), **Spa randevusu** (otel açmışsa), **Anket** (açık anket varsa kutu), **Web sohbeti** (kanal açıksa). **Dijital anahtar** düğmesi yerinde ama **pasiftir** — donanım entegrasyonu gelince açılır.
 
 Bağlantı rezervasyona bağlıdır; yenilenince eskisi geçersiz olur; iptal / gelmedi ve çıkıştan 14 gün sonra kapanır.
+
+#### Rezervasyon ayrıntısındaki "Misafir portalı" kartı
+
+| Alan / düğme | Anlamı |
+| --- | --- |
+| Bağlantı | Misafire özel adres; "Kopyala" |
+| QR | Telefona okutmak için (resepsiyonda ekrandan) |
+| Daveti gönder | Bildirim kanallarıyla elle davet (misafirde e-posta / telefon olmalı) |
+| Yenile | Yeni bağlantı üretir, eskisi geçersiz (bağlantı yanlış kişiye gittiyse) |
+| İptal | Bağlantıyı kapatır |
+| Davet durumu | "Gönderildi (e-posta, 13.03 09:01)" / "Gönderilmedi — iletişim yok" |
+| Online check-in durumu | İnceleme bekliyor / Onaylandı / Düzeltme istendi / Giriş yapıldı / "Henüz gönderilmedi"; "İncele" bağlantısı |
 
 ### Davet
 
@@ -297,6 +513,28 @@ Girişten "Online check-in kaç gün önce açılır" (varsayılan 7) gün önce
 - **Düzeltme iste:** sebep yazın; misafir portalda görür (kendi dilinde), düzeltip yeniden gönderir → yeniden "İnceleme bekliyor".
 - Misafir onaydan **sonra** bilgi değiştirirse kayıt yeniden incelemeye düşer.
 
+#### Online check-in sekmesi — ekranda gördüğünüz alanlar
+
+| Alan | Anlamı |
+| --- | --- |
+| Durum sayıları | İnceleme bekliyor / Onaylandı / Düzeltme istendi / Giriş yapıldı |
+| Görünüm | Gelecek girişler / Tümü |
+| Satır | Giriş günü, misafir, onay kodu, oda tipi, kişi (belge sayısı), durum rozeti, gönderim zamanı, portal dili |
+| İnceleme penceresi | Kişiler (belge türü, maskeli numara, uyruk, doğum tarihi, fotoğraf sayısı), fotoğraflar (büyüt), imza, onaylar (kurallar, KVKK, fotoğraf rızası, ticari ileti), tahmini varış, plaka, ödeme tercihi, misafir notu; **Onayla** · **Düzeltme iste** (sebep) · **Girişi yap** (giriş günü geldiyse) |
+
+| Tetikleyici | Ne olur | Nerede görünür | Kapalıysa / hatada |
+| --- | --- | --- | --- |
+| Girişe N gün kaldı (ayar) ve portal adresi + kanal var | 30 dk'lık iş davet bildirimi yazar ("Online check-in daveti" şablonu, e-posta / SMS) | Bildirimler → Gönderim geçmişi; portal kartında "davet gönderildi" | Adres / kanal / şablon yoksa tur başlamaz; elle gönderim |
+| Misafir formu gönderdi | Kayıt **İnceleme bekliyor**; resepsiyon ziline "Online check-in" | Sekme sayacı, zil | — |
+| Onaylandı | **Onaylandı**; Gelecekler satırında "online check-in onaylı" | Gelecekler | — |
+| Düzeltme istendi | **Düzeltme istendi**; misafir portalda sebebi kendi dilinde görür | Portal | — |
+| Misafir onaydan sonra değiştirdi | Yeniden **İnceleme bekliyor** | Sekme | — |
+| Giriş yapıldı | **Giriş yapıldı**; geri alınırsa Onaylandı'ya döner | Sekme | — |
+| Rezervasyon tarihi değişti | Kaydın giriş günü eşitlenir | Liste sırası | — |
+| Çıkıştan (gelmeyende girişten) saklama günü geçti | Belge fotoğrafları ve kimlik no / doğum tarihi kopyası silinir | Pencerede "belge silindi" | — |
+
+**Örnek:** Rezervasyon 20 Mart girişli; ayar "davet 7 gün önce", online check-in "7 gün önce açılır", saklama 7 gün. 13 Mart 09:00 iş turu: misafirin e-postası var, SMTP kanalı kurulu → davet e-postası kuyruğa, 09:01 gönderildi. 14 Mart misafir telefondan açar (dil: EN, uyruk DE olduğu için portal Almanca açılır, misafir İngilizceye çevirir): 2 yetişkin → 2 pasaport fotoğrafı (her biri 1 adet), çocuk 1 (belge yok), tahmini varış 16:00, plaka yok, ödeme "Girişte kartla", 4 onay kutusu, imza → gönder → resepsiyon ziline. 14 Mart 10:30 resepsiyon inceler: ikinci pasaport fotoğrafı bulanık → "Düzeltme iste: 2. kişinin pasaport fotoğrafı okunmuyor" → misafir 11:00'de yeni fotoğraf yükler → "İnceleme bekliyor" → 11:10 Onaylandı. 20 Mart 15:50 misafir gelir: Gelecekler satırında "Online check-in onaylı" → "Giriş yap" → form 2 pasaport, çocuk, varış bilgisiyle dolu; resepsiyon teminat ve odayı kontrol eder, "Giriş yap" → kayıt "Giriş yapıldı". Çıkış 23 Mart → 30 Mart fotoğraflar ve pasaport numaralarının kopyası silinir; ad, belge türü, uyruk, imza kalır.
+
 **KVKK:** belge fotoğrafları çıkıştan (gelmeyende girişten) "Belge fotoğrafı saklama (gün)" sonra silinir; silinince kimlik numarası ve doğum tarihi kopyası da temizlenir (ad, belge türü, uyruk, imza kalır). Bağlanmayan yükleme 48 saat sonra silinir. İşlem kaydına kimlik numarası yazılmaz.
 
 ### Portal ayarları
@@ -317,17 +555,51 @@ Yetkili (müdür) için: portal açık/kapalı, **portal adresi** (davet bağlan
 
 **Engeller:** o tarihlerde rezervasyonu olan odaya kayıt açılamaz ("misafiri başka odaya taşıyın"); kayıt yeni overbooking yaratacaksa reddedilir ("Bu kayıt overbooking'e yol açar"); geçmiş tarihli kayıt açılamaz; çakışan iki kayıt olamaz.
 
+#### Oda listesi — ekranda gördüğünüz alanlar
+
+| Alan | Anlamı |
+| --- | --- |
+| Oda no · Kat · Tip | Envanter tanımı |
+| Doluluk | Boş / Dolu (yalnızca okunur) |
+| Kat hizmeti | Kirli / Temizleniyor / Temiz / Kontrol edildi (kat ekranından değişir) |
+| Arıza | Bugün odayı kapsayan kayıt: Arızalı / Hizmet dışı + sebep; yoksa "Hizmette" |
+| Not | Oda notu (manzara, bağlantılı oda…) |
+| Düzenle / Sil | Envanter tanımı (yönetim); rezervasyonu olan oda silinemez |
+| Arıza kayıtları | Pencere (yönetim) |
+
+**Örnek — planlı tadilat:** 20–25 Ekim'de 3. kat banyoları yenilenecek: 301–310 için 10 ayrı Arızalı kaydı (başlangıç 20.10, bitiş 25.10, sebep "banyo tadilatı") 1 Eylül'de girilir. 1 Eylül'den itibaren müsaitlik tablosunda 20–24 Ekim geceleri Standart sayısı 10 azalır (25 Ekim'de odalar döner — çıkış günü mantığı), oda planında kırmızı şeritler görünür, oda atama bu odaları o tarihlerde listelemez, bekleme listesi kota hesabı buna göre çalışır. 305'te 22–24 Ekim rezervasyonu varsa kayıt **reddedilir**: önce rezervasyon başka odaya taşınır. Tadilat 24 Ekim'de erken biterse kayıt "Bitir" ile 24'te sonlandırılır → odalar Kirli → kat aktörü 10 detaylı temizlik görevi açar → bekleme listesi taranır. 20 Ekim gelmeden iptal edilirse kayıt silinir (denetim izinde kalır).
+
 **Teknik servisle ilişki:** teknik servis bileti "Odayı kullanıma kapat" ile açılırsa arıza kaydını o açar ve bilet çözülünce kapatır. Günlük arıza işi için Teknik servis ekranını kullanın; bu pencere doğrudan tadilat / plan kaydı içindir.
 
 ### Müsaitlik
 
 **Ne yapar:** satır oda tipi, sütun gece, hücrede **boş oda sayısı**. Renk kodu: kırmızı = overbooking (eksi), turuncu = son odalar, yeşil = rahat. Arızalı odalar sayıdan düşer; hizmet dışı odalar sayılır ama hücrede **nokta** ile işaretlenir — o gecenin son boş odası hizmet dışıysa satılan misafire oda bulunamaz.
 
+| Alan | Anlamı |
+| --- | --- |
+| Satır | Oda tipi (kod, ad, toplam oda) |
+| Sütun | Gece (tarih); pencere 7 / 14 / 30 gün |
+| Hücre sayısı | Boş oda = toplam − arızalı − o geceyi tutan rezervasyonlar (odası atanmış ya da atanmamış) |
+| Renk | Yeşil rahat · turuncu son odalar · **kırmızı eksi (overbooking)** |
+| Nokta | O gece hizmet dışı oda var (sayıda ama atanamaz) |
+| Tıklama | Hücreden o tip ve tarihle yeni rezervasyon formu ön dolu |
+
+**Örnek:** Deluxe 10 oda. 20 Mart sütunu: 7 rezervasyon (5'i odalı, 2'si oda bekliyor) + 1 Arızalı (klima) → hücre **2** (turuncu). 21 Mart: 10 rezervasyon + 1 Arızalı → **−1** kırmızı: overbooking var (onaya gönder politikasıyla açılmış ya da arıza sonradan girilmiş); o gün bir misafir başka tipe yükseltilmeli ya da iptal beklenmeli. 22 Mart: 6 boş ama hücrede nokta: 1 oda Hizmet dışı; 6 satış yapılırsa altıncı misafire oda verilemez.
+
 **Dikkat:** sayı "kaç tane satılabilir"dir; acente kotasında tutulu odalar burada düşülmez (satış sırasında denetlenir).
 
 ### Oda atama
 
 **Ne yapar:** odası olmayan rezervasyonlara oda vermek için bağımsız ekran (oda planındaki şeridin liste hâli). Görünümler ve arama ile rezervasyonu bulun; aday listesi sayfalıdır, "Diğer oda tiplerini de göster" ile başka tipe atama (üst sınıf / yan / alt sınıf olarak işaretli) yapılabilir; kapasite aşımı reddedilir. Giriş günü gelmiş ama gelmeyen misafir buradan "Gelmedi" işaretlenebilir ("Gelmeme ücretinden vazgeç" seçeneğiyle).
+
+| Tetikleyici | Aktör / kim | Sonuç | Nerede görünür | Kapalıysa |
+| --- | --- | --- | --- | --- |
+| Rezervasyon açıldı | Oda aktörü | Tip içinde boş, kapasitesi yeten, arızalı olmayan oda; bugün girecekse Temiz / Kontrol edilmiş öne | Rezervasyon "Oda" alanı; oda planı | "Oda atanacak" manuel görevi; Oda atama ekranı |
+| Rezervasyon düzenlendi ve oda uymuyor | Sunucu | Atama kaldırılır ("oda bekliyor") | Şerit | — |
+| Elle atama | Resepsiyon | Aday listesi: aynı tip önce; başka tip "üst sınıf / yan / alt sınıf" işaretli | Oda atama / plan | — |
+| Oda arızalı / dolu / overbooking yaratır | Sunucu | Reddedilir (409) | Hata mesajı | — |
+
+**Örnek:** 14 Kasım 09:00, 3 Deluxe boş: 401 (Kirli — gece çıkış), 405 (Kontrol edildi), 409 (Temiz). Bugün giriş yapacak Deluxe rezervasyon açılırsa Oda aktörü **405**'i seçer (en hazır). 15 Kasım girişli rezervasyon için hazırlık önemsizdir; numara sırasıyla 401 verilebilir. 4 kişilik aile Deluxe (kapasite 3) isterse aday listesi boş gelir, "Diğer oda tiplerini de göster" ile Aile odası "üst sınıf" olarak listelenir; fiyat rezervasyonun tipinden (Deluxe) hesaplanmaya devam eder — fiyat farkı istenirse rezervasyonun tipi düzenlenir.
 
 **Arka planda — otomatik atama:** rezervasyon açılınca **Oda aktörü** uygun odayı seçip atar. Bugün girecek misafir için **temiz / kontrol edilmiş** oda öne alınır — kat hizmetinin durumu zamanında işaretlemesi doğrudan atama kalitesini etkiler. Aktör kapalıysa "oda atanacak" manuel görevi düşer. Atama **yeni overbooking yaratamaz** ve arızalı / dolu odaya yapılamaz (veritabanı son savunma hattıdır).
 
@@ -340,6 +612,16 @@ Yetkili (müdür) için: portal açık/kapalı, **portal adresi** (davet bağlan
 ### Misafir listesi
 
 Ad, telefon ya da e-posta ile arama; her kartta konaklama sayısı, toplam harcama ve son konaklama. Üç harften kısa adla arama yapılmaz.
+
+| Alan | Anlamı |
+| --- | --- |
+| Arama | Ad (≥ 3 harf), telefon ya da e-posta (≥ 2 karakter); telefon ülke kodsuz yazılabilir |
+| Kart | Ad soyad, telefon, e-posta, uyruk, etiketler |
+| Konaklama | Tamamlanmış konaklama sayısı |
+| Toplam harcama | Folyolara işlenen borç toplamı |
+| Son konaklama | Tarih ve oda tipi |
+
+**Örnek:** "kaya" aranır → 14 kart; "0532 111" aranır → otelin ülke koduyla `+90532111…` olarak eşleşen 2 kart: "Ayşe Kaya" (4 konaklama, 38.400) ve "Ayse Kaya" (1 konaklama, 6.600) — aynı kişi, widget'tan açılan ikinci kart; birleştirme adayı.
 
 ### Misafir kartı
 
@@ -367,6 +649,34 @@ Ad, telefon ya da e-posta ile arama; her kartta konaklama sayısı, toplam harca
 4. Onaylayın. **Geri alınamaz.**
 
 **Arka planda:** kaynağın rezervasyonları, refakatçi kayıtları, konuşmaları, istekleri, folyoları, kayıp eşyaları, faturaları, bekleme listesi kayıtları, bildirimleri, tercihleri ve notları hedefe taşınır; etiketler birleştirilir; kaynak kart silinmiş olarak işaretlenir (iz kalır).
+
+#### Misafir kartı — ekranda gördüğünüz alanlar
+
+| Alan | Anlamı |
+| --- | --- |
+| Özet kutuları | Konaklama sayısı (ilk / son), **Toplam harcama** (folyolara işlenen borç), Son konaklama |
+| Kimlik / iletişim | Ad, soyad, telefon (`+90…`), e-posta, uyruk, doğum tarihi, kimlik türü, kimlik no (maskeli) |
+| Etiketler | VIP, Sorunlu, Sadık, Kurumsal, Balayı, Engelli erişimi, serbest |
+| Tercihler sekmesi | Kategori · değer · kaynak · güven · son teyit |
+| Konaklama geçmişi | Rezervasyonlar, durumları, odalar |
+| Harcama | Folyolar: borç / ödeme / bakiye |
+| Notlar | Tarih, yazar, metin; sabitle |
+| Bildirim tercihi | Kanal bazında "istemiyor" |
+| Birleştir | Mükerrer kartı bu karta katar |
+
+| Tetikleyici | Ne olur | Nerede görünür |
+| --- | --- | --- |
+| Yeni rezervasyon (telefon / e-posta eşleşti) | Mevcut kart kullanılır; eşleşme adla çelişirse personele sorulur | Form |
+| Kanaldan rezervasyon (WhatsApp, widget) | Soru soramadığı için **yeni kart** açılır → sonradan birleştirme | Misafir listesi (mükerrer) |
+| Check-in | Kimlik türü / no karta yazılır (maskeli gösterilir) | Kart |
+| Online check-in | Kimlik bilgisi karta; saklama süresi sonunda numara kopyası silinir | Kart |
+| Folyoya kalem işlendi | Toplam harcama artar | Özet kutusu |
+| Çıkış | Konaklama sayısı +1, son konaklama güncellenir | Özet kutusu |
+| WhatsApp mesajı | Telefondan eşleşen kart konuşmaya bağlanır (birden çok kartta en son güncellenen) | Mesajlar sağ paneli |
+| Anket yorumu (AI) | Tercih çıkarımı **yapılmaz** (ileriki sürüm — "misafir tanıma"); etiketler yalnızca ankette kalır | Anketler |
+| Birleştirme | 9 tablodaki kayıt hedefe taşınır; kaynak silinmiş işaretlenir | Kart, Aktivite → Denetim kaydı |
+
+**Örnek:** "Ayşe Kaya" kartı: 4 konaklama (ilk 03.2025, son 11.2026), toplam harcama 38.400 TL, etiket "Sadık"; tercihler: Kat / konum "üst kat, sessiz" (Personel, Yüksek, teyit 11.2026), Yastık "sert" (Misafir, Orta), Alerji "fındık" (Personel, Yüksek — mutfağın alerjen kodu). WhatsApp'tan +90 532 … ile yazıyor; ama widget'tan yaptığı rezervasyonda "Ayse Kaya", e-posta farklı → ikinci kart açılmış (1 konaklama, 6.600 TL). Resepsiyon asıl kartı açar → Birleştir → "Ayse Kaya"yı seçer → telefon asıl karttan, e-posta yeni karttan kalsın → onayla → asıl kart: 5 konaklama, 45.000 TL; ikinci kart silinmiş; WhatsApp konuşmaları ve folyolar tek kartta. Rezervasyon formunda bu misafir seçilince CRM önizlemesi "Sadık · üst kat, sessiz · sert yastık · **alerji: fındık**" gösterir; mutfak alerjen koduyla aynı dilde olduğu için oda servisi siparişinde uyarı çıkabilir.
 
 ### Arka planda misafir kartına ne yazılır
 

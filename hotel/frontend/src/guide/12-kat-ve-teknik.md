@@ -53,6 +53,43 @@ Aktörün yanında iki **zamanlanmış iş** vardır (aktörden bağımsız, sun
 
 Görev durumları: **Bekliyor → Temizleniyor → Bitti** (ya da İptal). Önceki günlerden açık kalan görev "bugün" görünümünde **devreden** rozetiyle durur; iş kaybolmaz.
 
+### Yetki özeti
+
+| İş | Kat görevlisi | Kat şefi | Resepsiyon | Teknisyen | Müdür |
+| --- | --- | --- | --- | --- | --- |
+| Görev panosu / harita görmek | ✓ | ✓ | ✓ | — | ✓ |
+| Başladım / Bitti / Sorun var | ✓ | ✓ | — | — | ✓ |
+| Görev aç / ata / iptal | — | ✓ | — | — | ✓ |
+| Kontrol: onayla / reddet | — | ✓ (kendi işi hariç) | — | — | ✓ |
+| Odanın kat hizmeti durumunu elle değiştirmek (Odalar ekranı) | ✓ | ✓ | ✓ | — | ✓ |
+| Arıza bileti aç / başla / çöz / fotoğraf | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Bilet ata / iptal / odayı kapat / periyodik plan | — | — | — | — | ✓ |
+| Arıza kaydını doğrudan aç / bitir (Odalar → Arıza kayıtları) | — | — | — | — | ✓ |
+
+Varsayılan rol matrisidir; otel Ayarlar → Roller & İzinler'den değiştirir.
+
+### Bir odanın günü — zaman çizelgesi
+
+Oda 204, 14 Kasım; misafir sabah çıkıyor, öğleden sonra yeni misafir giriyor.
+
+| Saat | Olay | Doluluk | Kat hizmeti | Arıza | Kim / ne yaptı |
+| --- | --- | --- | --- | --- | --- |
+| 00:10 | Gün kapanışı (13 Kasım kapandı) | Dolu | **Kirli** | — | Gün kapanışı dolu odaları Kirli yaptı |
+| 07:00 | Sabah zamanlayıcısı | Dolu | Kirli | — | 204 **bugün çıkacak** → konaklama görevi **açılmadı** |
+| 09:40 | Misafir çıkış yaptı | **Boş** | Kirli | — | Oda aktörü boş + kirli; kat aktörü **Çıkış temizliği** (Yüksek) |
+| 07:45 (önceden) | Şef sabah dağıtımı | — | — | — | Çıkış görevi 09:41'de havuza düştü; şef 09:50'de Fatma'ya atadı, not "11:00 giriş" |
+| 10:05 | Fatma "Başladım" | Boş | **Temizleniyor** | — | Kat aktörü |
+| 10:20 | Fatma minibar sayımı: 2 su | Boş | Temizleniyor | — | Fiş geç kalem → çıkan misafirin folyosu açıksa kalem; kapalıysa folyo görevi |
+| 10:35 | Fatma "Sorun var: duş başlığı damlatıyor" | Boş | Temizleniyor | — | Teknik servis bileti #149 açıldı (oda kapatılmadı) |
+| 10:40 | Fatma "Bitti" | Boş | **Temiz** | — | Kat aktörü; Kontrol kuyruğuna düştü |
+| 10:48 | Şef kontrol: onayladı | Boş | **Kontrol edildi** | — | Kat aktörü |
+| 10:55 | Oda aktörü 11:00 girişine oda arıyor | — | — | — | 204 hazır → zaten atanmış, korunur |
+| 11:05 | Yeni misafir giriş | **Dolu** | Kontrol edildi | — | Oda aktörü |
+| 14:30 | Teknisyen #149'u çözdü (misafir odadayken, 10 dk) | Dolu | Kontrol edildi | — | Bilet Çözüldü; oda kapatılmamıştı, durum değişmedi |
+| 00:10 (15 Kasım) | Gün kapanışı | Dolu | **Kirli** | — | Konaklama temizliği için sıraya |
+
+Aynı gün teknisyen "duş başlığı değişecek, 2 gün parça bekleniyor" deseydi ve oda boşken bileti "Odayı kullanıma kapat: Hizmet dışı, bitiş 16.11" ile güncelleseydi: oda sayıdan düşmez ama 11:00 girişine **atanamaz** → oda aktörü başka Deluxe'e taşır; yoksa rezervasyon "oda bekliyor"a döner ve resepsiyon ziline düşer.
+
 ## Kat hizmetleri
 
 **Nerede:** Ön büro → Kat hizmetleri (`/kat-hizmetleri`). Sekmeler: **Görev panosu** (`/gorevler`), **Görevlerim** (`/gorevlerim`), **Kontrol** (`/kontrol`), **Kat haritası** (`/harita`).
@@ -81,6 +118,19 @@ Görev durumları: **Bekliyor → Temizleniyor → Bitti** (ya da İptal). Önce
 2. "Atanmamış" süzgeciyle havuzu görün. Satırları işaretleyin → **"Ata"** → görevli seçin. Pencere görevlilerin **açık görev yükünü** gösterir; dengeli dağıtın. Aynı pencereden "atamayı kaldır" görevi havuza döndürür.
 3. Bugün **girişi olan** odaların çıkış temizliğine öncelik verin: oda atama, bugün girecek misafir için Temiz / Kontrol edilmiş odayı öne alır — kat hizmetinin zamanında işaretlemesi doğrudan atama kalitesini etkiler.
 4. Gün boyunca pano canlıdır (toplu atama ve toplu üretim tek haber gönderir; 2500 odada bile boğulmaz).
+
+#### Satır işlemleri — kural tablosu
+
+| Düğme | Kim | Önkoşul | Sonuç |
+| --- | --- | --- | --- |
+| Başlat | Görevli (atanan) ya da şef | Görev Bekliyor | Görev Temizleniyor; oda Temizleniyor (temizlik tiplerinde) |
+| Bitir | Görevli ya da şef | Görev Bekliyor / Temizleniyor | Görev Bitti; oda Temiz; bağlı istek Tamamlandı |
+| Sorun var | Görevli / şef | Açık görev | Teknik servis bileti; görev açık kalır |
+| İptal | Şef | Açık görev; **sebep** zorunlu ("oda satış dışı alındı") | Görev İptal; oda durumu değişmez |
+| Ata / atamayı kaldır | Şef | Açık görev(ler) | Atanan değişir; görevlinin Görevlerim listesi güncellenir |
+| Devreden rozeti | — | Önceki günden açık görev | Bugün listesinde kalır |
+
+Her işlem görevin **sürümüyle** gider: liste bayatsa (başka panel aynı görevi değiştirdi) "kayıt değişti" uyarısı gelir ve liste tazelenir; iki şef aynı görevi iki kişiye atayamaz.
 
 #### Elle görev açma
 
@@ -248,9 +298,29 @@ Kaydettikten sonra bilet sayfasında **fotoğraf** eklenir (en fazla 6; telefond
 | İptal | Gerekçe (yönetim) |
 | Düzenle | Başlık, açıklama, öncelik, kategori |
 
+### Arızalı mı, Hizmet dışı mı? — karar tablosu
+
+| Durum | Seçim | Neden |
+| --- | --- | --- |
+| Oda kullanılamaz: su basması, klima yok (yaz), kapı kilidi bozuk | **Arızalı** | Misafir yerleştirilemez ve satılamaz; envanterden düşmeli ki overbooking oluşmasın |
+| Kozmetik / kısa iş: perde değişimi, tablo asma, halı leke, 1–2 saatlik tamir | **Hizmet dışı** | Oda satılmış sayılır ama kimse atanmaz; başka oda verilir |
+| Odanın bütün tipi dolu ve iş küçük | Hizmet dışı | Arızalı reddedilir ("overbooking'e yol açar") |
+| Planlı tadilat (tarihli) | Arızalı + bitiş tarihi | Önceden girilir, günü gelince kendiliğinden devreye girer |
+| Misafir odada ve şikâyet var | Önce misafiri taşı, sonra Arızalı | Dolu odaya kayıt açılmaz |
+| Tamir bitti | Bileti **Çöz** | Kayıt kendiliğinden biter; oda Kirli → detaylı temizlik |
+
 ### Bana atananlar (teknisyen görünümü)
 
 Giriş yapan teknisyene atanan **açık** biletler; satır içi hızlı **Başla / Bitti** düğmeleri; satıra tıklayınca bilet sayfası (fotoğraf eklemek için). Yeni atama ziline düşer.
+
+| Alan | Anlamı |
+| --- | --- |
+| Satır | Oda / konum, başlık, kategori, öncelik, durum, açılış saati, kaynak, odayı kapattı işareti |
+| Başla | Bilet Devam ediyor |
+| Bitti | Bilet Çözüldü; oda kapatılmışsa kayıt sonlanır |
+| Boş durum | "Üzerinizde açık bilet yok" — Arızalar → Açık görünümünde atanmamış bilet olabilir |
+
+Sıralama: öncelik (Acil önce), sonra açılış saati. Telefonda kullanılabilir; "Bitti"den sonra bilet sayfasına geçip fotoğraf eklemek önerilir.
 
 **Örnek günü:** Teknisyen Murat'ın listesi 08:00'de: #148 311 klima (Normal, kat hizmetinden), #151 lobi asansör (Yüksek, elle), #152 Aylık klima bakımı — kat 3 (plan, Düşük). Sırayla Başla / Bitti; #148'de odayı kapatmamış, çözümde oda etkilenmez; #152 plan bileti kapanınca planın "son çalışma" günü bugüne çekilir ve 30 gün sonra yeni bilet üretilir.
 
@@ -298,6 +368,70 @@ Misafir WhatsApp'tan "klima çalışmıyor" yazdı → İstekler ekranında kate
 | Arıza kaydı kapandı | Oda Kirli; detaylı temizlik görevi; bekleme listesi taranır (yer açılmış olabilir) |
 | Plan bileti açıldı | Teknisyen zili; Arızalar listesi |
 
+## Zil ve bildirim özeti
+
+| Olay | Kime zil düşer | Bağlantı |
+| --- | --- | --- |
+| Kat aktörü kapalı, iş manuel göreve düştü | "Kat hizmeti" modülüne yetkili olanlar | Görevler ekranı |
+| Yeni arıza bileti (elle, "Sorun var", misafir isteği, plan) | Teknik servis yetkilileri | Bilet sayfası |
+| Bilet atandı | Atanan teknisyen | Bilet sayfası |
+| Misafir isteği (Temizlik / Havlu) açıldı | İstek yetkilileri; Acil ise hemen | İstekler |
+| İstek süresi aşıldı | İsteğin sahibi, yoksa istek yönetenler (bir kez) | İstekler |
+| Oda "oda bekliyor"a düştü (arıza nedeniyle atama kalktı) | Rezervasyon yetkilileri | Oda planı şeridi |
+
+Misafire **bildirim gitmez**: kat ve teknik işler iç süreçtir. Misafirin beklediği iş (istek) tamamlanınca yalnızca istek kaydı kapanır; misafire "havlunuz geldi" mesajı personel isterse Mesajlar'dan yazar.
+
+## Uçtan uca örnek: şikâyetten satışa
+
+Oda 512 (Deluxe), 15 Kasım, içeride misafir; 16 Kasım'da yeni misafir girecek.
+
+1. **09:10** Misafir WhatsApp'tan "lavabo taşıyor" yazar → konuşma AI'da; şikâyet olduğu için AI modelsiz **personele devreder**, resepsiyon ziline düşer.
+2. **09:12** Resepsiyon mesajdan **istek** açar: 512, Arıza, Yüksek (30 dk) → hedef 09:42.
+3. **09:13** Resepsiyon istekten **arıza bileti** açar: Su tesisatı, "Lavabo taşıyor", Acil; "Odayı kullanıma kapat" işaretlemez (oda dolu — reddedilirdi). Bilet isteğe bağlanır → istek **İlgileniliyor**. Teknik servis ziline.
+4. **09:15** Müdür bileti Murat'a **atar** → Murat'ın zili.
+5. **09:25** Murat **Başla**; 09:40 teşhis: sifon değişecek, parça yarın. Oda bu hâliyle kalınamaz.
+6. **09:45** Resepsiyon oda planında misafiri 512'den 508'e **taşır** (sebep "arıza"). 512 Boş + Kirli, 508 Dolu. Çıkış temizliği açılmaz (taşınma); 512 kırmızı.
+7. **09:50** Müdür bileti düzenler: **Odayı kullanıma kapat: Arızalı, bitiş 17.11**. 512 envanterden düşer. 16 Kasım girişi 512'ye atanmıştı → atama uymuyor → **oda bekliyor**, rezervasyon ziline; Oda aktörü boş Deluxe arar, 515'i atar.
+8. **09:51** Müsaitlik tablosunda Deluxe 15–16 Kasım hücreleri 1 azalır; bekleme listesi taraması (azalma — zil yok).
+9. **16.11 11:00** Parça geldi, Murat tamir eder, fotoğraf ekler, **Çöz** → arıza kaydı 16 Kasım'da **sonlandırılır** (planlanan 17 yerine), 512 Kirli → kat aktörü **Detaylı temizlik** görevi (Normal). İstek **Tamamlandı**. Bekleme listesi taranır: 16 Kasım Deluxe bekleyen varsa **zil**.
+10. **16.11 13:30** Görevli detaylı temizliği bitirir → Temiz; 13:45 şef onaylar → Kontrol edildi. 512 yeniden satılabilir ve atanabilir.
+11. **17.11 00:10** Gün kapanışı: 15 ve 16 Kasım satılabilir Deluxe sayısı raporlarda 1 eksik görünür (Arızalı oda paydadan düşer; Hizmet dışı düşmezdi).
+12. Misafir anketinde "lavabo taştı ama 30 dakikada oda değiştirdiler" yorumu → AI: Karışık, konu Oda; NPS 8 → takip açılmaz.
+
+## Günlük rutin — kontrol listeleri
+
+**Kat şefi (sabah):**
+
+1. Gün kapanışının yapıldığını doğrula (Gün kapanış → Geçmiş'te gece kapanmış mı); yoksa pano boş gelir.
+2. Görev panosu → "Atanmamış" süzgeci → toplu atama; bugün giriş olan odaların çıkış temizliğini öne al (Gelecekler listesi oda numaralarını verir).
+3. Kat haritasında kırmızı + arıza işaretli odaları kontrol et: teknisyen çıkmış, detaylı temizlik bekleyen odalar.
+4. Devreden rozetli görevleri (dünden kalan) ilk sıraya al.
+
+**Kat şefi (gün içi):** Kontrol kuyruğunu boş tut (onay bekleyen oda satılamaz sayılmaz ama atamada geriye düşer); ret sebeplerini açık yaz.
+
+**Kat görevlisi:** Görevlerim → Başladım → (minibar sayımı) → Sorun varsa bildir → Bitti. Telefonu kapatmadan önce listede kalan görev var mı bak.
+
+**Teknisyen:** Bana atananlar → öncelik sırasıyla Başla / Bitti; odayı kapatan biletlerde tamir bitince **mutlaka Çöz** (oda aksi hâlde satış dışı kalır); fotoğraf ekle.
+
+**Müdür (haftalık):** Planlama'daki pasif / süresi geçmiş planları gözden geçir; Arızalar → "Tümü" görünümünde 7 günden eski açık biletleri sor; Odalar → Arıza kayıtları'nda bitişi geçmiş süresiz kayıt var mı bak.
+
+### Manuel yol: aktör kapalıyken odanın rengini değiştirmek
+
+Kat hizmeti aktörü kapalıysa görevler yine açılır ve kapanır, ama oda rengi değişmez. O zaman:
+
+1. Görevler ekranında "Kat hizmeti" modülündeki manuel görevi açın; gövdede oda ve hedef durum yazar ("204 → Temiz").
+2. Odalar → Oda listesi → odanın **Kat hizmeti** sütunundaki düğmeyle durumu seçin (Kirli / Temizleniyor / Temiz; Kontrol edildi yalnız Temiz'den). Bayat ekrandan yazarsanız "kayıt değişti" uyarısı alırsınız.
+3. Manuel görevi "Tamamla" ile kapatın (not isteğe bağlı).
+
+Aktör yeniden açılınca olay yeniden gelse de aynı iş ikinci kez yapılmaz.
+
+## Büyük otel notları
+
+- Görev panosu, Görevlerim ve Kontrol listeleri sunucuda süzülür; yüzlerce görevli günde de kişinin kendi işi ve kontrol bekleyen oda doğru gelir.
+- Toplu atama ve toplu üretim tek canlı haber gönderir; 2500 odada panolar boğulmaz.
+- Kat haritası yalnızca kendi otelinizin odalarını gösterir (çok otelli kurulumda sızıntı yoktur).
+- Hata durumunda ekranlar "oda yok / görev yok" demez; "yüklenemedi — tekrar dene" gösterir. Boş liste gerçekten boştur.
+
 ## Sık sorulanlar
 
 **Görevli "Bitti" dedi ama harita hâlâ kırmızı.**
@@ -333,6 +467,21 @@ Hayır; plan başına tek açık bilet. Önceki bilet kapanmadan yeni üretilmez
 **Teknisyen fotoğrafları neden kayboldu?**
 Kapanmış biletin fotoğrafları 60 gün sonra silinir (depolama). Bilet kaydı ve çözüm notu kalır.
 
+**Resepsiyon "104 ne zaman hazır olur?" diye soruyor; nereden bakar?**
+Kat haritası ya da Görev panosu (resepsiyonun görüntüleme yetkisi vardır): 104 Temizleniyor (sarı) ise görevli içindedir; Temiz (yeşil) ise kontrol bekler; Kontrol edildi ise hazır. Giriş penceresi de odanın rengini gösterir.
+
+**Dolu odaya konaklama temizliği görevi düşmedi.**
+Zamanlayıcı yalnızca gün kapanışında Kirli yapılan dolu odalara görev açar; gün kapanışı yapılmadıysa oda hâlâ "Kontrol edildi"dir. Ayrıca odada açık bir temizlik görevi (ör. devreden) varsa yenisi açılmaz.
+
+**Misafir "rahatsız etmeyin" dedi; görevi ne yapayım?**
+Görevi iptal etmeyin (iş kaybolur); açık bırakın, nota yazın. Gün sonunda hâlâ açıksa yarın "devreden" rozetiyle görünür. Oda Kirli kalır — bu doğrudur, temizlenmemiştir.
+
+**Aynı odaya iki temizlik görevi görüyorum.**
+Biri temizlik (çıkış / konaklama / detaylı), diğeri **misafir isteği** olabilir — misafir isteği görevleri "tek görev" kuralından muaftır. İki temizlik görevi sistemce açılamaz; biri elle açılmış ve tipi farklı olabilir.
+
+**Teknisyen bileti çözdü ama oda hâlâ Arızalı görünüyor.**
+Bilet "odayı kapat" ile açılmamış, arıza kaydı Odalar ekranından ayrı açılmış olabilir; o kayıt bilete bağlı değildir, Odalar → Arıza kayıtları'ndan "Bitir" ile kapatın. Ya da kayıt ileri tarihli ve bilet başlamamış kaydı iptal etmiştir — listeye bakın.
+
 ## Sık yapılan hatalar
 
 - **Oda rengini elle değiştirerek görevi "kapatmak".** Görev açık kalır, raporlar bozulur. Görevli "Bitti" demeli; aktör rengi yazar. Elle değiştirme yalnızca aktör kapalıyken manuel görev için.
@@ -347,3 +496,8 @@ Kapanmış biletin fotoğrafları 60 gün sonra silinir (depolama). Bilet kaydı
 - **Çözülen bileti kapatmayı unutmak.** Oda Arızalı kalır, satılamaz; plan bileti kapanmazsa yeni dönem bileti üretilmez.
 - **İçerideki misafiri taşıdıktan sonra eski odanın görevini beklemek.** Taşınma çıkış değildir; aktör çıkış temizliği açmaz. Oda Kirli görünür; şef elle görev açar ya da sabah zamanlayıcısı açar.
 - **Fotoğrafı eklemeden bileti çözmek.** Çözüm geçerlidir ama şikâyet incelemesinde kanıt kalmaz; en fazla 6 fotoğraf eklenebilir.
+- **Görevi iptal ederek "sonra yaparız" demek.** İptal, görevi tarihçeden düşürür ve oda Kirli kalır; iş yarın kendiliğinden görünmez. Açık bırakın, devreden rozetiyle gelir.
+- **Toplu atamada görevlinin yükünü okumamak.** Pencere açık görev yükünü gösterir; 12 görevli bir kişide, 3 görevli diğerinde kalırsa 11:00 girişleri gecikir.
+- **Bileti kat hizmeti "Sorun var"ından ayrı ikinci kez elle açmak.** "Sorun var" zaten bilet açar (görev başına tek); listeyi kontrol edin, aynı oda için iki bilet teknisyeni ikiye böler.
+- **Periyodik planı "pasif" yapmadan silmek.** Silme geri alınamaz; geçici durdurmak için "Plan aktif" anahtarını kapatın.
+- **Misafir isteğinden doğan bileti çözüp isteği ayrıca kapatmaya çalışmak.** Bilet çözülünce istek kendiliğinden Tamamlandı olur; ikinci kapatma "geçersiz geçiş" uyarısı verir.

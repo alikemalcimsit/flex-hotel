@@ -72,6 +72,19 @@ Yan menüde **Mesajlar** rozeti cevap bekleyen konuşma sayısını, **İstekler
 | Kapalı konuşmaya misafir yazdı | Konuşma açılır, bekleme sayacı başlar | Rozet | — |
 | Cevapsız misafir mesajı (personel modunda) | Konuşmanın sahibine, yoksa mesaj görenlere zil | Zil | — |
 
+### Konuşma yaşam döngüsü
+
+| Durum / mod | Nasıl gelir | Nasıl değişir | Rozet etkisi |
+| --- | --- | --- | --- |
+| Açık · AI | Yeni konuşma, AI açıkken | Personel yazar / "Manuele al" → Personel; AI devreder → Personel | "Cevap bekleyen"e **girmez** (AI bakıyor) |
+| Açık · Personel | AI kapalı; devir; personel yazdı; "Manuele al" | "AI'a devret" → AI (yalnız AI kayıtlıysa düğme görünür) | Son yazan misafirse "Cevap bekleyen" + rozet |
+| Atanmış | Başlıktaki seçici | Atama değişir / kaldırılır | "Bana atanan"; kişiye özel zil |
+| Kapalı | "Kapat" | Misafir ya da personel yazınca açılır | Rozete girmez |
+
+Teslim durumları (giden mesaj): **Gönderim bekliyor** (geçit henüz almadı) → **Gönderildi** → **İletildi** → **Okundu**; ya da **Gönderilemedi** (sebep: 24 saat penceresi, kanal hatası). Durum yalnızca ileri gider; geç gelen bildirim geri almaz. Gelen mesaj: **Alındı**.
+
+**Örnek — bekleme sayacı:** Misafir 10:00'da yazar (konuşma Personel modunda) → "Cevap bekleyen"e girer, satırda "0 dk bekliyor" akar, rozet +1, ses çalar. 10:12 Ayşe cevaplar → sayaç durur, "Cevap bekleyen"den çıkar. 10:30 misafir yeniden yazar → yeniden bekler; 10:40'ta hâlâ cevapsızsa konuşma Ayşe'ye atanmışsa Ayşe'nin ziline, atanmamışsa mesaj görenlerin ziline "cevapsız misafir mesajı" uyarısı.
+
 ### AI concierge ne zaman cevap verir, ne zaman vermez
 
 **Cevap verir:** Ayarlar → AI asistanı'nda "AI asistanı yeni mesajlara cevap versin" açık, sunucuda model anahtarı tanımlı, ajanlar aktör panelinde açık ve konuşma AI modunda ise. Yalnızca **WhatsApp ve web chat**te.
@@ -154,6 +167,20 @@ Kanaldan gelen istek **onaya gitmez** (overbooking politikası "onaya gönder" o
 | Şikâyet | AI'dan gelen şikâyet konuşması personele devredilir; istek elle açılır, çözümü not edilir | İstekler, anket takibiyle birlikte | — |
 | Her kategori | Yeni istek → ilgili yetkililerin ziline (Acil hemen); süre aşılınca sahibine zil (bir kez) | Zil, kırmızı rozet | — |
 
+#### İstek yaşam döngüsü — zaman çizelgesi
+
+Oda 207, "2 ekstra havlu", Normal (60 dk), 08:05'te açıldı.
+
+| Saat | Olay | İstek durumu | Hedef / sayaç | Nerede görünür |
+| --- | --- | --- | --- | --- |
+| 08:05 | Resepsiyon istek açtı | Bekliyor | 09:05 · "60 dk kaldı" | İstekler (Açık), rozet +1; kat aktörü görev açtı → Görevlerim (Fatma) |
+| 08:20 | Fatma Görevlerim'de "Başladım" | İlgileniliyor | "45 dk kaldı" | İstekler satırı "İlgileniliyor", atanan Fatma |
+| 08:25 | Fatma yanlışlıkla geri aldı (Bekliyor) | Bekliyor | **"40 dk kaldı"** — sıfırlanmadı | — |
+| 08:40 | Fatma "Bitti" | **Tamamlandı** | — | İstekler (Tamamlanan); Mesajlar sağ paneli |
+| Alternatif 09:05 | Kimse dokunmadı | Bekliyor | **"0 dk" → gecikti** | Rozet kırmızı; "Gecikmiş" görünümü; sahibine (yoksa istek yönetenlere) zil — bir kez |
+| Alternatif 09:30 | Misafir "havlu geldi" dedi, resepsiyon Tamamla | Tamamlandı (25 dk gecikmeli) | — | Raporda gecikmiş sayılır |
+| Alternatif 09:35 | Yanlış kapatıldığı anlaşıldı, yeniden açıldı | Bekliyor | Sayaç **sıfırlanır** (misafir yeniden bekliyor) | — |
+
 **Örnek:** 08:05 misafir WhatsApp'tan "sabah 7'de uyandırın lütfen, bir de 2 havlu" yazdı (konuşma personelde). Resepsiyon iki istek açar: (1) oda 207 **Uyandırma**, saat yarın 07:00 → listede hedef 07:00; (2) oda 207 **Havlu / malzeme**, Normal → hedef 09:05; kat aktörü 207'ye "Misafir isteği: 2 havlu" görevi açar, Fatma'nın Görevlerim'ine düşer. 08:40 Fatma "Bitti" → istek (2) Tamamlandı, Mesajlar sağ panelinde "Tamamlandı" görünür. Ertesi sabah 07:00 geçti, uyandırma Tamamla basılmadıysa 07:01'de "1 dk gecikti" kırmızı, isteğin sahibine zil.
 
 ## Anketler
@@ -195,6 +222,18 @@ Model misafirin adını, onay kodunu, iletişim bilgisini görmez; işlem kaydı
 | Düşük NPS eşiği (6) / düşük puan eşiği (2) | Takip ve zil eşikleri |
 | Google yorum bağlantısı / TripAdvisor bağlantısı | Anket sonunda herkese gösterilir |
 | "Bağlantı adresi yok" uyarısı | Misafir portalı ayarındaki portal adresi gerekir; yoksa davet gitmez |
+
+### Misafirin gördüğü anket
+
+| Adım | Misafir ne görür | Arka planda |
+| --- | --- | --- |
+| 1 | SMS / e-postadaki bağlantıya dokunur | Davet "Açıldı"; bağlantı süresi dolmuşsa "bağlantının süresi geçti" |
+| 2 | Otelin karşılama metni, dil seçici (uyruğa göre açılır) | — |
+| 3 | Sorular sırayla: NPS 0–10 düğmeleri, 1–5 yıldız, seçenekler, metin kutusu; zorunlu işaretleri | Anket bu arada değiştiyse sorular yenilenir |
+| 4 | Gönder | Alan alan denetim (zorunlu / aralık / seçenek); davet başına tek cevap — ikinci gönderim "zaten cevaplandı" |
+| 5 | Teşekkür + **Google / TripAdvisor** bağlantıları (puandan bağımsız) | Düşük puan → takip + zil; yorum → AI etiketi (30 dk içinde) |
+
+Hız sınırı bağlantı başına (okuma 30, yazma 5 / dk) ve otel Wi-Fi'ı için ortak IP tavanı; belirteç günlüklerde maskeli.
 
 ### Tasarım
 
@@ -315,6 +354,21 @@ Takvim canlıdır; bağlantı yokken kendi tazelenir.
 
 **Örnek — oda hesabı:** Oda 305'teki misafir, 15 Kasım 16:00, "Aromaterapi masajı" 60 dk + 15 dk temizlik, kişi başı 1.800 TL, 2 kişi (çift masajı, 2 terapist) → fiyat **3.600 TL**. Terapist seçilmez; sistem Zeynep ve Can'ı (en az meşgul) atar, oda "Bakım 2". Hatırlatma 2 saat önce, 14:00'te SMS. 17:15 **Tamamla → Oda hesabına yaz** → spa vergisi %10 dahil ise borç 3.600,00 (net 3.272,73 + 327,27) → folyo aktörü 305'in folyosuna "Spa — Aromaterapi masajı ×2 · 3.600,00" yazar; randevu "Odaya yazılan 3.600, bakiye 0". Çıkışta misafir folyoyla öder. Aynı randevu 15 Kasım 13:30'da iptal edilseydi (başlangıca 2,5 saat; bedelsiz süre 4 saat) → geç iptal %50 = 1.800 TL odaya yazılırdı; müdür "Bedel alınmasın — misafir hastalandı" ile silebilir.
 
+#### İptal / gelmedi bedeli — örnek tablosu
+
+Randevu 16:00, fiyat 3.600 TL, bedelsiz süre 4 saat, geç iptal %50, gelmedi %100.
+
+| Ne zaman / ne | Bedel | Nereye | Yetkili silebilir mi |
+| --- | --- | --- | --- |
+| 11:59'da iptal (4 saatten önce) | 0 | — | — |
+| 12:00–15:59 iptal | 1.800 (%50) | İçerideki misafir: odaya (folyo "Spa" kalemi); dışarıdan: randevu bakiyesi | Evet, gerekçeyle |
+| 16:00 geçti, gelmedi | 3.600 (%100) | Aynı | Evet, gerekçeyle |
+| 15:30'da "Gelmedi" basılmaya çalışıldı | — | Reddedilir: saati gelmemiş randevuda gelmedi işaretlenemez | — |
+| Yedek listedeki ders kaydı iptal | 0 | — | — |
+| Seansı spa iptal etti | 0 | Kayıtlılara bildirim | — |
+| Konaklama iptal / gelmedi | 0 (ileri randevular kapanır) | — | — |
+| Portaldan misafir iptal etti (14:00) | 1.800 | Odaya; portal onaydan önce bedeli gösterir | — |
+
 **Örnek — spa kasası:** Dışarıdan gelen müşteri, hamam ritüeli 1.200 TL. Randevuda 500 TL nakit ön ödeme; tamamlanınca "Spa kasasında ödenecek" → kalan 700 kartla, slip no girilir; Kasa → kaynak Spa: Nakit 500, Kart 700. Müşteri şikâyet eder; yetkili fiyatı 900'e düşürür (gerekçe) → fazla 300 TL **iade** onaya gider → onaylanınca kasadan çıkar. Not: dışarıdan müşterinin spa satışına ait **mali belge** (ÖKC fişi / e-Arşiv) bu sürümde yoktur; yazarkasa entegrasyonu ileriki iş.
 
 ### Grup dersleri
@@ -362,6 +416,27 @@ Portalın personel tarafı (online check-in incelemesi, davet, ayarlar) **Ön b�
 
 **Örnek — misafirin yolculuğu iletişim gözüyle:** 10 Kasım davet SMS'i → 12 Kasım misafir online check-in yapar (resepsiyon zili) → 13 Kasım 15:00 giriş (form dolu) → 13 Kasım 21:00 portaldan "2 ekstra yastık" isteği (İstekler: Havlu / malzeme, Normal; kat görevi) → 14 Kasım 10:00 ara anket: 4/5 → 14 Kasım portaldan 17:00 masaj randevusu (spa zili; tamamlanınca odaya yazılır) → 15 Kasım web sohbetinden "geç çıkış mümkün mü?" (AI otel bilgisinden geç çıkış politikasını söyler; ücret kararı için personele devreder) → 16 Kasım çıkış → 17 Kasım 11:00 çıkış sonrası anket → NPS 9, yorum "masaj harikaydı" → AI: Olumlu, konu Spa.
 
+## Yetki özeti
+
+| İş | Resepsiyon | Kat görevlisi | Spa personeli | Müdür |
+| --- | --- | --- | --- | --- |
+| Mesajları görmek ve cevaplamak | ✓ | — | — | ✓ |
+| AI ve kanal ayarları | — | — | — | ✓ |
+| İstekleri görmek | ✓ | — | — | ✓ |
+| İstek aç / ata / durum | ✓ | ✓ (kapatabilsin diye) | — | ✓ |
+| Anket cevapları, rapor, takipler | ✓ | — | — | ✓ |
+| Takibi üstlen / not / kapat | ✓ | — | — | ✓ |
+| Anket tasarımı, ayarları, AI özeti | — | — | — | ✓ |
+| Spa takvim / randevular görmek | ✓ | — | ✓ | ✓ |
+| Randevu aç / tamamla / iptal / odaya yaz | — | — | ✓ | ✓ |
+| Spa kasası (tahsilat, iade isteği) | — | — | ✓ | ✓ |
+| Spa fiyat düzeltme, bedel silme | — | — | — | ✓ |
+| Spa tanımlar, ders programı, ayarlar | — | — | — | ✓ |
+| Online check-in inceleme, davet | ✓ | — | — | ✓ |
+| Portal ayarları | — | — | — | ✓ |
+
+Varsayılan matristir; Ayarlar → Roller & İzinler'den değişir. Menüde yetkisiz madde görünmez; sunucu ayrıca denetler.
+
 ## Sık sorulanlar
 
 **AI neden cevap vermiyor?**
@@ -397,6 +472,27 @@ Para hareketi (kasa ödemesi ya da odaya yazılmış kalem) varsa geri alınmaz;
 **Misafir portaldan randevu alamıyor.**
 Spa ayarında "Portaldan randevu açık" ve hizmette "Portaldan alınabilir" işaretli mi; en erken şimdi + 120 dk; konaklama günleri dışında alınamaz; konaklama başına 4 açık kayıt sınırı.
 
+**AI bir rezervasyonu misafir istemeden açabilir mi?**
+Hayır. Teklif önceki turda sunulmuş olmalı, misafir **yeni bir mesajda** açıkça onaylamalı (yönlendirici onayı tanır), fiyat ve müsaitlik yeniden denetlenmeli. Teklif 30 dakika geçerlidir; süresi geçince yeniden teklif gerekir.
+
+**AI'ın maliyeti nereden izlenir?**
+Ayarlar → AI asistanı → kullanım kartı: günlük token ve USD; bütçe dolunca yönetime zil. Model fiyatları ayardan girilir; yanlış fiyat girilirse bütçe hesabı yanlış olur.
+
+**Web chat misafiri kimdir?**
+Oturum kimliğiyle gelir; ad / telefon taşımaz (misafir yazarsa görürsünüz). Portaldan açılan sohbet rezervasyona bağlı bağlantıdan gelir; yine de konaklamaya bağlamayı resepsiyon yapar.
+
+**İsteğin kaynağı "AI asistanı" ne demek?**
+Concierge'ın konuşmadan açtığı istektir (ör. misafir "havlu" dedi). Personel formu bu kaynağı seçemez.
+
+**Anket bağlantısı kaç gün geçerli?**
+Ayardaki "bağlantı geçerlilik" gün sayısı; sonrası "süresi geçti". Yeni davet gönderilmez (aynı misafire sıklık kuralı) — gerekirse misafire portal üzerinden açık anket kutusu kalır.
+
+**Spa raporu terapist doluluğunu nasıl hesaplar?**
+Bugünkü haftalık çalışma saatlerinden; geçmişteki saat değişiklikleri ve izinler düşülmez (raporda yazar). Kesin mesai hesabı için bordro / puantaj kullanılır.
+
+**Dışarıdan gelen spa müşterisine fiş kesiliyor mu?**
+Bu sürümde yazarkasa / e-Arşiv belgesi yoktur; tahsilat spa kasasında ve ön muhasebede görünür. Mali belge yazarkasa entegrasyonuyla gelecek.
+
 ## Sık yapılan hatalar
 
 - **AI modundaki konuşmaya "sadece bakmak için" yazmak.** Yazdığınız an konuşma size geçer ve AI susar. Bakmak için okuyun; iç not yazmak da konuşmayı personele alır.
@@ -413,3 +509,9 @@ Spa ayarında "Portaldan randevu açık" ve hizmette "Portaldan alınabilir" iş
 - **Grup dersini tamamlamadan günü bitirmek.** Ücretler işlenmez; eğitmen "Dersi tamamla" demelidir (gelmeyenler önce işaretlenir).
 - **Portal adresini girmeden anket / davet beklemek.** Her ikisi de portal adresine ve bir bildirim kanalına bağlıdır.
 - **WhatsApp'tan "rezervasyon onayı" bildirimi beklemek.** Otelin başlattığı WhatsApp şablon mesajı bu sürümde yoktur; bildirimler e-posta / SMS ile gider. Onay kodunu AI sohbette yazar.
+- **Konuşmayı kapatmadan bırakmak.** "Açık" listesi şişer, "Cevap bekleyen" doğru kalır ama atanan kişi ayrılınca sahipsiz kalır. Konu bitince Kapat; misafir yazarsa yeniden açılır.
+- **Otel bilgisini AI ayarına yazmayıp AI'dan doğru cevap beklemek.** AI yalnızca oradaki ve otel ayarlarındaki bilgiyi söyler; havuz saati, otopark, evcil hayvan politikası gibi sık soruları metne yazın.
+- **İsteği "Düşük" öncelikle açıp gecikme uyarısı beklememek.** Düşük = 240 dk; acil işte Acil (15 dk) seçin; öncelik sonradan değişirse süre açılış anından yeniden hesaplanır.
+- **Anket düşük puan eşiğini çok yüksek tutmak.** Eşik NPS 8 yapılırsa her pasif cevap takip açar ve ekip boğulur; varsayılan 6 / 2 çoğu otel için uygundur.
+- **Spa randevusunu misafir çıktıktan sonra "Oda hesabına yaz" ile tamamlamak.** Folyo kapanmışsa aktör kalem yazamaz, Görevler'e düşer; çıkış öncesi tamamlayın ya da kasada tahsil edin.
+- **Portal metinlerini tek dilde bırakmak.** Eksik dil Türkçeye düşer; Rus / Alman misafir KVKK metnini Türkçe görür. Dört dili de doldurun.

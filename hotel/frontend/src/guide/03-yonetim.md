@@ -6,7 +6,7 @@ Yönetim ekranları çoğunlukla yöneticinin ve müdürün işidir; ama Görevl
 
 ## Görevler (manuel görevler)
 
-**Nerede:** Genel → Görevler, adres `/gorevler`. Yan menüde açık görev sayısı rozet olarak görünür. Zildeki "Personele bırakılan iş" uyarısı doğrudan göreve götürür (`/gorevler?gorev=<kimlik>`).
+**Nerede:** Genel → Görevler, adres `/gorevler`. Yan menüde açık görev sayısı rozet olarak görünür. Zildeki "Personele bırakılan iş" uyarısı doğrudan göreve götürür (`/gorevler?gorev=…` adresiyle).
 
 **Kim görür:** Herkes, **kendi modülünün** görevlerini. Görevin modülü, görevi düşüren aktörün bildirgesinden gelir ve her modül bir izne eşlenir:
 
@@ -53,7 +53,7 @@ Görev, aktör işi bırakırken **aynı işlemde** zile uyarıyla birlikte yaz�
 
 ## Onaylar
 
-**Nerede:** Yönetim → Onaylar; **Bekleyen** `/onaylar/bekleyen`, **Geçmiş** `/onaylar/gecmis`. Üst barda bekleyen sayacı (süresi yaklaşan varsa kırmızı), yan menüde rozet. Zildeki "Onay bekliyor" uyarısı doğrudan onaya götürür (`?onay=<kimlik>`).
+**Nerede:** Yönetim → Onaylar; **Bekleyen** `/onaylar/bekleyen`, **Geçmiş** `/onaylar/gecmis`. Üst barda bekleyen sayacı (süresi yaklaşan varsa kırmızı), yan menüde rozet. Zildeki "Onay bekliyor" uyarısı doğrudan onaya götürür (`/onaylar/bekleyen?onay=…` adresiyle).
 
 **Kim görür:** Onay kuyruğunu görüntüleme izni (yönetici, müdür, muhasebe). **Karar** için onayla / reddet izni (varsayılan yönetici ve müdür).
 
@@ -411,6 +411,61 @@ Ekran "Gece görevlisi günü adım adım kapatır" başlığıyla açılır; ka
 Kapanışlar sayfalı listelenir: gün, kapatan, kapanış anı, özet göstergeler, kasa farkı. Detayda günlük özet ve **vardiya devir raporu PDF** (yöntem bazında sayım, fark, devir notu).
 
 **Örnek:** Gece görevlisi Burak 23:55'te sihirbazı açtı. Gelmeyenler: 2 rezervasyon (biri acente garantili; iptal politikası ücreti 1 gece). Oda ücretleri: 61 içeride konaklama. Kasa: nakit beklenen 12.450, sayılan 12.400 (−50); kart beklenen 38.200, sayılan 38.200. Devir notu: "305 misafiri sabah 06:00 taksi istedi." Kapat. 00:02'de iş günü 25 Kasım oldu; Panel'deki gelecekler listesi yeni güne döndü; folyo aktörü 61 oda ücretini bastı; 24 Kasım'ın özeti raporlara ve bütçe gerçekleşenine düştü. Sabah müdür Geçmiş'ten PDF'i açıp −50 TL farkı gördü.
+
+## Ekranlar ve izinler özeti
+
+| Ekran | Adres | Görmek için | Değiştirmek için |
+| --- | --- | --- | --- |
+| Görevler | `/gorevler` | İşin modülüne ait izin (tablo yukarıda) | Aynı izin |
+| Onaylar | `/onaylar/bekleyen`, `/onaylar/gecmis` | Onay kuyruğunu görüntüle | Onayla / reddet |
+| Fiyat önerileri | `/fiyat-onerileri` | Onay kuyruğunu görüntüle | Onayla / reddet (düzenleme dahil) |
+| Bildirimler → Gönderim geçmişi | `/bildirimler/gecmis` | Bildirimleri görüntüle | Tekrar gönder / iptal: bildirim ayarlarını yönet |
+| Bildirimler → Şablonlar, Kanallar | `/bildirimler/sablonlar`, `/bildirimler/kanallar` | Bildirim ayarlarını yönet | Aynı |
+| Aktivite → Canlı akış, Olaylar | `/aktivite/akis`, `/aktivite/olaylar` | Aktivite akışını görüntüle | — (salt okunur) |
+| Aktivite → Denetim kaydı | `/aktivite/denetim` | Denetim kaydını görüntüle | — |
+| Excel'den yükle | `/ice-aktar` | Misafir yönet (misafir) / Ayarları yönet (fiyat planı) | Aynı |
+| Aktörler | `/aktorler` | Aktör panelini görüntüle | Aktörleri aç / kapat (varsayılan yalnızca Yönetici) |
+| Ayarlar (tüm sekmeler) | `/ayarlar/...` | Menü yalnızca Yönetici; API: ayarları görüntüle | Ayarları yönet; Kullanıcılar: kullanıcıları yönet; Roller: rolleri yönet |
+| Raporlar → Gelir, Tasarımcı, Kayıtlı | `/raporlar/gelir`, `/raporlar/tasarim`, `/raporlar/kayitli` | Gelir raporlarını görüntüle (+ kaynağın kendi izni) | Kaydet / paylaş: rapor asistanına soru sor |
+| Raporlar → Rapor asistanı | `/raporlar/asistan` | Rapor asistanına soru sor | Aynı |
+| Gün kapanış | `/gun-kapanis`, `/gun-kapanis/gecmis` | Gün kapanışını görüntüle | Günü kapat |
+
+## Sık yapılan yönetim işleri — hızlı tarifler
+
+| İş | Adımlar |
+| --- | --- |
+| Yeni personel hesabı açmak | Ayarlar → Kullanıcılar → Yeni kullanıcı → Ad, E-posta, Rol, Aktif, Şifre (8+) → Kaydet → kişiye şifreyi iletin; ilk girişten sonra "Şifre sıfırla" ile yenisini verebilirsiniz |
+| Ayrılan personeli kapatmak | Ayarlar → Kullanıcılar → kişi → Düzenle → Aktif kapat → Kaydet. Açık oturumu ilk istekte düşer; izleri kalır. Silme yoktur |
+| Bir rolün yetkisini genişletmek | Ayarlar → Roller & İzinler → ilgili kutuyu işaretle → Kaydet → kişiler çıkıp yeniden girsin |
+| Oda atamasını elle yürütmek | Aktörler → Oda aktörü → anahtarı kapat → gerekçe → onayla. Yeni rezervasyonlar "Oda atama" görevi olur |
+| Kampanya dönemi için şablon değiştirmek | Bildirimler → Şablonlar → olay → kanal → dil → metni düzenle → önizle → Kaydet. Sıradaki eski bildirimler eski metinle gider |
+| SMS'leri geceleri durdurmak | Bildirimler → Kanallar → SMS → Sessiz saatler 22:00–08:00 → Kaydet |
+| Bekleyen iadeyi onaylamak | Zil → "Onay bekliyor" → detay → gerekçe ve folyoyu kontrol → Onayla (not) |
+| Fiyat önerisini değiştirip onaylamak | Fiyat önerileri → öneri → Düzenle (çarpan) → Onayla |
+| Yield'i açmak | Ayarlar → Dinamik fiyat → "Kural tabanlı yield açık" → eşikleri gözden geçir → Kaydet. İlk öneriler 6 saat içinde |
+| Büyük ödeme eşiği koymak | Ayarlar → Genel parametreler → Ödeme onayı → tutar → Kaydet |
+| Misafir listesini toplu yüklemek | Excel'den yükle → Misafir listesi → şablonu indir → doldur → dosya → eşleştir → denetle → içe aktar |
+| Aylık doluluk raporunu kaydetmek | Raporlar → Rapor asistanı → "Geçen ayın haftalık doluluğu" → Kaydet → otelle paylaş. Her ay AI'sız yeniden çalışır |
+| "Kim değiştirdi" sorusunu cevaplamak | Aktivite → Denetim kaydı → Kayıt türü + kimlik ya da kayıt ekranındaki İşlem zinciri |
+| AI'ı geçici kapatmak | Ayarlar → AI asistanı → anahtarı kapat → Kaydet (ya da Aktörler'den niyet / concierge ajanını kapat). Konuşmalar personele düşer |
+| Kanal senkronunu sıfırdan eşitlemek | Aktörler → Kanal aktörü → kapat → aç. Açılışta tam eşitleme istenir |
+
+## Yönetici için haftalık kontrol listesi
+
+Sistemin sağlıklı çalıştığını on dakikada doğrulamak için:
+
+1. **Görevler** (`/gorevler`): Açık görev sayısı sıfıra yakın mı? Sürekli aynı modülden görev düşüyorsa (ör. hep "Ön muhasebe") bir tanım eksiktir; görevin açıklamasındaki sebebi okuyun.
+2. **Onaylar → Geçmiş**: "Süresi doldu" kararı var mı? Varsa onay yetkilileri zile bakmıyor demektir; yetkili sayısını artırın ya da zil tercihlerini kontrol edin.
+3. **Aktörler**: Hepsi açık mı; "son 24 saatte hata" sütununda sıfır dışı var mı? Hata varsa aktör detayındaki son işlerden zincire gidin.
+4. **Aktivite → Olaylar → "Yalnızca dağıtılmamış"**: Liste boş olmalı. Doluysa sunucu loglarına bakılmalı.
+5. **Aktivite → Canlı akış → Seviye: Sorunlar**: Son haftanın uyarı / hata satırlarını tarayın; tekrar eden bir mesaj varsa kök sebebi çözün.
+6. **Bildirimler → Gönderim geçmişi → Başarısız**: Kanal sorunu mu (parola, başlık), adres sorunu mu? Kanal testini çalıştırın.
+7. **Aktörler → LLM ajanları kartı**: Günlük bütçe doluyor mu? Doluyorsa ya bütçeyi artırın ya "Konuşma başına günlük cevap" sınırını düşürün.
+8. **Gün kapanış → Geçmiş**: Her gün kapatılmış mı? Boşluk varsa iş günü kaymıştır; o günü kapatın (takvimden ileri gün kapatılamaz, sırayla).
+9. **Kanallar → senkron logu**: "Kanal senkronu başarısız" uyarısı varsa kanal bağlantısını kontrol edin; gerekiyorsa kanal aktörünü kapatıp açarak tam eşitleme isteyin.
+10. **Ayarlar → Roller & İzinler**: Yeni modül geldiyse (güncelleme notunda yazar) yeni izinlerin rollerde doğru dağıldığını kontrol edin; sonradan eklenen izin varsayılanla gelir.
+
+**Örnek:** Pazartesi kontrolünde yönetici Onaylar → Geçmiş'te hafta sonu üç "Süresi doldu" gördü: ikisi fiyat önerisi, biri 1.800 TL iade. Sebep: tek onay yetkilisi müdür izindeydi. Çözüm: muhasebe müdürüne matristen "Onayla / reddet" izni verildi (dört göz kuralı zaten muhasebenin kendi isteğini onaylamasını engeller); iade yeniden açıldı ve aynı gün onaylandı; fiyat önerileri bir sonraki 6 saatlik turda yeniden üretildi.
 
 ## Sık sorulanlar
 

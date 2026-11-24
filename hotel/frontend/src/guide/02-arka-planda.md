@@ -434,6 +434,50 @@ Onay kararları, aktör açma / kapama, ayar değişiklikleri, kullanıcı işle
 - **Para:** Tutarlar metin olarak taşınır ve özel para aritmetiğiyle hesaplanır; kayan nokta hatası (0,1 + 0,2) olmaz. Envanteri azaltan yazmalar kilitle yapılır: iki resepsiyonist son odayı aynı anda satamaz.
 - **Üretim koruması:** Üretimde `JWT_SECRET` yoksa / kısaysa sunucu açılmaz; CORS yalnızca listelenen adreslere açıktır; `prisma db push` kullanılmaz (veritabanı kısıtlarını sessizce silerdi).
 
+## Uçtan uca örnek: bir OTA rezervasyonunun yolculuğu
+
+Bütün parçaları tek hikâyede görmek için Booking.com'dan gelen bir rezervasyonu baştan sona izleyelim. Saatler örnektir.
+
+| Saat | Ne oldu | Kim yaptı | İz |
+| --- | --- | --- | --- |
+| 14:02:00 | Booking.com, Channex üzerinden yeni rezervasyon revizyonu gönderdi (webhook) | Kanal yönetimi modülü revizyonu sakladı, "kanal rezervasyonu alındı" olayını yayınladı | Olaylar ekranında satır; Kanallar → senkron logu |
+| 14:02:01 | Revizyon rezervasyona çevrildi: oda tipi eşleştirmeden bulundu, fiyat planı uygulandı, misafir kartı telefon / e-postadan eşleşti (yoksa açıldı) | **Kanal aktörü** | Aktivite: "Kanal rezervasyonu açıldı: DEMO-0131", "rezervasyon oluşturuldu" olayı |
+| 14:02:01 | Uygun boş oda seçildi ve atandı | **Oda aktörü** | "Oda atandı" olayı |
+| 14:02:02 | "Rezervasyon onayı" e-postası kuyruğa yazıldı (misafir uyruğu NL → İngilizce) | **Bildirim aktörü** | Gönderim geçmişi: Sırada |
+| 14:02:02 | Diğer kanallar (ör. Expedia iCal, otelin web motoru) için müsaitlik "gönderilecek değişiklik var" işaretlendi | **Kanal aktörü** | — |
+| 14:02:06 | Fark Channex'e gönderildi; Expedia'ya iCal bir sonraki okumada | Kanal gönderim turu (5 sn) | Senkron logu |
+| 14:02:15 | E-posta SMTP'ye verildi | Bildirim göndericisi (15 sn) | Gönderim geçmişi: Gönderildi |
+| 14:02:20 | Panel'deki doluluk ve gelecekler kartı tazelendi | Canlı kanal haberi → ekran sorgusu | — |
+| 14:03 | Yield işi bir sonraki turunda (6 saatte bir) bu haftanın doluluğunun %80'i geçtiğini görürse öneri üretir | Dinamik fiyat işi | Onaylar: "Toplu fiyat değişimi" |
+| Giriş günü 09:10 | Misafir portalı daveti (ayarda 1 gün önce ise bir gün önce gitmişti); misafir online check-in yaptı | Misafir portalı işi (30 dk) | Online check-in listesi: inceleme bekliyor; zil |
+| 15:20 | Resepsiyon online check-in'i onayladı, girişi yaptı | Personel | Denetim kaydı |
+| 15:20 | Oda dolu; folyo açıldı; "Hoş geldiniz" e-postası | Oda, folyo, bildirim aktörleri | Zincir: aynı kimlik |
+| Her gece | Oda ücreti folyoya | Folyo aktörü (gün kapanışı / 5 dk'lık iş) | Folyo kalemleri |
+| Çıkış günü 10:40 | Çıkış; restoran adisyonu folyoda; kart tahsilatı; folyo kapandı; fatura taslağı açıldı; "Teşekkür" e-postası; muhasebeye kasa / banka kaydı; çıkış temizliği görevi | Personel + oda, folyo, bildirim, muhasebe, kat hizmeti aktörleri | Zincir |
+| Çıkış + 1 gün 11:00 | Çıkış sonrası anket daveti; misafir 9 puan ve yorum yazdı; yorum etiketlendi (olumlu; "temizlik", "kahvaltı") | Anket işi (15 dk), **geri bildirim ajanı** | Anketler ekranı |
+
+Bu yolculukta personel üç kez dokundu: online check-in onayı, giriş ve çıkış. Geri kalan on iki adım aktörler ve zamanlanmış işlerdi. Kanal aktörü kapalı olsaydı ilk adım "Kanaldan gelen rezervasyon elle işlenecek" görevi olurdu ve yolculuk oradan aynı şekilde sürerdi.
+
+## Kısa sözlük
+
+| Terim | Anlamı |
+| --- | --- |
+| Olay | Sistemde olan önemli bir şeyin kaydı; aktörler bunu dinler |
+| Outbox | Olayın iş verisiyle aynı işlemde yazılıp sonra dağıtılması; dağıtılamayan 30 sn'de yeniden denenir |
+| Aktör / worker / ajan | Olay dinleyen bağımsız işçi; kural tabanlı (worker) ya da dil modeli kullanan (ajan) |
+| Bildirge (manifest) | Aktörün beyanı: ne dinler, ne yayınlar, neyi onaya götürür, kapalıyken iş nereye düşer |
+| İdempotent | Aynı iş iki kez tetiklense de bir kez yapılır |
+| Manuel görev | Aktörün yapamadığı / kapalı olduğu için personele düşen iş |
+| Onay kuyruğu | Riskli işin yetkili kararına bırakılması; isteyen aktör onayda kaldığı yerden sürer |
+| Dört göz | İsteyen kendi isteğini onaylayamaz |
+| Zincir (correlation) | Bir isteğin yol açtığı bütün olay, aktör işi ve değişikliklerin ortak kimliği |
+| İş günü | Kapatılmış son günün ertesi; gün kapanışıyla ilerler |
+| Zil | Kişiye ya da izne giden personel uyarısı; 30 gün saklanır |
+| Canlı kanal | "Şu değişti" haberini ilgili ekranlara taşıyan socket kanalı |
+| Sürüm damgası | Aynı kaydı iki kişinin aynı anda ezmesini engelleyen koruma |
+| Denetim kaydı | Kişilerin yaptığı değişikliklerin eski / yeni değerle defteri |
+| Aktivite akışı | Aktörlerin işlerinin defteri |
+
 ## Sık sorulanlar
 
 **Aktörler kapalıyken otel çalışır mı?**

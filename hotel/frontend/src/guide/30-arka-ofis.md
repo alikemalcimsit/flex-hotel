@@ -87,6 +87,36 @@ Taslakta görülenler:
 
 Kesimden sonra ekranda **e-belge kutusu** (belge türü, ETTN, posta kutusu, son cevap), **zaman çizelgesi** (kim ne zaman ne yaptı), **PDF** ve **İptal iste** düğmesi görünür.
 
+### Örnek: folyo kapanışından e-belgeye, sayılarla
+
+Ayşe Demir, oda 204, 14–16 Mart (2 gece), Deluxe 3.000 TL / gece. Folyoda şu kalemler var (tutarlar vergi **dahil**; vergi dökümü her kalemin işlendiği anda kaleme yazılmıştır):
+
+| Kalem | Tutar | Vergi kategorisi | Dahil vergiler | Net | Vergi |
+| --- | --- | --- | --- | --- | --- |
+| Konaklama 14.03 | 3.000,00 | Oda | KDV %10 + konaklama vergisi %2 | 2.678,57 | KDV 267,86 · KV 53,57 |
+| Konaklama 15.03 | 3.000,00 | Oda | KDV %10 + konaklama vergisi %2 | 2.678,57 | KDV 267,86 · KV 53,57 |
+| Restoran · ADS-2026-000412 | 960,00 | Yiyecek-içecek | KDV %10 | 872,73 | KDV 87,27 |
+| Minibar · MB-000287 | 210,00 | Minibar | KDV %20 | 175,00 | KDV 35,00 |
+| **Toplam borç** | **7.170,00** | | | | |
+| Ödemeler: giriş teminatı nakit 1.000 + çıkışta kart 6.170 | **7.170,00** | | | | |
+| **Bakiye** | **0,00** | | | | |
+
+Net = brüt ÷ (1 + dahil oranların toplamı): 3.000 ÷ 1,12 = 2.678,57; KDV = 2.678,57 × 0,10; konaklama vergisi = 2.678,57 × 0,02. Yuvarlama **satır bazında** yapılır; bu yüzden toplamda kuruş farkı görülebilir, bu bir hata değildir.
+
+Adım adım:
+
+1. **Çıkış, 16 Mart 11:00.** Resepsiyon 6.170 TL kart ödemesini alır; bakiye sıfır; çıkış tamamlanır. Folyo aktörü bakiyesi sıfır folyoyu **kapatır** (`folio.closed`).
+2. **Taslak açılır (otomatik).** Folyo aktörü `folio.closed`'u dinler: faturalama başlangıcı 1 Mart ise 16 Mart'ta kapanan folyo kuyruğa girer; "otomatik taslak" açık → taslak. Satırlar **gelir grubuna göre** kurulur: "Konaklama 14.03.2026–16.03.2026 (2 gece)" 6.000,00; "Restoran" 960,00; "Minibar" 210,00. Vergi dökümü kalemlerden toplanır: KDV %10 matrahı 2.678,57 × 2 + 872,73 = 6.229,87 → KDV 622,99; KDV %20 matrahı 175,00 → 35,00; konaklama vergisi %2 matrahı 5.357,14 → 107,14. Alıcı **misafir** (folyo cariye aktarılmadı), türü kişi.
+3. **Taslak incelenir.** Faturalar → Taslaklar → Ayşe Demir. "Kesmeden önce" listesi: "TC kimlik no eksik" ve "adres eksik". Resepsiyon kimlik numarasını (check-in'de alınmıştı; sistem önceki faturasından da doldurur) ve adresi girer. Liste boşalır; yasal süre rozeti "6 gün kaldı".
+4. **Kes.** Tek işlemde: kaynak yeniden okunur (folyo değişmemiş) → alıcı kişi → mükellef sorgusu gerekmez, belge **e-Arşiv** → seri DMA, yıl 2026, sıradaki numara → `DMA2026000000731` → UBL-TR belgesi (KDV 0015 satırları ve konaklama vergisi 0059 satırı **KDV hariç bedel** üzerinden; karekod) → özet (SHA-256) dondurulur → gönderim sırasına girer → `invoice.issued`.
+5. **Gönderim.** Gönderici belgeyi üstlenir, entegratöre yollar; 30 sn sonra durum sorar. Test entegratöründe "entegratörde → tamamlandı". Gerçek entegratörde aynı yol izlenecek; şu an gerçek adaptör yok.
+6. **Muhasebe.** Muhasebe aktörü `invoice.issued`'u alır: folyo faturasında numara **alacağı doğuran cari harekete** yazılır. Ayşe kartla ödedi, cari hareket yok → bağlanacak satır yok, iş "bağlanacak hareket yok" diye biter (kasa / banka girişleri ödeme anında zaten yazılmıştı). Aynı folyo acenteye "Acente / cari" ile kapanmış olsaydı acente carisindeki 7.170 TL borç satırına `DMA2026000000731` yazılırdı ve cari ekstresinde görünürdü.
+7. **PDF ve zaman çizelgesi.** Fatura ekranında: taslak açıldı (folyo aktörü, 11:02), alıcı düzenlendi (resepsiyon, 11:05), kesildi (resepsiyon, 11:06), gönderildi (gönderici, 11:06), tamamlandı (11:07).
+
+**Varyant — şirket alıcı:** aynı folyo "Yılmaz Holding" adına istenirse resepsiyon folyoyu kapanıştan önce "ödeyen" alanıyla şirkete yönlendirir ya da taslakta alıcı türünü **şirket** yapıp vergi numarasını girer. Kesimde mükellef sorgusu yapılır: Yılmaz Holding GİB'de e-Fatura kullanıcısıysa belge **e-Fatura** (seri DMF, posta kutusu etiketi), değilse e-Arşiv.
+
+**Varyant — iptal:** fatura kesildikten sonra misafir "minibarı ben tüketmedim" derse: önce **İptal iste** (gerekçe) → onay kuyruğu → başka yetkili onaylar → e-Arşiv entegratörden iptal → folyo artık yeniden açılabilir → minibar kalemi iptal isteği (dört göz) → ters kayıt −210 → 210 TL iade (onaylı) → folyo yeniden kapanır → **yeni taslak** 6.960 TL → kes.
+
 ### Kesilenler sekmesi ve GİB durumu
 
 Liste üstünde dört uyarı kutusu vardır ve her biri süzgeç olarak çalışır: **gönderilemedi**, **reddedildi**, **sonuç bekleniyor**, **iptal onayı bekliyor**. Süzgeçler: tarih, seri, belge türü, durum, alıcı araması.
@@ -166,6 +196,33 @@ Bu konuda beklenti yönetimi önemlidir:
 | Gönderilemedi / reddedildi | Gönderici | Fatura yetkilisine zil (uyarı türü "Fatura"). |
 
 Folyo aktörü ya da muhasebe aktörü kapalıysa işleri **Görevler** ekranına düşer ("Folyo" ve "Ön muhasebe" modüllerinde); personel aynı işi fatura ekranından ya da Muhasebe → Eşitle ile yapar. Gönderici bir aktör değil sunucu işidir; kapatılmaz.
+
+Aynı akış "aktör kapalıysa ne olur" sütunuyla:
+
+| Olay | Açıkken | Kapalıysa / yapamazsa | Personel ne yapar |
+| --- | --- | --- | --- |
+| `folio.closed` | Folyo aktörü taslak açar | "Folyo" modülünde görev: "Kapanan folyonun fatura taslağı açılacak" | Faturalanacaklar → Taslak aç; görevi tamamla |
+| `invoice.issued` | Muhasebe aktörü numarayı cari harekete bağlar / serbest faturayı cariye yazar | "Ön muhasebe" görevi: "Fatura DMA… cariye bağlanacak" | Ön muhasebe → Ayarlar → Eşitle (dönem) → görevi tamamla |
+| `invoice.cancelled` | Bağ çözülür, serbest fatura ters kayıt | "Ön muhasebe" görevi: "Fatura … iptali cariye işlenecek" | Eşitle → görevi tamamla |
+| Gönderim sırası | Gönderici yollar, durum sorar | (Kapatılamaz) Sunucu kapalıysa açılışta takılı kalanı sıraya geri koyar | Beklemek yeterli |
+| İptal kararı | Onay kuyruğu dinleyicisi iptali işler | (Süreç içi dinleyici, aktör değil) | Onaylar → Bekleyen |
+
+### Ekran alanları: fatura ekranı
+
+Taslak ve kesilmiş fatura aynı ekranda, farklı kutularla görünür (`/faturalar/:id`):
+
+| Alan | Ne gösterir / ne yapar |
+| --- | --- |
+| Başlık | Kaynak (folyo · oda · misafir / etkinlik · dosya no / serbest · cari), durum rozeti (taslak, kesildi, gönderiliyor, entegratörde, tamamlandı, reddedildi, gönderilemedi, iptal onayı bekliyor, iptal), belge türü (e-Fatura / e-Arşiv) |
+| Alıcı formu (taslakta) | Tür: kişi / şirket / yabancı kişi / yurt dışındaki şirket. Kişide ad soyad + TC kimlik; şirkette ünvan + VKN + vergi dairesi; yabancı kişide uyruk + pasaport; yurt dışındaki şirkette ülke + kendi vergi no. Adres (il, ilçe, posta kodu, ülke), e-posta. Tür bir kez seçilip hatırlanır (aynı alıcının sonraki faturası aynı türle açılır). |
+| "Kesmeden önce" | Eksiklerin madde listesi; her madde ilgili alana götürür. Boş değilse Kes kapalı. |
+| Yasal süre | Hizmet bitiminden 7 gün; kalan gün yeşil / sarı / kırmızı; süre geçtiyse "süresi geçti" (kesim engellenmez, raporlanır). |
+| Başlangıç uyarısı | Kaynak faturalama başlangıcından önce kapanmışsa "önceki sistemde faturalanmış sayılır" |
+| Satırlar | Açıklama, miktar, birim fiyat (KDV hariç), iskonto, KDV oranı / kodu, konaklama vergisi, satır toplamı. Folyo faturasında salt okunur; serbest faturada düzenlenir. |
+| Vergi dökümü | Vergi kodu başına matrah ve tutar (0015 KDV %10, 0015 KDV %20, 0059 konaklama vergisi %2); muafiyet satırı (%0 + 351) |
+| e-belge kutusu (kesilmişte) | Numara, ETTN, belge türü, alıcı posta kutusu (e-Fatura), ortam (test / canlı), son cevap metni, sonraki deneme zamanı |
+| Zaman çizelgesi | Kim ne zaman ne yaptı: taslak açıldı, alıcı değişti, kesildi, gönderildi, durum sorgusu, iptal istendi / onaylandı, tekrar gönderildi |
+| Düğmeler | Taslakta: Kaydet, Kes, Sil. Kesilmişte: PDF, Tekrar gönder (gönderilemedi / reddedildi), İptal iste (`invoices.manage`). İptal edilmişte: Yeni taslak. |
 
 ### Dikkat edilecekler ve sık hatalar
 
@@ -292,6 +349,49 @@ Fiş türleri ve etkileri:
 
 **İptal** (`accounting.setup`): yalnız işlenmiş fişte, gerekçeyle, **fiş tarihli ters kayıt** ile. Fişin açtığı çek ilk durumunda olmalı (tahsile verilmiş / ciro edilmiş çekin fişi iptal edilemez). Kasa iptalle eksiye düşecekse iptal reddedilir.
 
+### Ekran alanları: cari kartı ve fiş penceresi
+
+**Cari kartı** (`/muhasebe/cariler/:id`):
+
+| Alan | Ne gösterir |
+| --- | --- |
+| Başlık | Kod (ör. `CAR-000214`), ad / ünvan, tür rozeti (acente, tedarikçi, etkinlik müşterisi, şirket, şahıs, personel, kurum), durum, bağlı kart bağlantısı (acente kartı, tedarikçi kartı, personel kartı) |
+| Bilgiler | Vergi no / TC kimlik, vergi dairesi, iletişim, **vade (gün)**, not, kullanım alanı. Bağlı caride ünvan / vergi / iletişim salt okunur (kaynağı kart). |
+| Bakiye kutusu | Bakiye ve yönü: **(B)** cari bize borçlu, **(A)** biz borçluyuz; tutar otel para biriminde |
+| Yaşlandırma şeridi | Vadesi gelmemiş · 1–30 · 31–60 · 61–90 · 90+ gün dilimleri (FIFO) |
+| Açık çek / senetler | Bu cariden alınan portföydeki / tahsildeki çekler, bu cariye verilen ödenecek çekler; satırdan çek kartına |
+| Açılış | "Açılış bakiyesi gir" (yoksa) ya da açılış fişi bağlantısı |
+| Ekstre | Dönem seçimi; **devir** satırı; hareketler belge günü sırasıyla: tarih, belge (fiş no / folyo / mal kabul no / fatura no / bordro), açıklama, borç, alacak, **yürüyen bakiye**, vade; dönem toplamı; "daha fazla" |
+| Düğmeler | Tahsilat fişi, Ödeme fişi (cari seçili açılır), Düzenle |
+
+**Fiş penceresi** (Fişler → Yeni fiş ya da cari kartından):
+
+| Alan | Ne gösterir / ne yapar |
+| --- | --- |
+| Tür | Tahsilat / Ödeme / Virman / Giriş / Çıkış (açılış ayrı pencerede) |
+| Tarih | İş günü varsayılan; geriye yazılabilir (başlangıç gününden önce olamaz) |
+| Cari | Tahsilat ve ödemede zorunlu; seçici kod / ad ile arar, bakiyeyi gösterir |
+| Satırlar | Her satır bir kasa / banka hesabı + tutar (+ açıklama). Hesabın para birimi fişle aynı olmalı. |
+| Çek / senet satırları | Tahsilatta **alınan çek**: çek no, banka, şube, keşideci, vade, tutar. Ödemede **verilen çek** (firma çeki) ya da **ciro**: portföyden çek seçimi (süresi geçmiş / tahsile verilmiş çek listelenmez). |
+| Canlı toplam | Satırların toplamı; cari tarafıyla eşit olmalı |
+| Onay uyarısı | Ödeme fişi toplamı eşiğe eşit / üstüyse "bu fiş onaya gider" şeridi |
+| Kaydet | 201 işlendi ya da 202 onaya gitti; aynı istek kimliğiyle ikinci gönderim tek fiş |
+
+### Örnek: mal kabulden ödemeye (11.800 TL)
+
+Deniz Balıkçılık'tan 10 kg levrek: mal bedeli 10.727,27 TL + KDV %10 1.072,73 TL = **11.800,00 TL** KDV dahil. Tedarikçi kartında vade 30 gün. Mal kabul 2 Nisan.
+
+| Adım | Ekranda | Arka planda | Nerede görünür |
+| --- | --- | --- | --- |
+| 1 | Satın alma → sipariş → **Mal kabul**: depo, irsaliye no, gelen 10 kg | Stok girer; hareketli ortalama güncellenir; `purchase.goods.received` (tutarlar, vade, tedarikçi) | Stok → Hareketler |
+| 2 | — | **Muhasebe aktörü:** Deniz Balıkçılık carisine **11.800,00 alacak** (bizim borcumuz), belge günü 2 Nisan, **vade 2 Mayıs** (kabul günü + 30), kaynak "Mal kabul MKB-2026-0098". Cari bakiyesi **(A) 11.800,00** | Ön muhasebe → Cariler (borcumuz kutusu +11.800); cari ekstresi; Yaşlandırma → "vadesi gelmemiş" |
+| 3 | 20 Nisan: muhasebeci kısmi ödeme — cari kartı → **Ödeme fişi**: banka "İş Bankası TRY" 5.000,00 | Fiş `ODM-2026-0087`; cari **borç 5.000** (bakiye (A) 6.800); banka hesabından **çıkış 5.000**. Eşik (ör. 75.000) altında → onay yok | Fişler; Kasa / banka → İş Bankası hareketleri; cari ekstresi yürüyen bakiye 6.800 |
+| 4 | 2 Mayıs: kalan 6.800 TL **firma çekiyle** — Ödeme fişi: satır "verilen çek" (çek no, banka, vade 2 Haziran, 6.800) | Cari borç 6.800 → bakiye **0**; çek portföyde **"ödenecek"** durumunda; banka henüz etkilenmez | Çek / senet → verilenler; cari kapandı |
+| 5 | 2 Haziran: çek bankadan ödenir → Çek / senet → satır → **Ödendi** | Banka hesabından **6.800 çıkış**, çek durumu "ödendi"; işlem tarihli | Kasa / banka hareketleri; çek geçmişi |
+| 6 | Varyant: çek karşılıksız dönerse → **Karşılıksız** | Cariye borcumuz **geri doğar** (A 6.800); çek "karşılıksız" | Cari ekstresi; yaşlandırmada 31–60 gün dilimi |
+
+Mal kabul **başlangıç gününden önce** olsaydı (ör. başlangıç 1 Mayıs) aktör hiçbir şey yazmazdı; o borç açılış bakiyesiyle girilirdi (cari kartı → Açılış: alacak 11.800, vade 2 Mayıs). Muhasebe aktörü kapalı olsaydı 2. adım "Ön muhasebe" görevi olur, Eşitle ile tamamlanırdı; eşleme gerekmez (mal kabul kasa / banka kullanmaz, doğrudan cariye yazılır).
+
 ### Otomatik kayıtlar: muhasebe aktörü neyi nasıl işler
 
 Muhasebe aktörü (panelde "Muhasebe aktörü") şu olayları dinler ve **kaynak belgeyi okuyarak** kayıt yazar. Her kayıt kaynak anahtarıyla tekildir: aynı olay iki kez gelse, aktör sonradan açılıp olayı yeniden alsa da ikinci kayıt açılmaz.
@@ -316,6 +416,26 @@ Kurallar:
 - **Başlangıç gününden önceki** belge işlenmez (açılış bakiyesiyle gelir). İptal kaydı, asıl satır işlenmişse işlenir.
 - Eşleme yoksa ya da hesabın para birimi tutmuyorsa iş **anlamlı hatayla durur** ve "Ön muhasebe" manuel görevine düşer (bekleyip yeniden denemez; iş kuralı hatası beklemekle düzelmez).
 - Her kayıt kaynak belgeden okunur, olayın gövdesinden değil — belge sonradan düzeltildiyse düzeltilmiş hâl yazılır.
+
+### Olay → kayıt → ekran → aktör kapalıysa (tek tablo)
+
+| Olay (kaynak modül) | Muhasebe aktörü ne yazar | Nerede görünür | Kapalıysa / yapamazsa görev başlığı | Tamamlama yolu |
+| --- | --- | --- | --- | --- |
+| Folyo ödemesi alındı (17) | Eşlemedeki kasa / bankaya giriş; "Acente / cari" ve voucher'da cariye borç (vade = gün + cari vadesi) | Kasa / banka hareketleri (kaynak "Ön büro"); cari ekstresi | "Folyo tahsilatı muhasebeye işlenecek (kasa / banka ya da cari)" | Eşlemeyi tamamla → Ayarlar → Eşitle |
+| Folyo iadesi (17) | Kasa / bankadan çıkış ya da carinin alacağı | Aynı | "Folyo iadesi muhasebeye işlenecek" | Eşitle |
+| Ödeme iptali (17) | Asıl satırın tersi | Aynı (iptal kaydı üstü çizili) | "Ödeme iptali muhasebeye ters kayıtla işlenecek" | Eşitle |
+| Etkinlik tahsilatı (37) | Kasa / bankaya giriş + müşteri carisinden düşer | Kasa / banka (kaynak "Etkinlik"); cari ekstresi | "Etkinlik tahsilatı kasaya / bankaya ve müşteri carisine işlenecek" | Eşitle |
+| Etkinlik gerçekleşti / iptal / kaybedildi (37) | Müşteri carisine bedel (fark kaydıyla); iptalde iptal bedeline düzeltme; kaybedilende geri alınır | Cari ekstresi | "Etkinlik bedeli müşteri carisine işlenecek" | Eşitle |
+| Restoran / oda servisi ödemesi (39 / 41) | Restoran eşlemesine göre kasa / banka | Kasa / banka (kaynak "Restoran") | "Restoran tahsilatı kasaya / bankaya işlenecek" | Eşleme → Eşitle |
+| Spa ödemesi (57) | Spa eşlemesine göre kasa / banka | Kasa / banka (kaynak "Spa") | "Spa tahsilatı kasaya / bankaya işlenecek" | Eşleme → Eşitle |
+| Mal kabul (45) | Tedarikçi carisine KDV dahil borcumuz, vade = kabul + tedarikçi vadesi | Cari ekstresi; Yaşlandırma (borçlarımız) | "Mal kabul tedarikçi carisine işlenecek" | Eşitle |
+| Acente primi onaylandı / ödendi / geri alındı (35) | Acente carisine alacak (fark kaydıyla) | Cari ekstresi | "Acente prim hak edişi acente carisine işlenecek" | Eşitle |
+| Fatura kesildi (49) | Numara cari harekete; serbest fatura vadeli alacak | Cari ekstresi (satırda fatura no) | "Fatura … cariye bağlanacak" | Eşitle |
+| Fatura iptal (49) | Bağ çözülür; serbest faturanın ters kaydı | Cari ekstresi | "Fatura … iptali cariye işlenecek" | Eşitle |
+| Bordro onaylandı (51) | Ay sonu tarihli tahakkuk: personel, SGK, vergi dairesi, BES, icra / nafaka carileri | Cariler (tür personel / kurum); ekstreler | "Onaylanan bordro carilere tahakkuk ettirilecek" | Eşitle |
+| Maaş ödendi (51) | Kasa / bankadan tek çıkış; personel carilerine borç (kapanır) | Kasa / banka (kaynak "Bordro"); personel ekstreleri | "Maaş ödemesi kasaya / bankaya ve personel carilerine işlenecek" | Eşitle |
+
+Her satır için ortak: başlangıç gününden önceki belge işlenmez; kaynak anahtarı tekildir; onay bekleyen / reddedilen ödemenin etkisi yoktur; iş kuralı hatası (eşleme yok, cari yok, para birimi uyumsuz) beklemeden göreve düşer, geçici hata 3 kez denenir.
 
 ### "Eşitle" ile tamamlama
 
@@ -402,6 +522,63 @@ Altında ayın **ek ödeme / kesinti kalemleri**: kalem (prim, ikramiye, yol, ye
 5. **Öde** (`payroll.pay`): **banka** → banka hesabından çıkış + IBAN dosyası (Excel); **elden** → yalnız kasadan (kasa eksiye düşmez). Ödeme tarihi bugünü geçemez.
 
 **Çıktılar:** bordro listesi PDF (bütün personel, toplamlı), personel pusulaları PDF (kişi başı bir sayfa; büyük otelde departman ya da sayfa sayfa), departman icmali, banka dosyası ve müşavir tablosu (Excel). Onaylanmamış bordronun her sayfasında **"TASLAK"** yazar.
+
+### Ekran alanları: bordro ekranı
+
+`/bordro/:id`:
+
+| Alan | Ne gösterir / ne yapar |
+| --- | --- |
+| Başlık | Ay, tür (aylık / fark), durum rozeti (taslak, hesaplandı, onayda, onaylı, ödendi), kullanılan parametre seti ve teyit durumu |
+| Uyarı şeridi | "Yeniden hesaplanmalı" (girdi değişti), "parametre seti teyitsiz", "önceki ay onaylı değil", "onay bekliyor", "reddedildi (not)" |
+| Toplamlar | Brüt, SGK işçi / işveren, gelir vergisi, damga vergisi, kesintiler, **net ödenecek**, işveren maliyeti; personel sayısı |
+| Departman icmali | Departman başına brüt / net / maliyet |
+| Personel satırları | Ad, departman, gün, brüt, SGK, GV, DV, kesintiler, net; satıra tıklayınca **hesap izi** (her adımın ara değeri) ve **pusula** penceresi |
+| Çıktılar | Bordro listesi PDF, pusulalar PDF (departman / sayfa seçimi), departman icmali, banka dosyası (Excel; banka ödemesi için), müşavir tablosu (Excel) |
+| Ödemeler | Ödeme satırları (tarih, yöntem, hesap, tutar, ödeyen); **Öde** düğmesi (`payroll.pay`): banka hesabı seç ya da elden → kasa seç |
+| Düğmeler | Hesapla, Onaya gönder, (fark bordrosunda) Fark bordrosu aç; onaylı ayda düzenleme kapalı |
+
+### Örnek: brüt 30.000 TL'lik bir bordro
+
+Aşçı Selin Kaya, Mutfak departmanı, brüt anlaşmalı 30.000 TL, Nisan 2026, tam ay (30 gün), teşvik yok, BES yok, 2.000 TL avans almış. **Aşağıdaki oranlar yalnızca örnektir**; gerçek oranlar ve istisna tutarları otelin **teyit edilmiş parametre setinden** gelir ve hesap izi ekranında satır satır görünür. Asgari ücret gelir / damga vergisi istisnası basitlik için gösterilmemiştir (gerçek hesapta düşülür ve net daha yüksek çıkar).
+
+| Adım | Hesap | Tutar |
+| --- | --- | --- |
+| Brüt ücret | 30 gün × günlük | 30.000,00 |
+| SGK işçi payı | 30.000 × %14 | −4.200,00 |
+| İşsizlik işçi payı | 30.000 × %1 | −300,00 |
+| Gelir vergisi matrahı | 30.000 − 4.500 | 25.500,00 |
+| Gelir vergisi (ilk dilim %15, birikmiş matraha göre) | 25.500 × %15 | −3.825,00 |
+| Damga vergisi | 30.000 × %0,759 | −227,70 |
+| **Net ücret** | | **21.447,30** |
+| Avans mahsubu | (onayda kesinleşir) | −2.000,00 |
+| **Ödenecek** | | **19.447,30** |
+| SGK işveren payı | 30.000 × %20,75 | 6.225,00 |
+| İşsizlik işveren payı | 30.000 × %2 | 600,00 |
+| Hazine 5 puan indirimi | 30.000 × %5 (koşulları sağlıyorsa) | −1.500,00 |
+| **İşveren maliyeti** | 30.000 + 6.225 + 600 − 1.500 | **35.325,00** |
+
+Netten anlaşmalı olsaydı (ör. "net 25.000"): sistem **en küçük brütü** ikili aramayla bulur; hesap izi "hedef net 25.000 → brüt X" satırını gösterir.
+
+Bordro onaylanınca **ön muhasebeye** düşen tahakkuk (ay sonu, 30 Nisan tarihli; muhasebe aktörü):
+
+| Cari | Hareket | Tutar | Açıklama |
+| --- | --- | --- | --- |
+| Selin Kaya (personel) | Alacak (borcumuz) | 21.447,30 | Net ücret. Avans ödendiği gün aynı cariye **borç 2.000** yazılmıştı; tahakkukla cari bakiyesi (A) 19.447,30 olur |
+| SGK | Alacak | 4.200 + 300 + 6.225 + 600 − 1.500 = 9.825,00 | İşçi + işveren payları − indirim |
+| Vergi dairesi | Alacak | 3.825,00 + 227,70 = 4.052,70 | Gelir + damga vergisi |
+| BES şirketi | — | 0 | (BES yok) |
+| İcra / nafaka dosyası | — | 0 | (yok) |
+
+Maaş ödemesi (Bordro ekranı → Öde → banka "İş Bankası TRY", 5 Mayıs): banka hesabından **tek çıkış** (bütün personelin ödeneceklerinin toplamı), Selin Kaya carisine **borç 19.447,30** → cari bakiyesi **0**; banka dosyasında IBAN satırı. SGK ve vergi dairesi carileri muhasebecinin ay sonunda **Ödeme fişi** ile kapatacağı borçlar olarak kalır (bu ödeme bordro ekranından değil, Ön muhasebe → cari kartından yapılır). Fark bordrosunda tutar eksi çıkarsa (ör. yanlış girilen primin geri alınması) ters taraf yazılır.
+
+Arka plan ve kapalıysa:
+
+| Olay | Açıkken | Kapalıysa | Tamamlama |
+| --- | --- | --- | --- |
+| Bordro onaylandı | Muhasebe aktörü 250'lik parçalarla tahakkuk yazar; eksik personel carilerini toplu açar | "Ön muhasebe" görevi: "Onaylanan bordro carilere tahakkuk ettirilecek" | Ön muhasebe → Ayarlar → Eşitle (ay) |
+| Maaş ödendi | Kasa / banka çıkışı + personel carileri | "Maaş ödemesi kasaya / bankaya ve personel carilerine işlenecek" | Eşitle |
+| Bordro onaya gitti / reddedildi / hesaplandı | Muhasebe etkisi yok | — | — |
 
 ### Ayarlar
 
@@ -495,6 +672,44 @@ Kurallar (kullanıcı kararı):
 
 **Muhasebe fişi yoktur** (genel muhasebe 48 yok); amortisman ve elden çıkarma kâr / zararı tabloda görülür. Azalan bakiyeler usulü yoktur.
 
+### Ekran alanları: demirbaş kartı
+
+`/demirbas/:id`:
+
+| Alan | Ne gösterir |
+| --- | --- |
+| Başlık | Kod (`DM-000123`), ad, durum (kullanımda / elden çıkarıldı), kategori, QR önizlemesi |
+| Bilgiler | Marka, model, seri no, **yer** (oda no ya da alan adı), **zimmet** (sicil + ad), alış tarihi, alış tutarı, faydalı ömür (yıl), garanti bitişi (kalan gün), not |
+| Finansal özet | Maliyet, açılış amortismanı (varsa; hangi yıla kadar), kaydedilmiş birikmiş amortisman, planlanan, **net değer**; elden çıkarılmışsa çıkarma tarihi, türü, satış bedeli, dondurulmuş net değer ve **kâr / zarar** |
+| Yıl yıl tablo | Yıl · yıl başı birikmiş · yılın payı · kaynağı (açılış / kaydedildi / plan) · yıl sonu birikmiş · net değer |
+| Hareket geçmişi | Ekle-yalnız satırlar: açıldı, düzeltildi (hangi alan), taşındı (nereden nereye), zimmetlendi / iade alındı (kime), sayımda bulundu (sayım no), elden çıkarıldı; kim, ne zaman |
+| Düğmeler | Düzelt, Taşı, Zimmetle / İade al, Etiket yazdır (`assets.manage`); Elden çıkar (`assets.finance`) |
+
+### Örnek: 60.000 TL, 5 yıl — amortisman tablosu
+
+Endüstriyel fırın, kategori "Mutfak ekipmanı" (varsayılan ömür 5 yıl), alış **15 Mart 2026**, 60.000 TL, garanti 15 Mart 2028, yer "Mutfak" alanı, zimmet Selin Kaya.
+
+VUK yıllık doğrusal: yılın payı = kalan net değer / ömrün kalan yılı; alındığı yıl **tam yıl** (Mart'ta alınsa da 2026 için tam pay).
+
+| Yıl | Yıl başı birikmiş | Yılın payı | Yıl sonu birikmiş | Net değer | Aylık pay (raporlar için) |
+| --- | --- | --- | --- | --- | --- |
+| 2026 | 0,00 | 12.000,00 | 12.000,00 | 48.000,00 | 1.000,00 |
+| 2027 | 12.000,00 | 12.000,00 | 24.000,00 | 36.000,00 | 1.000,00 |
+| 2028 | 24.000,00 | 12.000,00 | 36.000,00 | 24.000,00 | 1.000,00 |
+| 2029 | 36.000,00 | 12.000,00 | 48.000,00 | 12.000,00 | 1.000,00 |
+| 2030 | 48.000,00 | 12.000,00 (kalanın tamamı) | 60.000,00 | 0,00 | 1.000,00 |
+
+Adımlar:
+
+1. **2026 sonu:** Demirbaş → Amortisman → yıl 2026 → tabloda fırın 12.000 "plan" → **Kaydet** (`assets.finance`). Artık 2026 kilitli: fırının alış tarihi / tutarı / ömrü değişmez; 2026 ya da öncesine elden çıkarma yazılamaz. Kayıt kartları kilitleyerek yazılır (aynı anda gelen düzeltme bekler).
+2. **Hata fark edildi:** tutar aslında 66.000 olmalıydı. 2026 kaydını **Geri al** (yalnız son yıl) → kart → Düzelt → 66.000 → yeniden Kaydet: 2026 payı 13.200.
+3. **Açılışla gelen kart (karşılaştırma):** aynı fırın 2024'te alınmış, sistem 2026'da başlamış olsaydı kartta "açılış amortismanı 24.000, 2025 yılına kadar" girilir; kalan 36.000 kalan 3 yıla yayılır → 2026–2028 yılda 12.000. Açılışın kapsadığı yıllarda pay yoktur.
+4. **Elden çıkarma:** 2028 Haziran'da fırın 20.000 TL'ye satılır. 2027 kaydı yapılmış, 2028 kaydı yapılmamış → tarih geçerli. **Çıkarıldığı yıl amortisman ayrılmaz**: net değer 2027 sonundaki **36.000** (60.000 − 24.000) olarak dondurulur; satış 20.000 → **zarar 16.000** tabloda görünür. 2028 tablosunda fırın "elden çıkarıldı, pay yok" satırıyla yer alır. Bu noktadan sonra 2027 kaydı geri alınamaz (dondurulan değer onu içerir).
+5. **Garanti:** 13 Şubat 2028'de (bitişe 30 gün) 6 saatlik iş fırını yakalar → `assets.manage` iznine tek zil ("1 demirbaşın garantisi 30 gün içinde bitiyor", bağlantı garanti listesine). Garanti uzatılırsa yeni tarih için yeniden çalar.
+6. **Sayım:** Nisan 2027 "Mutfak" alanı sayımında fırın okutulur → "yerinde". Depoya taşınmış olsaydı → "başka yerde"; kapanışta "bulunduğu yere taşı" işaretlenirse kart Depo'ya taşınır, geçmişe "sayım SYM-… ile taşındı" yazılır.
+
+**Muhasebe fişi yoktur:** 12.000 TL'lik yıllık pay ve 16.000 TL'lik zarar yalnız bu tabloda ve Excel çıktısındadır; genel muhasebe (48) gelince yevmiye fişi üretilecektir.
+
 ### Garanti
 
 `/demirbas/garanti`: seçilen pencerede garantisi bitecek kullanımdaki demirbaşlar (en yakın önce) ya da son bir yılda bitmişler. **Garanti zili:** 6 saatte bir çalışan iş, garantisi 30 gün içinde bitecek kartı yakalar ve `assets.manage` iznine zil düşürür (bağlantı garanti listesine). Kart ve bitiş tarihi başına **bir kez**; garanti uzatılırsa yeniden; aynı günün kartları tek zilde.
@@ -518,6 +733,16 @@ Demirbaş modülünde aktör yoktur; satın almadan otomatik kart açılması (s
 - **Kamera düğmesi yok**: tarayıcı QR okumayı desteklemiyor (Safari / iOS'ta yok). El okuyucusu ya da elle yazma kullanılır.
 - **Excel yüklemesi geçmedi**: tek satır hatası bütün dosyayı durdurur; önizlemedeki satır hatalarını düzeltip yeniden yükleyin. Kategori / alan / sicil adları tanımlarla birebir eşleşmelidir.
 - Lazer barkod okuyucu QR okumaz; 2D okuyucu ya da telefon gerekir.
+
+## Bütçe (kısa)
+
+Bütçe arka ofisin planlama ayağıdır (`/butce/plan`, `/butce/gerceklesen`, `/butce/sapma`; `budget.view` müdür ve muhasebe, `budget.approve` müdür).
+
+- **Plan:** yıl × sürüm; satırlar gelir kalemleri, doluluk / ADR hedefleri, nakit (tahsilat) ve gider kalemleri (ilk bütçede USALI'ye göre 7 öneri); sütunlar aylar. Excel şablonu indir → doldur → yükle (kod sütunuyla eşleşir; yüklenen değer "kaydedilmemiş değişiklik" olarak gelir). Taslak → **Onayla** (kilit); değişiklik **revize** ile (önceki onaylı "eski sürüm").
+- **Gerçekleşen:** gelir, doluluk, ADR, tahsilat **sistemden** (yalnız kapanmış günler; gelir raporuyla aynı tanım); **gider gerçekleşeni elle** girilir (hücre sürümlü; gelecek ay girilmez). Satın alma ve ön muhasebeden otomatik beslenme yol haritasındadır.
+- **Sapma:** ay ya da yılbaşından seçilen aya; plan / gerçek / fark / fark %; gelirde fazlası, giderde azı olumlu; oda geliri sapması **doluluk etkisi** ve **fiyat etkisi**ne ayrılır; brüt faaliyet kârı; planı olup gerçekleşeni girilmemiş gider "eksik". **AI yorumu** (bütçe ajanı; anahtar yoksa "yazılamadı", rapor yorumsuz da eksiksizdir).
+
+Örnek: Mart planı oda geliri 2.400.000, gerçekleşen 2.580.000 → +180.000 (+%7,5, olumlu). Ayrıştırma: doluluk hedefi %72, gerçek %76 → doluluk etkisi +133.000; ADR hedefi 2.750, gerçek 2.800 → fiyat etkisi +47.000. Yiyecek maliyeti planı 420.000, girilen gerçekleşen 455.000 → −35.000 (olumsuz, kırmızı).
 
 ## Bölüm sonu: sık sorulanlar
 
