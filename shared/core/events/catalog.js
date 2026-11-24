@@ -540,6 +540,7 @@ export const EVENT_CATALOG = Object.freeze({
       'MAINTENANCE',
       'SALES_FOLLOW_UP',
       'ASSET',
+      'STOCK',
     ]),
     userId: z.string().uuid().nullable(),
     permission: z.string().nullable(),
@@ -922,8 +923,15 @@ export const EVENT_CATALOG = Object.freeze({
     currency: z.string(),
     dueDate: z.string(),
   }),
-  /** Stok değişti (mal kabul girişi, depo tanımı, minimum seviye); 44 çıkış / transfer / sayımı ekler. */
-  'stock.changed': hotelScoped.extend({ change: z.enum(['RECEIPT', 'WAREHOUSE', 'MIN_LEVEL']), stockItemIds: z.array(z.string().uuid()).max(500).default([]) }),
+  /**
+   * Stok değişti: mal kabul girişi, depo tanımı, minimum seviye (modül 45); elle hareket (çıkış / fire / transfer),
+   * sayım onayı, satış düşümü (adisyon kapanışında reçeteden) ve satış noktası → depo ayarı (modül 44).
+   * `stockItemIds` miktarı değişen malzemeler: inventory-worker minimum altına düşeni buradan izler.
+   */
+  'stock.changed': hotelScoped.extend({
+    change: z.enum(['RECEIPT', 'WAREHOUSE', 'MIN_LEVEL', 'MOVEMENT', 'COUNT', 'SALE', 'SETTINGS']),
+    stockItemIds: z.array(z.string().uuid()).max(500).default([]),
+  }),
 
   /* ── Demirbaş ve amortisman (modül 46) ──
      Demirbaş listesi, kart, sayım, amortisman tablosu ve garanti ekranları (`assets.changed`); yükte yalnız kimlikler. */

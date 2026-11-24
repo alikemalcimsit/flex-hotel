@@ -179,6 +179,9 @@ const SuppliersPage = lazy(() => import('./pages/purchasing/SuppliersPage.jsx').
 const StockLayout = lazy(() => import('./pages/stock/StockLayout.jsx').then((m) => ({ default: m.StockLayout })));
 const StockLevelsPage = lazy(() => import('./pages/stock/StockLevelsPage.jsx').then((m) => ({ default: m.StockLevelsPage })));
 const StockMovementsPage = lazy(() => import('./pages/stock/StockMovementsPage.jsx').then((m) => ({ default: m.StockMovementsPage })));
+const StockCountsPage = lazy(() => import('./pages/stock/StockCountsPage.jsx').then((m) => ({ default: m.StockCountsPage })));
+const StockCountPage = lazy(() => import('./pages/stock/StockCountPage.jsx').then((m) => ({ default: m.StockCountPage })));
+const StockCostReportPage = lazy(() => import('./pages/stock/StockCostReportPage.jsx').then((m) => ({ default: m.StockCostReportPage })));
 const AssetsLayout = lazy(() => import('./pages/assets/AssetsLayout.jsx').then((m) => ({ default: m.AssetsLayout })));
 const AssetsHome = lazy(() => import('./pages/assets/AssetsLayout.jsx').then((m) => ({ default: m.AssetsHome })));
 const AssetsPage = lazy(() => import('./pages/assets/AssetsPage.jsx').then((m) => ({ default: m.AssetsPage })));
@@ -1006,7 +1009,7 @@ export default function App() {
                 </RequirePermission>
               }
             />
-            {/* Stok (modül 45 — 44'ün çekirdeği): mevcut, hareketler, depolar. */}
+            {/* Stok (modül 45 + 44): mevcut, hareketler (elle hareket), sayım (liste + ekran), maliyet raporu, depolar (+ satış noktası → depo). */}
             <Route
               path="stok"
               element={
@@ -1017,6 +1020,9 @@ export default function App() {
             >
               <Route index element={<StockLevelsPage />} />
               <Route path="hareketler" element={<StockMovementsPage />} />
+              <Route path="sayim" element={<StockCountsPage />} />
+              <Route path="sayim/:countId" element={<StockCountPage />} />
+              <Route path="maliyet" element={<StockCostReportPage />} />
               <Route path="depolar" element={<WarehousesPage />} />
             </Route>
             {/* Demirbaş (modül 46): liste, sayım (etiket okutan personel de girer), amortisman, garanti, tanımlar; kart, QR bağlantısı, sayım ekranı. */}

@@ -11,7 +11,8 @@ import { hotelContext } from '../banquet/shared.js';
 import { stockValue } from './rules.js';
 
 /**
- * Stok çekirdeği ekranları (modül 45; 44 çıkış / transfer / fire / sayım ve maliyet raporunu ekler).
+ * Stok çekirdeği ekranları (modül 45). Modül 44 yanına: elle hareket `manual.js`, sayım `counts.js`, satış düşümü
+ * `sales.js`, minimum altı önerisi `suggestions.js`, maliyet raporları `reports.js`, satış noktası → depo `settings.js`.
  *
  * - **Depo:** otelde en fazla `MAX_WAREHOUSES`; tek varsayılan depo (mal kabulde önce seçili, pasif
  *   olamaz). Stoğu olan depo pasife alınamaz.
@@ -97,7 +98,7 @@ export async function updateWarehouse(hotelId, warehouseId, input) {
       if (input.isDefault && !input.isActive) throw new ValidationError('Varsayılan depo pasif olamaz', { fields: { isActive: 'Varsayılan depo pasif olamaz' } });
       if (before.isActive && !input.isActive) {
         const stocked = await tx.stockLevel.count({ where: { warehouseId, quantity: { not: 0 } } });
-        if (stocked > 0) throw new ConflictError(`Depoda ${stocked} malzemenin stoğu var; pasife almadan önce stok başka depoya aktarılmalı (transfer: modül 44)`, 'WAREHOUSE_HAS_STOCK');
+        if (stocked > 0) throw new ConflictError(`Depoda ${stocked} malzemenin stoğu var; pasife almadan önce stok başka depoya aktarılmalı (Hareketler → Hareket gir → Transfer)`, 'WAREHOUSE_HAS_STOCK');
       }
       if (input.isDefault && !before.isDefault) await tx.warehouse.updateMany({ where: { hotelId, isDefault: true }, data: { isDefault: false } });
       const data = { code: input.code, name: input.name, isDefault: input.isDefault, isActive: input.isActive };
@@ -254,9 +255,9 @@ async function levelOf(hotelId, stockItemId) {
 /* ─────────────── Hareket ─────────────── */
 
 /**
- * Stok hareketleri (en yeni önce): malzeme, depo, gün aralığı (otelin günü).
+ * Stok hareketleri (en yeni önce): malzeme, depo, tür, gün aralığı (otelin günü).
  * @param {string} hotelId
- * @param {{ page: number, pageSize: number, stockItemId?: string, warehouseId?: string, from?: string, to?: string }} query
+ * @param {{ page: number, pageSize: number, stockItemId?: string, warehouseId?: string, kind?: string, from?: string, to?: string }} query
  */
 export async function listMovements(hotelId, query) {
   const { timezone } = await hotelContext(hotelId);
@@ -264,6 +265,7 @@ export async function listMovements(hotelId, query) {
   const where = { hotelId };
   if (query.stockItemId) where.stockItemId = query.stockItemId;
   if (query.warehouseId) where.warehouseId = query.warehouseId;
+  if (query.kind) where.kind = query.kind;
   if (query.from || query.to) {
     const next = (day) => new Date(Date.parse(`${day}T00:00:00.000Z`) + 86_400_000).toISOString().slice(0, 10);
     where.occurredAt = {
@@ -291,13 +293,28 @@ export async function listMovements(hotelId, query) {
         createdBy: true,
         stockItem: { select: { id: true, code: true, name: true, unit: true } },
         warehouse: { select: { id: true, name: true } },
+        menuItem: { select: { id: true, name: true } },
       },
     }),
     prisma.stockMovement.count({ where }),
   ]);
-  const receiptIds = [...new Set(rows.filter((row) => row.sourceType === 'GoodsReceipt').map((row) => row.sourceId))];
-  const receipts = receiptIds.length ? await prisma.goodsReceipt.findMany({ where: { hotelId, id: { in: receiptIds } }, select: { id: true, number: true, orderId: true } }) : [];
+  const idsOf = (type) => [...new Set(rows.filter((row) => row.sourceType === type).map((row) => row.sourceId))];
+  const [receiptIds, countIds, checkIds] = [idsOf('GoodsReceipt'), idsOf('StockCount'), idsOf('PosCheck')];
+  const [receipts, stockCounts, checks] = await Promise.all([
+    receiptIds.length ? prisma.goodsReceipt.findMany({ where: { hotelId, id: { in: receiptIds } }, select: { id: true, number: true, orderId: true } }) : [],
+    countIds.length ? prisma.stockCount.findMany({ where: { hotelId, id: { in: countIds } }, select: { id: true, number: true } }) : [],
+    checkIds.length ? prisma.posCheck.findMany({ where: { hotelId, id: { in: checkIds } }, select: { id: true, number: true } }) : [],
+  ]);
   const receiptById = new Map(receipts.map((receipt) => [receipt.id, receipt]));
+  const countById = new Map(stockCounts.map((count) => [count.id, count]));
+  const checkById = new Map(checks.map((check) => [check.id, check]));
+  /** Kaynak belge: mal kabul (sipariş bağı), sayım, adisyon; elle harekette belge yok (not gösterilir). */
+  const sourceOf = (row) => {
+    if (row.sourceType === 'GoodsReceipt' && receiptById.has(row.sourceId)) return { type: 'GoodsReceipt', id: row.sourceId, number: receiptById.get(row.sourceId).number, orderId: receiptById.get(row.sourceId).orderId };
+    if (row.sourceType === 'StockCount' && countById.has(row.sourceId)) return { type: 'StockCount', id: row.sourceId, number: countById.get(row.sourceId).number, orderId: null };
+    if (row.sourceType === 'PosCheck' && checkById.has(row.sourceId)) return { type: 'PosCheck', id: row.sourceId, number: checkById.get(row.sourceId).number, orderId: null };
+    return { type: row.sourceType, id: row.sourceId, number: null, orderId: null };
+  };
   return buildPage(
     rows.map((row) => ({
       id: row.id,
@@ -309,7 +326,8 @@ export async function listMovements(hotelId, query) {
       totalCost: money(row.totalCost),
       onHandAfter: plain(row.onHandAfter),
       avgCostAfter: toDecimal(String(row.avgCostAfter)).toFixed(4),
-      source: row.sourceType === 'GoodsReceipt' && receiptById.has(row.sourceId) ? { type: 'GoodsReceipt', id: row.sourceId, number: receiptById.get(row.sourceId).number, orderId: receiptById.get(row.sourceId).orderId } : { type: row.sourceType, id: row.sourceId, number: null, orderId: null },
+      source: sourceOf(row),
+      menuItem: row.menuItem,
       note: row.note,
       occurredAt: iso(row.occurredAt),
       createdBy: row.createdBy,

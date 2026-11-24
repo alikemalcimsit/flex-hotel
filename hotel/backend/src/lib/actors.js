@@ -16,6 +16,7 @@ import { parseToolArguments } from '@hotelos/llm';
 import { createNotificationWorker, NOTIFICATION_WORKER_NAME } from '@hotelos/notification-worker';
 import { createReservationWorker } from '@hotelos/reservation-worker';
 import { createHousekeepingWorker } from '@hotelos/housekeeping-worker';
+import { createInventoryWorker } from '@hotelos/inventory-worker';
 import { createRoomWorker } from '@hotelos/room-worker';
 import { createRouterAgent, routerAgentManifest } from '@hotelos/router-agent';
 import { createWebchatGateway } from '@hotelos/webchat-gateway';
@@ -33,6 +34,8 @@ import * as folioService from '../modules/folios/service.js';
 import * as paymentService from '../modules/payments/service.js';
 import * as accountingPostings from '../modules/accounting/postings.js';
 import { syncPayrollRun } from '../modules/payroll/postings.js';
+import { consumeSale } from '../modules/stock/sales.js';
+import { suggestPurchases } from '../modules/stock/suggestions.js';
 import * as invoiceService from '../modules/invoicing/invoices.js';
 import { enqueueTriggerNotifications } from '../modules/notifications/service.js';
 import { raiseStaffAlert } from '../modules/notifications/staff-alerts.js';
@@ -330,6 +333,10 @@ export function registerActors() {
         deps,
       ),
     );
+  }
+  // Stok aktörü (modül 44): kapanan adisyon → reçeteden düşüm; miktarı düşen malzeme minimum altındaysa → stok talebi.
+  if (!actorRegistry.get('inventory-worker')) {
+    actorRegistry.register(createInventoryWorker({ consumeSale, suggestPurchases }, deps));
   }
   // Kanal aktörü (modül 33): envanter / fiyat değişikliğini kanallara işaretler, kanal rezervasyonunu işler.
   if (!actorRegistry.get(CHANNEL_SYNC_WORKER_NAME)) {

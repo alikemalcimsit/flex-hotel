@@ -1,0 +1,14 @@
+{
+  "name": "@hotelos/inventory-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "description": "Stok aktörü: kapanan adisyonu reçeteden stoktan düşer, minimum altına düşen malzeme için satın alma talebi açar",
+  "scripts": {
+    "test": "node --test \"*.test.js\""
+  },
+  "dependencies": {
+    "@hotelos/actor-kit": "*"
+  }
+}

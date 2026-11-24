@@ -176,3 +176,26 @@ export const stockCostReportQuerySchema = z
     const days = (Date.parse(`${value.to}T00:00:00Z`) - Date.parse(`${value.from}T00:00:00Z`)) / 86_400_000 + 1;
     if (days > MAX_STOCK_REPORT_DAYS) ctx.addIssue({ code: 'custom', path: ['from'], message: `Aralık en fazla ${MAX_STOCK_REPORT_DAYS} gün` });
   });
+
+/* ─────────────── Modül 44: satış noktası → depo (satış düşümü hangi depodan) ─────────────── */
+
+export const MAX_OUTLET_WAREHOUSE_LINKS = 50;
+
+/**
+ * Otel ayarı `Hotel.settings.stock.outletWarehouses`: satış noktasının stoğunun düştüğü depo; eşlenmemiş nokta
+ * varsayılan depodan düşer. Çift gönderime karşı otel kaydının sürüm damgasıyla.
+ */
+export const updateStockSettingsSchema = z
+  .object({
+    expectedUpdatedAt,
+    outletWarehouses: z
+      .array(z.object({ outletId: uuid('Satış noktası geçersiz'), warehouseId: uuid('Depo seçin') }))
+      .max(MAX_OUTLET_WAREHOUSE_LINKS, `En fazla ${MAX_OUTLET_WAREHOUSE_LINKS} eşleme`),
+  })
+  .superRefine((value, ctx) => {
+    const ids = value.outletWarehouses.map((link) => link.outletId);
+    if (new Set(ids).size !== ids.length) ctx.addIssue({ code: 'custom', path: ['outletWarehouses'], message: 'Bir satış noktası bir kez eşlenir' });
+  });
+
+/** Ürün bazlı maliyet raporu (satılan adet / ciro / reçeteden düşen maliyet / marj) — aynı gün aralığı kuralları. */
+export const stockProductReportQuerySchema = stockCostReportQuerySchema;

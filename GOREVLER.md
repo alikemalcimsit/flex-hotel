@@ -3258,15 +3258,80 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 ### 44. Stok & maliyet analizi — Ali Kemal
 **Gün sonu:** Depodaki her ürünün miktarı ve hareketli ortalama maliyeti izleniyor; satılan yemek reçeteden stoğu düşüyor; sayım farkları görünüyor.
-- [ ] Backend: Warehouse, StockItem, StockMovement, StockCount tabloları + API
-- [ ] Backend: hareketli ortalama maliyet hesabı (her girişte güncelle)
-- [ ] Backend: transfer, fire, sayım düzeltme servisleri
-- [ ] Ekran: Depo tanımları
-- [ ] Ekran: Stok kartları (ürün, birim, mevcut, min. seviye, ortalama maliyet)
-- [ ] Ekran: Hareket listesi + manuel hareket formu
-- [ ] Ekran: Sayım ekranı (fiziksel gir, fark listesi, onayla)
-- [ ] Ekran: Maliyet raporu (ürün / reçete bazlı)
-- [ ] Aktör: inventory-worker paketi (`order.paid` → reçete satırlarını düş; stok < min → `purchase.request.suggested`)
+- [x] Backend: Warehouse, StockItem, StockMovement, StockCount tabloları + API — depo / malzeme / hareket çekirdeği 45'te (Ahmet), `StockCount` + `StockCountLine` + hareket türleri burada
+- [x] Backend: hareketli ortalama maliyet hesabı (her girişte güncelle) — 45'te; **çıkışlar maliyeti değiştirmez** (o anki ortalamayla değerlenir)
+- [x] Backend: transfer, fire, sayım düzeltme servisleri (`stock/manual.js`, `stock/counts.js`, ortak yazıcı `postStockMovements`)
+- [x] Ekran: Depo tanımları — 45'te; buraya **satış noktası → depo** eşlemesi eklendi
+- [x] Ekran: Stok kartları (ürün, birim, mevcut, min. seviye, ortalama maliyet) — 43 (kart) + 45 (mevcut ekranı)
+- [x] Ekran: Hareket listesi + manuel hareket formu (tür süzgeci, kaynak bağları: mal kabul / sayım / adisyon; "Hareket gir": çıkış / fire / transfer)
+- [x] Ekran: Sayım ekranı (fiziksel gir, fark listesi, onayla) — `/stok/sayim`, `/stok/sayim/:countId`
+- [x] Ekran: Maliyet raporu (ürün / reçete bazlı) — `/stok/maliyet`: malzeme bazlı + ürün bazlı (ciro, reçete maliyeti, brüt kâr, yemek maliyeti %)
+- [x] Aktör: inventory-worker paketi (`fnb.order.paid` → reçeteden düşüm; `stock.changed` → minimum altı → `STOCK` kaynaklı satın alma talebi + zil)
+
+> **📌 Modül 44 tamamlandı (24 Kasım 2026 — Ali Kemal).**
+>
+> **Kararlar:** çıkış / fire / transfer / sayım farkı / satış düşümü **birim maliyeti değiştirmez** — hareketli ortalama yalnız mal
+> kabulde güncellenir, diğer hareketler o anki ortalamayla değerlenir (45'in kuralı korundu). Elle hareketler depodaki mevcuttan
+> fazla çıkamaz; **yalnız satış düşümü eksiye iner** (adisyon gerçek, kayıt geride kalmıştır — sayım düzeltir). Satış düşümünde
+> hangi depo: `Hotel.settings.stock.outletWarehouses` eşlemesi, yoksa **varsayılan depo** (Json ayar, yeni kolon yok — 34'ün yield
+> kalıbı). Minimum altı önerisi fiilen **talep açar** (kaynak `STOCK`; Ahmet'in 45 notundaki yol) — ayrı `purchase.request.suggested`
+> olayı yok, mevcut `purchase.request.changed` + `staff.alert.raised` (`STOCK`) yeter.
+>
+> **Veri** (migration `20261124090000_stock_movements`): `StockMovementKind` += `ISSUE`, `WASTE`, `TRANSFER_OUT`, `TRANSFER_IN`,
+> `COUNT_ADJUST`, `SALE`; `StockMovement.menuItemId` (satış düşümünde hangi menü ürünü için — ürün bazlı rapor); `StockCount`
+> (`SYM-yıl-sıra`, `PurchaseSequence` ile; depoda **tek açık sayım** — kısmi tekil indeks; durum izi CHECK) + `StockCountLine`
+> (beklenen = açılıştaki depo mevcudu, sayılan, onayda yazılan fark, birim maliyet); `StaffAlertKind.STOCK`.
+>
+> **Hareket yazıcısı** (`stock/movements.js` → `postStockMovements`): giriş dışı her tür için tek yol — kartları kimlik sırasıyla
+> kilitler, depo satırını tek ifadede upsert eder, kart `onHand`'ini günceller, değişmez hareket kaydını (hareket sonrası mevcut /
+> ortalama) yazar; `allowNegative` yalnız satış ve sayımda. Transfer = kaynakta `TRANSFER_OUT` (eksi) + hedefte `TRANSFER_IN`
+> (artı), kart toplamı sabit. Saf kurallar `rules.js`: `applyDelta`, `countDifference`, `saleRequirements`, `saleDeltas` (birim testli).
+>
+> **Elle hareket** (`manual.js`): formun ürettiği `requestId` tekrar işleme anahtarı (`sourceType = ManualMovement`): çift gönderimde
+> ikinci istek hareket yazmaz, ilk özeti döner (`duplicate: true`). Fire sebebi sözleşmede zorunlu. Yetersiz stok `INSUFFICIENT_STOCK`
+> (satır alanlarıyla). Kilit sırası: depo(lar) paylaşımlı → kartlar.
+>
+> **Sayım** (`counts.js`): açılışta deponun sıfır olmayan mevcutları + o anki maliyet dondurulur; sayarken listede olmayan malzeme
+> eklenir (beklenen = o anki depo mevcudu). Satır yazımı sayımın sürüm damgasıyla (iki sayımcı: ikincisi güncel listeyi görür —
+> `STALE_WRITE`). **Onayda fark = sayılan − onay anındaki depo mevcudu** (beklenen değil: sayım sürerken satış / çıkış devam eder);
+> sıfır olmayan fark `COUNT_ADJUST`; sayılmayan satıra dokunulmaz; iptal hiçbir şeye dokunmaz. Kilit: depo paylaşımlı → sayım
+> `FOR UPDATE` → kartlar.
+>
+> **Satış düşümü** (`sales.js` → `consumeSale`, inventory-worker çağırır): `fnb.order.paid` ürünleri → `MenuItem.recipe` →
+> `loadRecipeGraph` + `demandCalculator` (43'ün açılımı: ara reçeteler, fire payı brüt) → (satılan + ikram + zayi) × birim ihtiyaç,
+> binde bire yuvarlı. Reçetesiz ürün ve sistem ürünleri (tepsi / paket ücreti) atlanır, özette sayılır. Hareketler `sourceType =
+> PosCheck`, `menuItemId`'li. **Adisyon başına son yayın esas:** yeniden açılıp kapanınca hedef tüketim − daha önce düşülen = düzeltme
+> hareketi (artı / eksi); daha yeni kapanış işlenmişse eski yayın atlanır (`occurredAt` = kapanış anı). Depo yoksa / pasifse
+> `NO_WAREHOUSE` / `WAREHOUSE_INACTIVE` (4xx → aktör manuel göreve düşürür).
+>
+> **Öneri** (`suggestions.js` → `suggestPurchases`): miktarı düşen malzemelerden minimumun altına inenler (45'in öneri hesabıyla —
+> yoldaki ve siparişe dönmemiş talep düşülür, `stockSuggestion` yuvarlaması) için **tek** `STOCK` talebi (ihtiyaç bugün + 2 gün) +
+> `STOCK` zili (`purchasing.request` iznine, talebe bağlantı). Açılan talep "talep edilen"e sayıldığı için aynı malzeme yeniden
+> önerilmez; talep iptalinde bir sonraki hareket yeniden önerir.
+>
+> **Aktör** `hotel/workers/inventory-worker` (BaseWorker, servis dışarıdan; birim testli): `fnb.order.paid` → `consumeSale`;
+> `stock.changed` → yalnız `SALE` / `MOVEMENT` / `COUNT` + malzeme listesi doluysa kabul (`accepts`; mal kabul / depo / minimum / ayar
+> haberi iz bırakmaz) → `suggestPurchases`. Kapalıyken satış düşümü **"Stok" manuel görevine** düşer (`stock.manage`; görev adisyon
+> numarasını taşır, elle çıkışla tamamlanır); öneri `skipWhenDisabled` (satın alma öneri ekranı aynı hesabı her an gösterir).
+> Aktör kendi yayınladığı `stock.changed`'i de dinler; öneri işi `stock.changed` yayınlamaz → döngü yok.
+>
+> **Maliyet raporları** (`reports.js`): malzeme bazlı — dönemde giriş / satış düşümü / çıkış / fire / sayım farkı / transfer (depo
+> süzgecinde net) miktar + tutar, bugünkü mevcut ve değer (depo süzgecinde deponun mevcudu × kartın ortalaması); tüketim = satış +
+> çıkış + fire. Ürün bazlı — `PosOrderLine.businessDate` aralığından satılan adet / ciro (liste fiyatı, iptal / ikram düşülmüş) ve
+> `SALE` hareketlerinden ürün maliyeti → brüt kâr, yemek maliyeti % (43'ün eşikleri). Aralık en fazla 366 gün (sözleşme).
+>
+> **Ekranlar:** `/stok/hareketler` (tür süzgeci, kaynak bağları, "Hareket gir" diyaloğu — malzeme arama + miktar satırları, tür
+> çipleri, transferde hedef depo), `/stok/sayim` + `/stok/sayim/:countId` (satır başına beklenen / şu anki / sayılan / fark + değer,
+> kaydet → onayla, listede olmayan malzeme ekle, iptal sebepli), `/stok/maliyet` (malzeme / ürün görünümü, özet kutuları, depo
+> süzgeci), `/stok/depolar` altında satış noktası → depo kartı. Olay `stock.changed` `change` += `MOVEMENT`, `COUNT`, `SALE`,
+> `SETTINGS`. İzin: hepsi mevcut `stock.manage` / `stock.view` (yeni izin açılmadı).
+>
+> **Testler:** `stock/rules.test.js` (+4 kural), `inventory-worker.test.js` (7), `stock/stock.integration.test.js` (8: elle hareket,
+> transfer, sayım, satış düşümü + yeniden yayın, eşleme, öneri, raporlar, izinler).
+>
+> **Bilinçli bırakılan:** satış noktası deposu otel ayarında (satış noktası kartına kolon eklenmedi — POS ekranına dokunmamak için);
+> ürün bazlı raporda ciro KDV dahil liste fiyatıyla (POS vergi dökümü 39'da adisyon düzeyinde); fire için ayrı sebep sözlüğü yok
+> (serbest metin, raporda tutar); `shared/workers/inventory-worker` yalnız işaretçi (klinik için ortak sürüm sonra).
 
 > **📌 Ali'ye not (modül 43, 27 Ekim 2026 — Ahmet):** `StockItem` tablosu ve API'si (`/recipes/stock-items`, izin `recipes.manage`)
 > modül 43'te kuruldu; depo / hareket / sayım ve hareketli ortalama maliyet bunun **üstüne** eklenir (birim maliyeti siz yazarsınız;

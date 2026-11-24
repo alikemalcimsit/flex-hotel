@@ -327,7 +327,7 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.PURCHASING_MANAGE]: 'Tedarikçi, teklif turu, kazanan seçimi / sipariş, sipariş iptali, satın alma politikası',
   [PERMISSIONS.PURCHASING_RECEIVE]: 'Mal kabul / irsaliye gir (stok girer)',
   [PERMISSIONS.STOCK_VIEW]: 'Stok mevcudu, hareketleri ve stok değerini görüntüle',
-  [PERMISSIONS.STOCK_MANAGE]: 'Depo tanımları ve minimum stok seviyesi',
+  [PERMISSIONS.STOCK_MANAGE]: 'Depo tanımları, minimum stok seviyesi, elle hareket (çıkış / fire / transfer), sayım, satış noktası → depo eşlemesi',
   [PERMISSIONS.ACCOUNTING_VIEW]: 'Cariler ve ekstre, kasa / banka hareketleri, çek / senet portföyü ve fişleri görüntüle',
   [PERMISSIONS.ACCOUNTING_MANAGE]: 'Tahsilat / ödeme / virman fişi gir, çek / senet işlemleri, cari kartı aç ve düzenle',
   [PERMISSIONS.ACCOUNTING_SETUP]: 'Kasa / banka tanımları, yöntem eşlemesi, başlangıç günü ve onay eşiği, açılış bakiyesi, fiş iptali',

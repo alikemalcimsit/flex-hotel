@@ -1,49 +1,58 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { KITCHEN_UNIT_LABELS, STOCK_MOVEMENT_KIND_LABELS } from '@hotelos/hotel-contracts';
-import { Badge, Input, Select } from '@hotelos/ui';
+import { KITCHEN_UNIT_LABELS, STOCK_MOVEMENT_KINDS, STOCK_MOVEMENT_KIND_LABELS } from '@hotelos/hotel-contracts';
+import { Badge, Button, Input, Select } from '@hotelos/ui';
 import { DataTable } from '../../components/DataTable.jsx';
 import { SearchPicker } from '../../components/SearchPicker.jsx';
 import { Toolbar } from '../../components/Toolbar.jsx';
 import { api, withQuery } from '../../lib/api.js';
-import { formatDate, formatMoney } from '../../lib/format.js';
+import { formatDateTime, formatMoney } from '../../lib/format.js';
 import { recipeKeys, stockKeys, useWarehouses } from '../../lib/kitchen.js';
 import { quantityText } from '../../lib/kitchenFormat.js';
+import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 import { useHotelContext } from '../../lib/useHotel.js';
+import { ManualMovementDialog } from './ManualMovementDialog.jsx';
 
 const PAGE_SIZE = 50;
+const KIND_OPTIONS = [{ value: '', label: 'Bütün türler' }, ...STOCK_MOVEMENT_KINDS.map((kind) => ({ value: kind, label: STOCK_MOVEMENT_KIND_LABELS[kind] }))];
+/** Tür rozeti: giriş yeşil, transfer / sayım nötr-bilgi, çıkış / fire / satış uyarı. */
+const KIND_TONES = Object.freeze({ RECEIPT: 'success', TRANSFER_IN: 'info', TRANSFER_OUT: 'info', COUNT_ADJUST: 'violet', SALE: 'sky', ISSUE: 'warning', WASTE: 'danger' });
 
 /**
- * Stok hareketleri (modül 45): değişmez kayıtlar, en yeni önce — tür, malzeme, depo, miktar, birim
- * maliyet, hareket sonrası mevcut ve ortalama maliyet, kaynak belge (mal kabul). Filtre: malzeme,
- * depo, gün aralığı (otelin günü).
+ * Stok hareketleri (modül 45 + 44): değişmez kayıtlar, en yeni önce — tür, malzeme, depo, miktar, birim
+ * maliyet, hareket sonrası mevcut ve ortalama maliyet, kaynak belge (mal kabul, sayım, adisyon; elle harekette
+ * not). Filtre: malzeme, depo, tür, gün aralığı (otelin günü). "Hareket gir": çıkış / fire / transfer (`stock.manage`).
  */
 export function StockMovementsPage() {
+  const can = useCan();
+  const canManage = can(PERMISSIONS.STOCK_MANAGE);
   const { data: hotel } = useHotelContext();
   const warehouses = useWarehouses({ includeInactive: true });
   const [item, setItem] = useState(null);
   const [warehouseId, setWarehouseId] = useState('');
+  const [kind, setKind] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [page, setPage] = useState(1);
-  useEffect(() => setPage(1), [item, warehouseId, from, to]);
+  const [entering, setEntering] = useState(false);
+  useEffect(() => setPage(1), [item, warehouseId, kind, from, to]);
 
   const invalidRange = from && to && to < from;
-  const filters = { stockItemId: item?.id, warehouseId: warehouseId || undefined, from: from || undefined, to: to || undefined, page, pageSize: PAGE_SIZE };
+  const filters = { stockItemId: item?.id, warehouseId: warehouseId || undefined, kind: kind || undefined, from: from || undefined, to: to || undefined, page, pageSize: PAGE_SIZE };
   const list = useQuery({ queryKey: stockKeys.movements(filters), queryFn: () => api(withQuery('/stock/movements', filters)), placeholderData: keepPreviousData, enabled: !invalidRange });
   const currency = hotel?.currency;
 
   const columns = [
-    { key: 'at', header: 'An', render: (row) => formatDate(row.occurredAt) },
-    { key: 'kind', header: 'Tür', render: (row) => <Badge tone={Number(row.quantity) > 0 ? 'success' : 'warning'}>{STOCK_MOVEMENT_KIND_LABELS[row.kind] ?? row.kind}</Badge> },
+    { key: 'at', header: 'An', className: 'whitespace-nowrap', render: (row) => formatDateTime(row.occurredAt) },
+    { key: 'kind', header: 'Tür', render: (row) => <Badge tone={KIND_TONES[row.kind] ?? 'neutral'}>{STOCK_MOVEMENT_KIND_LABELS[row.kind] ?? row.kind}</Badge> },
     {
       key: 'item',
       header: 'Malzeme',
       render: (row) => (
         <span className="block">
           <span className="block font-semibold text-ink">{row.stockItem.name}</span>
-          <span className="block text-xs text-ink-muted">{row.warehouse.name}</span>
+          <span className="block text-xs text-ink-muted">{[row.warehouse.name, row.menuItem?.name].filter(Boolean).join(' · ')}</span>
         </span>
       ),
     },
@@ -69,21 +78,34 @@ export function StockMovementsPage() {
     {
       key: 'source',
       header: 'Kaynak',
-      render: (row) =>
-        row.source.type === 'GoodsReceipt' && row.source.number ? (
-          <Link to={`/satin-alma/mal-kabul/${row.source.id}`} className="font-mono text-xs font-semibold text-ink hover:underline">
-            {row.source.number}
-          </Link>
+      render: (row) => {
+        const link = row.source.type === 'GoodsReceipt' ? `/satin-alma/mal-kabul/${row.source.id}` : row.source.type === 'StockCount' ? `/stok/sayim/${row.source.id}` : row.source.type === 'PosCheck' ? `/pos/adisyon/${row.source.id}` : null;
+        return link && row.source.number ? (
+          <span className="block">
+            <Link to={link} className="font-mono text-xs font-semibold text-ink hover:underline">
+              {row.source.number}
+            </Link>
+            {row.source.type !== 'PosCheck' && row.note && <span className="block text-xs text-ink-muted">{row.note}</span>}
+          </span>
         ) : (
           <span className="text-xs text-ink-muted">{row.note ?? '—'}</span>
-        ),
+        );
+      },
     },
   ];
-  const filtered = item || warehouseId || from || to;
+  const filtered = item || warehouseId || kind || from || to;
 
   return (
     <div className="flex flex-col gap-4">
-      <Toolbar>
+      <Toolbar
+        actions={
+          canManage && (
+            <Button type="button" icon="plus" onClick={() => setEntering(true)}>
+              Hareket gir
+            </Button>
+          )
+        }
+      >
         <div className="w-full sm:w-72">
           {item ? (
             <div className="flex flex-col gap-1">
@@ -115,6 +137,7 @@ export function StockMovementsPage() {
           onChange={(event) => setWarehouseId(event.target.value)}
           className="w-full sm:w-48"
         />
+        <Select label="Tür" name="movement-kind" options={KIND_OPTIONS} value={kind} onChange={(event) => setKind(event.target.value)} className="w-full sm:w-48" />
         <Input label="İlk gün" name="movement-from" type="date" value={from} onChange={(event) => setFrom(event.target.value)} error={invalidRange ? 'Bitiş başlangıçtan önce' : undefined} className="w-full sm:w-40" />
         <Input label="Son gün" name="movement-to" type="date" value={to} min={from || undefined} onChange={(event) => setTo(event.target.value)} className="w-full sm:w-40" />
       </Toolbar>
@@ -128,8 +151,9 @@ export function StockMovementsPage() {
         onRetry={() => list.refetch()}
         onPageChange={setPage}
         emptyTitle={filtered ? 'Eşleşen hareket yok' : 'Stok hareketi yok'}
-        emptyHint={filtered ? undefined : 'Mal kabul girildikçe giriş hareketleri burada listelenir.'}
+        emptyHint={filtered ? undefined : 'Mal kabul girişi, adisyon kapanışında satış düşümü, elle çıkış / fire / transfer ve sayım farkı burada listelenir.'}
       />
+      {entering && <ManualMovementDialog onClose={() => setEntering(false)} />}
     </div>
   );
 }

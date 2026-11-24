@@ -252,7 +252,7 @@ export const NAV_SECTIONS = Object.freeze([
           { label: 'Tedarikçiler', to: '/satin-alma/tedarikciler', icon: 'users' },
         ],
       },
-      // Stok (modül 45 — 44'ün çekirdeği): depo bazında mevcut, değer, hareketler.
+      // Stok (modül 45 + 44): mevcut, hareketler (çıkış / fire / transfer / satış düşümü), sayım, maliyet raporu, depolar.
       {
         label: 'Stok',
         to: '/stok',
@@ -261,6 +261,8 @@ export const NAV_SECTIONS = Object.freeze([
         children: [
           { label: 'Mevcut', to: '/stok', icon: 'package', end: true },
           { label: 'Hareketler', to: '/stok/hareketler', icon: 'list' },
+          { label: 'Sayım', to: '/stok/sayim', icon: 'clipboard' },
+          { label: 'Maliyet raporu', to: '/stok/maliyet', icon: 'chart' },
           { label: 'Depolar', to: '/stok/depolar', icon: 'building' },
         ],
       },

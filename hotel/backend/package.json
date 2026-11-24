@@ -32,6 +32,7 @@
     "@hotelos/concierge-agent": "*",
     "@hotelos/core": "*",
     "@hotelos/hotel-contracts": "*",
+    "@hotelos/inventory-worker": "*",
     "@hotelos/llm": "*",
     "@hotelos/mcp-server": "*",
     "@hotelos/notification-worker": "*",

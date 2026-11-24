@@ -113,6 +113,9 @@ export const MANUAL_TASK_MODULE_PERMISSIONS = Object.freeze({
   'Teknik servis': PERMISSIONS.ROOMS_OPERATE,
   // Modül 24: rapor ajanı kapalıyken / cevaplayamayınca soru "rapor talebi" olarak rapor yetkilisinin önüne düşer.
   'Rapor talebi': PERMISSIONS.REPORTS_VIEW,
+  // Modül 44: stok aktörü kapalıyken / düşemeyince (depo yok, reçete bozuk) satış düşümü stok yetkilisinin önüne düşer;
+  // elle çıkış hareketiyle (kaynak: adisyon numarası) tamamlanır.
+  Stok: PERMISSIONS.STOCK_MANAGE,
 });
 
 export const MANUAL_TASK_KNOWN_MODULES = Object.freeze(Object.keys(MANUAL_TASK_MODULE_PERMISSIONS));
