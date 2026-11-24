@@ -70,6 +70,8 @@ export function HomePage() {
         {features.folio && <Tile to={`/p/${token}/folyo`} icon="wallet" title={t('tile.folio')} hint={t('tile.folioHint')} />}
         {features.requests && <Tile to={`/p/${token}/istek`} icon="bell" title={t('tile.requests')} hint={t('tile.requestsHint')} />}
         {features.roomService && <Tile onClick={openRoomService} busy={rsBusy} icon="utensils" title={t('tile.roomService')} hint={t('tile.roomServiceHint')} />}
+        {features.spa && <Tile to={`/p/${token}/spa`} icon="sparkles" title={t('tile.spa')} hint={t('tile.spaHint')} />}
+        {features.survey && <Tile to={features.survey.path.replace(/^\/misafir/, '')} icon="star" title={t('tile.survey')} hint={t('tile.surveyHint')} />}
         {features.chatKey && <Tile icon="message" title={t('tile.chat')} hint={t('tile.chatHint')} />}
         <Tile icon="key" title={t('tile.digitalKey')} hint={t('common.soon')} disabled />
         <Tile icon="creditCard" title={t('tile.payOnline')} hint={t('common.soon')} disabled />

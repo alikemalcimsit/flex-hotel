@@ -9,6 +9,8 @@ import { FolioPage } from './pages/FolioPage.jsx';
 import { HomePage } from './pages/HomePage.jsx';
 import { RequestsPage } from './pages/RequestsPage.jsx';
 import { RoomServicePage } from './pages/RoomServicePage.jsx';
+import { SpaPage } from './pages/SpaPage.jsx';
+import { SurveyPage } from './pages/SurveyPage.jsx';
 import { useLoad } from './useLoad.js';
 
 /**
@@ -20,6 +22,8 @@ export const PORTAL_PAGES = Object.freeze([
   { key: 'checkin', path: 'check-in', label: 'nav.checkin', icon: 'user', visible: (overview) => overview.features.checkin, Component: CheckInPage },
   { key: 'folio', path: 'folyo', label: 'nav.folio', icon: 'wallet', visible: (overview) => overview.features.folio, Component: FolioPage },
   { key: 'requests', path: 'istek', label: 'nav.requests', icon: 'bell', visible: (overview) => overview.features.requests, Component: RequestsPage },
+  // Spa (modül 57): randevu ve ders kaydı; otel spa ayarında portalı açtıysa.
+  { key: 'spa', path: 'spa', label: 'nav.spa', icon: 'sparkles', visible: (overview) => Boolean(overview.features.spa), Component: SpaPage },
 ]);
 
 const PortalContext = createContext(null);
@@ -35,6 +39,8 @@ export function App() {
             {PORTAL_PAGES.map(({ key, path, Component }) => (path ? <Route key={key} path={path} element={<Component />} /> : <Route key={key} index element={<Component />} />))}
           </Route>
           <Route path="oda-servisi/:token" element={<RoomServicePage />} />
+          {/* Anket (modül 55): çıkış sonrası ve ara anket. */}
+          <Route path="a/:token" element={<SurveyPage />} />
           <Route path="*" element={<FullPageMessage code="NOT_FOUND" />} />
         </Routes>
       </BrowserRouter>

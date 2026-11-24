@@ -47,8 +47,8 @@ import * as setup from './setup.js';
  * @param {import('fastify').FastifyInstance} app
  */
 export async function payrollRoutes(app) {
-  const guard = (permission) => ({ preHandler: [withHotelContext, requirePermission(permission)] });
-  const any = (...permissions) => ({ preHandler: [withHotelContext, requireAnyPermission(...permissions)] });
+  const guard = (permission) => ({ preValidation: [withHotelContext, requirePermission(permission)] });
+  const any = (...permissions) => ({ preValidation: [withHotelContext, requireAnyPermission(...permissions)] });
   const has = (req, permission) => Boolean(req.auth?.permissions?.includes(permission));
   const ok = (data) => ({ success: true, data });
   const created = (reply, data) => reply.status(201).send(ok(data));

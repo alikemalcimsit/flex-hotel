@@ -80,7 +80,7 @@ import * as setup from './setup.js';
  * @param {import('fastify').FastifyInstance} app
  */
 export async function banquetRoutes(app) {
-  const guard = (permission) => ({ preHandler: [withHotelContext, requirePermission(permission)] });
+  const guard = (permission) => ({ preValidation: [withHotelContext, requirePermission(permission)] });
   const view = guard(PERMISSIONS.BANQUET_VIEW);
   const manage = guard(PERMISSIONS.BANQUET_MANAGE);
   const configure = guard(PERMISSIONS.BANQUET_SETUP);

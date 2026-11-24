@@ -658,6 +658,29 @@ export const invoiceDraftUpdateSchema = z.object({
 
 export const invoiceIssueSchema = z.object({ expectedUpdatedAt });
 
+/**
+ * Toplu işlem (iki adım): faturalanacaklardan seçilenlere taslak, taslaklardan seçilenlere kesim. Her belge tek
+ * işlemin kuralıyla, sırayla; istek süre bütçesiyle durur, kalanlar `pending` döner (ekran devam ettirir: kesim
+ * mükellef sorgusu için dış servise gider).
+ */
+export const MAX_BULK_INVOICES = 100;
+const uniqueIds = (ids) => new Set(ids).size === ids.length;
+export const invoiceDraftBatchSchema = z.object({
+  kind: z.enum(['FOLIO', 'EVENT'], { error: 'Geçersiz tür' }),
+  ids: z
+    .array(uuidField('Geçersiz kayıt'))
+    .min(1, 'Kayıt seçin')
+    .max(MAX_BULK_INVOICES, `Tek seferde en fazla ${MAX_BULK_INVOICES} kayıt`)
+    .refine(uniqueIds, 'Aynı kayıt iki kez seçilmiş'),
+});
+export const invoiceIssueBatchSchema = z.object({
+  items: z
+    .array(z.object({ id: uuidField('Geçersiz fatura'), expectedUpdatedAt }))
+    .min(1, 'Taslak seçin')
+    .max(MAX_BULK_INVOICES, `Tek seferde en fazla ${MAX_BULK_INVOICES} taslak`)
+    .refine((items) => uniqueIds(items.map((item) => item.id)), 'Aynı taslak iki kez seçilmiş'),
+});
+
 /** İptal isteği; GİB'e ulaşmış e-Faturada portal iptal referansı zorunlu (servis denetler). */
 export const invoiceCancelSchema = z.object({
   reason: requiredText(500, 'Gerekçe', 5),

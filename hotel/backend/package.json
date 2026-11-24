@@ -28,6 +28,7 @@
     "@hotelos/billing-worker": "*",
     "@hotelos/accounting-worker": "*",
     "@hotelos/budget-agent": "*",
+    "@hotelos/insight-agent": "*",
     "@hotelos/channel-sync-worker": "*",
     "@hotelos/concierge-agent": "*",
     "@hotelos/core": "*",

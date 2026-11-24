@@ -58,12 +58,13 @@ export const TREASURY_KIND_LABELS = Object.freeze({ CASH: 'Kasa', BANK: 'Banka' 
 export const TREASURY_CODE_PREFIXES = Object.freeze({ CASH: 'KSA', BANK: 'BNK' });
 
 /** Prisma `TreasurySource` ile birebir: kasa / banka hareketinin kaynağı. */
-export const TREASURY_SOURCES = Object.freeze(['OPENING', 'FOLIO_PAYMENT', 'EVENT_PAYMENT', 'POS_PAYMENT', 'VOUCHER', 'INSTRUMENT', 'PAYROLL_PAYMENT', 'EMPLOYEE_ADVANCE']);
+export const TREASURY_SOURCES = Object.freeze(['OPENING', 'FOLIO_PAYMENT', 'EVENT_PAYMENT', 'POS_PAYMENT', 'SPA_PAYMENT', 'VOUCHER', 'INSTRUMENT', 'PAYROLL_PAYMENT', 'EMPLOYEE_ADVANCE']);
 export const TREASURY_SOURCE_LABELS = Object.freeze({
   OPENING: 'Açılış bakiyesi',
   FOLIO_PAYMENT: 'Ön büro tahsilatı',
   EVENT_PAYMENT: 'Etkinlik tahsilatı',
   POS_PAYMENT: 'Restoran tahsilatı',
+  SPA_PAYMENT: 'Spa tahsilatı',
   VOUCHER: 'Fiş',
   INSTRUMENT: 'Çek / senet',
   PAYROLL_PAYMENT: 'Maaş ödemesi',
@@ -71,13 +72,14 @@ export const TREASURY_SOURCE_LABELS = Object.freeze({
 });
 
 /** Prisma `TreasuryChannel` ile birebir: otomatik tahsilatın geldiği yer (eşleme bunun üstüne kurulur). */
-export const TREASURY_CHANNELS = Object.freeze(['FRONT_DESK', 'BANQUET', 'POS']);
-export const TREASURY_CHANNEL_LABELS = Object.freeze({ FRONT_DESK: 'Ön büro (folyo)', BANQUET: 'Etkinlik', POS: 'Restoran ve oda servisi' });
+export const TREASURY_CHANNELS = Object.freeze(['FRONT_DESK', 'BANQUET', 'POS', 'SPA']);
+export const TREASURY_CHANNEL_LABELS = Object.freeze({ FRONT_DESK: 'Ön büro (folyo)', BANQUET: 'Etkinlik', POS: 'Restoran ve oda servisi', SPA: 'Spa ve spor salonu' });
 /** Kanalda kasaya / bankaya giden yöntemler (cari yöntemleri eşlenmez). */
 export const TREASURY_CHANNEL_METHODS = Object.freeze({
   FRONT_DESK: Object.freeze(['CASH', 'CARD', 'TRANSFER', 'VIRTUAL_POS']),
   BANQUET: Object.freeze(['CASH', 'CARD', 'TRANSFER', 'VIRTUAL_POS']),
   POS: Object.freeze(['CASH', 'CARD']),
+  SPA: Object.freeze(['CASH', 'CARD']),
 });
 /** Yöntem başına önerilen hesap türü (nakit kasaya, diğerleri bankaya). */
 export const TREASURY_METHOD_KIND = Object.freeze({ CASH: 'CASH', CARD: 'BANK', TRANSFER: 'BANK', VIRTUAL_POS: 'BANK' });

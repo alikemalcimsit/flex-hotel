@@ -150,6 +150,27 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 - [x] Ekran: Rol → izin matrisi (satır rol, sütun izin, checkbox)
 - [x] Frontend: sidebar menüleri ve butonlar izne göre gizlenir
 
+> **📌 Ali'ye not (guard sırası, 10 Kasım 2026 — Ahmet):** kimlik/izin guard'ları artık route'un
+> **`preValidation`**'ında, `preHandler`'ında değil. Sebep: Fastify şema doğrulamasını `preHandler`'dan
+> önce yapıyor; token'sız ve bozuk gövdeli istek 401 yerine 400 + alan listesi alıyordu (canlıda
+> `POST /lost-items {}` → 400, `GET /reports/revenue` → 400) — korumalı ucun şeması herkese görünüyordu.
+> Şimdi anonim → 401, izinsiz rol → 403, ikisi de doğrulamadan önce; izni olan kişi bozuk girdide yine 400 alır.
+>
+> - **Değişen:** tüm modüllerin `routes.js`'inde `{ preHandler: [withHotelContext, requirePermission(...)] }`
+>   → `{ preValidation: [...] }` (seninkiler dahil; yalnız anahtar adı, guard'lar ve izinler aynı).
+>   `/auth/me` ve `/auth/logout`'taki `requireAuth` da öyle. İç fonksiyon adları `permissionGuard` /
+>   `anyPermissionGuard` oldu (katalog aracı `docs/katalog/araclar/olgular.mjs` buna göre okuyor).
+> - **Yeni kural:** guard'ı `preHandler`'a yazarsan uygulama **açılmaz** — `app.js`'teki `onRoute`
+>   denetimi (`assertGuardsBeforeValidation`, `lib/permissions.js`) route adıyla "preValidation'a taşıyın"
+>   hatası verir. flex-ali'de bu değişiklikten önce başlanmış bir modülde eski kalıp varsa
+>   `preHandler:` → `preValidation:` yeter. Yeni guard yazarsan `markAuthGuard(...)` ile işaretle.
+> - **Değişmeyen:** gövdeye bağlı ek izin (`assertRequestPermission`) handler içinde, doğrulanmış gövdeyle
+>   çalışıyor; guard olmayan `preHandler`'lar orada kalabilir. `request.requiredPermission` aynı şekilde set ediliyor.
+>   Bozuk JSON (ayrıştırma hatası) hâlâ 400 — ayrıştırma `preValidation`'dan önce, şema bilgisi sızdırmaz.
+> - **Testler:** `app.test.js` (anonim bozuk gövde/sorgu/yol → 401, açık uçlar doğrulamayı sürdürür;
+>   doğrulama testleri artık ADMIN token'ıyla), `lib/permissions.test.js`, `rbac.integration.test.js`
+>   (anonim 401 / yetkisiz 403 / yetkili 400).
+
 ### 3. Oda tipi müsaitlik & oda atama — arkadaşın
 **Gün sonu:** "15-18 Ekim'de kaç Standart boş?" sorusuna sistem cevap veriyor; rezervasyona uygun oda otomatik veya elle atanıyor.
 - [x] Backend: `checkAvailability(checkIn, checkOut, roomTypeId)` servisi (rezervasyonlar + bloke odalar düşülür)
@@ -3055,6 +3076,13 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 > **Canlıya alırken:** 5 migration + `npm install` (`qrcode-generator`); her otel ayarlarda satıcı ve faturalama başlangıcını girmeli
 > (girene kadar kuyruk boş).
 
+> **Modül 55 döneminden not (10 Kasım 2026 — Ahmet):** **toplu fatura** (kullanıcı kararı: iki adım). Faturalanacaklardan seçilenlere
+> toplu taslak (`POST /invoices/batch-drafts`; alıcısı eksik taslak işaretlenir), taslaklardan alıcısı tamam olanlara toplu kesim
+> (`POST /invoices/batch-issue`; her taslak tek kesimin kuralıyla, açılış sırasıyla numara). En fazla 100 kayıt; istek 20 sn bütçeyle
+> durur, kalanlar `pending` döner, ekran ilerleme göstererek kendiliğinden devam eder (`useBatchRunner`). Taslak listesi alıcı eksiklerini
+> döner (`buyerProblems`), sayfa 100 satır. Entegrasyon testleri: sıra, alıcı eksik, bayat sürüm, bütçe, çift seçim; toplu taslakta
+> kapanmamış / olmayan folyo.
+
 ### 50. Sanal POS / ödeme geçidi — Ali Kemal
 **Gün sonu:** Misafire ödeme linki gönderiliyor veya widget'ta kartla ödeme yapılıyor; sonuç otomatik folyoya düşüyor.
 - [ ] Backend: PaymentGatewayConfig, PaymentTransaction tabloları; sağlayıcı adaptörü (iyzico veya PayTR)
@@ -3241,14 +3269,69 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 
 > **FlexAI 2.0'dan not (3 Kasım 2026 — Ahmet):** insight-agent'ın çıktısını şemalı yaz (duygu puanı, konu, departman, dil):
 > 80 (tercih çıkarma), 81 (konaklama içi duygu) ve 102 (kalite skoru) aynı ajanı ve şemayı kullanacak.
+>
+> **Modül 55'ten not (10 Kasım 2026 — Ahmet):** `shared/agents/insight-agent` kuruldu (55'in anket yorumları için): şemalı JSON çıktı
+> (ton `POSITIVE/NEUTRAL/NEGATIVE/MIXED`, konu `SURVEY_TOPICS` listesinden en fazla 5, tek cümle Türkçe özet; dönem özetinde tema / pay /
+> alıntı / öneri), ayrıştırma listeyle sınırlı (`prompt.js`: `parseAnalysis`, `parseInsight`), kişisel veri istemde yok. Yorum siteleri için
+> yeni olay adıyla (`review.analysis.requested` gibi) handler eklenir; istemler kaynaktan bağımsız. Konu listesi `contracts/surveys.js`.
 
 ### 55. Anket & memnuniyet — arkadaşın
 **Gün sonu:** Check-out'tan 1 gün sonra anket gidiyor; cevaplar toplanıyor; NPS ve AI özeti görünüyor.
-- [ ] Backend: Survey, SurveyQuestion, SurveyResponse tabloları + API; public cevap sayfası
-- [ ] Backend: `guest.checked_out` + 1 gün → notification-worker anket linki gönderir
-- [ ] Ekran: Anket tasarımı (sorular, tip: puan / çoktan seçmeli / açık)
-- [ ] Ekran: Cevaplar listesi + NPS skoru
-- [ ] insight-agent özeti (açık uçlu cevapların ana temaları)
+- [x] Backend: Survey, SurveyQuestion, SurveyResponse tabloları + API; public cevap sayfası — **+ SurveyInvitation, SurveyAnswer, SurveyFollowUp(+Note), SurveyInsight, SurveySettings**; misafir sayfası `/misafir/a/:token` (53'ün misafir uygulamasında)
+- [x] Backend: `guest.checked_out` + 1 gün → notification-worker anket linki gönderir — **zamanlanmış iş (15 dk) + 9'un kanalları; kullanıcı kararı: ara anket de (girişin ertesi günü)**
+- [x] Ekran: Anket tasarımı (sorular, tip: puan / çoktan seçmeli / açık) — **+ NPS, dört dil, sıralama, arşiv**
+- [x] Ekran: Cevaplar listesi + NPS skoru — **+ NPS raporu (eğilim, soru / bölüm puanı, cevap oranı) ve takip ekranları**
+- [x] insight-agent özeti (açık uçlu cevapların ana temaları) — **+ her yoruma ton / konu etiketi**
+
+> **✅ Modül 55 tamamlandı (10 Kasım 2026 — Ahmet).** Kararlar (kullanıcı): **çıkış sonrası + kısa ara anket**; düşük puanda **uyarı +
+> takip kaydı**; yorum bağlantıları **herkese** (yalnız memnunlara göstermek Google kurallarına aykırı).
+>
+> **Anketler:** otelde tür başına bir anket (çıkış sonrası, ara anket), ilk okunuşta dört dilde varsayılan sorularla kurulur. Soru tipleri NPS
+> (tek), 1–5 puan, seçenekli (tekli / çoklu), açık uçlu; konu (rapordaki bölüm), zorunluluk, dört dilde metin (eksik dil Türkçeye düşer,
+> ekranda uyarı). Tasarım anketin `version`'ıyla iyimser kilitli; cevaplanmış soru silinmez (arşiv), tipi değişmez, cevaplanmış seçenek
+> kaldırılamaz. Soru başına cevap sayısı tasarım ekranında 1.000'de kesilir ("1.000+").
+>
+> **Gönderim:** zamanlanmış iş 15 dk'da bir; çıkış sonrası çıkış anının otel günü + `postStayDelayDays`, saat `postStaySendHour`'dan
+> (en fazla 2 gün geç); ara anket girişin ertesi günü `midStaySendHour`'dan, en az `midStayMinNights` gece, ayrılış gününe değil. Aynı
+> misafire aynı tür `minDaysBetweenSurveys` günden sık değil, aynı turda aynı misafirin iki odası tek anket. Davet bir kanala satır
+> açılınca "gitti" sayılır (iletişimsiz / kanal kapalıysa silinir, sonraki turda yeniden); kanal + şablon ya da portal adresi yoksa tur
+> başlamaz. Zaman gerçek saat (gece kapanışına bağlı değil). Bildirim tetikleyicileri `SURVEY_POST_STAY` / `SURVEY_MID_STAY`
+> (`{anketLinki}`; TR / EN e-posta + SMS şablonu; kurulmuş otelde ilk turda yüklenir).
+>
+> **Misafir:** `/misafir/a/<kimlik>.<imza>` (HMAC, anket bağlamı; anket ekranları personele göstermez, giden iletinin metni bildirim geçmişinde durur);
+> bağlantı `linkValidDays` gün. Dört dil, uyruğa göre. Davet başına tek cevap (tekil kısıt); zorunlu / aralık / seçenek denetimi alan alan;
+> anket bu arada değiştiyse sorular yenilenir. Bitince puandan bağımsız Google / TripAdvisor bağlantısı. Açık anket portal (53) ana
+> sayfasında kutu. Uçlar bağlantı başına hız sınırlı (okuma 30, yazma 5 / dk) + ortak IP tavanı, belirteç günlükte maskeli.
+>
+> **Düşük puan:** NPS ≤ `lowNpsThreshold` (6) ya da bir puan ≤ `lowRatingThreshold` (2) → cevapla aynı işlemde takip kaydı + zil
+> (`SURVEY_LOW_SCORE`; ara ankette kritik). Hedef içeride 2, çıkmışta 48 saat; üstlen / devret / bırak, görüşme ve not (değişmez),
+> sonuç + açıklamayla kapanış (veritabanı kısıtı), yeniden aç. İşlem kaydına yorum metni yazılmaz.
+>
+> **Rapor:** NPS ve dağılımı, cevap oranı (davet / açılan / cevaplanan), puan ortalaması, haftalık / aylık eğilim (cevap sayısıyla), soru
+> başına ortalama + dağılım, seçenek sayıları, bölüm puanları, AI konu / ton dökümü, takip özeti.
+>
+> **AI (insight-agent, `shared/agents/insight-agent`):** yorumlu cevap AI açıksa ton + en fazla 5 konu + tek cümle (şemalı JSON, listeyle
+> sınırlanır, yalnız bekleyen cevaba yazılır, 30 dk'da yazılmazsa "etiketlenemedi"); dönem özeti (en yeni 150 yorum; tema, pay, alıntı, en
+> fazla 3 öneri; aynı dönem için bekleyen tek istek; `surveys.setup`). Model ad, onay kodu, iletişim görmez. Otelin ana modeli
+> (`conciergeModel`); AI kapalıysa her şey AI'sız çalışır.
+>
+> **API ve izinler:** `/surveys` — `settings`, `design/:kind` (+ `questions`, `order`, `remove`, `restore`), `responses`, `report`,
+> `insights`, `follow-ups` (+ `assignees`, `assign`, `notes`, `resolve`, `reopen`); `/public/survey/:token`. İzinler
+> `surveys.view` / `.follow_up` (müdür, ön büro), `surveys.setup` (müdür). Olaylar `survey.*`; kanal `surveys.changed`.
+>
+> **Ölçüm** (`scripts/perf-surveys.mjs`; 2 yıl: 150.000 davet, 60.000 cevap, 534.000 cevap satırı): rapor 30 gün / 1 yıl 151 / 183 ms,
+> listeler 9–18 ms, ayrıntı 9 ms, takip 15 ms, tasarım 7 ms, misafir formu 9 ms, gönderim 86 ms, AI girdisi 193 ms, davet turu 400 çıkışta
+> 19 sn (arka planda). Ölçümle düzeltilen: **1 yıllık rapor 0,4–0,6 sn → 0,18 sn** (puan dökümü ve davet sayımı yalnız indeksten,
+> seçenek dökümü yalnız seçenekli soruların satırlarından), **tasarım 0,2 sn → 7 ms** (sayım 1.000'de kesilir).
+>
+> **Testler:** entegrasyon tam suite 691 / 691 (anket 9), backend birim 660, sözleşme 543, ön yüz 83, insight-agent 8.
+>
+> **Demo** (`scripts/demo-surveys.mjs`, `demo-data.mjs` çağırır): son 60 günün çıkışlarına davet, ~%34 cevap (lüks otel NPS dağılımı),
+> dört dilde yorumlar ve `demo` modelli AI etiketleri, son günlerin ara anketleri, takipler (kapanmış / ilgilenilen / açık), dönem özeti.
+>
+> **Canlıya alırken:** 2 migration (`20261110090000_surveys`, `20261110100000_survey_report_indexes`); yeni çalışma alanı paketi
+> `@hotelos/insight-agent` → `npm install`; otel anket ayarından anketleri açar (bağlantı tabanı portal adresi, kanal + şablon gerekir);
+> demo için yeniden yükleme.
 
 ### 56. Sadakat programı — Ali Kemal
 **Gün sonu:** Misafir her konaklamada puan kazanıyor, seviyesi yükseliyor, puanla indirim alıyor.
@@ -3258,13 +3341,90 @@ Her modülde: **Gün sonu** = modül bitince elinde ne olacak. Altındaki maddel
 - [ ] Ekran: Puan harcama (rezervasyonda indirim olarak kullan)
 - [ ] Portala (53) puan görünümü
 
+> **📌 Ali'ye not (modül 57, 19 Kasım 2026 — Ahmet):** spa ücreti iki yoldan kapanır: odaya yazılan `spa.charged` olayıyla folyoya düşer
+> (`folio.closed` kuralınız onu kendiliğinden sayar); **spa kasasında** ödenen ise folyoya girmez (`SpaPayment`, olay
+> `spa.payment.changed`). Spa harcamasına da puan verilecekse randevunun `reservationId` / `guestId`'si ve `totalDue`'su
+> (`status = COMPLETED`) kaynak olarak kullanılabilir.
+
 ### 57. SPA & spor salonu randevu — arkadaşın
 **Gün sonu:** Masaj / hamam / PT randevuları terapist takviminde; ücret folyoya yansıyor.
-- [ ] Backend: SpaService, Therapist, SpaAppointment tabloları + API; çakışma kontrolü
-- [ ] Ekran: Hizmet listesi (süre, fiyat, gereken terapist)
-- [ ] Ekran: Randevu takvimi (terapist × saat)
-- [ ] Ekran: Randevu formu (misafir / dışarıdan, hizmet, terapist, saat) → folyo kalemi
-- [ ] Portaldan (53) randevu alma
+- [x] Backend: SpaService, Therapist, SpaAppointment tabloları + API; çakışma kontrolü — **+ SpaRoom, SpaTherapistHour, SpaBlock, SpaHold (terapist / oda EXCLUDE kısıtı), SpaSession, SpaPayment, SpaRoomCharge, SpaSettings**
+- [x] Ekran: Hizmet listesi (süre, fiyat, gereken terapist) — **+ ekip ve çalışma saatleri, odalar, izin / bakım blokları, dört dilde ad**
+- [x] Ekran: Randevu takvimi (terapist × saat) — **+ oda görünümü, boş hücreden randevu**
+- [x] Ekran: Randevu formu (misafir / dışarıdan, hizmet, terapist, saat) → folyo kalemi — **+ randevu ekranı (tamamla, iptal / gelmedi bedeli, odaya yaz, spa kasası, geri al), grup dersleri, rapor, ayarlar**
+- [x] Portaldan (53) randevu alma — **anında onay, ders kaydı ve yedek liste, iptal; dört dil**
+
+> **✅ Modül 57 tamamlandı (19 Kasım 2026 — Ahmet).** Kararlar (kullanıcı): **PT + grup dersleri** (yoga / pilates kontenjan ve yedek
+> listesiyle); ödeme **oda hesabı + spa kasası**; iptal / gelmedi bedeli **süre + oran, ayardan**; portaldan **anında onay**.
+>
+> **Tanımlar:** oda (bakım, hamam, stüdyo, spor salonu), terapist / eğitmen (unvan, cinsiyet, haftalık saat — günde 3 dilime kadar,
+> verebildiği hizmetler), hizmet (kategori, birebir / grup, süre + temizlik arası, kişi başı fiyat × kişi, terapist sayısı — çift masajı
+> 2, kontenjan, oda gerekip gerekmediği, portaldan alınabilirlik, TR / EN / DE / RU ad ve açıklama), izin / bakım bloğu (en fazla 60 gün).
+> Hepsi `updatedAt` sürüm kilitli, ad tekil; ileri tarihli işi olan terapist / oda / hizmet silinmez (yumuşak silme, geçmiş okunur).
+>
+> **Yerleştirme:** saat açılış–kapanış içinde ve ayardaki aralığa (varsayılan 15 dk) oturmalı, terapist o gün o saatte çalışıyor olmalı;
+> tutma = başlangıç → bitiş + temizlik arası. Terapist / oda boşsa otomatik: istenen kaynak, yoksa tercih edilen cinsiyet, sonra en az
+> meşgul terapist; oda hizmetin odalarından boş olan. Son söz `SpaHold` üzerindeki iki **EXCLUDE (gist, tsrange)** kısıtında; otomatik
+> atamada yarışı kaybeden 3 kez yeniden yerleşir. Aynı `requestId` ikinci randevu açmaz. Saat değişmeden terapist / oda değişirse aralık
+> denetlenmez (ayar sonradan değişmiş olabilir).
+>
+> **Para:** `listPrice` = kişi başı × kişi; `price` gerekçe + `spa.supervise` ile değişir — açık randevuda (ikram, paket) ve **kasada
+> kapanmış tamamlanan randevuda** (şikâyet telafisi: borç yeniden hesaplanır, fazlası onaylı iadeyle geri verilir; odaya yazılmışta
+> düzeltme folyodan). Tamamlanınca `totalDue` folyonun vergi hesabıyla (`chargeLine`, SPA kategorisi; dahil vergide aynı, hariçte üstüne).
+> Randevu ya **odaya** (`spa.charged` → billing-worker `postExternalCharge`, kaynak SPA) ya **spa kasasına** kapanır (kısmi ikisi kuruş
+> farkı doğurur). Kasa: açıkta ön ödeme fiyat kadar, kapanmışta kalan kadar; iade alınan paradan (kapanmışta yalnız fazlası); büyük ödeme,
+> her iade ve hatalı girişin iptali `SPA_PAYMENT` onayına (dört göz). Kasa ekranında "Spa" kaynağı; muhasebe `TreasuryChannel SPA`.
+>
+> **İptal / gelmedi:** başlangıçtan `freeCancelHours` (varsayılan 4) önce bedelsiz, sonra `lateCancelFeePct` (50), gelmedi `noShowFeePct`
+> (100; yalnız saati gelmiş randevuda). İçerideki misafirde bedel odaya, dışarıdan gelende bakiye. Bedeli silmek yetkili + gerekçe. Yedek
+> listedeki kayıt, seans iptali, konaklamanın iptali / gelmemesi bedelsiz. Para hareketi yoksa kapanmış randevu geri alınır (ekran engeli
+> önceden gösterir).
+>
+> **Grup dersleri:** haftanın günlerinde tekrar (çakışan gün atlanır), kontenjan + yedek liste (seans satırı kilitli sayaçlar, kısıtla
+> korunur); yer açılınca sıradaki asıla geçer ve bildirim alır; saat değişince kayıtların saati de değişir; toplu tamamlama süre bütçeli
+> (içerideki ve kasada ödemesi olmayan odaya, diğerleri bakiyede).
+>
+> **Portal (53):** otelin spa ayarında açılır; en erken şimdi + `portalLeadMinutes` (120), konaklama başına `portalMaxActive` (4) açık kayıt,
+> yalnız konaklama günleri; anında onay, spa'ya zil; saati gelmemiş kayıt portaldan iptal (bedel varsa onaydan önce gösterilir). Misafire
+> personel notu, terapist ataması, kasa satırları gitmez. Okuma 60, yazma 10 istek / dk.
+>
+> **Bildirim ve olaylar:** `SPA_BOOKED` (açılınca / saat değişince / yedekten asıla geçince) ve `SPA_REMINDER` (`reminderHours` önce; iş 5 dk'da
+> bir, `reminderSentAt` ile tek kez) — yalnız konaklamaya bağlı randevuda; şablonlar ilk kullanımda yüklenir. Konaklama iptal / gelmedi → ileri
+> randevular bedelsiz kapanır; çıkışta açık randevu ya da borç spa'nın ziline. Olaylar `spa.appointment.changed`, `spa.session.changed`,
+> `spa.payment.changed`, `spa.setup.changed`, `spa.charged`; kanal `spa.changed`.
+>
+> **API ve izinler:** `/spa` — `settings`, `setup`, `rooms`, `therapists`, `services`, `blocks`, `availability`, `calendar`, `appointments` (+ `price`,
+> `complete`, `cancel`, `no-show`, `restore`, `room-charge`, `payments` + `void`), `stays`, `payments/:id/appointment`, `sessions` (+ `enroll`, `cancel`, `complete`), `report`;
+> portal `/public/portal/:token/spa`. İzinler `spa.view`, `spa.book`, `spa.payment`, `spa.supervise`, `spa.setup`.
+>
+> **Ölçüm** (`scripts/perf-spa.mjs`; 50 bakım odası + 4 stüdyo, 56 terapist / eğitmen, 120 hizmet, 2 yıl + 60 gün: 272.000 randevu,
+> 456.000 tutma): boş saat 21–28 ms (50 terapist × 50 oda), takvim 49 ms, listeler 18–30 ms (1 yıllık açık bakiye / gelmedi 63–66 ms),
+> randevu ekranı 10 ms, dersler 12–15 ms, rapor 31 gün 80 ms / 1 yıl 587 ms, kasa 6–7 ms, hatırlatma turu 4 ms, boş saat → aç → ön ödeme
+> 142 ms, derse kayıt 47 ms. Ölçümle düzeltilen: **1 yıllık rapor 1,1–1,3 sn → 0,59 sn** (çift terapistli randevunun pay sayısı randevu
+> başına alt sorgu yerine pencere fonksiyonuyla).
+>
+> **Öz denetimde düzeltilen:** kasada ödenmiş tamamlanan hizmette şikâyet telafisi yapılamıyordu (fiyat yalnız açıkta değişiyordu, iade
+> yalnız fazlayı kapsıyordu) → kasada kapanmış randevuda gerekçeli fiyat düzeltmesi; API ızgara dışı saati (10:07) kabul ediyordu → sunucuda
+> aralık denetimi; geri alınamayacak randevuda "Geri al" etkin görünüyordu → sunucu engeli döner, düğme sebebiyle kapalı; boş randevu
+> formunda hata görünmüyordu; rapor yüzdeleri noktalıydı ("%4.8" → "%4,8"); rapor kategorileri ilk 100 hizmetle sınırlıydı.
+>
+> **Testler:** entegrasyon tam suite 706 (705 + sırasız uyarı okuyan modül 47 testi sağlamlaştırıldı, tek başına geçti; spa 13), backend birim 691, sözleşme 573, çekirdek 52, ön yüz 83, billing-worker 25,
+> accounting-worker 9; iki ön yüz derlemesi.
+>
+> **Demo** (`scripts/demo-spa.mjs`, `demo-data.mjs` çağırır; `--reset` otelin bütün spa verisini siler): ayar (07:00–22:00, portal açık),
+> 8 oda / salon, 9 terapist ve eğitmen, 13 hizmet (çift masajı, hamam ritüeli, PT, dört dil), yoga (pzt–cmt 08:00) ve pilates dersleri;
+> son 21 günün randevuları (odaya yazılan / kasada ödenen, ücretsiz ve geç iptal, gelmedi, sadakat indirimi) ve dersleri, bugünün panosu,
+> önümüzdeki günler (portaldan gelenler, ön ödemeli), dolu ders + yedek liste, terapist izni ve hamam bakımı, onay bekleyen ön ödeme iadesi.
+> Kasa ve folyo tarihleri randevunun gününe taşınır; spa kasası ön muhasebede eşlenir (demo: "Spa kasası").
+>
+> **Sınırlar:** dışarıdan gelen müşterinin spa kasası satışının mali belgesi (ÖKC fişi / e-Arşiv) 74'te, restoranla birlikte (Ali'ye not
+> 74'te); hediye çeki ve spa / spor üyeliği 84'te; odaya yazılmış spa ücretinin sonradan düzeltmesi folyodan (15). Terapist doluluğu bugünkü
+> haftalık saatlerden hesaplanır (geçmiş saat değişiklikleri ve izinler düşülmez; raporda yazılı).
+>
+> **Canlıya alırken:** 2 migration (`20261113090000_spa`, `20261113100000_spa_treasury_source`); yeni paket yok. Otel spa ayarından portalı
+> açar; ön muhasebe kullanan otel Ayarlar → eşlemede **Spa** kanalını (nakit / kart) bir kasa / banka hesabına bağlamalı (yoksa spa
+> tahsilatı muhasebe görevine düşer); bildirim şablonları ilk kullanımda yüklenir; demo için yeniden yükleme.
+
 
 ---
 
@@ -3494,6 +3654,12 @@ veri envanterine (71) saklama süresiyle; 5 sn'den uzun iş uzun iş çerçevesi
 - [ ] Olaylar: `fiscal.receipt.printed`, `fiscal.receipt.failed`, `fiscal.day.closed`
 - [ ] Test: belge türü kuralı (ödeme türü × müşteri türü), KDV departman eşlemesi
 
+> **📌 Ali'ye not (modül 57, 19 Kasım 2026 — Ahmet):** spa kasası da restoran gibi mali belge ister: dışarıdan gelen müşterinin spa
+> tahsilatı (`SpaPayment`, `kind = PAYMENT`, `status = POSTED`, yöntem `CASH` / `CARD`, olay `spa.payment.changed`) ÖKC fişi ya da
+> e-Arşiv ister; odaya yazılan spa ücreti (`SpaRoomCharge` → folyo) istemez (belge folyodan, 49). İade satırı (`kind = REFUND`, onaylı)
+> ve hatalı girişin iptali (`reversalOfId`) fiş iptali / iade belgesi kuralınıza bağlanmalı. Spa KDV kategorisi `SPA` (otelin vergi
+> ayarından); ÖKC departman eşlemesine eklenmeli.
+
 ---
 
 ## 12. SAHİP VE OKUL
@@ -3582,6 +3748,7 @@ veri envanterine (71) saklama süresiyle; 5 sn'den uzun iş uzun iş çerçevesi
 **Önkoşul:** 7, 8, 11, 14, 15, 20, 55, 80 (varsa) · **Aktör:** guest-experience-worker (sinyal kuralları) + insight-agent (duygu)
 - [ ] Rol `GUEST_RELATIONS` (Misafir ilişkileri); izinler `recovery.view`, `recovery.manage`
 - [ ] Sinyaller: konaklama içi mesajda olumsuz duygu (insight-agent), aynı istek ikinci kez, istek süresi aşıldı (7), arıza çözülmedi (20), ara anket ≤ 3 (55), oda değişikliği isteği; her sinyal ayrı kural, ayrı açılıp kapanır
+  - *55'ten hazır (10 Kasım 2026):* `survey.response.submitted` (`kind`, `npsScore`, `lowScore`), ara anket (girişin ertesi günü) ve düşük puan takibi (`SurveyFollowUp`: üstlenen, görüşme notları, sonuç); olay kaydı bu takiple birleştirilmeli (iki ayrı iş listesi olmasın).
 - [ ] Backend: `GuestIncident` (konaklama, kategori, departman, ciddiyet, durum, sorumlu, süre), `IncidentAction`, `Compensation` (tür, tutar ve maliyet, folyo kalemi bağlantısı)
 - [ ] Telafi: folyoya indirim / ikram (15'in düzeltme yolu), oda yükseltme (3), ücretsiz hizmet; eşik üstü tutar onay türü `SERVICE_RECOVERY` (dört göz)
 - [ ] Kapanış: misafire takip mesajı (8), memnuniyet sorusu; açık olayla çıkışta ön büroya uyarı
@@ -3626,6 +3793,12 @@ veri envanterine (71) saklama süresiyle; 5 sn'den uzun iş uzun iş çerçevesi
 - [ ] Ekran: Provizyonlar, itirazlar, hediye çekleri, üyelikler
 - [ ] Olaylar: `payment.authorization.changed`, `gift_card.changed`, `membership.changed`
 - [ ] Test: provizyon tutarı ve artırım kuralı, hediye çeki bakiyesi (eşzamanlı harcama kilidi)
+
+> **📌 Ali'ye not (modül 57, 19 Kasım 2026 — Ahmet):** 84'ün hediye çeki ve üyeliği için spa tarafı hazır bağlantı noktaları: randevunun
+> `price` + `priceReason` alanı paket / üyelik indirimini bugün taşıyor (`POST /spa/appointments/:id/price`, `spa.supervise`); spa kasası
+> `SpaPayment` (yöntem `CASH` / `CARD`, `SPA_PAYMENT_METHODS` + `TREASURY_CHANNEL_METHODS.SPA`) — hediye çeki bir ödeme yöntemi olarak
+> buraya eklenebilir (`spaPaymentIssue` sınırları yöntemden bağımsız). Dışarıdan gelen müşteri bugün ad + telefonla tutuluyor
+> (`customerName`, `customerPhone`); üyelik gelince `SpaAppointment`'a üyelik kimliği bağlanabilir.
 
 ---
 

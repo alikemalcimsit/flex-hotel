@@ -31,7 +31,7 @@ import * as variance from './variance.js';
  * @param {import('fastify').FastifyInstance} app
  */
 export async function budgetRoutes(app) {
-  const guard = (permission) => ({ preHandler: [withHotelContext, requirePermission(permission)] });
+  const guard = (permission) => ({ preValidation: [withHotelContext, requirePermission(permission)] });
   const view = guard(PERMISSIONS.BUDGET_VIEW);
   const manage = guard(PERMISSIONS.BUDGET_MANAGE);
   const approve = guard(PERMISSIONS.BUDGET_APPROVE);

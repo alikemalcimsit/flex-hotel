@@ -13,8 +13,8 @@ import * as service from './service.js';
  * @param {import('fastify').FastifyInstance} app
  */
 export async function actorRoutes(app) {
-  const view = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.ACTORS_VIEW)] };
-  const manage = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.ACTORS_MANAGE)] };
+  const view = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.ACTORS_VIEW)] };
+  const manage = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.ACTORS_MANAGE)] };
 
   app.get('/', view, async (request) => ({
     success: true,

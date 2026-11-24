@@ -11,7 +11,7 @@ import * as service from './service.js';
  * @param {import('fastify').FastifyInstance} app
  */
 export async function reportRoutes(app) {
-  const view = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.REPORTS_VIEW)] };
+  const view = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.REPORTS_VIEW)] };
 
   app.get('/revenue', { ...view, schema: { querystring: reportRangeSchema } }, async (request) => ({
     success: true,

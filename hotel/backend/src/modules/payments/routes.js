@@ -37,10 +37,10 @@ const statusCode = (result) => (!result.created ? 200 : result.payment.status ==
  * @param {import('fastify').FastifyInstance} app
  */
 export async function paymentRoutes(app) {
-  const receive = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.PAYMENT_RECEIVE)] };
-  const refund = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.PAYMENT_REFUND)] };
-  const cash = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.CASH_VIEW)] };
-  const quote = { preHandler: [withHotelContext, requireAnyPermission(PERMISSIONS.PAYMENT_RECEIVE, PERMISSIONS.PAYMENT_REFUND)] };
+  const receive = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.PAYMENT_RECEIVE)] };
+  const refund = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.PAYMENT_REFUND)] };
+  const cash = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.CASH_VIEW)] };
+  const quote = { preValidation: [withHotelContext, requireAnyPermission(PERMISSIONS.PAYMENT_RECEIVE, PERMISSIONS.PAYMENT_REFUND)] };
 
   app.post('/quote', { ...quote, schema: { body: paymentQuoteSchema } }, async (request) => ({
     success: true,
@@ -106,12 +106,12 @@ export async function paymentRoutes(app) {
  */
 export async function exchangeRateRoutes(app) {
   const read = {
-    preHandler: [
+    preValidation: [
       withHotelContext,
       requireAnyPermission(PERMISSIONS.PAYMENT_RECEIVE, PERMISSIONS.PAYMENT_REFUND, PERMISSIONS.CASH_VIEW, PERMISSIONS.EXCHANGE_RATES_MANAGE),
     ],
   };
-  const manage = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.EXCHANGE_RATES_MANAGE)] };
+  const manage = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.EXCHANGE_RATES_MANAGE)] };
 
   app.get('/current', read, async (request) => ({
     success: true,

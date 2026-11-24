@@ -548,6 +548,66 @@ describe('fatura ve e-belge (entegrasyon)', { skip }, () => {
       assert.equal(new Set(results.map((result) => result.invoiceId)).size, 1);
       assert.equal(results.filter((result) => result.created).length, 1);
     });
+
+    it('toplu kesim: hazır taslaklar sırayla numara alır; alıcısı eksik ve bayat sürümlü taslak sebebiyle kesilmez; bütçe dolunca kalanlar bekler', async () => {
+      const ready = [];
+      for (let index = 0; index < 3; index += 1) {
+        const draft = await settleAndClose(await stayWithCharges({ guest: { firstName: `Toplu${index}`, lastName: 'Test', idType: 'NATIONAL_ID', idNumber: TC } }));
+        const view = await detail(draft.id);
+        await as(DESK, () => invoices.updateDraft(hotelId, draft.id, contracts.invoiceDraftUpdateSchema.parse({ expectedUpdatedAt: view.invoice.updatedAt, buyer: { ...view.invoice.buyer, ...ADDRESS } })));
+        ready.push((await detail(draft.id)).invoice);
+      }
+      const incomplete = (await detail((await settleAndClose(await stayWithCharges())).id)).invoice;
+
+      // Taslak listesi kesime yetmeyen alıcıyı söyler (ekranda seçilemez).
+      const listed = (await call('GET', '/invoices?status=DRAFT&pageSize=50', DESK)).json().data.items;
+      assert.ok(listed.find((row) => row.id === incomplete.id).buyerProblems.length > 0);
+      assert.deepEqual(listed.find((row) => row.id === ready[0].id).buyerProblems, []);
+
+      // Bütçe dolmuşsa hiçbiri işlenmez, hepsi bekler.
+      const waiting = await as(DESK, () => invoices.issueBatch(hotelId, ready.map((row) => ({ id: row.id, expectedUpdatedAt: row.updatedAt })), { budgetMs: -1 }));
+      assert.deepEqual([waiting.results.length, waiting.pending.length], [0, 3]);
+
+      const stale = { id: ready[2].id, expectedUpdatedAt: new Date(new Date(ready[2].updatedAt).getTime() - 1000).toISOString() };
+      const response = await call('POST', '/invoices/batch-issue', DESK, {
+        items: [{ id: ready[0].id, expectedUpdatedAt: ready[0].updatedAt }, { id: incomplete.id, expectedUpdatedAt: incomplete.updatedAt }, { id: ready[1].id, expectedUpdatedAt: ready[1].updatedAt }, stale],
+      });
+      dispatcher.stopEdocDispatcher();
+      assert.equal(response.statusCode, 200, response.body);
+      const batch = response.json().data;
+      assert.deepEqual([batch.succeeded, batch.failed, batch.pending.length], [2, 2, 0]);
+      const byId = new Map(batch.results.map((row) => [row.id, row]));
+      assert.match(byId.get(incomplete.id).message, /Alıcı bilgileri eksik/);
+      assert.equal(byId.get(stale.id).code, 'STALE_WRITE');
+      const numbers = [byId.get(ready[0].id).number, byId.get(ready[1].id).number].map((number) => Number(number.slice(7)));
+      assert.equal(numbers[1], numbers[0] + 1, 'seçim sırasıyla, boşluksuz');
+      assert.equal((await detail(incomplete.id)).invoice.status, 'DRAFT');
+      // Aynı taslak iki kez seçilemez.
+      assert.equal((await call('POST', '/invoices/batch-issue', DESK, { items: [{ id: ready[2].id, expectedUpdatedAt: ready[2].updatedAt }, { id: ready[2].id, expectedUpdatedAt: ready[2].updatedAt }] })).statusCode, 400);
+    });
+
+    it('toplu taslak: kapanan folyolara taslak açılır, taslağı olanın taslağı döner; kapanmamış ve olmayan folyo sebebiyle atlanır; alıcısı eksik işaretlenir', async () => {
+      await boss(() => saveSettings({ autoDraft: false }));
+      // Aynı odaya sırayla (biri çıkmadan diğeri içeride olamaz).
+      const closed = [];
+      for (let index = 0; index < 2; index += 1) {
+        const stay = await stayWithCharges();
+        await settleAndClose(stay);
+        closed.push(stay);
+      }
+      const open = await stayWithCharges();
+      const missing = randomUUID();
+      const ids = [closed[0].folio.id, open.folio.id, closed[1].folio.id, missing];
+      const first = (await call('POST', '/invoices/batch-drafts', DESK, { kind: 'FOLIO', ids })).json().data;
+      assert.deepEqual([first.succeeded, first.failed, first.needsBuyer], [2, 2, 2], 'misafir taslağında adres eksik');
+      const byId = new Map(first.results.map((row) => [row.id, row]));
+      assert.equal(byId.get(open.folio.id).code, 'FOLIO_NOT_CLOSED');
+      assert.equal(byId.get(missing).code, 'NOT_FOUND');
+      assert.ok(byId.get(closed[0].folio.id).created && byId.get(closed[0].folio.id).buyerProblems.length > 0);
+      const again = await as(DESK, () => invoices.createDraftsBatch(hotelId, { kind: 'FOLIO', ids: [closed[0].folio.id] }));
+      assert.deepEqual([again.results[0].created, again.results[0].invoiceId], [false, byId.get(closed[0].folio.id).invoiceId]);
+      assert.equal(await db.invoice.count({ where: { hotelId, folioId: closed[0].folio.id } }), 1);
+    });
   });
 
   /* ═══════════════ Faturalama başlangıcı ═══════════════ */

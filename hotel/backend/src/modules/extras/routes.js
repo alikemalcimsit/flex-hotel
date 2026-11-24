@@ -37,12 +37,12 @@ import * as report from './report.js';
  * @param {import('fastify').FastifyInstance} app
  */
 export async function extrasRoutes(app) {
-  const view = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.EXTRAS_VIEW)] };
-  const manage = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.EXTRAS_MANAGE)] };
-  const minibarPost = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.MINIBAR_POST)] };
-  const laundryPost = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.LAUNDRY_POST)] };
+  const view = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.EXTRAS_VIEW)] };
+  const manage = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.EXTRAS_MANAGE)] };
+  const minibarPost = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.MINIBAR_POST)] };
+  const laundryPost = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.LAUNDRY_POST)] };
   const entry = {
-    preHandler: [
+    preValidation: [
       withHotelContext,
       requireAnyPermission(PERMISSIONS.MINIBAR_POST, PERMISSIONS.LAUNDRY_POST, PERMISSIONS.EXTRAS_VIEW, PERMISSIONS.EXTRAS_MANAGE),
     ],

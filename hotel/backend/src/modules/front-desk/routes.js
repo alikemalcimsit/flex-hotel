@@ -29,8 +29,8 @@ const ROOM_ASSIGN_DENIED = 'Oda atama yetkiniz yok; misafirin odası oda planın
  * @param {import('fastify').FastifyInstance} app
  */
 export async function frontDeskRoutes(app) {
-  const view = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.STAYS_VIEW)] };
-  const manage = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.STAYS_MANAGE)] };
+  const view = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.STAYS_VIEW)] };
+  const manage = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.STAYS_MANAGE)] };
   const params = { params: stayParamSchema };
 
   app.get('/summary', view, async (request) => ({

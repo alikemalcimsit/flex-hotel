@@ -18,8 +18,8 @@ import * as service from './service.js';
  * Ayarlar route'ları.
  *
  * Route'larda try/catch yok: servis tipli hata fırlatır, server.js'deki merkezi
- * handler HTTP durumuna çevirir. Her route iki preHandler'dan geçer —
- * otel bağlamı ve izin işareti.
+ * handler HTTP durumuna çevirir. Her route iki preValidation guard'ından geçer —
+ * otel bağlamı ve izin işareti (şema doğrulamasından önce: anonime 401).
  *
  * DELETE'ler 204 değil 200 + gövde döner: frontend'in `api()` yardımcısı her
  * cevabı JSON olarak okuyor, boş gövde onu kırar.
@@ -27,13 +27,13 @@ import * as service from './service.js';
  * @param {import('fastify').FastifyInstance} app
  */
 export async function settingsRoutes(app) {
-  const view = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.SETTINGS_VIEW)] };
-  const manage = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.SETTINGS_MANAGE)] };
+  const view = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.SETTINGS_VIEW)] };
+  const manage = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.SETTINGS_MANAGE)] };
 
   /* ── Otel bilgileri ── */
 
   /** Ekranların otel bağlamı (ad, saat dilimi, para birimi, bugün): oturum açmış her personele. */
-  app.get('/hotel/context', { preHandler: [withHotelContext] }, async (request) => ({
+  app.get('/hotel/context', { preValidation: [withHotelContext] }, async (request) => ({
     success: true,
     data: await service.getHotelContext(request.hotelId),
   }));

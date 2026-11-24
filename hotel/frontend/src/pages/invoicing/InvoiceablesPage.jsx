@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { MAX_BULK_INVOICES } from '@hotelos/hotel-contracts';
 import { Link, useNavigate } from 'react-router-dom';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Badge, Button, Checkbox, Input, Select } from '@hotelos/ui';
+import { BulkResultAlert, useBatchRunner, useRowSelection } from '../../components/BulkSelection.jsx';
 import { ChoiceChips } from '../../components/ChoiceChips.jsx';
 import { DataTable } from '../../components/DataTable.jsx';
 import { Toolbar } from '../../components/Toolbar.jsx';
@@ -12,7 +14,8 @@ import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 import { useDebounced } from '../../lib/pos.js';
 import { toastError } from '../../store/toast.js';
 
-const PAGE_SIZE = 25;
+/** Kuyruk sayfası toplu taslağın sınırı kadar (bir sayfa tek turda taslağa çevrilir). */
+const PAGE_SIZE = MAX_BULK_INVOICES;
 const WINDOWS = [
   { value: '7', label: 'Son 7 gün' },
   { value: '30', label: 'Son 30 gün' },
@@ -29,7 +32,8 @@ function DeadlineBadge({ row }) {
 
 /**
  * Faturalanacaklar (modül 16 / 49): kapanan folyolar ve faturaya hazır etkinlikler — geçerli faturası olmayanlar,
- * en eski önce. Yasal süre (hizmetten sonra 7 gün) satırda; taslağı olan taslağa, olmayan için taslak açılır.
+ * en eski önce. Yasal süre (hizmetten sonra 7 gün) satırda; taslağı olan taslağa, olmayan için taslak açılır —
+ * tek tek ya da seçilenlere toplu (kesim Taslaklar'da, alıcı kontrol edildikten sonra).
  */
 export function InvoiceablesPage() {
   const can = useCan();
@@ -48,6 +52,28 @@ export function InvoiceablesPage() {
   const filters = { kind, days, overdueOnly: overdueOnly ? 'true' : undefined, search: search || undefined, page, pageSize: PAGE_SIZE };
   const list = useQuery({ queryKey: invoiceKeys.invoiceables(filters), queryFn: () => api(withQuery('/invoices/invoiceables', filters)), placeholderData: keepPreviousData });
 
+  // Toplu taslak: taslağı olmayanlar seçilir; seçim süzgeç / sayfa değişince temizlenir.
+  const rows = list.data?.items ?? [];
+  const selection = useRowSelection();
+  const { clear } = selection;
+  useEffect(() => clear(), [kind, days, overdueOnly, search, page, clear]);
+  const [draftResult, setDraftResult] = useState(null);
+  const sendDrafts = useCallback((ids) => apiPost('/invoices/batch-drafts', { kind, ids }), [kind]);
+  const draftRunner = useBatchRunner(sendDrafts, (id) => id);
+  const bulkDrafts = useMutation({
+    mutationFn: async (ids) => {
+      const labels = new Map(rows.filter((row) => ids.includes(row.id)).map((row) => [row.id, `${row.label} · ${formatMoney(row.amount, row.currency)}`]));
+      const result = await draftRunner.run(ids);
+      return { ...result, labels, needsBuyer: result.results.filter((row) => row.buyerProblems?.length).length };
+    },
+    onSuccess: (data) => {
+      setDraftResult(data);
+      clear();
+    },
+    onError: (error) => toastError(error.message),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: invoiceKeys.all }),
+  });
+
   const open = useMutation({
     mutationFn: (row) => apiPost('/invoices', row.kind === 'FOLIO' ? { source: 'FOLIO', folioId: row.id } : { source: 'EVENT', eventId: row.id }),
     onSuccess: (data) => {
@@ -58,6 +84,7 @@ export function InvoiceablesPage() {
   });
 
   const columns = [
+    ...(canIssue ? [selection.column(rows, (row) => !row.draftId, 'Taslağı var: Taslaklar sekmesinden kesin')] : []),
     {
       key: 'label',
       header: kind === 'FOLIO' ? 'Oda · misafir' : 'Etkinlik',
@@ -123,6 +150,34 @@ export function InvoiceablesPage() {
         <Input label="Ara" name="invoiceable-search" placeholder={kind === 'FOLIO' ? 'Rezervasyon no, misafir, oda' : 'Etkinlik kodu, adı, müşteri'} value={searchText} onChange={(event) => setSearchText(event.target.value)} className="w-full sm:w-60" />
         <Checkbox name="invoiceable-overdue" label="Yalnız süresi geçenler" checked={overdueOnly} onChange={(event) => setOverdueOnly(event.target.checked)} />
       </Toolbar>
+      {draftResult && (
+        <BulkResultAlert
+          title="Toplu taslak"
+          result={draftResult}
+          labelOf={(id) => draftResult.labels.get(id) ?? id}
+          hint="Açılamayanlar: folyo yeniden açılmış, faturası kesilmiş ya da kalemlerinde vergi sorunu var; satırı tek tek açın."
+          onClose={() => setDraftResult(null)}
+        >
+          {draftResult.succeeded > 0 && (
+            <p className="mt-1 text-xs">
+              Taslaklar kesilmedi; kontrol edip{' '}
+              <Link to="/faturalar/taslaklar" className="font-semibold hover:underline">
+                Taslaklar
+              </Link>{' '}
+              sekmesinden toplu kesebilirsiniz.
+              {draftResult.needsBuyer > 0 && ` ${draftResult.needsBuyer} taslakta alıcı bilgisi eksik (ör. vergi no, adres): kesimden önce tamamlayın.`}
+            </p>
+          )}
+        </BulkResultAlert>
+      )}
+      {canIssue && selection.count > 0 && (
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <span className="text-sm text-ink-muted">{selection.count} kayıt seçili</span>
+          <Button type="button" icon="plus" disabled={bulkDrafts.isPending || selection.count > MAX_BULK_INVOICES} onClick={() => bulkDrafts.mutate(selection.ids)}>
+            {draftRunner.progress ? `Taslaklar açılıyor ${draftRunner.progress.done} / ${draftRunner.progress.total}…` : `Seçilenlere taslak aç (${selection.count})`}
+          </Button>
+        </div>
+      )}
       <DataTable
         columns={columns}
         rows={list.data?.items}

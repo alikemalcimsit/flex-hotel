@@ -29,10 +29,10 @@ import * as stockItems from './stock-items.js';
  * @param {import('fastify').FastifyInstance} app
  */
 export async function recipeRoutes(app) {
-  const guard = (permission) => ({ preHandler: [withHotelContext, requirePermission(permission)] });
+  const guard = (permission) => ({ preValidation: [withHotelContext, requirePermission(permission)] });
   const view = guard(PERMISSIONS.RECIPES_VIEW);
   const manage = guard(PERMISSIONS.RECIPES_MANAGE);
-  const pick = { preHandler: [withHotelContext, requireAnyPermission(PERMISSIONS.RECIPES_VIEW, PERMISSIONS.BANQUET_MANAGE, PERMISSIONS.BANQUET_SETUP)] };
+  const pick = { preValidation: [withHotelContext, requireAnyPermission(PERMISSIONS.RECIPES_VIEW, PERMISSIONS.BANQUET_MANAGE, PERMISSIONS.BANQUET_SETUP)] };
   const canSeeCost = (request) => Boolean(request.auth?.permissions?.includes(PERMISSIONS.RECIPES_VIEW));
   const ok = (data) => ({ success: true, data });
 

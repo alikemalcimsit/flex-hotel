@@ -15,6 +15,11 @@ export const ID_TYPES = Object.freeze(['NATIONAL_ID', 'PASSPORT', 'OTHER']);
 /** Oda servisi (41): bir siparişte en fazla kalem, aynı anda en fazla açık sipariş. */
 export const MAX_ORDER_LINES = 15;
 export const MAX_ACTIVE_ORDERS = 3;
+/** Anket (55): açık uçlu cevabın en uzun hâli. */
+export const SURVEY_TEXT_MAX = 2000;
+/** Spa (57): grup dersine tek kayıtta en fazla kişi; randevu notunun en uzun hâli. */
+export const SPA_MAX_ENROLL_GUESTS = 6;
+export const SPA_NOTE_MAX = 500;
 
 /**
  * Belge numarası kuralı (sözleşmedeki `identityNumberError` ile aynı): Türk vatandaşının kimlik kartında TC kimlik

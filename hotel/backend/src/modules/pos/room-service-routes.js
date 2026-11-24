@@ -40,9 +40,9 @@ import * as service from './room-service.js';
  * @param {import('fastify').FastifyInstance} app
  */
 export async function roomServiceRoutes(app) {
-  const any = (...permissions) => ({ preHandler: [withHotelContext, requireAnyPermission(...permissions)] });
-  const operate = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.POS_OPERATE)] };
-  const report = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.POS_REPORT)] };
+  const any = (...permissions) => ({ preValidation: [withHotelContext, requireAnyPermission(...permissions)] });
+  const operate = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.POS_OPERATE)] };
+  const report = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.POS_REPORT)] };
   const view = any(PERMISSIONS.POS_OPERATE, PERMISSIONS.POS_REPORT);
   const trays = any(PERMISSIONS.POS_OPERATE, PERMISSIONS.REQUESTS_MANAGE);
   const links = any(PERMISSIONS.POS_OPERATE, PERMISSIONS.REQUESTS_MANAGE);

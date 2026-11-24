@@ -163,10 +163,10 @@ export function rateLimitKey(request) {
 
 /**
  * Yolunda sır taşıyan oturumsuz uçlar: misafirin oda servisi bağlantısı (modül 41), misafir portalı bağlantısı
- * (modül 53) ve kanalın okuduğu iCal takvimi (modül 33). Belirteç bağlantının kendisidir; istek günlüğüne açık yazılırsa günlüğü okuyan misafir adına sipariş
+ * (modül 53), anket bağlantısı (modül 55) ve kanalın okuduğu iCal takvimi (modül 33). Belirteç bağlantının kendisidir; istek günlüğüne açık yazılırsa günlüğü okuyan misafir adına sipariş
  * verebilir / takvimi okuyabilirdi.
  */
-const SECRET_PATHS = Object.freeze([/^(\/public\/room-service\/)[^/?#]+/, /^(\/public\/portal\/)[^/?#]+/, /^(\/channel-ical\/)[^/?#]+/]);
+const SECRET_PATHS = Object.freeze([/^(\/public\/room-service\/)[^/?#]+/, /^(\/public\/portal\/)[^/?#]+/, /^(\/public\/survey\/)[^/?#]+/, /^(\/channel-ical\/)[^/?#]+/]);
 
 /**
  * İstek adresindeki belirteci maskeler ("/public/room-service/***\/orders").

@@ -39,7 +39,7 @@ import * as service from './service.js';
  * @param {import('fastify').FastifyInstance} app
  */
 export async function channelManagerRoutes(app) {
-  const guard = (permission) => ({ preHandler: [withHotelContext, requirePermission(permission)] });
+  const guard = (permission) => ({ preValidation: [withHotelContext, requirePermission(permission)] });
   const view = guard(PERMISSIONS.CHANNEL_MANAGER_VIEW);
   const manage = guard(PERMISSIONS.CHANNEL_MANAGER_MANAGE);
   const ok = (data) => ({ success: true, data });

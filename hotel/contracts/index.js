@@ -164,6 +164,8 @@ export * from './room-service.js';
 export * from './channel-manager.js';
 export * from './payroll.js';
 export * from './guest-portal.js';
+export * from './surveys.js';
+export * from './spa.js';
 export * from './bulk.js';
 export * from './events.js';
 export { displayPhone, internationalPhone } from './phone.js';

@@ -57,11 +57,53 @@ export function useRowSelection() {
   return useMemo(() => ({ selected, ids: [...selected], count: selected.size, toggle, clear, column }), [selected, toggle, clear]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
+/** Sunucunun süre bütçesi dolduğunda işlenmeden kalan kaydın sonucu. */
+export const BATCH_LEFTOVER_MESSAGE = 'İşlenmedi (süre doldu); yeniden seçip deneyin';
+
+/**
+ * Süre bütçeli toplu işlem: sunucu bütçe dolunca kalanları `pending` döndürür; kalan bitene dek aynı uç kalanlarla
+ * yeniden çağrılır, sonuçlar birleşir. Bir tur hiç ilerlemezse durur (sonsuz döngü yok), kalanlar "işlenmedi" yazılır.
+ * İşlenenler kalıcıdır: hata olsa da çağıran listeyi tazelemeli.
+ *
+ * @template T
+ * @param {(items: T[]) => Promise<{ results: any[], pending?: string[] }>} send
+ * @param {(item: T) => string} idOf
+ */
+export function useBatchRunner(send, idOf) {
+  const [progress, setProgress] = useState(/** @type {{ done: number, total: number } | null} */ (null));
+  const run = useCallback(
+    /** @param {T[]} items */
+    async (items) => {
+      let remaining = items;
+      const results = [];
+      setProgress({ done: 0, total: items.length });
+      try {
+        while (remaining.length) {
+          const page = await send(remaining);
+          results.push(...page.results);
+          const pending = new Set(page.pending ?? []);
+          const next = remaining.filter((item) => pending.has(idOf(item)));
+          if (next.length === remaining.length) break;
+          remaining = next;
+          setProgress({ done: results.length, total: items.length });
+        }
+        for (const item of remaining) results.push({ id: idOf(item), ok: false, message: BATCH_LEFTOVER_MESSAGE });
+        return { results, succeeded: results.filter((row) => row.ok).length, failed: results.filter((row) => !row.ok).length };
+      } finally {
+        setProgress(null);
+      }
+    },
+    [send, idOf],
+  );
+  return { run, progress };
+}
+
 /**
  * Toplu işlemin sonucu: kaçı yapıldı, yapılamayanlar sebebiyle (ilk 10).
- * @param {{ title: string, result: { results: Array<{ id: string, ok: boolean, message?: string | null }> } | null, labelOf: (id: string) => string, onClose: () => void }} props
+ * @param {{ title: string, result: { results: Array<{ id: string, ok: boolean, message?: string | null }> } | null, labelOf: (id: string) => string, onClose: () => void, hint?: string, children?: import('react').ReactNode }} props
+ *   `hint`: yapılamayanlar için ne yapılacağı; `children`: başarılılar için ek not
  */
-export function BulkResultAlert({ title, result, labelOf, onClose }) {
+export function BulkResultAlert({ title, result, labelOf, onClose, hint = 'Yapılamayanlar tek tek açılıp işlenebilir (ör. bakiye, ücret onayı, gerekçe isteyenler).', children = null }) {
   if (!result) return null;
   const failed = result.results.filter((row) => !row.ok);
   const done = result.results.length - failed.length;
@@ -85,7 +127,8 @@ export function BulkResultAlert({ title, result, labelOf, onClose }) {
           {failed.length > 10 && <li>… ve {failed.length - 10} kayıt daha</li>}
         </ul>
       )}
-      {failed.length > 0 && <p className="mt-1 text-xs">Yapılamayanlar tek tek açılıp işlenebilir (ör. bakiye, ücret onayı, gerekçe isteyenler).</p>}
+      {failed.length > 0 && <p className="mt-1 text-xs">{hint}</p>}
+      {children}
     </Alert>
   );
 }

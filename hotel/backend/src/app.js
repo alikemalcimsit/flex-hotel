@@ -7,6 +7,7 @@ import { enterContext } from '@hotelos/core';
 import { checkDb, disconnectDb } from './db.js';
 import { asBusyError } from './lib/errors.js';
 import { applyGuestIpCeiling } from './lib/guest-rate-limit.js';
+import { assertGuardsBeforeValidation } from './lib/permissions.js';
 import { cache } from './lib/cache.js';
 import { actorRegistry, registerActors, setActorLogger } from './lib/actors.js';
 import { registerCoreSubscribers, setEventLogger } from './lib/events.js';
@@ -44,6 +45,9 @@ import { payrollRoutes } from './modules/payroll/routes.js';
 import { registerPayrollSubscribers } from './modules/payroll/subscribers.js';
 import { registerGuestPortalSubscribers } from './modules/guest-portal/jobs.js';
 import { guestPortalRoutes, publicGuestPortalRoutes } from './modules/guest-portal/routes.js';
+import { publicSurveyRoutes, surveyRoutes } from './modules/surveys/routes.js';
+import { publicSpaRoutes, spaRoutes } from './modules/spa/routes.js';
+import { registerSpaSubscribers } from './modules/spa/subscribers.js';
 import { recipeRoutes } from './modules/recipes/routes.js';
 import { publicRoomServiceRoutes } from './modules/pos/room-service-routes.js';
 import { registerPosSubscribers } from './modules/pos/subscribers.js';
@@ -178,9 +182,15 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   registerPayrollSubscribers();
   registerGuestPortalSubscribers();
   registerHousekeepingSubscribers();
+  registerSpaSubscribers(app.log);
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
+
+  // Kimlik/yetki guard'ı `preHandler`'a yazılmış route kaydedilemez: orada
+  // şema doğrulamasından sonra çalışır, anonim istek 401 yerine 400 + alan
+  // listesi alır. Hook route'lardan önce eklenir ki tüm alt eklentilere geçsin.
+  app.addHook('onRoute', assertGuardsBeforeValidation);
 
   const origins = allowedOrigins();
   // socket.io aynı listeyi kullansın diye (bkz. server.js).
@@ -218,7 +228,10 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
    * (`{ userId, email, hotelId, role, permissions }`) dolar ve `actor` kullanıcının
    * e-postası olur. Token yoksa/geçersizse istek anonim kalır (throw etmeyiz —
    * `/auth/login`, `/auth/refresh` ve `/health` herkese açık olmalı); korumalı
-   * route'ları `withHotelContext`/`requirePermission` preHandler'ları 401/403 yapar.
+   * route'ları `withHotelContext`/`requirePermission` guard'ları 401/403 yapar.
+   * Guard'lar `preValidation`'dadır: anonim/yetkisiz istek şema doğrulamasına
+   * hiç varmaz, bozuk gövdeyle de 400 + alan listesi değil 401/403 alır
+   * (bkz. aşağıdaki `onRoute` denetimi ve `lib/permissions.js`).
    *
    * Bundan sonra servis katmanındaki audit kaydı ve yayınlanan event'ler bu
    * kimliği kendiliğinden taşır (modül 10 zincir ekranı bunun üstüne kurulacak).
@@ -361,6 +374,8 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   await app.register(invoiceRoutes, { prefix: '/invoices' });
   await app.register(payrollRoutes, { prefix: '/payroll' });
   await app.register(guestPortalRoutes, { prefix: '/guest-portal' });
+  await app.register(surveyRoutes, { prefix: '/surveys' });
+  await app.register(spaRoutes, { prefix: '/spa' });
   await app.register(promotionRoutes, { prefix: '/promotions' });
   await app.register(channelManagerRoutes, { prefix: '/channel-manager' });
   await app.register(manualTaskRoutes, { prefix: '/manual-tasks' });
@@ -379,6 +394,10 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
     await guestApp.register(publicRoomServiceRoutes, { prefix: '/public/room-service' });
     // Misafir portalı (modül 53): online check-in, folyo, istek, oda servisine geçiş.
     await guestApp.register(publicGuestPortalRoutes, { prefix: '/public/portal' });
+    // Spa (modül 57): portaldan randevu ve ders kaydı (aynı portal bağlantısıyla).
+    await guestApp.register(publicSpaRoutes, { prefix: '/public/portal' });
+    // Anket (modül 55): misafirin anket sayfası.
+    await guestApp.register(publicSurveyRoutes, { prefix: '/public/survey' });
   });
 
   app.addHook('onClose', async () => {

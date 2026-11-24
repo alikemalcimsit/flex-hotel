@@ -406,11 +406,25 @@ export async function saveTemplate(hotelId, input) {
 }
 
 /**
- * Otel kurulurken varsayılan şablonları ekler; var olana dokunmaz.
- * @param {string} hotelId
- * @param {import('@prisma/client').PrismaClient} [client]
- * @returns {Promise<number>} eklenen şablon
+ * Zamanlanmış işle giden bir tetikleyicinin (online check-in daveti 53, anketler 55) misafire ulaşabileceği kanallara
+ * göre misafir kartı denetimi: açık kanal + o tetikleyicinin etkin şablonu. Hiçbiri yoksa `null` (iş hiç başlamaz;
+ * davet / anket "harcanmaz", kanal açılınca gider). E-posta kanalı e-postayı, SMS / WhatsApp telefonu ister.
+ * @param {string} hotelId @param {string} trigger
+ * @returns {Promise<((guest: { email: string | null, phone: string | null }) => boolean) | null>}
  */
+export async function triggerReachability(hotelId, trigger) {
+  const [configs, templates] = await Promise.all([
+    prisma.notificationChannelConfig.findMany({ where: { hotelId, enabled: true }, select: { channel: true } }),
+    prisma.notificationTemplate.findMany({ where: { hotelId, key: trigger, isActive: true }, select: { channel: true } }),
+  ]);
+  const withTemplate = new Set(templates.map((template) => template.channel));
+  const open = new Set(configs.map((config) => config.channel).filter((channel) => withTemplate.has(channel)));
+  const byEmail = open.has('EMAIL');
+  const byPhone = open.has('SMS') || open.has('WHATSAPP');
+  if (!byEmail && !byPhone) return null;
+  return (guest) => Boolean((byEmail && guest.email?.trim()) || (byPhone && guest.phone?.trim()));
+}
+
 /**
  * Sonradan eklenen bir tetikleyicinin (ör. online check-in daveti, modül 53) kurulmuş otelde hiç şablonu yoksa
  * varsayılanlarını yükler. Otelin bilerek sildiği şablon geri gelmez (silinmiş satır da "var" sayılır).
@@ -435,6 +449,12 @@ export async function ensureTriggerTemplates(hotelId, trigger) {
   return result.count;
 }
 
+/**
+ * Otel kurulurken varsayılan şablonları ekler; var olana dokunmaz.
+ * @param {string} hotelId
+ * @param {import('@prisma/client').PrismaClient} [client]
+ * @returns {Promise<number>} eklenen şablon
+ */
 export async function ensureDefaultTemplates(hotelId, client = prisma) {
   const result = await client.notificationTemplate.createMany({
     data: DEFAULT_NOTIFICATION_TEMPLATES.map((template) => ({

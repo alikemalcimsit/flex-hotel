@@ -23,8 +23,8 @@ import * as service from './service.js';
  * @param {import('fastify').FastifyInstance} app
  */
 export async function messagingRoutes(app) {
-  const view = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.MESSAGES_VIEW)] };
-  const reply = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.MESSAGES_REPLY)] };
+  const view = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.MESSAGES_VIEW)] };
+  const reply = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.MESSAGES_REPLY)] };
 
   app.get('/conversations', { ...view, schema: { querystring: inboxQuerySchema } }, async (request) => ({
     success: true,

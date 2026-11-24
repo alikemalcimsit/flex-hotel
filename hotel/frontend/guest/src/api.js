@@ -5,11 +5,12 @@
 const API_URL = String(import.meta.env.VITE_API_URL ?? '').replace(/\/+$/, '');
 
 export class GuestError extends Error {
-  /** @param {string} message @param {string} code @param {number} status */
-  constructor(message, code, status) {
+  /** @param {string} message @param {string} code @param {number} status @param {Record<string, string> | null} [fields] alan (soru) → ileti */
+  constructor(message, code, status, fields = null) {
     super(message);
     this.code = code;
     this.status = status;
+    this.fields = fields;
   }
 }
 
@@ -35,7 +36,7 @@ export async function guestApi(path, { method = 'GET', body, signal } = {}) {
   const payload = await response.json().catch(() => null);
   if (!response.ok || payload?.success === false) {
     const code = response.status === 429 ? 'RATE_LIMIT' : response.status === 413 ? 'TOO_LARGE' : (payload?.code ?? (response.status === 404 ? 'NOT_FOUND' : 'UNKNOWN'));
-    throw new GuestError(payload?.error ?? 'İstek başarısız', code, response.status);
+    throw new GuestError(payload?.error ?? 'İstek başarısız', code, response.status, payload?.fields ?? null);
   }
   return payload?.data;
 }
@@ -44,6 +45,8 @@ export async function guestApi(path, { method = 'GET', body, signal } = {}) {
 export const portalPath = (token, rest = '') => `/public/portal/${encodeURIComponent(token)}${rest}`;
 /** Oda servisi (41) uçları. @param {string} token */
 export const roomServicePath = (token, rest = '') => `/public/room-service/${encodeURIComponent(token)}${rest}`;
+/** Anket (55) uçları. @param {string} token */
+export const surveyPath = (token) => `/public/survey/${encodeURIComponent(token)}`;
 
 /** Web sohbeti balonunun betiği (8) — aynı API sunucusundan. */
 export const webchatScriptUrl = () => `${API_URL}/webchat/widget.js`;

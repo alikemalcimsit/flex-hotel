@@ -35,7 +35,7 @@ import * as settlement from './settlement.js';
  * @param {import('fastify').FastifyInstance} app
  */
 export async function agencyBonusRoutes(app) {
-  const guard = (permission) => ({ preHandler: [withHotelContext, requirePermission(permission)] });
+  const guard = (permission) => ({ preValidation: [withHotelContext, requirePermission(permission)] });
   const view = guard(PERMISSIONS.AGENCY_BONUS_VIEW);
   const manage = guard(PERMISSIONS.AGENCY_BONUS_MANAGE);
   const pay = guard(PERMISSIONS.AGENCY_BONUS_PAY);

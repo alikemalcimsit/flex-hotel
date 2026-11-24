@@ -19,7 +19,7 @@ import * as service from './service.js';
  * @param {import('fastify').FastifyInstance} app
  */
 export async function manualTaskRoutes(app) {
-  const signedIn = { preHandler: [withHotelContext, requireAuth] };
+  const signedIn = { preValidation: [withHotelContext, requireAuth] };
   const permissions = (request) => request.auth.permissions;
 
   app.get('/', { ...signedIn, schema: { querystring: manualTaskListQuerySchema } }, async (request) => ({

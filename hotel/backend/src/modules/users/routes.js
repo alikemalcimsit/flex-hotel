@@ -17,8 +17,8 @@ import * as service from './service.js';
  * @param {import('fastify').FastifyInstance} app
  */
 export async function userRoutes(app) {
-  const view = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.USERS_VIEW)] };
-  const manage = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.USERS_MANAGE)] };
+  const view = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.USERS_VIEW)] };
+  const manage = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.USERS_MANAGE)] };
 
   app.get('/', { ...view, schema: { querystring: listQuerySchema } }, async (request) => ({
     success: true,

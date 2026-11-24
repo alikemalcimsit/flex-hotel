@@ -13,6 +13,9 @@ import {
   ONLINE_CHECKIN_THUMB_MAX_BYTES,
   ONLINE_CHECKIN_THUMB_MAX_EDGE,
   GUEST_REQUEST_CATEGORIES,
+  SURVEY_ANSWER_TEXT_MAX,
+  SPA_MAX_ENROLL_GUESTS,
+  SPA_NOTE_MAX,
   identityNumberError,
 } from '@hotelos/hotel-contracts';
 import * as limits from '../../guest/src/limits.js';
@@ -36,6 +39,9 @@ describe('misafir uygulaması ↔ sözleşme', () => {
     assert.deepEqual([...limits.ID_TYPES], [...ID_DOCUMENT_TYPES]);
     assert.equal(limits.MAX_ORDER_LINES, MAX_GUEST_ORDER_LINES);
     assert.equal(limits.MAX_ACTIVE_ORDERS, MAX_GUEST_ACTIVE_ORDERS);
+    assert.equal(limits.SURVEY_TEXT_MAX, SURVEY_ANSWER_TEXT_MAX);
+    assert.equal(limits.SPA_MAX_ENROLL_GUESTS, SPA_MAX_ENROLL_GUESTS);
+    assert.equal(limits.SPA_NOTE_MAX, SPA_NOTE_MAX);
   });
 
   it('belge numarası kuralı sözleşmedekiyle aynı sonucu verir', () => {

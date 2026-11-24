@@ -25,8 +25,8 @@ import * as alerts from './staff-alerts.js';
  * - Şablon, kanal ayarı, test, tekrar gönder, iptal: `notifications.manage`.
  */
 export async function notificationRoutes(app) {
-  const view = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.NOTIFICATIONS_VIEW)] };
-  const manage = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.NOTIFICATIONS_MANAGE)] };
+  const view = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.NOTIFICATIONS_VIEW)] };
+  const manage = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.NOTIFICATIONS_MANAGE)] };
 
   app.get('/history', { ...view, schema: { querystring: notificationHistoryQuerySchema } }, async (request) => ({
     success: true,
@@ -106,7 +106,7 @@ export async function notificationRoutes(app) {
  * gönderilmiş uyarıları görür (süzme serviste).
  */
 export async function staffAlertRoutes(app) {
-  const own = { preHandler: [withHotelContext] };
+  const own = { preValidation: [withHotelContext] };
 
   app.get('/', { ...own, schema: { querystring: staffAlertQuerySchema } }, async (request) => ({
     success: true,

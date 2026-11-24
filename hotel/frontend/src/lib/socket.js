@@ -87,6 +87,10 @@ export const CHANNEL_MANAGER_CHANNEL = 'channel-manager.changed';
 export const PAYROLL_CHANNEL = 'payroll.changed';
 /** Misafir portalı ve online check-in (modül 53): gönderim, onay, düzeltme, giriş, bağlantı, ayar. */
 export const GUEST_PORTAL_CHANNEL = 'guest-portal.changed';
+/** Anket ve memnuniyet (modül 55): cevap, takip, AI etiketi / özeti, tasarım, ayar. */
+export const SURVEY_CHANNEL = 'surveys.changed';
+/** Spa ve spor salonu (modül 57): randevu, ders, ödeme, tanım. */
+export const SPA_CHANNEL = 'spa.changed';
 
 /**
  * Kanal aboneliği sayacı. Aynı kanalı birden fazla bileşen dinleyebilir

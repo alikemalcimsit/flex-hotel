@@ -24,10 +24,10 @@ import * as service from './service.js';
  * @param {import('fastify').FastifyInstance} app
  */
 export async function stockRoutes(app) {
-  const guard = (permission) => ({ preHandler: [withHotelContext, requirePermission(permission)] });
+  const guard = (permission) => ({ preValidation: [withHotelContext, requirePermission(permission)] });
   const view = guard(PERMISSIONS.STOCK_VIEW);
   const manage = guard(PERMISSIONS.STOCK_MANAGE);
-  const warehouseReaders = { preHandler: [withHotelContext, requireAnyPermission(PERMISSIONS.STOCK_VIEW, PERMISSIONS.PURCHASING_RECEIVE)] };
+  const warehouseReaders = { preValidation: [withHotelContext, requireAnyPermission(PERMISSIONS.STOCK_VIEW, PERMISSIONS.PURCHASING_RECEIVE)] };
   const ok = (data) => ({ success: true, data });
 
   app.get('/summary', view, async (req) => ok(await service.getStockSummary(req.hotelId)));

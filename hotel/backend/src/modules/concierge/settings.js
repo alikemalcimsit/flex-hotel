@@ -1,4 +1,5 @@
 import { budgetAgentManifest } from '@hotelos/budget-agent';
+import { insightAgentManifest } from '@hotelos/insight-agent';
 import { conciergeAgentManifest } from '@hotelos/concierge-agent';
 import { currentActor } from '@hotelos/core';
 import { routerAgentManifest } from '@hotelos/router-agent';
@@ -36,6 +37,8 @@ const AGENT_MODEL_FIELDS = Object.freeze({
   [conciergeAgentManifest.name]: 'conciergeModel',
   // Bütçe yorum ajanı (modül 27) otelin ana modelini kullanır.
   [budgetAgentManifest.name]: 'conciergeModel',
+  // Geri bildirim ajanı (modül 55) da otelin ana modelini kullanır.
+  [insightAgentManifest.name]: 'conciergeModel',
 });
 
 /**

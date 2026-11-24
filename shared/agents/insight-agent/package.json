@@ -1,0 +1,14 @@
+{
+  "name": "@hotelos/insight-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "description": "Misafir geri bildirimini (anket yorumu; ileride yorum siteleri) duygu ve konuyla etiketleyen ve dönem için tema özeti yazan ortak ajan",
+  "scripts": {
+    "test": "node --test \"*.test.js\""
+  },
+  "dependencies": {
+    "@hotelos/actor-kit": "*"
+  }
+}

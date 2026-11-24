@@ -45,12 +45,12 @@ export async function authRoutes(app) {
     return { success: true, data: { ...(await buildSession(user)), refreshToken } };
   });
 
-  app.post('/logout', { preHandler: [requireAuth], schema: { body: refreshSchema } }, async (request) => {
+  app.post('/logout', { preValidation: [requireAuth], schema: { body: refreshSchema } }, async (request) => {
     await service.revokeRefreshToken(request.body.refreshToken);
     return { success: true, data: { ok: true } };
   });
 
-  app.get('/me', { preHandler: [requireAuth] }, async (request) => {
+  app.get('/me', { preValidation: [requireAuth] }, async (request) => {
     const user = await service.findSessionUser(request.auth.hotelId, request.auth.userId);
     return { success: true, data: { user: service.toUserDto(user), permissions: request.auth.permissions } };
   });

@@ -1829,11 +1829,11 @@ export async function reverseReservationFees(hotelId, reservationId, { occurredA
 }
 
 /** Dış kaynaklı harcamanın kalem tipi (vergi kategorisi de bu). */
-const EXTERNAL_CHARGE_TYPES = Object.freeze({ FNB_ORDER: 'FNB', MINIBAR: 'MINIBAR', LAUNDRY: 'LAUNDRY' });
+const EXTERNAL_CHARGE_TYPES = Object.freeze({ FNB_ORDER: 'FNB', MINIBAR: 'MINIBAR', LAUNDRY: 'LAUNDRY', SPA: 'SPA' });
 
 /**
  * Dış kaynaklı harcama (restoran siparişi, minibar tüketimi, teslim edilen
- * çamaşır): konaklama verilmişse ona, yalnızca oda verilmişse o odada
+ * çamaşır, spa randevusu / iptal bedeli): konaklama verilmişse ona, yalnızca oda verilmişse o odada
  * içerideki misafire işlenir.
  *
  * **Geç kalem** (modül 19): konaklama açıkça verilmişse ve misafir çıkış
@@ -1846,7 +1846,7 @@ const EXTERNAL_CHARGE_TYPES = Object.freeze({ FNB_ORDER: 'FNB', MINIBAR: 'MINIBA
  *
  * @param {string} hotelId
  * @param {{ reservationId: string | null, roomId: string | null, reference: string, items: Array<{ description: string, unitPrice: string, quantity: number, taxCategory?: string }> }} charge
- * @param {{ source: 'FNB_ORDER' | 'MINIBAR' | 'LAUNDRY', eventId: string }} options
+ * @param {{ source: 'FNB_ORDER' | 'MINIBAR' | 'LAUNDRY' | 'SPA', eventId: string }} options
  */
 export async function postExternalCharge(hotelId, charge, { source, eventId }) {
   const [taxes, today] = await Promise.all([getActiveTaxes(hotelId), businessDay(hotelId)]);

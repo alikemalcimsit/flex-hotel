@@ -17,7 +17,7 @@ import * as service from './service.js';
  * @param {import('fastify').FastifyInstance} app
  */
 export async function activityRoutes(app) {
-  const view = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.ACTIVITY_VIEW)] };
+  const view = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.ACTIVITY_VIEW)] };
 
   app.get('/feed', { ...view, schema: { querystring: activityFeedQuerySchema } }, async (request) => ({
     success: true,
@@ -49,7 +49,7 @@ export async function activityRoutes(app) {
  * @param {import('fastify').FastifyInstance} app
  */
 export async function auditRoutes(app) {
-  const view = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.AUDIT_VIEW)] };
+  const view = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.AUDIT_VIEW)] };
 
   app.get('/', { ...view, schema: { querystring: auditQuerySchema } }, async (request) => ({
     success: true,

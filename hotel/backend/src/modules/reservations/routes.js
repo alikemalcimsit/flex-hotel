@@ -48,8 +48,8 @@ const PRICE_OVERRIDE_DENIED = 'Fiyatı elle değiştirme yetkiniz yok; sistem fi
  * @param {import('fastify').FastifyInstance} app
  */
 export async function reservationRoutes(app) {
-  const view = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.RESERVATIONS_VIEW)] };
-  const manage = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.RESERVATIONS_MANAGE)] };
+  const view = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.RESERVATIONS_VIEW)] };
+  const manage = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.RESERVATIONS_MANAGE)] };
 
   /** @param {import('fastify').FastifyRequest} request */
   const priceOverride = (request) => {

@@ -29,10 +29,10 @@ const dateQuerySchema = z.object({ date: housekeepingTaskListQuerySchema.shape.d
  * @param {import('fastify').FastifyInstance} app
  */
 export async function housekeepingRoutes(app) {
-  const view = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.HOUSEKEEPING_VIEW)] };
-  const operate = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.HOUSEKEEPING_OPERATE)] };
-  const manage = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.HOUSEKEEPING_MANAGE)] };
-  const inspect = { preHandler: [withHotelContext, requirePermission(PERMISSIONS.HOUSEKEEPING_INSPECT)] };
+  const view = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.HOUSEKEEPING_VIEW)] };
+  const operate = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.HOUSEKEEPING_OPERATE)] };
+  const manage = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.HOUSEKEEPING_MANAGE)] };
+  const inspect = { preValidation: [withHotelContext, requirePermission(PERMISSIONS.HOUSEKEEPING_INSPECT)] };
 
   /* ── Okuma ── */
 

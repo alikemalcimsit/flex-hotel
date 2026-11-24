@@ -70,6 +70,7 @@ export const FOLIO_ITEM_SOURCES = Object.freeze([
   'MINIBAR',
   'LAUNDRY',
   'REVERSAL',
+  'SPA',
 ]);
 
 export const FOLIO_ITEM_SOURCE_LABELS = Object.freeze({
@@ -83,6 +84,7 @@ export const FOLIO_ITEM_SOURCE_LABELS = Object.freeze({
   MINIBAR: 'Minibar tüketimi',
   LAUNDRY: 'Çamaşırhane siparişi',
   REVERSAL: 'İptal kaydı',
+  SPA: 'Spa randevusu',
 });
 
 /**
