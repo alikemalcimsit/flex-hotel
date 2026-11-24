@@ -25,7 +25,8 @@ git pull --ff-only --quiet origin "$BRANCH"
 git log -1 --format='  %h %ad %s' --date=short
 
 log "Bağımlılıklar"
-npm install --no-audit --no-fund --omit=optional 2>&1 | tail -1
+# İsteğe bağlı bağımlılıklar atlanmaz: vite / tailwind / rollup yerel ikilileri onlardadır.
+npm install --no-audit --no-fund 2>&1 | tail -1
 
 log "Veritabanı (prisma generate + migrate deploy)"
 set -a; source "$REPO/.env"; set +a
@@ -33,12 +34,18 @@ HEALTH_URL="${HEALTH_URL:-http://${HOST:-127.0.0.1}:${PORT:-3000}/health}"
 (cd hotel/backend && npx prisma generate >/dev/null && npx prisma migrate deploy 2>&1 | tail -2)
 
 log "Ön yüz derleniyor (panel + misafir portalı)"
-(cd hotel/frontend && npm run build 2>&1 | grep -E "built in|error" || true)
-test -f hotel/frontend/dist/index.html
+rm -rf hotel/frontend/dist
+(cd hotel/frontend && npm run build 2>&1 | tail -6)
+test -f hotel/frontend/dist/index.html || { echo "Ön yüz derlemesi başarısız; eski statik dosyalar yerinde bırakıldı." >&2; exit 1; }
 
 log "Statik dosyalar → $WEB_ROOT"
 mkdir -p "$WEB_ROOT"
-rsync -a --delete hotel/frontend/dist/ "$WEB_ROOT"/
+if command -v rsync >/dev/null 2>&1; then
+  rsync -a --delete hotel/frontend/dist/ "$WEB_ROOT"/
+else
+  find "$WEB_ROOT" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+  cp -a hotel/frontend/dist/. "$WEB_ROOT"/
+fi
 chown -R "$OWNER:$OWNER" "$REPO" "$WEB_ROOT"
 
 log "Backend yeniden başlatılıyor ($SERVICE)"
