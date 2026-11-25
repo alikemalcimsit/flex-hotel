@@ -1371,7 +1371,7 @@ Veritabanında 229 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan
 | `RoomType` | 12 |  |
 | `Room` | 11 | Oda durumu üç bağımsız bilgidir: `occupancy` (boş/dolu), `housekeepingStatus` (kirli/temiz...) ve tarihli arıza kaydı (`RoomBlock`). "Arızalı" bir kolon değildir; o günü kapsayan bloktan okunur — böylece ileri tarihli arıza kaydı günü gelince zamanlayıcı gerekmeden etkin olur ve bitince kendiliğinden kalkar. |
 | `RoomBlock` | 11 | Tarihli arıza kaydı: odanın belirli günlerde arızalı ya da hizmet dışı olması. Tarihler UTC gün başıdır (veritabanı kısıtıyla zorunlu). `endDate` boşsa blok süresizdir. Geçmiş kayıt değiştirilmez: süren blok "bitirilir" (bitişi bugüne çekilir), başlamamış blok iptal edilir (soft-delete). Rezervasyonla çakışması veritabanı tetikleyicisiyle engellenir (`Reservation_room_blocked`, `RoomBlock_has_reservations`). |
-| `Guest` | 16 |  |
+| `Guest` | 19 |  |
 | `GuestPreference` | 12 | Misafir tercihi (modül 22): kategori + değer + kaynak + güven + son teyit. Serbest metin değil yapılandırılmış; birleştirmede (`mergeGuests`) hedef misafire taşınır. VIP / sorunlu gibi işaretler `Guest.tags` üzerinde. |
 | `GuestNote` | 9 | Misafir notu (modül 22): tarihli, yazarlı; sabitlenen not kartın üstünde. |
 | `Reservation` | 53 |  |
@@ -1539,7 +1539,7 @@ Veritabanında 229 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan
 | `GuestPortalSettings` | 10 | Misafir portalı ayarı (otel başına bir satır; yoksa varsayılanlar). |
 | `GuestPortalLink` | 10 | Misafir portalı bağlantısı: rezervasyona bağlı, imzalı (`/misafir/p/<kimlik>.<imza>`). Rezervasyonda tek geçerli bağlantı (kısmi tekil index); yenilemek eskisini öldürür. |
 | `OnlineCheckin` | 24 | Online check-in (rezervasyon başına bir kayıt; misafir düzeltip yeniden gönderir). Kimlik bilgileri girişte personelin penceresini doldurur; belge fotoğrafları ayrı tabloda ve diskte, saklama süresi sonunda silinir. |
-| `OnlineCheckinDocument` | 10 | Belge fotoğrafı (disk: `online-checkin/<otel>/<kimlik>.jpg` + önizleme). Yüklenince gönderime bağlanmamış (`onlineCheckinId` boş) bekler; bağlanmayan 48 saat sonra, bağlanan saklama süresi sonunda silinir. |
+| `OnlineCheckinDocument` | 15 | Belge fotoğrafı (disk: `online-checkin/<otel>/<kimlik>.jpg` + önizleme). Yüklenince gönderime bağlanmamış (`onlineCheckinId` boş) bekler; bağlanmayan 48 saat sonra, bağlanan saklama süresi sonunda silinir. |
 | `SurveySettings` | 16 | Otelin anket ayarı. Satır yoksa varsayılanlar (anketler kapalı). Bağlantı tabanı misafir portalı ayarındaki adres. |
 | `Survey` | 7 | Otelin anketi (tür başına bir tane). `version`: soru ekleme / düzenleme / sıralama / arşivin iyimser kilidi. |
 | `SurveyQuestion` | 13 | Soru. Cevaplanmış soru silinmez, arşive kalkar (geçmiş cevaplar raporda durur); tipi değişmez. |

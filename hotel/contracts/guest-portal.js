@@ -1,6 +1,6 @@
 import { z } from './locale.js';
 import { expectedUpdatedAt, isoDayField, paginationQuerySchema } from './fields.js';
-import { companionSchema, guestIdentitySchema, MAX_COMPANIONS, normalizePlate } from './front-desk.js';
+import { companionSchema, guestIdentitySchema, MAX_COMPANIONS, MAX_MRZ_TEXT_LENGTH, normalizePlate } from './front-desk.js';
 import { GUEST_REQUEST_CATEGORIES } from './constants.js';
 
 /**
@@ -220,6 +220,22 @@ export function onlineCheckinToCheckInValues(submission) {
     vehiclePlate: submission.vehiclePlate ?? null,
   };
 }
+
+/**
+ * Belge fotoğrafının okunması (modül 59): personelin tarayıcısı fotoğraftaki MRZ'yi okur, satırları gönderir;
+ * `mrz: null` → okunamadı. Sunucu misafirin yazdıklarıyla karşılaştırır; değerler değil sonuç saklanır.
+ */
+export const onlineCheckinDocumentOcrSchema = z.object({
+  mrz: z.string().trim().max(MAX_MRZ_TEXT_LENGTH, 'Okuma çok uzun').nullable(),
+});
+/** Karşılaştırılan alanların ekrandaki adı. */
+export const DOCUMENT_OCR_FIELD_LABELS = Object.freeze({
+  name: 'Ad soyad',
+  idType: 'Belge türü',
+  idNumber: 'Belge numarası',
+  nationality: 'Uyruk',
+  birthDate: 'Doğum tarihi',
+});
 
 /* ─────────────── Şemalar: misafir ─────────────── */
 

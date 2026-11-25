@@ -3,6 +3,18 @@
  */
 
 /**
+ * guestId taşıyan ve `mergeGuests`'in basitçe (çakışmasız) taşıyacağı tablolar. `ReservationGuest` ayrı ele alınır
+ * (aynı rezervasyonda iki satır çakışır). Yeni bir tablo `guestId` alırsa buraya eklenmeli — birim testi şemadan
+ * denetler; eksik kalırsa birleştirmeden sonra o kayıtlar silinen karta bağlı kalır (misafir geçmişinden kaybolur).
+ */
+export const GUEST_REASSIGN_MODELS = Object.freeze([
+  'reservation', 'conversation', 'guestRequest', 'folio', 'lostItem', 'invoice', 'waitlistEntry', 'notification',
+  'guestPreference', 'guestNote', 'lead', 'surveyInvitation', 'surveyResponse', 'spaAppointment',
+]);
+/** `mergeGuests`'in ayrıca (çakışma temizliğiyle) taşıdığı tablolar. */
+export const GUEST_MERGE_SPECIAL_MODELS = Object.freeze(['reservationGuest']);
+
+/**
  * İki etiket listesini birleştirir: sıra korunur, tekrarlar (büyük/küçük harf
  * duyarsız) atılır. Hedefin etiketleri önce gelir.
  *

@@ -286,6 +286,19 @@ enum IdDocumentType {
   OTHER
 }
 
+/// Kimliğin belgeden okunduğu yer (modül 59).
+enum IdReadVia {
+  STAFF_SCAN
+  ONLINE_PHOTO
+}
+
+/// Online check-in belge fotoğrafının okunma sonucu (modül 59): misafirin yazdıklarıyla karşılaştırma.
+enum DocumentOcrStatus {
+  MATCH
+  MISMATCH
+  UNREADABLE
+}
+
 /// Girişte alınan teminat. Tahsilat değil: nakit teminatın kasaya girişi ve
 /// kart provizyonunun kapanışı ödeme modülünde (17).
 enum DepositMethod {
@@ -1568,6 +1581,11 @@ model Guest {
   idType      IdDocumentType?
   idNumber    String?
   birthDate   DateTime?
+  /// Kimlik belgeden okundu (modül 59): sunucu MRZ'yi sağlayıp alanlarla eşleştirdi. Kimlik elle
+  /// değiştirilince silinir. Görüntü ve MRZ metni saklanmaz.
+  idReadAt    DateTime?
+  idReadBy    String?
+  idReadVia   IdReadVia?
   notes       String?
   preferences Json            @default("{}")
   tags        String[]        @default([])
@@ -1776,6 +1794,8 @@ model Reservation {
   @@index([hotelId, createdAt, id])
   @@index([hotelId, status, checkIn, id])
   @@index([hotelId, groupId])
+  // Paket silinirken kullanımı (modül 28; index migration 20261114090000_rate_plans_packages).
+  @@index([packageId])
   // Ön büro (modül 6): gidecekler (içeride, çıkışı bugün ya da geçmiş) ve
   // "bugün giriş / çıkış yapanlar".
   @@index([hotelId, status, checkOut, id])
@@ -7272,6 +7292,13 @@ model OnlineCheckinDocument {
   thumbBytes      Int
   createdAt       DateTime  @default(now())
   purgedAt        DateTime?
+  /// Personelin tarayıcısında okunan MRZ'nin sonucu (modül 59). Değerler değil yalnız sonuç ve tutmayan
+  /// alanların adları saklanır (`ocrMismatch`: idNumber, birthDate, nationality, idType, name).
+  ocrStatus       DocumentOcrStatus?
+  ocrMismatch     String[]  @default([])
+  ocrExpired      Boolean   @default(false)
+  ocrCheckedAt    DateTime?
+  ocrCheckedBy    String?
 
   hotel         Hotel          @relation(fields: [hotelId], references: [id])
   reservation   Reservation    @relation(fields: [reservationId], references: [id], onDelete: Restrict)

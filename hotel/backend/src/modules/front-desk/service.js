@@ -14,6 +14,7 @@ import { getBusinessDate } from '../../lib/business-date.js';
 import { bulkItemFailure, ConflictError, ForbiddenError, NotFoundError, StaleWriteError, ValidationError, rethrowPrismaError } from '../../lib/errors.js';
 import { LIVE_SCOPES, liveVersion } from '../../lib/live-version.js';
 import { lockReservations, lockRooms, lockRoomTypes } from '../../lib/locks.js';
+import { identityReadFields } from '../../lib/id-read.js';
 import { buildPage, toSkipTake } from '../../lib/pagination.js';
 import { createReadCache } from '../../lib/read-cache.js';
 import { writeWithEvents } from '../../lib/write.js';
@@ -159,6 +160,8 @@ const STAY_SELECT = Object.freeze({
       idType: true,
       idNumber: true,
       birthDate: true,
+      idReadAt: true,
+      idReadVia: true,
     },
   },
   roomType: { select: { id: true, code: true, name: true } },
@@ -384,12 +387,15 @@ async function assertRoomForCheckIn(tx, hotelId, stay, { businessDate, acceptRoo
  * personele söylenir. Konaklamanın eski refakatçi bağlantıları (geri alınıp
  * yeniden yapılan giriş) yenileriyle değişir.
  *
+ * Belge okuması (modül 59) varsa kimlik okunanla aynı olmalı; kartın "kimlikten okundu" işareti yazılır.
+ *
  * @param {import('@prisma/client').Prisma.TransactionClient} tx
  * @param {string} hotelId
  * @param {object} stay
  * @param {Array<object>} companions
+ * @param {{ today: string, actor: string, now: Date }} read
  */
-async function saveCompanions(tx, hotelId, stay, companions) {
+async function saveCompanions(tx, hotelId, stay, companions, read) {
   await tx.reservationGuest.deleteMany({ where: { hotelId, reservationId: stay.id } });
   await tx.reservationGuest.create({ data: { hotelId, reservationId: stay.id, guestId: stay.guestId, isPrimary: true } });
   if (companions.length === 0) return;
@@ -402,7 +408,7 @@ async function saveCompanions(tx, hotelId, stay, companions) {
   const known = numbers.length
     ? await tx.guest.findMany({
         where: { hotelId, idNumber: { in: numbers }, deletedAt: null },
-        select: { id: true, firstName: true, lastName: true, idNumber: true, nationality: true },
+        select: { id: true, firstName: true, lastName: true, idType: true, idNumber: true, nationality: true, birthDate: true },
         orderBy: { createdAt: 'asc' },
       })
     : [];
@@ -419,6 +425,14 @@ async function saveCompanions(tx, hotelId, stay, companions) {
     const match = companion.idNumber
       ? known.find((guest) => guest.idNumber === companion.idNumber && (!guest.nationality || guest.nationality === companion.nationality))
       : null;
+    const readFields = identityReadFields({
+      current: match ?? null,
+      next: { ...identity, birthDate: companion.birthDate ?? match?.birthDate ?? null },
+      documentRead: companion.documentRead,
+      ...read,
+      field: `companions.${index}.documentRead`,
+    });
+    Object.assign(identity, readFields);
     if (match) {
       if (match.id === stay.guestId) {
         throw new ValidationError('Refakatçi, rezervasyon sahibiyle aynı kişi olamaz (aynı belge numarası)', { field: `companions.${index}.idNumber` });
@@ -449,6 +463,9 @@ async function saveCompanions(tx, hotelId, stay, companions) {
 
 /* ══════════════════ Giriş ══════════════════ */
 
+/** Kartın "kimlikten okundu" bilgisi (modül 59). @param {{ idReadAt?: Date | null, idReadVia?: string | null }} guest */
+const idReadOf = (guest) => (guest?.idReadAt ? { at: guest.idReadAt.toISOString(), via: guest.idReadVia } : null);
+
 /**
  * Giriş formunun önizlemesi: misafirin kimliği (tam), refakatçiler, odanın
  * hazırlığı, erken giriş ücreti, yapılamıyorsa sebebi.
@@ -469,7 +486,7 @@ export async function getCheckInPreview(hotelId, reservationId, { now = new Date
         orderBy: { createdAt: 'asc' },
         select: {
           guest: {
-            select: { id: true, firstName: true, lastName: true, idType: true, idNumber: true, nationality: true, birthDate: true },
+            select: { id: true, firstName: true, lastName: true, idType: true, idNumber: true, nationality: true, birthDate: true, idReadAt: true, idReadVia: true },
           },
         },
       },
@@ -499,6 +516,7 @@ export async function getCheckInPreview(hotelId, reservationId, { now = new Date
       idNumber: stay.guest.idNumber,
       nationality: stay.guest.nationality,
       birthDate: stay.guest.birthDate ? toIsoDay(stay.guest.birthDate) : null,
+      idRead: idReadOf(stay.guest),
     },
     companions: stay.reservationGuests.map(({ guest }) => ({
       firstName: guest.firstName,
@@ -507,6 +525,7 @@ export async function getCheckInPreview(hotelId, reservationId, { now = new Date
       idNumber: guest.idNumber,
       nationality: guest.nationality,
       birthDate: guest.birthDate ? toIsoDay(guest.birthDate) : null,
+      idRead: idReadOf(guest),
     })),
     room: roomState,
     identityPolicy: hotel.checkInIdentityPolicy,
@@ -566,11 +585,44 @@ export async function checkIn(hotelId, reservationId, input, { now = new Date() 
       }
 
       const { guest } = input;
+      const today = toIsoDay(businessDate);
+      const card = await tx.guest.findFirst({
+        where: { id: stay.guestId, hotelId },
+        select: { firstName: true, lastName: true, idType: true, idNumber: true, nationality: true, birthDate: true },
+      });
+      const readFields = identityReadFields({
+        current: card,
+        next: { idType: guest.idType, idNumber: guest.idNumber, nationality: guest.nationality, birthDate: guest.birthDate ?? card?.birthDate ?? null },
+        documentRead: guest.documentRead,
+        today,
+        actor,
+        now,
+        field: 'guest.documentRead',
+      });
+      // Ad düzeltmesi (modül 59): rezervasyondaki ad belgedekinden farklıysa personel kartı belgedeki gibi yazar.
+      const rename = input.guestName && (input.guestName.firstName !== card.firstName || input.guestName.lastName !== card.lastName) ? input.guestName : null;
       await tx.guest.update({
         where: { id: stay.guestId },
-        data: { idType: guest.idType, idNumber: guest.idNumber, nationality: guest.nationality, birthDate: guest.birthDate ?? undefined },
+        data: {
+          idType: guest.idType,
+          idNumber: guest.idNumber,
+          nationality: guest.nationality,
+          birthDate: guest.birthDate ?? undefined,
+          ...readFields,
+          ...(rename ? { firstName: rename.firstName, lastName: rename.lastName } : {}),
+        },
       });
-      await saveCompanions(tx, hotelId, stay, input.companions);
+      if (rename) {
+        await recordAudit(tx, {
+          hotelId,
+          entity: 'Guest',
+          entityId: stay.guestId,
+          action: 'UPDATE',
+          before: { firstName: card.firstName, lastName: card.lastName },
+          after: { firstName: rename.firstName, lastName: rename.lastName, reason: 'Girişte belgedeki ada göre düzeltildi' },
+        });
+      }
+      await saveCompanions(tx, hotelId, stay, input.companions, { today, actor, now });
 
       const deposit = input.deposit.method === 'NONE' ? null : input.deposit;
       const updated = await tx.reservation.update({
@@ -600,8 +652,9 @@ export async function checkIn(hotelId, reservationId, input, { now = new Date() 
           earlyCheckInPolicyFee: early.fee,
           earlyFeeWaived: Boolean(early.fee && input.waiveEarlyFee),
           roomNotReadyAccepted: input.acceptRoomNotReady,
-          guestIdentity: { idType: guest.idType, idNumber: maskIdNumber(guest.idNumber), nationality: guest.nationality },
+          guestIdentity: { idType: guest.idType, idNumber: maskIdNumber(guest.idNumber), nationality: guest.nationality, readFromDocument: guest.documentRead?.via ?? null },
           companions: input.companions.length,
+          companionsReadFromDocument: input.companions.filter((companion) => companion.documentRead).length,
         },
       });
       await stage('guest.checked_in', {
@@ -760,7 +813,10 @@ export async function checkInBatch(hotelId, items, { now = new Date() } = {}) {
         companions: stay.reservationGuests.map(({ guest }) => ({
           firstName: guest.firstName,
           lastName: guest.lastName,
-          isChild: false,
+          // Girişte yetişkin refakatçi kimliksiz kaydedilemez (sözleşme): kartında belge numarası olmayan refakatçi
+          // çocuk olarak girilmiştir. Hepsini yetişkin saymak çocuklu odaların toplu girişini "fazla yetişkin" diye
+          // düşürüyordu.
+          isChild: !guest.idNumber,
           idType: guest.idType,
           idNumber: guest.idNumber,
           nationality: guest.nationality,

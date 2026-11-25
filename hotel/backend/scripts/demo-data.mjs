@@ -71,6 +71,7 @@ const { resetPayrollDemo, seedPayrollDemo } = await import('./demo-payroll.mjs')
 const { resetGuestPortalDemo, seedGuestPortalDemo } = await import('./demo-guest-portal.mjs');
 const { resetSurveyDemo, seedSurveyDemo } = await import('./demo-surveys.mjs');
 const { resetSpaDemo, seedSpaDemo } = await import('./demo-spa.mjs');
+const { resetAliDemo, seedAliDemo } = await import('./demo-ali.mjs');
 
 const HISTORY_DAYS = 400;
 const FUTURE_DAYS = 75;
@@ -106,6 +107,9 @@ if (process.argv.includes('--reset')) {
   let portalFiles = [];
   await prisma.$transaction(
     async (tx) => {
+      // Ali'nin modülleri (18–46): stok hareketi / sayım, paket sipariş, kontenjan, misafir tercihi / notu, zimmet
+      // demo kayıtlara kısıtlı bağlı — dokunulmazsa sıfırlama yarıda kalır. En önce.
+      await resetAliDemo(tx, hotelId, ACTOR);
       // Demo misafir portalı (modül 53): bağlantı, online check-in ve belgeleri rezervasyona kısıtlı bağlı — en önce.
       portalFiles = await resetGuestPortalDemo(tx, hotelId);
       // Demo spa (modül 57): randevular, kasa ve oda yazımları rezervasyona / misafire kısıtlı bağlı — rezervasyondan önce.
@@ -1000,6 +1004,14 @@ try {
   console.error(`Anket adımı tamamlanamadı: ${error.message}`);
 }
 
+// ── Ali'nin modülleri (20, 22, 28, 36, 46): arıza / bakım, misafir tercihleri, paket ve fiyat planı, satış fırsatları, demirbaş ──
+let aliSummary = null;
+try {
+  aliSummary = await seedAliDemo({ prisma, core, contracts, hotelId, today, actor: ACTOR });
+} catch (error) {
+  console.error(`Ali modülleri adımı tamamlanamadı: ${error.message}`);
+}
+
 // Odaların anlık durumu: içeride kimse varsa dolu, boşların bir kısmı kirli.
 const inHouse = new Set(reservations.filter((entry) => entry.row.status === 'CHECKED_IN').map((entry) => entry.row.roomId));
 await prisma.room.updateMany({ where: { hotelId, id: { in: [...inHouse] } }, data: { occupancy: 'OCCUPIED' } });
@@ -1071,6 +1083,9 @@ console.log(
     (surveySummary ? ` Anket: ${surveySummary.invitations} davet, ${surveySummary.responses} cevap, ${surveySummary.followUps} takip (${surveySummary.open} açık).` : '') +
     (spaSummary
       ? ` Spa: ${spaSummary.services} hizmet, ${spaSummary.therapists} terapist, ${spaSummary.appointments} randevu (${spaSummary.completed} tamamlandı, ${spaSummary.cancelled} iptal, ${spaSummary.noShow} gelmedi), ${spaSummary.sessions} ders (${spaSummary.enrollments} kayıt), ${spaSummary.portal} portal kaydı, ${spaSummary.roomCharges} oda yazımı, ${spaSummary.payments} kasa tahsilatı, ${spaSummary.pendingApprovals} onay bekleyen iade${spaSummary.skipped ? `, ${spaSummary.skipped} dolu saat atlandı` : ''}.`
+      : '') +
+    (aliSummary
+      ? ` Ali modülleri: ${aliSummary.tickets} arıza kaydı, ${aliSummary.plans} bakım planı, ${aliSummary.preferences} tercih, ${aliSummary.notes} not, ${aliSummary.packages} paket, ${aliSummary.ratePlans} fiyat planı, ${aliSummary.leads} fırsat (${aliSummary.quotes} teklif), ${aliSummary.assets} demirbaş${aliSummary.depreciation ? `, amortisman ${aliSummary.depreciation}'e kadar` : ''}${aliSummary.skipped.length ? `; atlanan: ${aliSummary.skipped.join(' | ')}` : ''}.`
       : ''),
 );
 await prisma.$disconnect();

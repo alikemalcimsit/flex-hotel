@@ -609,6 +609,11 @@ olay kataloğu, zamanlanmış işler, tablolar, modül durumu; elle düzenlenmez
 > online check-in'i "giriş yapıldı"ya, `guest.check_in_reverted` onaylıya çeker. Ön büroya "Online check-in" sekmesi eklendi
 > (gezinme kaydıyla; `FrontDeskPage` değişmedi).
 
+> **📌 Ali'ye not (25 Kasım 2026 — Ahmet):** ortak `<Button>`'ın varsayılan türü artık `type="button"` (`shared/ui/src/Button.jsx`).
+> Yeni rezervasyon formunda "Satır ekle / satırı sil", "Bu misafir", "Tekrar dene"; düzenlemede "İndirimi kaldır / Vazgeç"; çıkışta
+> "Ödeme al" form içinde türsüzdü ve tıklayınca formu da gönderiyordu ("Farklı kişi — yeni kart aç" iki kez gönderiyordu). Formu gönderen
+> düğme `type="submit"` yazmalı.
+
 ### 7. Misafir mesajları / istek takibi — arkadaşın
 **Gün sonu:** Personel, misafirlerle yapılan tüm chat/WhatsApp konuşmalarını görüyor, gerekirse elle cevaplıyor; misafir istekleri görev olarak takip ediliyor.
 - [x] Backend: Conversation / Message API'leri (liste, detay, mesaj gönder, okundu işaretle)
@@ -1937,6 +1942,14 @@ olay kataloğu, zamanlanmış işler, tablolar, modül durumu; elle düzenlenmez
 
 ## 3. RAPORLAMA
 
+> **📌 Ali'ye not (modül 59 incelemesi, 25 Kasım 2026 — Ahmet):** misafir kartında üç düzeltme: (1) "Kartı düzenle" kimlik türü / no
+> gösteriyordu ama `guestCardUpdateSchema`'da yoktu — zod alanları atıyor, kaydedildi deniyor, değişmiyordu; şema girişteki kimlik
+> kurallarıyla (TC no sağlaması, uyruk listesi, eksiksiz belge) yeniden yazıldı, form `IdentityFields` + satır içi hata + "Kimlik tara"
+> kullanıyor. (2) Boş bırakılan telefon / e-posta silinemiyordu ('' → değişiklik yok); artık silinir, e-posta biçimi denetlenir; denetim
+> izinde belge numarası maskeli (açık yazılıyordu). (3) **Birleştirme** `lead`, `spaAppointment`, `surveyInvitation`,
+> `surveyResponse` tablolarını taşımıyordu (silinen kartta kalıyorlardı); liste `rules.js`'e alındı ve birim testi Prisma şemasından
+> `guestId` taşıyan her tabloyu denetliyor — yeni tablo eklenince test düşer.
+
 ### 23. Gelir raporları — arkadaşın
 **Gün sonu:** Doluluk, ADR, RevPAR raporları tarih aralığına göre tablo + grafik olarak çıkıyor; geçen yılla karşılaştırma var.
 - [x] Backend: MCP server paketi (read-only DB bağlantısı; tool'lar: `get_occupancy`, `get_revenue`, `run_report_query` parametrik/güvenli)
@@ -2173,6 +2186,10 @@ olay kataloğu, zamanlanmış işler, tablolar, modül durumu; elle düzenlenmez
 >
 > **Devir:** yeni kaynaklar (adisyon, demirbaş — katalog genişletilir), kayıtlı raporun zamanlanmış e-postası.
 
+> **📌 Ali'ye not (25 Kasım 2026 — Ahmet):** rapor tasarımcısı ve rapor asistanının "Paylaşılanlar" listeleri sınırsızdı (bütün
+> kullanıcıların paylaşımları); `MAX_REPORT_LIST` (200, en yeni önce) eklendi. Tasarımda kişi başı sınır yoktu; `MAX_DESIGNS_PER_USER` (100,
+> asistandaki kayıtlı rapor sınırıyla aynı) eklendi.
+
 ### 27. Bütçe yönetimi — arkadaşın
 **Gün sonu:** Yıllık bütçe ay ay giriliyor; gerçekleşenle sapma raporu çıkıyor; AI sapmayı yorumluyor.
 - [x] Backend: Budget, BudgetLine tabloları + API (yıl, ay, kalem, plan tutarı)
@@ -2287,6 +2304,9 @@ olay kataloğu, zamanlanmış işler, tablolar, modül durumu; elle düzenlenmez
 > düzeyindeki tek fiyat yapısını değiştirmeyi gerektirir — **modül 33 işi**). Paket bileşenlerinin folyoya ayrı kalem
 > olarak yansıması ve fiyat planı ekranında "toplu/satır-sütun" düzenleme ileride. Modül 34 (dinamik fiyat) plan fiyatını
 > giriş noktası alabilir.
+
+> **📌 Ali'ye not (25 Kasım 2026 — Ahmet):** `Reservation_packageId_idx` migration'da vardı ama şemada `@@index([packageId])` yoktu —
+> sonraki `migrate dev` sessizce silerdi; şemaya eklendi (yeni migration gerekmedi).
 
 ### 29. Kontrat & acente yönetimi — arkadaşın
 **Gün sonu:** Acenteler kayıtlı, kontrat fiyatları girili; acente adına açılan rezervasyon kontrat fiyatını otomatik alıyor.
@@ -2419,6 +2439,11 @@ olay kataloğu, zamanlanmış işler, tablolar, modül durumu; elle düzenlenmez
 > satışta kotaya takılabilir — kota görünürlüğü kullanım tablosunda). Grup **master folyo** (tek folyoya toplama) modül
 > 15/16'nın folyo birleştirmesiyle yapılır; grup dosyası bakiyeleri okur. Satır başına tarihli rooming list ileriki
 > sürüm. Modül 33 ARI'si artık kota-farkında; board-başına plan fiyatı devri (M28) ayrıca duruyor.
+
+> **📌 Ali'ye not (25 Kasım 2026 — Ahmet):** grup dosyasının **toplu check-in**'i kayıtlı refakatçilerin hepsini yetişkin gönderiyordu;
+> çocuklu odalar "N yetişkin girilemez" diye atlanıyordu. Girişte yetişkin refakatçi belgesiz kaydedilemediği için kartında belge numarası
+> olmayan refakatçi çocuk sayılıyor (test: front-desk entegrasyonu). Grup listesi her satırda grubun bütün rezervasyonlarını çekiyor
+> (sayfa × grup büyüklüğü) — 2500 ölçeğinde `groupBy` ile sayıya çevrilmeli (dokunulmadı).
 
 ### 31. Promosyon & kupon — arkadaşın
 **Gün sonu:** "Erken rezervasyon %15", "3 gece kal 1 gece bedava" gibi kurallar tanımlanıyor; kupon kodu girilince fiyat düşüyor.
@@ -4071,10 +4096,10 @@ olay kataloğu, zamanlanmış işler, tablolar, modül durumu; elle düzenlenmez
 
 ### 59. Kimlik / pasaport okuma (OCR) — arkadaşın
 **Gün sonu:** Check-in'de kimliğin fotoğrafı çekilince ad, soyad, TC / pasaport no, doğum tarihi otomatik doluyor.
-- [ ] Backend: OCR servisi bağlantısı (MRZ okuma; bulut API veya kütüphane)
-- [ ] Ekran: Check-in formunda "Kimlik tara" butonu (kamera / dosya)
-- [ ] Ekran: Okunan alanları göster → onayla → forma yaz
-- [ ] Kimlik görselini misafir kaydına ekle (KVKK: süre sonunda sil)
+- [x] Backend: OCR servisi bağlantısı (MRZ okuma; bulut API veya kütüphane)
+- [x] Ekran: Check-in formunda "Kimlik tara" butonu (kamera / dosya)
+- [x] Ekran: Okunan alanları göster → onayla → forma yaz
+- [x] Kimlik görselini misafir kaydına ekle (KVKK: süre sonunda sil) — **karar: görüntü saklanmaz**, kayda "kimlikten okundu" işareti
 
 > **FlexAI 2.0'dan not (3 Kasım 2026 — Ahmet):** son maddeyi başlamadan yeniden düşün — öneri: görüntü **saklanmasın**, yalnız
 > makine okunur satır (MRZ) alanları alınsın ve okuma bitince görüntü silinsin; kayda alanlar + "kimlikten okundu"
@@ -4084,6 +4109,53 @@ olay kataloğu, zamanlanmış işler, tablolar, modül durumu; elle düzenlenmez
 > **Modül 53'ten not (4 Kasım 2026 — Ahmet):** online check-in belge fotoğrafları (`OnlineCheckinDocument`, yalnız personel uçlarından)
 > OCR'ın doğal girdisi: okunan alanlar misafirin yazdıklarıyla karşılaştırılıp inceleme penceresinde uyarı olabilir. Fotoğraflar saklama
 > süresinde silinir; OCR süre dolmadan çalışmalı.
+
+> **✅ Modül 59 tamamlandı (25 Kasım 2026 — Ahmet).** Kararlar (kullanıcı): okuma **tarayıcıda, cihazda** (tesseract.js 7 + resmi
+> İngilizce LSTM modeli, dosyalar kendi kaynağımızdan `/ocr/…` — CDN / üçüncü taraf yok); **görüntü saklanmaz**; kapsam **giriş + online
+> check-in kontrolü**; okunan kayıttakinden farklıysa **farklar gösterilir, personel seçer**.
+>
+> **Okuma (sözleşme `mrz.js`, sunucu ve tarayıcı aynı kod):** ICAO 9303 TD3 (pasaport 2 × 44), TD2 (2 × 36), TD1 (kimlik kartı 3 × 30 —
+> yeni TC kimlik kartının arka yüzü). 7-3-1 sağlama haneleri (belge no, doğum, son kullanma, kişisel no, birleşik); OCR hatalarına karşı
+> alan türüne göre düzeltme (rakam alanında O→0, I→1…), belge numarasında belirsiz karakterler en az değişiklikle ve birleşik sağlamayla
+> birlikte denenir; OCR'ın dolguyu (`<`) K / L okuması ve yutması geri kurulur (tarayıcıdaki gerçek okuma çıktıları testte). Birleşik
+> sağlama yalnız isteğe bağlı alanı korur: alan boşsa ya da sağlamalı TC no ise son hanenin bozulması okumayı geçersiz kılmaz. TC kimlik
+> no kimlik kartında isteğe bağlı alandan, Türk pasaportunda kişisel numaradan (sağlamalı) okunur; Türk vatandaşında kimlik türü "TC no"
+> (girişin mevcut kuralı, KBS anahtarı). ICAO 3 harfli kod → otelin uyruk listesi (D<<, GBD…, RKS dahil; vatansız / BM kodu tanınmaz,
+> personel seçer). Doğum yılı yüzyılı, olmayan gün, süresi dolmuş belge (uyarı, engel değil).
+>
+> **Ekran:** `IdScanDialog` — kamera (arka kamera, belge çerçevesi), dosya (tarayıcı çıktısı / telefon fotoğrafı), online check-in'de
+> misafirin yüklediği fotoğraf, ya da satırları elle yazma; okunan satırlar düzenlenebilir (belgeye bakıp düzeltme); karşılaştırma
+> tablosu alan alan "Kayıttaki / Belgeden okunan" + aynı / farklı. Kimlik alanlarında varsayılan belgedeki (sağlamalı); **adda kayıttaki**
+> (adın sağlaması yok — tarayıcı testinde OCR "MARIE<CLAIRE"ı "MARIE LCLATRE" okudu; Türkçe harf farkı fark sayılmaz). Aynı belge başka
+> kartta varsa uyarı (numara gövdede gider, adres satırına / erişim günlüğüne düşmez). Giriş: misafir + her refakatçi "Kimlik tara",
+> "Tarayarak ekle" (reşit olmayan doğum tarihi → çocuk önerisi), rezervasyondaki yanlış adı belgedeki gibi düzeltme (kart adı girişle
+> birlikte; denetim izine eski ad). Misafir kartı (modül 22) düzenleme formu yeniden yazıldı (aşağıdaki 22 notu). Online check-in
+> inceleme: fotoğraf başına "Belgeyi oku", hepsi için "Belgeleri oku" → **Belgeyle uyuşuyor / Uyuşmuyor: alanlar / Satır okunamadı /
+> Belgenin süresi dolmuş**. OCR işçisi son okumadan 5 dk sonra bırakılır (sekmede ~30–50 MB tutmasın).
+>
+> **Sunucu (görüntü ve MRZ metni saklanmaz):** girişte / kart düzenlemede `documentRead { mrz, via }` gelirse MRZ **sunucuda yeniden
+> ayrıştırılıp sağlanır** ve gönderilen kimlik alanlarıyla karşılaştırılır; tutarsa `Guest.idReadAt / idReadBy / idReadVia`
+> (resepsiyonda tarandı / online check-in belgesinden), tutmazsa 422 "Kimlikten okunan bilgiler değiştirilmiş (alanlar)". Kimlik elle
+> değişirse işaret silinir (`lib/id-read.js`, kimliği yazan her yer: giriş, refakatçi, kart, birleştirme — birleştirmede kalan kimliğin
+> kartının işareti). Online belge okuması: `POST /guest-portal/online-checkins/:id/documents/:documentId/ocr { mrz | null }` → sonuç
+> (`ocrStatus` MATCH / MISMATCH / UNREADABLE, tutmayan alanların **adları**, süresi dolmuş); değerler saklanmaz; online check-in sürümü
+> ilerlemez; misafir yeniden gönderince eski sonuç düşer. Aynı belge: `POST /front-desk/identity-matches` (stays.manage) ve
+> `POST /guests/identity-matches` (guests.manage), en fazla 5 kart, numara maskeli. Denetim izinde belge numarası maskeli, MRZ yok.
+>
+> **Ölçek:** okuma sunucuya yük getirmez (cihazda, 1–5 sn); ilk kullanım ~7 MB (çekirdek ~3,9 MB + dil 2,9 MB, önbellek). Eşleşme sorgusu
+> `(hotelId, idNumber)` indeksinde. **Testler:** sözleşme MRZ 23 (ICAO örnek belgeleri, kurgusal TC kimlik kartı / Türk ve Alman
+> pasaportu, gerçek OCR çıktıları), ön yüz karşılaştırma 6, entegrasyon modül 59 (okunan kimlikle giriş, değiştirilmiş / sağlamasız okuma
+> reddi, ad düzeltme + refakatçi pasaportu, elle değişince işaretin silinmesi, kart okuması, eşleşme, online belge karşılaştırması +
+> eskime + silinmiş belge + başka otel); tam set: birim 777, sözleşme 643, ön yüz 138, entegrasyon 805 / 805. Tarayıcıda: kurgusal Fransız pasaportu ve TC kimlik kartı görüntüsü gerçek OCR ile 1,5–2,6 sn'de
+> okundu, giriş yapıldı (`STAFF_SCAN` yazıldı), kart düzenleme ve online inceleme denendi; **kamera bu ortamda denenemedi** (tarayıcı
+> izni kapalı) — ilk canlı kullanımda telefonla denenmeli.
+>
+> **Canlıya alırken:** migration 20261125090000_id_document_read; `npm install` (yeni ön yüz paketleri tesseract.js 7.0.0,
+> @tesseract.js-data/eng 1.0.0); derleme `dist/ocr` (~15 MB, tarayıcı yalnız ~7 MB indirir). Kamera HTTPS ister (canlı HTTPS). Demo
+> belge fotoğrafları örnek görsel (MRZ yok) — "Belgeleri oku" onlarda "Satır okunamadı" der; gerçek belgeyle denenmeli.
+>
+> **Sınırlar:** NFC çip okuma (e-pasaport / yeni kimlik kartı çipi) tarayıcıdan yapılamaz — kiosk / yerel uygulama (73). Eski nüfus
+> cüzdanı ve ehliyette MRZ yok (elle giriş). Kiosk modu (misafirin kendisi) 73'te aynı bileşenle.
 
 ### 60. Çoklu dil & çoklu para birimi — Ali Kemal
 **Gün sonu:** Arayüz TR / EN arasında geçiyor; fiyatlar seçilen para biriminde görünüyor; günlük kur otomatik geliyor.

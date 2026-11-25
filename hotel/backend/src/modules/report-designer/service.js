@@ -1,8 +1,8 @@
 import { currentActor, toIsoDay } from '@hotelos/core';
-import { DESIGNER_PREVIEW_ROWS, DESIGNER_SOURCE_LABELS, DESIGNER_SOURCE_PERMISSIONS, reportDesignSchema } from '@hotelos/hotel-contracts';
+import { DESIGNER_PREVIEW_ROWS, DESIGNER_SOURCE_LABELS, DESIGNER_SOURCE_PERMISSIONS, MAX_DESIGNS_PER_USER, MAX_REPORT_LIST, reportDesignSchema } from '@hotelos/hotel-contracts';
 import { prisma } from '../../db.js';
 import { getBusinessDate } from '../../lib/business-date.js';
-import { ForbiddenError, NotFoundError, ValidationError } from '../../lib/errors.js';
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../lib/errors.js';
 import { updateWithVersionCheck } from '../../lib/versioned-update.js';
 import { writeWithEvents } from '../../lib/write.js';
 import { readOnly } from '../reports/queries.js';
@@ -72,7 +72,8 @@ export async function listDefinitions(hotelId, permissions, { scope }) {
   const me = currentActor();
   const rows = await prisma.reportDefinition.findMany({
     where: scope === 'MINE' ? { hotelId, owner: me } : { hotelId, shared: true },
-    orderBy: { updatedAt: 'desc' },
+    orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+    take: MAX_REPORT_LIST,
   });
   return { items: rows.map((row) => toDefinitionDto(row, me, permissions)) };
 }
@@ -90,6 +91,8 @@ export async function getDefinition(hotelId, permissions, id) {
 export async function createDefinition(hotelId, permissions, { title, shared, design }) {
   assertSource(permissions, design.source);
   const me = currentActor();
+  const owned = await prisma.reportDefinition.count({ where: { hotelId, owner: me } });
+  if (owned >= MAX_DESIGNS_PER_USER) throw new ConflictError(`En fazla ${MAX_DESIGNS_PER_USER} rapor tasarımı kaydedebilirsiniz; eskilerden silin`, 'TOO_MANY_SAVED');
   const row = await writeWithEvents(async (tx, stage) => {
     const created = await tx.reportDefinition.create({ data: { hotelId, owner: me, title, source: design.source, design, shared } });
     await stage('report.definition.changed', { hotelId, definitionId: created.id, change: 'CREATED' });

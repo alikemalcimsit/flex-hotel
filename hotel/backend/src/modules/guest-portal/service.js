@@ -1,6 +1,16 @@
 import { Prisma } from '@prisma/client';
 import { currentActor, toIsoDay } from '@hotelos/core';
-import { GUEST_PORTAL_LANGUAGES, GUEST_PORTAL_TEXT_KEYS, onlineCheckinToCheckInValues } from '@hotelos/hotel-contracts';
+import {
+  GUEST_PORTAL_LANGUAGES,
+  GUEST_PORTAL_TEXT_KEYS,
+  mrzIdentity,
+  mrzProblems,
+  normalizeIdNumber,
+  onlineCheckinToCheckInValues,
+  readMrz,
+  sameMrzName,
+} from '@hotelos/hotel-contracts';
+import { getBusinessDate } from '../../lib/business-date.js';
 import { recordAudit } from '../../lib/audit.js';
 import { ConflictError, NotFoundError, StaleWriteError } from '../../lib/errors.js';
 import { lockReservations } from '../../lib/locks.js';
@@ -177,7 +187,15 @@ function toDetailDto(row, documents) {
     reviewedBy: row.reviewedBy,
     completedAt: iso(row.completedAt),
     documentsPurgedAt: iso(row.documentsPurgedAt),
-    documents: documents.map((doc) => ({ id: doc.id, person: doc.person, contentType: doc.contentType, createdAt: iso(doc.createdAt), purged: Boolean(doc.purgedAt) })),
+    documents: documents.map((doc) => ({
+      id: doc.id,
+      person: doc.person,
+      contentType: doc.contentType,
+      createdAt: iso(doc.createdAt),
+      purged: Boolean(doc.purgedAt),
+      // Okuma (modül 59) misafirin son gönderiminden sonra yapıldıysa geçerli; yeniden gönderimde eskir.
+      ocr: doc.ocrCheckedAt && doc.ocrCheckedAt >= row.submittedAt ? { status: doc.ocrStatus, mismatch: doc.ocrMismatch, expired: doc.ocrExpired, checkedAt: iso(doc.ocrCheckedAt), checkedBy: doc.ocrCheckedBy } : null,
+    })),
     // Giriş penceresinin (modül 6) ön dolumu.
     checkInValues: onlineCheckinToCheckInValues(row),
   };
@@ -187,7 +205,7 @@ function toDetailDto(row, documents) {
 async function loadDetail(client, where) {
   const row = await client.onlineCheckin.findFirst({ where, include: LIST_INCLUDE });
   if (!row) return null;
-  const documents = await client.onlineCheckinDocument.findMany({ where: { onlineCheckinId: row.id }, orderBy: [{ person: 'asc' }, { createdAt: 'asc' }], select: { id: true, person: true, contentType: true, createdAt: true, purgedAt: true } });
+  const documents = await client.onlineCheckinDocument.findMany({ where: { onlineCheckinId: row.id }, orderBy: [{ person: 'asc' }, { createdAt: 'asc' }], select: { id: true, person: true, contentType: true, createdAt: true, purgedAt: true, ocrStatus: true, ocrMismatch: true, ocrExpired: true, ocrCheckedAt: true, ocrCheckedBy: true } });
   return toDetailDto(row, documents);
 }
 
@@ -201,6 +219,68 @@ export async function getOnlineCheckin(hotelId, onlineCheckinId) {
 /** Rezervasyonun online check-in'i (yoksa boş): giriş penceresi ve rezervasyon ekranı için. @param {string} hotelId @param {string} reservationId */
 export async function getOnlineCheckinByReservation(hotelId, reservationId) {
   return { onlineCheckin: await loadDetail(prisma, { reservationId, hotelId }) };
+}
+
+/* ══════════════════ Belge okuma (modül 59) ══════════════════ */
+
+/**
+ * Okunan MRZ ile misafirin o kişi için yazdıklarını karşılaştırır. Saf: test edilir.
+ * @param {import('@hotelos/hotel-contracts').ParsedMrz | null} mrz
+ * @param {{ firstName?: string, lastName?: string, idType?: string | null, idNumber?: string | null, nationality?: string | null, birthDate?: string | null }} person
+ * @returns {{ status: 'MATCH' | 'MISMATCH' | 'UNREADABLE', mismatch: string[], expired: boolean, problems: string[] }}
+ */
+export function compareDocumentRead(mrz, person) {
+  if (!mrz) return { status: 'UNREADABLE', mismatch: [], expired: false, problems: ['Makine okunur satır (MRZ) bulunamadı'] };
+  const problems = mrzProblems(mrz);
+  if (problems.length) return { status: 'UNREADABLE', mismatch: [], expired: mrz.expired, problems };
+  const read = mrzIdentity(mrz);
+  const mismatch = [];
+  if (person.firstName && person.lastName && !sameMrzName({ firstName: person.firstName, lastName: person.lastName }, mrz)) mismatch.push('name');
+  if ((person.idType ?? null) !== read.idType) mismatch.push('idType');
+  if ((normalizeIdNumber(person.idNumber) || null) !== read.idNumber) mismatch.push('idNumber');
+  if ((person.nationality ?? null) !== read.nationality) mismatch.push('nationality');
+  if ((person.birthDate ?? null) !== read.birthDate) mismatch.push('birthDate');
+  return { status: mismatch.length ? 'MISMATCH' : 'MATCH', mismatch, expired: mrz.expired, problems: [] };
+}
+
+/**
+ * Personelin tarayıcısında okunan belge fotoğrafının sonucu. Kişi: belgenin `person` sırası (0 = rezervasyon
+ * sahibi, adı rezervasyondan; 1… = refakatçi). Online check-in'in sürümünü ilerletmez (onay penceresi bayatlamaz).
+ *
+ * @param {string} hotelId @param {string} onlineCheckinId @param {string} documentId @param {{ mrz: string | null }} input
+ */
+export async function recordDocumentOcr(hotelId, onlineCheckinId, documentId, { mrz }) {
+  const [row, doc, businessDate] = await Promise.all([
+    prisma.onlineCheckin.findFirst({ where: { id: onlineCheckinId, hotelId }, include: { reservation: { select: { confirmationCode: true, guest: { select: { firstName: true, lastName: true } } } } } }),
+    prisma.onlineCheckinDocument.findFirst({ where: { id: documentId, onlineCheckinId, hotelId }, select: { id: true, person: true, purgedAt: true } }),
+    getBusinessDate(hotelId),
+  ]);
+  if (!row || !doc) throw new NotFoundError('Belge bulunamadı');
+  if (doc.purgedAt) throw new ConflictError('Belge fotoğrafı saklama süresi dolduğu için silinmiş.', 'DOCUMENT_PURGED');
+  const person =
+    doc.person === 0
+      ? { ...(row.guest ?? {}), firstName: row.reservation.guest.firstName, lastName: row.reservation.guest.lastName }
+      : doc.person != null
+        ? row.companions?.[doc.person - 1] ?? null
+        : null;
+  if (!person) throw new ConflictError('Belge bir kişiye bağlı değil; misafirden yeniden göndermesini isteyin.', 'DOCUMENT_UNLINKED');
+  const result = compareDocumentRead(mrz ? readMrz(mrz, { today: toIsoDay(businessDate) }) : null, person);
+  const actor = currentActor();
+  await writeWithEvents(async (tx) => {
+    await tx.onlineCheckinDocument.update({
+      where: { id: doc.id },
+      data: { ocrStatus: result.status, ocrMismatch: result.mismatch, ocrExpired: result.expired, ocrCheckedAt: new Date(), ocrCheckedBy: actor },
+    });
+    // Değerler değil, sonuç: denetim izinde kişisel veri yok.
+    await recordAudit(tx, {
+      hotelId,
+      entity: 'OnlineCheckinDocument',
+      entityId: doc.id,
+      action: 'UPDATE',
+      after: { reservation: row.reservation.confirmationCode, person: doc.person, ocrStatus: result.status, mismatch: result.mismatch, expired: result.expired },
+    });
+  });
+  return result;
 }
 
 /* ══════════════════ Onay / düzeltme ══════════════════ */

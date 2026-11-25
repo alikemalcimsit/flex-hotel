@@ -1,15 +1,15 @@
 import { currentActor, toIsoDay, toMoneyString } from '@hotelos/core';
+import { MAX_IDENTITY_MATCHES, maskIdNumber } from '@hotelos/hotel-contracts';
 import { prisma } from '../../db.js';
 import { recordAudit } from '../../lib/audit.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../lib/errors.js';
+import { getBusinessDate } from '../../lib/business-date.js';
+import { identityReadFields, sameIdentity } from '../../lib/id-read.js';
 import { buildPage, toSkipTake } from '../../lib/pagination.js';
 import { writeWithEvents } from '../../lib/write.js';
 import { guestFullName, searchGuests, storablePhone, toGuestDto } from '../reservations/guests.js';
 import { getHotelSettings } from '../settings/service.js';
-import { mergeTags } from './rules.js';
-
-/** guestId taşıyan ve `mergeGuests`'in basitçe (çakışmasız) taşıyacağı tablolar. */
-const REASSIGN_MODELS = ['reservation', 'conversation', 'guestRequest', 'folio', 'lostItem', 'invoice', 'waitlistEntry', 'notification', 'guestPreference', 'guestNote'];
+import { GUEST_REASSIGN_MODELS, mergeTags } from './rules.js';
 
 /* ───────────────────────── Özet (konaklama / harcama) ───────────────────────── */
 
@@ -132,6 +132,7 @@ export async function getGuestCard(hotelId, guestId) {
     birthDate: guest.birthDate ? toIsoDay(guest.birthDate) : null,
     idType: guest.idType,
     idNumber: guest.idNumber,
+    idRead: guest.idReadAt ? { at: guest.idReadAt.toISOString(), by: guest.idReadBy, via: guest.idReadVia } : null,
     tags: guest.tags,
     summary: summaryMap.get(guestId) ?? emptySummary(),
     preferences: prefs.map(toPreferenceDto),
@@ -170,22 +171,38 @@ export async function getSpendHistory(hotelId, guestId) {
   }));
 }
 
-/** Kart düzenleme: iletişim, kimlik, etiketler, doğum tarihi. */
+/**
+ * Kart düzenleme: iletişim, kimlik, etiketler, doğum tarihi. Kimlik girişteki kurallarla denetlenmiş gelir
+ * (sözleşme); belge okuması (modül 59) varsa MRZ yeniden sağlanır ve "kimlikten okundu" işareti yazılır, kimlik
+ * elle değişirse işaret silinir. Denetim izinde belge numarası maskelidir.
+ */
 export async function updateGuestCard(hotelId, guestId, input) {
-  const hotel = await getHotelSettings(hotelId);
+  const [hotel, businessDate] = await Promise.all([getHotelSettings(hotelId), getBusinessDate(hotelId)]);
+  const actor = currentActor();
+  const now = new Date();
   const guest = await writeWithEvents(async (tx, stage) => {
     const current = await tx.guest.findFirst({ where: { id: guestId, hotelId, deletedAt: null } });
     if (!current) throw new NotFoundError('Misafir kartı bulunamadı');
     const data = {};
-    for (const field of ['firstName', 'lastName', 'nationality', 'idType', 'idNumber']) {
-      if (input[field] !== undefined) data[field] = input[field] || null;
+    for (const field of ['firstName', 'lastName']) {
+      if (input[field] !== undefined) data[field] = input[field];
     }
     if (input.phone !== undefined) data.phone = input.phone ? storablePhone(input.phone, hotel.phoneCountryCode) : null;
     if (input.email !== undefined) data.email = input.email ? input.email.toLowerCase() : null;
-    if (input.birthDate !== undefined) data.birthDate = input.birthDate ? new Date(`${input.birthDate}T00:00:00.000Z`) : null;
     if (input.tags !== undefined) data.tags = [...new Set(input.tags)];
+    const identityTouched = ['idType', 'idNumber', 'nationality', 'birthDate'].some((field) => input[field] !== undefined);
+    if (identityTouched || input.documentRead) {
+      const next = {
+        idType: input.idType !== undefined ? input.idType ?? null : current.idType,
+        idNumber: input.idNumber !== undefined ? input.idNumber ?? null : current.idNumber,
+        nationality: input.nationality !== undefined ? input.nationality ?? null : current.nationality,
+        birthDate: input.birthDate !== undefined ? input.birthDate ?? null : current.birthDate,
+      };
+      Object.assign(data, next, identityReadFields({ current, next, documentRead: input.documentRead, today: toIsoDay(businessDate), actor, now, field: 'documentRead' }));
+    }
     const updated = await tx.guest.update({ where: { id: guestId }, data });
-    await recordAudit(tx, { hotelId, entity: 'Guest', entityId: guestId, action: 'UPDATE', after: data });
+    const audited = { ...data, ...(data.idNumber !== undefined ? { idNumber: maskIdNumber(data.idNumber) } : {}), ...(input.documentRead ? { readFromDocument: input.documentRead.via } : {}) };
+    await recordAudit(tx, { hotelId, entity: 'Guest', entityId: guestId, action: 'UPDATE', after: audited });
     await stage('guest.card.updated', { hotelId, guestId });
     return updated;
   });
@@ -309,7 +326,7 @@ export async function mergeGuests(hotelId, input) {
     await tx.reservationGuest.updateMany({ where: { hotelId, guestId: sourceId }, data: { guestId: targetId } });
 
     // Diğer tablolar: doğrudan taşınır.
-    for (const model of REASSIGN_MODELS) {
+    for (const model of GUEST_REASSIGN_MODELS) {
       await tx[model].updateMany({ where: { hotelId, guestId: sourceId }, data: { guestId: targetId } });
     }
 
@@ -319,6 +336,13 @@ export async function mergeGuests(hotelId, input) {
       if (keep[field] !== undefined) data[field] = keep[field];
     }
     if (keep.birthDate !== undefined) data.birthDate = keep.birthDate ? new Date(`${keep.birthDate}T00:00:00.000Z`) : null;
+    // "Kimlikten okundu" (modül 59) kalan kimlikle gider: kimlik hedefinki gibi kalırsa onun işareti, kaynağınki
+    // seçildiyse kaynağın işareti; ikisine de uymayan karışık kimlik elle girilmiş sayılır.
+    const finalIdentity = { idType: target.idType, idNumber: target.idNumber, nationality: target.nationality, birthDate: target.birthDate, ...data };
+    const readOf = (row) => ({ idReadAt: row.idReadAt, idReadBy: row.idReadBy, idReadVia: row.idReadVia });
+    if (!sameIdentity(finalIdentity, target)) {
+      Object.assign(data, sameIdentity(finalIdentity, source) ? readOf(source) : { idReadAt: null, idReadBy: null, idReadVia: null });
+    }
     await tx.guest.update({ where: { id: targetId }, data });
 
     // Kaynağı sil.
@@ -329,4 +353,34 @@ export async function mergeGuests(hotelId, input) {
   });
 
   return getGuestCard(hotelId, targetId);
+}
+
+/**
+ * Aynı belge numarasını taşıyan diğer kartlar (modül 59): kimlik okununca ya da yazılınca "bu belge başka kartta
+ * kayıtlı" uyarısı. Uyruğu boş kart da eşleşir (girişteki refakatçi kuralı). İndeks: (hotelId, idNumber).
+ * @param {string} hotelId @param {{ idNumber: string, nationality?: string | null, excludeGuestIds: string[] }} query
+ */
+export async function findIdentityMatches(hotelId, { idNumber, nationality, excludeGuestIds }) {
+  const rows = await prisma.guest.findMany({
+    where: {
+      hotelId,
+      deletedAt: null,
+      idNumber,
+      ...(excludeGuestIds.length ? { id: { notIn: excludeGuestIds } } : {}),
+      ...(nationality ? { OR: [{ nationality }, { nationality: null }] } : {}),
+    },
+    orderBy: { createdAt: 'asc' },
+    take: MAX_IDENTITY_MATCHES,
+    select: { id: true, firstName: true, lastName: true, nationality: true, idType: true, idNumber: true, idReadAt: true },
+  });
+  return {
+    items: rows.map((row) => ({
+      id: row.id,
+      name: guestFullName(row),
+      nationality: row.nationality,
+      idType: row.idType,
+      idNumber: maskIdNumber(row.idNumber),
+      readFromDocument: Boolean(row.idReadAt),
+    })),
+  };
 }

@@ -3,6 +3,7 @@ import {
   checkInSchema,
   checkOutSchema,
   departuresQuerySchema,
+  identityMatchQuerySchema,
   inHouseQuerySchema,
   revertStaySchema,
   stayParamSchema,
@@ -11,6 +12,7 @@ import {
 } from '@hotelos/hotel-contracts';
 import { PERMISSIONS, assertRequestPermission, requirePermission } from '../../lib/permissions.js';
 import { withHotelContext } from '../../lib/tenant.js';
+import { findIdentityMatches } from '../guests/service.js';
 import * as service from './service.js';
 
 /**
@@ -54,6 +56,11 @@ export async function frontDeskRoutes(app) {
     data: await service.listInHouse(request.hotelId, request.query),
   }));
 
+  // Kimlik okununca / yazılınca aynı belge başka kartta mı (modül 59). Numara gövdede.
+  app.post('/identity-matches', { ...manage, schema: { body: identityMatchQuerySchema } }, async (request) => ({
+    success: true,
+    data: await findIdentityMatches(request.hotelId, request.body),
+  }));
   app.get('/stays/:reservationId/check-in', { ...manage, schema: params }, async (request) => ({
     success: true,
     data: await service.getCheckInPreview(request.hotelId, request.params.reservationId),

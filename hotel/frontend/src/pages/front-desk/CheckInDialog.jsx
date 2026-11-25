@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { IDENTITY_POLICY_LABELS, checkInSchema } from '@hotelos/hotel-contracts';
 import { Alert, Badge, Button, Checkbox, Icon, Input, Select, Spinner } from '@hotelos/ui';
+import { IdReadBadge, IdScanDialog } from '../../components/IdScanDialog.jsx';
 import { Modal } from '../../components/Modal.jsx';
 import { api, apiPost } from '../../lib/api.js';
 import { DEPOSIT_OPTIONS, READINESS, frontDeskKeys } from '../../lib/front-desk.js';
-import { guestPortalKeys } from '../../lib/guestPortal.js';
+import { documentPath, guestPortalKeys } from '../../lib/guestPortal.js';
+import { isMinor, stillFromDocument } from '../../lib/idScan.js';
 import { formatDate, formatMoney } from '../../lib/format.js';
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 import { reservationKeys } from '../../lib/reservations.js';
@@ -19,7 +21,10 @@ const NOT_READY = new Set(['DIRTY', 'CLEANING']);
 /** Formda kalan (yeniden gönderilebilir) hatalar; diğerleri de form içinde gösterilir. */
 const REFRESH_CODES = new Set(['STALE_WRITE', 'INVALID_STATUS', 'FEE_CHANGED', 'ROOM_OCCUPIED', 'ROOM_NOT_FREE']);
 
-const emptyCompanion = () => ({ key: globalThis.crypto.randomUUID(), firstName: '', lastName: '', isChild: false, identity: { ...EMPTY_IDENTITY } });
+const emptyCompanion = () => ({ key: globalThis.crypto.randomUUID(), firstName: '', lastName: '', isChild: false, identity: { ...EMPTY_IDENTITY }, read: null, savedRead: null });
+
+/** Okumanın formdaki kimlikle hâlâ geçerli olan kısmı (personel sonradan elle değiştirdiyse düşer). */
+const liveRead = (identity, read) => (read && stillFromDocument(identityBody(identity), read.snapshot) ? read.documentRead : null);
 
 /**
  * Check-in formu (modül 6). Tek pencerede: oda (verilmemişse ya da değişecekse
@@ -65,6 +70,10 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
   const [serverError, setServerError] = useState(null);
   /** Sunucunun "hazır değil" dediği oda (önizlemeden sonra kirlenmiş olabilir). */
   const [serverNotReadyRoom, setServerNotReadyRoom] = useState(null);
+  // Kimlik tarama (modül 59): kimin için açık ('guest' | refakatçi anahtarı | 'new'), okuma ve ad düzeltmesi.
+  const [scanFor, setScanFor] = useState(null);
+  const [guestRead, setGuestRead] = useState(null);
+  const [guestName, setGuestName] = useState(null);
 
   // Form önizleme ilk geldiğinde doldurulur; sonraki tazelemeler yazılanı silmez.
   const initialized = useRef(false);
@@ -77,7 +86,7 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
     setCompanions(
       fromOnline
         ? fromOnline.companions.map((companion) => ({ ...emptyCompanion(), firstName: companion.firstName, lastName: companion.lastName, isChild: companion.isChild, identity: toIdentityForm(companion) }))
-        : data.companions.map((companion) => ({ ...emptyCompanion(), ...companion, isChild: !companion.idNumber, identity: toIdentityForm(companion) })),
+        : data.companions.map((companion) => ({ ...emptyCompanion(), ...companion, isChild: !companion.idNumber, identity: toIdentityForm(companion), savedRead: companion.idRead ?? null })),
     );
     setPlate(fromOnline?.vehiclePlate ?? data.reservation.vehiclePlate ?? '');
     setChoosingRoom(!data.room && canAssignRoom);
@@ -152,12 +161,14 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
       expectedUpdatedAt: reservation.updatedAt,
       roomId: pickedRoom?.id ?? null,
       acceptRoomNotReady: roomNotReady && acceptNotReady,
-      guest: identityBody(guest),
+      guest: { ...identityBody(guest), documentRead: liveRead(guest, guestRead) },
+      guestName,
       companions: companions.map((companion) => ({
         firstName: companion.firstName,
         lastName: companion.lastName,
         isChild: companion.isChild,
         ...identityBody(companion.identity),
+        documentRead: liveRead(companion.identity, companion.read),
       })),
       vehiclePlate: plate.trim() || null,
       deposit:
@@ -181,6 +192,32 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
   }
 
   const errorCount = Object.keys(errors).length;
+  const today = data.businessDate;
+  // Online check-in'de misafirin yüklediği belgeler: tarayıcının okuma kaynağı (görüntü yine cihazda okunur).
+  const onlineDocuments = (onlineCheckin?.documents ?? [])
+    .filter((doc) => !doc.purged)
+    .map((doc, index) => ({ id: doc.id, label: doc.person === 0 ? `Rezervasyon sahibi (${index + 1})` : `${doc.person}. refakatçi (${index + 1})`, path: documentPath(onlineCheckin.id, doc.id, 'full') }));
+  const scanCompanion = scanFor && scanFor !== 'guest' && scanFor !== 'new' ? companions.find((companion) => companion.key === scanFor) : null;
+  const guestCardName = { firstName: data.guest.firstName, lastName: data.guest.lastName };
+  const guestReadLive = liveRead(guest, guestRead);
+  const guestSavedRead = !guestRead && data.guest.idRead && stillFromDocument(identityBody(guest), toIdentityForm(data.guest)) ? data.guest.idRead : null;
+
+  /** Taramanın sonucu → forma. @param {'guest' | string} target @param {ReturnType<typeof import('../../lib/idScan.js').applyScan>} result */
+  function applyScan(target, { values, documentRead }) {
+    const identity = { idType: values.idType ?? '', idNumber: values.idNumber ?? '', nationality: values.nationality ?? '', birthDate: values.birthDate ?? '' };
+    const read = documentRead ? { snapshot: identityBody(identity), documentRead } : null;
+    setErrors({});
+    if (target === 'guest') {
+      setGuest(identity);
+      setGuestRead(read);
+      const renamed = values.firstName !== guestCardName.firstName || values.lastName !== guestCardName.lastName;
+      setGuestName(renamed ? { firstName: values.firstName, lastName: values.lastName } : null);
+      return;
+    }
+    const changes = { firstName: values.firstName, lastName: values.lastName, identity, read, isChild: isMinor(values.birthDate, today) };
+    if (target === 'new') setCompanions((list) => [...list, { ...emptyCompanion(), ...changes }]);
+    else updateCompanion(target, changes);
+  }
 
   return (
     <Modal
@@ -203,7 +240,10 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
             <Icon name="user" className="size-5" />
           </span>
           <div className="min-w-0 text-sm">
-            <p className="font-bold text-ink">{reservation.guest.name}</p>
+            <p className="font-bold text-ink">
+              {guestName ? `${guestName.firstName} ${guestName.lastName}` : reservation.guest.name}
+              {guestName && <span className="ml-2 text-xs font-normal text-ink-muted line-through">{reservation.guest.name}</span>}
+            </p>
             <p className="text-xs text-ink-muted">
               {formatDate(reservation.checkIn)} → {formatDate(reservation.checkOut)} · {reservation.nights} gece · {reservation.roomType.name} ·{' '}
               {partyLabel(reservation.adults, reservation.children)} · {reservation.boardType}
@@ -289,7 +329,22 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
         </section>
 
         <section className="flex flex-col gap-3" aria-labelledby="check-in-identity">
-          <h3 id="check-in-identity" className="text-sm font-bold text-ink">Misafirin kimliği</h3>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 id="check-in-identity" className="flex flex-wrap items-center gap-2 text-sm font-bold text-ink">
+              Misafirin kimliği
+              <IdReadBadge read={guestReadLive ? { at: null } : guestSavedRead} />
+              {guestRead && !guestReadLive && <Badge tone="warning">okunduktan sonra elle değişti</Badge>}
+            </h3>
+            <Button type="button" size="sm" variant="outline" icon="camera" onClick={() => setScanFor('guest')} disabled={busy}>
+              Kimlik tara
+            </Button>
+          </div>
+          {guestName && (
+            <Alert tone="info" title="Ad belgedeki gibi düzeltilecek" action={<Button type="button" size="sm" variant="outline" icon="rotateCcw" onClick={() => setGuestName(null)} disabled={busy}>Geri al</Button>}>
+              Kart: {guestCardName.firstName} {guestCardName.lastName} → {guestName.firstName} {guestName.lastName}. Girişle birlikte misafir kartına yazılır.
+            </Alert>
+          )}
+          {errors['guest.documentRead'] && <p className="text-xs font-semibold text-sec-strong">{errors['guest.documentRead']}</p>}
           <IdentityFields value={guest} onChange={setGuest} errors={errors} prefix="guest" disabled={busy} />
         </section>
 
@@ -298,16 +353,21 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
             <h3 id="check-in-companions" className="text-sm font-bold text-ink">
               Refakatçiler <span className="font-normal text-ink-muted">({companions.length} / {maxCompanions})</span>
             </h3>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              icon="plus"
-              onClick={() => setCompanions((list) => [...list, emptyCompanion()])}
-              disabled={busy || companions.length >= maxCompanions}
-            >
-              Kişi ekle
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" size="sm" variant="outline" icon="camera" onClick={() => setScanFor('new')} disabled={busy || companions.length >= maxCompanions}>
+                Tarayarak ekle
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                icon="plus"
+                onClick={() => setCompanions((list) => [...list, emptyCompanion()])}
+                disabled={busy || companions.length >= maxCompanions}
+              >
+                Kişi ekle
+              </Button>
+            </div>
           </div>
           <p className="text-xs text-ink-muted">
             Kimlik politikası: <strong>{IDENTITY_POLICY_LABELS[identityPolicy]}</strong>
@@ -317,6 +377,16 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
           {companions.map((companion, index) => (
             <fieldset key={companion.key} className="flex flex-col gap-3 rounded-panel border border-line p-4">
               <legend className="px-1 text-xs font-bold text-ink-muted">{index + 1}. kişi</legend>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="flex flex-wrap items-center gap-2">
+                  <IdReadBadge read={liveRead(companion.identity, companion.read) ? { at: null } : !companion.read && companion.savedRead ? companion.savedRead : null} />
+                  {companion.read && !liveRead(companion.identity, companion.read) && <Badge tone="warning">okunduktan sonra elle değişti</Badge>}
+                </span>
+                <Button type="button" size="sm" variant="outline" icon="camera" onClick={() => setScanFor(companion.key)} disabled={busy}>
+                  Kimlik tara
+                </Button>
+              </div>
+              {errors[`companions.${index}.documentRead`] && <p className="text-xs font-semibold text-sec-strong">{errors[`companions.${index}.documentRead`]}</p>}
               <div className="grid gap-3 sm:grid-cols-2">
                 <Input label="Ad" value={companion.firstName} onChange={(e) => updateCompanion(companion.key, { firstName: e.target.value })} error={errors[`companions.${index}.firstName`]} disabled={busy} />
                 <Input label="Soyad" value={companion.lastName} onChange={(e) => updateCompanion(companion.key, { lastName: e.target.value })} error={errors[`companions.${index}.lastName`]} disabled={busy} />
@@ -386,6 +456,24 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
           )
         )}
       </form>
+      {scanFor && (
+        <IdScanDialog
+          title={scanFor === 'guest' ? `Kimlik tara — ${guestCardName.firstName} ${guestCardName.lastName}` : scanFor === 'new' ? 'Kimlik tara — yeni refakatçi' : `Kimlik tara — ${scanCompanion?.firstName || 'refakatçi'}`}
+          current={
+            scanFor === 'guest'
+              ? { ...(guestName ?? guestCardName), ...guest }
+              : scanCompanion
+                ? { firstName: scanCompanion.firstName, lastName: scanCompanion.lastName, ...scanCompanion.identity }
+                : {}
+          }
+          today={today}
+          onlineDocuments={onlineDocuments}
+          matchEndpoint="/front-desk/identity-matches"
+          excludeGuestIds={scanFor === 'guest' ? [data.guest.id] : []}
+          onApply={(result) => applyScan(scanFor, result)}
+          onClose={() => setScanFor(null)}
+        />
+      )}
     </Modal>
   );
 }
