@@ -159,6 +159,7 @@ export * from './recipes.js';
 export * from './purchasing.js';
 export * from './stock.js';
 export * from './accounting.js';
+export * from './ledger.js';
 export * from './invoicing.js';
 export * from './pos.js';
 export * from './room-service.js';

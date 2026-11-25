@@ -13,6 +13,7 @@ import {
   ASSET_EVENTS,
   REPORT_CHAT_EVENTS,
   ACCOUNTING_EVENTS,
+  LEDGER_EVENTS,
   INVOICE_EVENTS,
   PAYROLL_EVENTS,
   GUEST_PORTAL_EVENTS,
@@ -147,6 +148,8 @@ export const REPORT_CHAT_CHANNEL = 'report-chat.changed';
 
 /** Ön muhasebe (modül 47): cariler ve ekstre, kasa / banka hareketleri, çek / senet, fişler, ayar ve eşleme. */
 export const ACCOUNTING_CHANNEL = 'accounting.changed';
+/** Genel muhasebe (modül 48): yevmiye, hesap planı, kurallar, mizan. */
+export const LEDGER_CHANNEL = 'ledger.changed';
 
 /** Fatura ve e-belge (modül 16 / 49): faturalanacaklar, faturalar, e-belge durumu. */
 export const INVOICES_CHANNEL = 'invoices.changed';
@@ -207,6 +210,7 @@ const CHANNEL_EVENTS = Object.freeze({
   [ASSETS_CHANNEL]: ASSET_EVENTS,
   [REPORT_CHAT_CHANNEL]: REPORT_CHAT_EVENTS,
   [ACCOUNTING_CHANNEL]: ACCOUNTING_EVENTS,
+  [LEDGER_CHANNEL]: LEDGER_EVENTS,
   [INVOICES_CHANNEL]: INVOICE_EVENTS,
   [PAYROLL_CHANNEL]: PAYROLL_EVENTS,
   [GUEST_PORTAL_CHANNEL]: GUEST_PORTAL_EVENTS,

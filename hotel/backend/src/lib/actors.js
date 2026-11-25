@@ -36,6 +36,7 @@ import * as folioService from '../modules/folios/service.js';
 import * as paymentService from '../modules/payments/service.js';
 import * as accountingPostings from '../modules/accounting/postings.js';
 import { syncPayrollRun } from '../modules/payroll/postings.js';
+import { journalizeDay, journalizeSource } from '../modules/ledger/journalize.js';
 import { consumeSale } from '../modules/stock/sales.js';
 import { suggestPurchases } from '../modules/stock/suggestions.js';
 import * as invoiceService from '../modules/invoicing/invoices.js';
@@ -345,6 +346,8 @@ export function registerActors() {
           syncEventCharge: accountingPostings.syncEventCharge,
           syncInvoice: accountingPostings.syncInvoice,
           syncPayrollRun,
+          journalizeSource,
+          journalizeDay,
         },
         deps,
       ),

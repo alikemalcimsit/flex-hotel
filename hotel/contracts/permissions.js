@@ -181,6 +181,13 @@ export const PERMISSIONS = Object.freeze({
   /** Kasa / banka tanımları, yöntem eşlemesi, başlangıç günü ve onay eşiği, açılış bakiyeleri, fiş iptali. */
   ACCOUNTING_SETUP: 'accounting.setup',
 
+  /** Genel muhasebe (modül 48): hesap planı, yevmiye fişleri, mizan ve hesap ekstresi. */
+  LEDGER_VIEW: 'ledger.view',
+  /** Elle yevmiye fişi girmek, fişlenmemiş hareketleri eşitlemek. */
+  LEDGER_MANAGE: 'ledger.manage',
+  /** Hesap planını düzenlemek, otomatik fiş kurallarını değiştirmek, dönem kilidi, fiş iptali. */
+  LEDGER_SETUP: 'ledger.setup',
+
   /** Fatura ve e-belge (modül 16 çekirdeği + 49): faturalanacaklar, faturalar, PDF, GİB durumu. */
   INVOICES_VIEW: 'invoices.view',
   /** Folyo / etkinlik faturası: taslak aç, alıcıyı düzenle, kes; e-belgeyi tekrar gönder. */
@@ -347,6 +354,9 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.ACCOUNTING_VIEW]: 'Cariler ve ekstre, kasa / banka hareketleri, çek / senet portföyü ve fişleri görüntüle',
   [PERMISSIONS.ACCOUNTING_MANAGE]: 'Tahsilat / ödeme / virman fişi gir, çek / senet işlemleri, cari kartı aç ve düzenle',
   [PERMISSIONS.ACCOUNTING_SETUP]: 'Kasa / banka tanımları, yöntem eşlemesi, başlangıç günü ve onay eşiği, açılış bakiyesi, fiş iptali',
+  [PERMISSIONS.LEDGER_VIEW]: 'Hesap planı, yevmiye fişleri, mizan ve hesap ekstresini görüntüle',
+  [PERMISSIONS.LEDGER_MANAGE]: 'Elle yevmiye fişi gir, fişlenmemiş hareketleri eşitle',
+  [PERMISSIONS.LEDGER_SETUP]: 'Hesap planı ve otomatik fiş kuralları, dönem kilidi, yevmiye fişi iptali',
   [PERMISSIONS.INVOICES_VIEW]: "Faturalanacakları, faturaları, PDF'leri ve GİB durumunu görüntüle",
   [PERMISSIONS.INVOICES_ISSUE]: 'Folyo / etkinlik faturası kes (taslak, alıcı, kesim), e-belgeyi tekrar gönder',
   [PERMISSIONS.INVOICES_MANAGE]: 'Cariye serbest fatura kes, fatura iptali iste (onay kuyruğu)',
@@ -486,6 +496,7 @@ export const PERMISSION_GROUPS = Object.freeze([
   { key: 'stock', label: 'Stok ve depo', permissions: [PERMISSIONS.STOCK_VIEW, PERMISSIONS.STOCK_MANAGE] },
   { key: 'assets', label: 'Demirbaş', permissions: [PERMISSIONS.ASSETS_VIEW, PERMISSIONS.ASSETS_COUNT, PERMISSIONS.ASSETS_MANAGE, PERMISSIONS.ASSETS_FINANCE] },
   { key: 'accounting', label: 'Ön muhasebe', permissions: [PERMISSIONS.ACCOUNTING_VIEW, PERMISSIONS.ACCOUNTING_MANAGE, PERMISSIONS.ACCOUNTING_SETUP] },
+  { key: 'ledger', label: 'Genel muhasebe', permissions: [PERMISSIONS.LEDGER_VIEW, PERMISSIONS.LEDGER_MANAGE, PERMISSIONS.LEDGER_SETUP] },
   { key: 'invoices', label: 'Fatura ve e-belge', permissions: [PERMISSIONS.INVOICES_VIEW, PERMISSIONS.INVOICES_ISSUE, PERMISSIONS.INVOICES_MANAGE, PERMISSIONS.INVOICES_SETUP] },
   { key: 'employees', label: 'Personel', permissions: [PERMISSIONS.EMPLOYEES_VIEW, PERMISSIONS.EMPLOYEES_MANAGE] },
   { key: 'payroll', label: 'Bordro', permissions: [PERMISSIONS.PAYROLL_VIEW, PERMISSIONS.PAYROLL_MANAGE, PERMISSIONS.PAYROLL_PAY, PERMISSIONS.PAYROLL_SETUP] },
@@ -636,6 +647,10 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.ACCOUNTING_VIEW,
     PERMISSIONS.ACCOUNTING_MANAGE,
     PERMISSIONS.ACCOUNTING_SETUP,
+    // Genel muhasebe (modül 48): müdür mizanı görür, elle fiş girebilir; hesap planı ve kurallar da onun (küçük otel).
+    PERMISSIONS.LEDGER_VIEW,
+    PERMISSIONS.LEDGER_MANAGE,
+    PERMISSIONS.LEDGER_SETUP,
     // Fatura müdürün: ayarlar ve serbest fatura dahil; iptali başka bir yetkili onaylar.
     PERMISSIONS.INVOICES_VIEW,
     PERMISSIONS.INVOICES_ISSUE,
@@ -789,6 +804,10 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     // Cari, kasa, banka, çek / senet ve fişler muhasebenin işi; kasa / banka tanımı, açılış bakiyesi ve fiş iptali müdürün.
     PERMISSIONS.ACCOUNTING_VIEW,
     PERMISSIONS.ACCOUNTING_MANAGE,
+    // Genel muhasebe muhasebecinin asıl işi: hesap planı, fiş kuralları, yevmiye, mizan, dönem kilidi.
+    PERMISSIONS.LEDGER_VIEW,
+    PERMISSIONS.LEDGER_MANAGE,
+    PERMISSIONS.LEDGER_SETUP,
     // Faturalar ve e-belge takibi muhasebenin işi; fatura ayarları müdürün.
     PERMISSIONS.INVOICES_VIEW,
     PERMISSIONS.INVOICES_ISSUE,

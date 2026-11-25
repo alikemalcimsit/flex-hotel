@@ -52,6 +52,8 @@ class AccountingWorker extends BaseWorker {
    *   syncEventCharge: (hotelId: string, eventId: string) => Promise<{ posted?: boolean, skipped?: string, message?: string | null }>,
    *   syncInvoice: (hotelId: string, invoiceId: string) => Promise<{ posted?: boolean, skipped?: string, message?: string | null }>,
    *   syncPayrollRun: (hotelId: string, runId: string) => Promise<{ posted?: boolean, skipped?: string, message?: string | null }>,
+   *   journalizeSource: (hotelId: string, sourceId: string) => Promise<{ posted?: boolean, skipped?: string, message?: string | null }>,
+   *   journalizeDay: (hotelId: string, day: string) => Promise<{ posted?: boolean, skipped?: string, message?: string | null }>,
    * }} service
    * @param {object} deps BaseWorker bağımlılıkları
    */
@@ -100,6 +102,13 @@ class AccountingWorker extends BaseWorker {
           if (payload.change !== 'PAID') return { message: 'Muhasebe etkisi yok' };
           return said(await run(() => service.syncPayrollRun(payload.hotelId, payload.runId)), 'Maaş ödemesi işlendi');
         },
+        /** Ön muhasebe kaydı yazıldı (kendi yazdığı dahil): belgenin kayıtları yevmiye fişine (genel muhasebe, modül 48). */
+        'accounting.posted': async (payload) => {
+          if (!payload.sourceId) return { message: 'Yevmiye fişi için kaynak belge yok (eski yayın)' };
+          return said(await run(() => service.journalizeSource(payload.hotelId, payload.sourceId)), 'Yevmiye fişi yazıldı');
+        },
+        /** Gün kapandı: günün gelir fişi (folyo kalemleri, kapanan adisyonlar, spa). */
+        'night.audit.closed': async (payload) => said(await run(() => service.journalizeDay(payload.hotelId, payload.businessDay)), 'Günlük gelir fişi yazıldı'),
       },
       deps,
     );
@@ -138,6 +147,10 @@ class AccountingWorker extends BaseWorker {
         return 'Onaylanan bordro carilere tahakkuk ettirilecek';
       case 'payroll.run.changed':
         return 'Maaş ödemesi kasaya / bankaya ve personel carilerine işlenecek';
+      case 'accounting.posted':
+        return `Ön muhasebe kaydı (${payload?.source ?? ''}) yevmiye fişine çevrilecek: kuralı / hesabı düzeltip Genel muhasebe → Ayarlar → Eşitle`.replace(' ()', '');
+      case 'night.audit.closed':
+        return `${payload?.businessDay ?? ''} gününün gelir fişi yazılacak (Genel muhasebe → Ayarlar → Eşitle)`.trim();
       default:
         return super.describeFallback(eventName, payload);
     }

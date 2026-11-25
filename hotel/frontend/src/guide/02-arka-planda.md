@@ -163,7 +163,7 @@ Aktör **göndermez**, kuyruğa yazar. Gönderimi ayrı bir gönderici yapar (15
 
 #### Muhasebe aktörü (accounting-worker)
 
-Kural tabanlı. Kapalıyken **"Ön muhasebe"** modülüne düşer; muhasebeci eşleme / cari sorununu düzeltip **Ön muhasebe → Eşitle** ile dönemi tamamlar (aynı kaynak anahtarı: olay sonradan yeniden gelse kayıt iki kez yazılmaz). 3 deneme, 400 ms.
+Kural tabanlı. Hem **ön muhasebeyi** (47: cari ve kasa / banka hareketleri) hem **genel muhasebeyi** (48: yevmiye fişleri) besler. Kapalıyken **"Ön muhasebe"** modülüne düşer; muhasebeci eşleme / cari / kural sorununu düzeltip **Ön muhasebe → Eşitle** (kayıtlar) ve **Genel muhasebe → Ayarlar → Eşitle** (fişler) ile dönemi tamamlar (aynı kaynak anahtarı: olay sonradan yeniden gelse kayıt ve fiş iki kez yazılmaz). 3 deneme, 400 ms.
 
 | Tetikleyen olay | Yaptığı iş |
 | --- | --- |
@@ -175,8 +175,10 @@ Kural tabanlı. Kapalıyken **"Ön muhasebe"** modülüne düşer; muhasebeci e�
 | Etkinlik değişti (gerçekleşti / iptal) | Etkinlik bedelini (iptalde iptal bedelini) müşteri carisine borç |
 | Fatura kesildi / iptal edildi | Fatura numarasını cari harekete bağlar; serbest faturayı borç yazar, iptalde ters kayıt |
 | Bordro onaylandı / değişti | Personel (net), SGK, vergi dairesi, BES, icra carilerine tahakkuk; maaş ödemesini kasa / bankadan çıkış |
+| **Ön muhasebe kaydı işlendi** (`accounting.posted`, kaynak belge `sourceId` ile — kendi yazdığı dahil) | **Yevmiye fişi:** belgenin fişlenmemiş cari ve kasa / banka kayıtlarını Tek Düzen hesaplarına çevirir — kasa / banka hareketi `100.xx` / `102.xx`, cari hareketi kontrol hesabı (120.02, 320, 335…), kalan fark kurallara göre karşı hesap (gelir + KDV, stok + KDV, gider, 120.01). Kayıtlar fişe bağlanır; ikinci kez fişlenmez. Kilitli döneme ait belge kilit sonrası ilk güne yazılır. |
+| **Gün kapandı** (`night.audit.closed`, iş günü `businessDay`) | **Günlük gelir fişi:** günün folyo kalemleri (hizmet günü; tür ve KDV oranıyla), odaya yazılmayan kapanan adisyonlar ve spa randevuları → gelir hesapları (600.xx) ve hesaplanan KDV (391) alacak, `120.01` misafir ve adisyon hesapları borç. Daha önce yazılanla **farkı** yazar ("düzeltme"). |
 
-Ürettiği olay: "Muhasebe kaydı işlendi". *Örnek:* Resepsiyon 2.400 TL kredi kartı tahsilatı aldı. Muhasebe aktörü yöntem eşlemesinde "Kredi kartı → Garanti POS hesabı" tanımını bulur ve o banka hesabına giriş fişi yazar. Eşleme yoksa iş "Ön muhasebe" görevi olur; muhasebeci eşlemeyi tanımlayıp Eşitle'ye basar.
+Ürettiği olaylar: "Muhasebe kaydı işlendi" (`accounting.posted`) ve "Genel muhasebe değişti" (`ledger.changed`: fiş / hesap planı / kural / ayar; Yevmiye ve Mizan ekranlarını tazeler). *Örnek:* Resepsiyon 2.400 TL kredi kartı tahsilatı aldı. Muhasebe aktörü yöntem eşlemesinde "Kredi kartı → Garanti POS hesabı" tanımını bulur ve o banka hesabına giriş hareketi yazar; `accounting.posted` yayınlar. Aynı aktör bu olayı dinler ve belgeyi yevmiye fişine çevirir: `102.02 Garanti POS (TRY)` 2.400,00 borç / `120.01 Misafir ve adisyon hesapları` 2.400,00 alacak. Eşleme yoksa iş "Ön muhasebe" görevi olur; muhasebeci eşlemeyi tanımlayıp Ön muhasebe → Eşitle'ye basar. Fiş kuralı eksikse (ör. hesap pasif) kayıt yazılır ama fiş yazılmaz; görev "Ön muhasebe kaydı … yevmiye fişine çevrilecek" başlığıyla düşer, muhasebeci kuralı düzeltip Genel muhasebe → Ayarlar → Eşitle'ye basar.
 
 #### Stok aktörü (inventory-worker)
 
@@ -357,7 +359,8 @@ Gece görevlisi `/gun-kapanis` sihirbazını adım adım geçer: **Gelmeyenler �
 2. O gecenin **oda ücretlerini** içerideki bütün konaklamalara basar (gece hassasiyetli; iki kez basılmaz).
 3. **Günlük özeti** (`DailyStats`: doluluk, oda geliri, ADR, RevPAR, tahsilat) yazar — göstergeler gelir raporuyla aynı tanımla.
 4. **Vardiya raporunu** (yöntem bazında beklenen / sayılan / fark, devir notu) kaydeder; PDF olarak indirilebilir.
-5. Günü **kapandı** işaretler, "gün kapandı" olayını yayınlar, iş gününü ilerletir.
+5. Günü **kapandı** işaretler, "gün kapandı" olayını (`night.audit.closed`) yayınlar, iş gününü ilerletir.
+6. "Gün kapandı" olayını **muhasebe aktörü** dinler ve günün **gelir fişini** yazar (genel muhasebe): folyo kalemleri, odaya yazılmayan adisyonlar ve spa randevuları gelir ve KDV hesaplarına alacak, `120.01` borç. Aktör kapalıysa "… gününün gelir fişi yazılacak" görevi düşer; Genel muhasebe → Ayarlar → Eşitle kapanmış günlerin fişini sonradan yazar.
 
 "Başlat" iki görevlinin aynı anda kapatmasını engeller (gün "sürüyor" olur). Takvimden ileri gün kapatılamaz; aynı gün iki kez kapatılamaz. Gün kapanışı başladığında folyo aktörü tamamlanmış gecelerin ücretini önceden basar; dolu odaların kat hizmeti durumu "kirli" olur (ertesi sabahın konaklayan temizliği buradan beslenir).
 
@@ -405,7 +408,7 @@ Olaylar sistemin ana tetikleyicisidir; zamanlanmış işler **güvenlik ağı** 
 
 ## Canlı kanallar: ekranlar nasıl kendiliğinden yenilenir
 
-Sunucu, bir şey değiştiğinde panellere socket üzerinden **yalnızca haber** gönderir ("bu otelde envanter değişti", "onaylar değişti", "manuel görevler değişti", "mesajlar değişti"); veri göndermez. Haber yalnızca o kanala abone olan — yani ilgili ekranı açık tutan — panellere gider; otelin tamamına yayın yapılmaz. Panel haberi alınca kendi sorgusunu tazeler (bazı ekranlarda en sık 10–15 saniyede bir).
+Sunucu, bir şey değiştiğinde panellere socket üzerinden **yalnızca haber** gönderir ("bu otelde envanter değişti", "onaylar değişti", "manuel görevler değişti", "mesajlar değişti", "genel muhasebe değişti" — `ledger.changed`); veri göndermez. Haber yalnızca o kanala abone olan — yani ilgili ekranı açık tutan — panellere gider; otelin tamamına yayın yapılmaz. Panel haberi alınca kendi sorgusunu tazeler (bazı ekranlarda en sık 10–15 saniyede bir).
 
 Zil haberi kişiye (`kullanıcı`) ya da izne (`perm`) gider; rozet sunucudan bir kez gelir, sonra haberle artar. Aktivite akışı 500 ms'de bir toplu "yeni satır kimlikleri" alır; içerik HTTP'den okunur (socket kimliği şimdilik istemcinin söylediği e-postadır, bu yüzden socket'ten içerik taşınmaz).
 
@@ -474,6 +477,8 @@ Bu yolculukta personel üç kez dokundu: online check-in onayı, giriş ve çık
 | İş günü | Kapatılmış son günün ertesi; gün kapanışıyla ilerler |
 | Zil | Kişiye ya da izne giden personel uyarısı; 30 gün saklanır |
 | Canlı kanal | "Şu değişti" haberini ilgili ekranlara taşıyan socket kanalı |
+| Yevmiye fişi | Bir belgenin Tek Düzen hesaplarına çift taraflı kaydı (borç = alacak); ön muhasebe hareketinden kendiliğinden ya da elle |
+| Günlük gelir fişi | Gün kapanışında günün gelirini (folyo, adisyon, spa) gelir ve KDV hesaplarına yazan otomatik yevmiye fişi; yeniden çalışınca yalnız farkı yazar |
 | Sürüm damgası | Aynı kaydı iki kişinin aynı anda ezmesini engelleyen koruma |
 | Denetim kaydı | Kişilerin yaptığı değişikliklerin eski / yeni değerle defteri |
 | Aktivite akışı | Aktörlerin işlerinin defteri |

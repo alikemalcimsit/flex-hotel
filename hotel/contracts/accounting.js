@@ -616,8 +616,11 @@ export const voucherCreateSchema = z
     lines: z.array(voucherLineSchema).max(MAX_VOUCHER_LINES, `Bir fişte en fazla ${MAX_VOUCHER_LINES} satır`).default([]),
     description: requiredText(MAX_ACCOUNTING_TEXT_LENGTH, 'Açıklama', 3),
     reference: optionalText(MAX_REFERENCE_LENGTH, 'Belge no'),
+    /** Kasa / banka giriş-çıkış fişinde yevmiyenin karşı hesabı (genel muhasebe, modül 48); boşsa kural hesabı. */
+    glAccountId: uuid('Hesap seçin').nullish(),
   })
   .superRefine((value, ctx) => {
+    if (value.glAccountId && value.type !== 'TREASURY_IN' && value.type !== 'TREASURY_OUT') ctx.addIssue({ code: 'custom', path: ['glAccountId'], message: 'Karşı hesap yalnız kasa / banka giriş-çıkış fişinde seçilir' });
     if (value.type === 'COLLECTION' || value.type === 'PAYMENT') {
       if (!value.ledgerAccountId) ctx.addIssue({ code: 'custom', path: ['ledgerAccountId'], message: 'Cari seçin' });
       if (value.lines.length === 0) ctx.addIssue({ code: 'custom', path: ['lines'], message: 'En az bir satır girin' });

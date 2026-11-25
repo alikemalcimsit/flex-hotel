@@ -961,6 +961,8 @@ export const EVENT_CATALOG = Object.freeze({
   /** Cari ve / veya kasa-banka hareketi yazıldı (otomatik kayıt, fiş, çek / senet işlemi): ekstre ve bakiyeler tazelenir. */
   'accounting.posted': hotelScoped.extend({
     source: z.string().min(1).max(40),
+    // Kaynak belgenin kimliği (ödeme, fiş, mal kabul, bordro, çek…): genel muhasebe (48) bu belgenin hareketlerini yevmiye fişine çevirir.
+    sourceId: z.string().min(1).max(80).nullable().default(null),
     ledgerAccountIds: z.array(z.string().uuid()).max(50).default([]),
     treasuryAccountIds: z.array(z.string().uuid()).max(50).default([]),
   }),
@@ -970,6 +972,14 @@ export const EVENT_CATALOG = Object.freeze({
   }),
   'accounting.instrument.changed': hotelScoped.extend({ instrumentId: z.string().uuid(), action: z.string().min(1).max(20) }),
   'accounting.settings.changed': hotelScoped,
+  /**
+   * Genel muhasebe (modül 48): yevmiye fişi yazıldı / iptal edildi, hesap planı, kural ya da dönem kilidi değişti.
+   * Ekranlar (mizan, fiş listesi, hesap planı) bununla tazelenir.
+   */
+  'ledger.changed': hotelScoped.extend({
+    change: z.enum(['JOURNAL', 'CHART', 'RULES', 'SETTINGS']),
+    journalIds: z.array(z.string().uuid()).max(50).default([]),
+  }),
   /**
    * İş olayı (modül 16 / 49): fatura kesildi. Ön muhasebe folyo ve etkinlik faturasını **ikinci alacak
    * olarak yazmaz** — alacak operasyondan doğmuştur (folyo cariye aktarıldığında, etkinlik gerçekleştiğinde);
@@ -1589,6 +1599,9 @@ export const ASSET_EVENTS = Object.freeze(['asset.changed', 'asset.count.changed
 
 /** Ön muhasebe (modül 47): cari, kasa / banka, çek / senet ve fiş ekranları (`accounting.changed` kanalı). */
 export const ACCOUNTING_EVENTS = Object.freeze(['accounting.account.changed', 'accounting.treasury.changed', 'accounting.posted', 'accounting.voucher.changed', 'accounting.instrument.changed', 'accounting.settings.changed']);
+
+/** Genel muhasebe (modül 48): hesap planı, yevmiye, mizan ekranları (`ledger.changed` kanalı). */
+export const LEDGER_EVENTS = Object.freeze(['ledger.changed']);
 
 /** Fatura ve e-belge (modül 16 / 49): ekranlar bunlarla tazelenir (`invoices.changed` kanalı). */
 export const INVOICE_EVENTS = Object.freeze(['invoice.changed', 'invoice.settings.changed']);

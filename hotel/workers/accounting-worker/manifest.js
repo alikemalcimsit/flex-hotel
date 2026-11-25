@@ -21,6 +21,8 @@ export const accountingWorkerManifest = defineActor({
     'bağı çözer ve serbest faturanın borcunu ters kayıtla düşer. ' +
     'Onaylanan bordroyu personel (net ücret), SGK, vergi dairesi, BES ve icra / nafaka carilerine tahakkuk ettirir; maaş ödemesini kasadan / ' +
     'bankadan çıkış ve personel carisine borç olarak işler. ' +
+    'Genel muhasebe (48): yazdığı her cari / kasa-banka hareketini belgenin yevmiye fişine çevirir (kasa hesabı, cari kontrol hesabı, ' +
+    'gelir / KDV / stok / gider karşı hesapları kurallardan); gün kapanışında günün gelir fişini yazar (folyo kalemleri, adisyonlar, spa). ' +
     'Kapalıyken ya da işleyemediğinde iş manuel görev olarak düşer.',
   subscribes: [
     'payment.received',
@@ -36,8 +38,10 @@ export const accountingWorkerManifest = defineActor({
     'invoice.cancelled',
     'payroll.run.approved',
     'payroll.run.changed',
+    'accounting.posted',
+    'night.audit.closed',
   ],
-  publishes: ['accounting.posted'],
+  publishes: ['accounting.posted', 'ledger.changed'],
   retry: { attempts: 3, backoffMs: 400 },
   fallbackModule: 'Ön muhasebe',
 });

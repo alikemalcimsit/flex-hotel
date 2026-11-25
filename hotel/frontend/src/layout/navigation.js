@@ -341,6 +341,18 @@ export const NAV_SECTIONS = Object.freeze([
           { label: 'Fişler', to: '/muhasebe/fisler', icon: 'clipboard' },
         ],
       },
+      // Genel muhasebe (modül 48): mizan, yevmiye fişleri, hesap planı.
+      {
+        label: 'Genel muhasebe',
+        to: '/genel-muhasebe',
+        icon: 'bookOpen',
+        permission: PERMISSIONS.LEDGER_VIEW,
+        children: [
+          { label: 'Mizan', to: '/genel-muhasebe/mizan', icon: 'chart' },
+          { label: 'Yevmiye', to: '/genel-muhasebe/yevmiye', icon: 'clipboard' },
+          { label: 'Hesap planı', to: '/genel-muhasebe/hesap-plani', icon: 'list' },
+        ],
+      },
       // Oda servisi tepsileri (modül 41): kat görevlisi ve oda servisi toplar.
       {
         label: 'Toplanacak tepsiler',

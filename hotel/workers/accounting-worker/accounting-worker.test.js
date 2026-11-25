@@ -29,6 +29,8 @@ function makeHarness({ service = {}, isEnabled = async () => true } = {}) {
       syncAgencyBonus: record('syncAgencyBonus', { posted: true, message: 'Prim hak edişi → Tatil Acentesi' }),
       syncEventCharge: record('syncEventCharge', { posted: true, message: 'Etkinlik bedeli ETK-2026-0001 → Demir Holding' }),
       syncInvoice: record('syncInvoice', { posted: false, message: 'Fatura FTR2026000000001 cari hareketine bağlandı (1)' }),
+      journalizeSource: record('journalizeSource', { posted: true, message: 'YEV-2026-00001 (Ön büro tahsilatı, 2 satır, 1500.00 TRY)' }),
+      journalizeDay: record('journalizeDay', { posted: true, message: 'YEV-2026-00002: 24.11.2026 gelir fişi (4 satır, 12000.00 TRY)' }),
       ...service,
     },
     {
@@ -49,11 +51,13 @@ const envelope = (name, id = 'evt-1') => ({ id, name, correlationId: 'zincir', h
 describe('manifest', () => {
   it('para olaylarını dinler; manuel görevi "Ön muhasebe"ye düşer', () => {
     assert.deepEqual([...accountingWorkerManifest.subscribes].sort(), [
+      'accounting.posted',
       'agency.bonus.changed',
       'banquet.event.changed',
       'banquet.payment.changed',
       'invoice.cancelled',
       'invoice.issued',
+      'night.audit.closed',
       'payment.received',
       'payment.refunded',
       'payment.voided',
@@ -64,7 +68,7 @@ describe('manifest', () => {
       'spa.payment.changed',
     ]);
     assert.equal(accountingWorkerManifest.fallbackModule, 'Ön muhasebe');
-    assert.deepEqual(accountingWorkerManifest.publishes, ['accounting.posted']);
+    assert.deepEqual(accountingWorkerManifest.publishes, ['accounting.posted', 'ledger.changed']);
   });
 });
 
@@ -138,6 +142,41 @@ describe('fatura', () => {
     await worker.handle({ hotelId: HOTEL, invoiceId: ID, number: 'EAR2026000000004', source: 'MANUAL', folioId: null, eventId: null, ledgerAccountId: ID }, envelope('invoice.cancelled', 'i3'));
     assert.equal(calls.service.length, 0);
     assert.match(calls.manualTasks[0].title, /EAR2026000000004 iptali cariye işlenecek/);
+  });
+});
+
+describe('genel muhasebe (modül 48)', () => {
+  it('ön muhasebe kaydı kaynak kimliğiyle fişe çevrilir; kaynaksız eski yayın atlanır; gün kapanışı gelir fişi yazar', async () => {
+    const { worker, calls } = makeHarness();
+    await worker.handle({ hotelId: HOTEL, source: 'FOLIO_PAYMENT', sourceId: ID, ledgerAccountIds: [], treasuryAccountIds: [ID] }, envelope('accounting.posted', 'ap1'));
+    await worker.handle({ hotelId: HOTEL, source: 'VOUCHER', sourceId: null, ledgerAccountIds: [], treasuryAccountIds: [] }, envelope('accounting.posted', 'ap2'));
+    await worker.handle({ hotelId: HOTEL, businessDay: '2026-11-24', noShows: 0, roomChargeStays: 10, roomChargeTotal: '12000.00' }, envelope('night.audit.closed', 'na1'));
+    assert.deepEqual(
+      calls.service.map((call) => [call.name, call.args[1]]),
+      [
+        ['journalizeSource', ID],
+        ['journalizeDay', '2026-11-24'],
+      ],
+    );
+    assert.match(calls.activity[0].message, /YEV-2026-00001/);
+    assert.match(calls.activity[1].message, /kaynak belge yok/);
+    assert.equal(calls.manualTasks.length, 0);
+  });
+
+  it('kural eksikse iş "Ön muhasebe" görevine düşer, başlık eşitlemeyi söyler', async () => {
+    const { worker, calls } = makeHarness({
+      service: {
+        journalizeSource: async () => {
+          const error = new Error('"REVENUE / SPA" için hesap kuralı yok: Genel muhasebe → Kurallar');
+          error.statusCode = 409;
+          throw error;
+        },
+      },
+    });
+    await worker.handle({ hotelId: HOTEL, source: 'SPA_PAYMENT', sourceId: ID, ledgerAccountIds: [], treasuryAccountIds: [ID] }, envelope('accounting.posted', 'ap3'));
+    assert.equal(calls.manualTasks.length, 1);
+    assert.match(calls.manualTasks[0].title, /SPA_PAYMENT.*yevmiye fişine çevrilecek/);
+    assert.match(calls.manualTasks[0].description, /hesap kuralı yok/);
   });
 });
 

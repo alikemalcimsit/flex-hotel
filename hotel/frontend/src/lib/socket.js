@@ -85,6 +85,8 @@ export const ASSETS_CHANNEL = 'assets.changed';
 export const REPORT_CHAT_CHANNEL = 'report-chat.changed';
 /** Ön muhasebe (modül 47): cari, kasa / banka, çek / senet, fiş ekranları. */
 export const ACCOUNTING_CHANNEL = 'accounting.changed';
+/** Genel muhasebe (modül 48): yevmiye fişleri, hesap planı, kurallar, mizan. */
+export const LEDGER_CHANNEL = 'ledger.changed';
 /** Fatura ve e-belge (modül 16 / 49): faturalanacaklar, faturalar, e-belge durumu, fatura ayarı. */
 export const INVOICES_CHANNEL = 'invoices.changed';
 /** Kanal yönetimi (modül 33): kanal ayarı, eşleştirme, stop-sale, senkron logu, kanal rezervasyonları. */

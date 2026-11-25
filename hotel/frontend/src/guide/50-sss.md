@@ -138,6 +138,33 @@ Sorun giderirken üç ekranı yanınızda tutun:
 - **Sebep:** ödeme fişi toplamı Ön muhasebe → Ayarlar'daki eşiğe eşit / üstü → dört göz; onay anında kasa yeterliliği yeniden denetlenir. İptal: yalnız işlenmiş fişte, gerekçeyle, fiş tarihli ters kayıtla; fişin açtığı çek ilk durumunda olmalı (tahsile verilmiş / ciro edilmiş / tahsil edilmiş çekin fişi iptal edilemez); kasayı eksiye düşüren iptal reddedilir.
 - **Çözüm:** başka yetkili onaylar; çeki önce iade / geri alın.
 
+### Yevmiye fişini silebilir miyim?
+
+- **Cevap:** Hayır. Genel muhasebede fiş silinmez; **İptal et** (`ledger.setup`) fişi "İptal edildi" yapar ve seçilen günde bütün satırları ters çeviren bir **ters kayıt fişi** yazar. İki fiş birbirine bağlıdır, mizanda ikisi de sayılır (net sıfır). Ters kayıt fişi iptal edilemez; iptal edilmiş fiş ikinci kez iptal edilemez; kilitli dönemdeki fiş kilidi açmadan iptal edilemez.
+- **Dikkat:** otomatik fişi iptal ettiğinizde ön muhasebedeki kaynak kayıt **fişli kalır**; Eşitle onu yeniden yazmaz. Doğru satırları elle fişle girin. Tutar yanlışsa yevmiye fişini değil **ön muhasebe fişini** iptal edin (kasa da düzelir; yevmiyede ters fiş kendiliğinden oluşur).
+
+### Mizan neden dengesiz görünüyor / "fişlenmemiş hareket" ne demek?
+
+- **Belirti:** Genel muhasebe → Mizan'da "Fişlenmemiş hareket var" sarı uyarısı (sayı + Ayarlar → Eşitle bağlantısı); Ayarlar'da "Fişlenmemiş cari hareketi" / "Fişlenmemiş kasa / banka hareketi" sayaçları sıfır değil.
+- **Sebep:** ön muhasebeye yazılmış ama henüz **yevmiye fişine çevrilmemiş** kayıt var: muhasebe aktörü kapalıydı, kuralın hesabı yok / pasif / ana hesap, döviz kasası hareketi için kur yok, ya da fiş tek satıra iniyor. Görevler'de "Ön muhasebe kaydı (…) yevmiye fişine çevrilecek" görevi ve sebebi vardır. Bu kayıtlar mizanda **yoktur** — bu bir denge sorunu değil, eksiklik uyarısıdır; rozet yine "Mizan dengeli" der.
+- **Çözüm:** sebebi düzeltin (Kurallar → hesap; Hesap planı → etkinleştir; Kasa → Döviz kurları), Genel muhasebe → **Ayarlar → Eşitle** (dönem) çalıştırın; sonuç kutusunda Hata 0 ve Kalan 0 olunca uyarı kalkar. Rozet gerçekten "Mizan dengesiz" diyorsa (normal işletimde görülmez) o günün fişlerini Yevmiye'de inceleyip teknik ekibe bildirin.
+
+### KDV oranına göre ayrı hesap nasıl açarım?
+
+- **Cevap:** Hesap planı → **Hesap ekle**: `391.10 Hesaplanan KDV %10`, `391.20 Hesaplanan KDV %20` (üst hesap `391`; alt hesap açılınca `391` satır almaz olur — `391`'in geçmiş satırı varsa alt hesap açılamaz, o zaman `392` gibi boş bir ana hesabın altını kullanın ya da `192.10` / `192.20` örneğindeki gibi başka hesabı seçin). Sonra Kurallar → "Hesaplanan KDV" kartı → **Oran ekle** "10" → `391.10`, "20" → `391.20`; "Bütün oranlar" satırı listede olmayan oranlar için kalır. İndirilecek KDV için aynı yol ("İndirilecek KDV" kartı; ör. `192.10` / `192.20`). Kural **yalnız yeni fişleri** etkiler.
+
+### Kasa / banka hesabı açtım, hesap planında nereye düştü?
+
+- **Cevap:** Ön muhasebede kasa açılınca `100 Kasa` altında, banka açılınca `102 Bankalar` altında **ilk boş alt kod**la hesap kendiliğinden açılır (`100.01`, `100.02`, `102.01`…); adı ön muhasebedeki ad + para birimi ("Resepsiyon kasası (TRY)", "Döviz kasası (EUR)"). Kurallar → "Kasa / banka hesabı" kartında her kasa / bankanın hangi yevmiye hesabına bağlı olduğu görünür; başka bir yaprak hesaba bağlayabilirsiniz. Hesap planı henüz yüklenmemişken açılan kasalar ilk yüklemede toplu açılır. Adı Hesap planı'ndan düzenleyebilirsiniz; kodu değişmez.
+
+### Açılış bakiyeleri neden 500 Sermaye'ye gidiyor, nasıl değiştiririm?
+
+- **Cevap:** Ön muhasebedeki açılış fişleri (cari devri, kasa / banka devri) yevmiyede karşı hesap ister; bir bilanço olmadığı için varsayılan kural "Açılış bakiyesi karşı hesabı" = `500 Sermaye`'dir. Böylece açılışlar dengeli yazılır ve hangi hesaba gitmesi gerektiğine siz karar verirsiniz. Değiştirmek için Kurallar → "Açılış bakiyesi karşı hesabı" → başka bir yaprak hesap (ör. `570 Geçmiş Yıllar Kârları`, ya da geçiş döneminde bir `9xx` nazım hesabı) → Kaydet; bundan sonraki açılış fişleri oraya gider. Yazılmış açılış fişleri için: açılış bilançosunu elle fişle dağıtın (`500` borç / `570`, `102.xx`, `120.xx`… alacak gibi) ya da yevmiye fişini iptal edip doğru satırlarla elle girin.
+
+### Bordro gideri hangi hesaba gidiyor?
+
+- **Cevap:** Bordro onaylanınca tahakkuk fişinde **işveren maliyeti** "Personel gideri (departman)" kuralına göre borç yazılır: varsayılan `770 Genel Yönetim Giderleri`; Kurallar → "Personel gideri (departman)" kartında her bordro departmanı için ayrı hesap seçilebilir (ör. Mutfak → `740.01`, Kat hizmetleri → `740.02`, departmansız → "Diğer" satırı). Tutar personelin işveren maliyetiyle (brüt + SGK işveren payı − indirimler) departmanlara ağırlıklı bölünür. Alacak tarafı: `335` net ücret, `361` SGK, `360` gelir ve damga vergisi, `369` BES, `336` icra / nafaka ("Bordro yükümlülükleri" kuralı). Maaş ödemesi `335` borç / `102.xx` alacak. Kural değişikliği yalnız sonraki bordrolara uygulanır.
+
 ### Bordro onaya gidemiyor / hesaplanamıyor
 
 - **Belirti:** "parametre seti teyit edilmedi", "önceki ay onaylı değil", "yeniden hesaplanmalı", "ay kilitli".
@@ -314,17 +341,17 @@ Durum sözlüğü: **Tamam** = görev listesindeki maddelerin tümü işaretli v
 | --- | --- | --- | --- | --- |
 | 44 | Stok & maliyet analizi | inventory-worker | Tamam | |
 | 45 | Satın alma | inventory-worker | Tamam | Stok çekirdeği burada |
-| 46 | Demirbaş & amortisman | manuel | Tamam | Muhasebe fişi yok (48); zimmet tutanağı PDF'i sonra |
+| 46 | Demirbaş & amortisman | manuel | Tamam | Otomatik amortisman fişi yok (elle yevmiye fişi girilir); zimmet tutanağı PDF'i sonra |
 
 ### 7. Muhasebe / ERP
 
 | No | Modül | Aktör | Durum | Not |
 | --- | --- | --- | --- | --- |
 | 47 | Ön muhasebe | accounting-worker | Tamam | |
-| 48 | Genel muhasebe | accounting-worker | **Planlı** | Hesap planı, yevmiye, mizan yok |
-| 49 | e-Fatura / e-Arşiv / e-Defter | entegrasyon | Kısmi | Fatura + e-belge akışı tamam; **gerçek entegratör adaptörü yok (test entegratörü)**; **e-Defter 48'den sonra** |
+| 48 | Genel muhasebe | accounting-worker | Tamam | Tek Düzen hesap planı, otomatik yevmiye fişleri, günlük gelir fişi, mizan, ekstre, kurallar, dönem kilidi; e-Defter dosyası 49'da |
+| 49 | e-Fatura / e-Arşiv / e-Defter | entegrasyon | Kısmi | Fatura + e-belge akışı tamam; **gerçek entegratör adaptörü yok (test entegratörü)**; **e-Defter dosyası (yevmiye / kebir XML) yok** — veri 48'de hazır |
 | 50 | Sanal POS / ödeme geçidi | entegrasyon | **Planlı** | Portalda "kartla ödeme" pasif bekliyor |
-| 51 | Personel & bordro | manuel | Tamam | Gider tarafı 48'de |
+| 51 | Personel & bordro | manuel | Tamam | Gider tarafı 48'de yazılır (tahakkuk fişi) |
 | 52 | İK (izin, mesai, özlük) | manuel | **Planlı** | Personel tablosu 51'de ortak |
 
 ### 8. Misafir deneyimi
@@ -355,6 +382,6 @@ Tamamı **planlı**dır; kod yok. Başlıklar: 69–74 sağlam zemin (göç sihi
 
 ### Özet sayılar
 
-- 1–68 arası: **49 tamam**, **6 kısmi** (9, 38, 42, 49, 53 ve e-posta bağımlılığıyla 32'nin bildirim adımı), **13 planlı** (48, 50, 52, 54, 56, 58–63, 64–68 dikey paketler tek satırda sayılırsa).
+- 1–68 arası: **50 tamam**, **6 kısmi** (9, 38, 42, 49, 53 ve e-posta bağımlılığıyla 32'nin bildirim adımı), **12 planlı** (50, 52, 54, 56, 58–63, 64–68 dikey paketler tek satırda sayılırsa).
 - Otelin **günlük operasyonu** (rezervasyon → giriş → folyo → ödeme → çıkış → fatura → muhasebe; restoran → stok → satın alma; kat hizmetleri, teknik servis, anket, spa) uçtan uca çalışır.
 - **Dış dünyaya bağlanan** parçaların bir kısmı taslaktır: e-posta gönderimi, e-belge entegratörü, online kart ödemesi, KBS. Ekranlar bunu açıkça söyler; "gönderildi" gibi görünen ama gitmeyen hiçbir şey yoktur.

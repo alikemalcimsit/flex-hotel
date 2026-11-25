@@ -29,6 +29,8 @@ Okumaya başlamadan iki hatırlatma:
 | J — Stok sayımı ve maliyet | Depo, F&B, muhasebe | Stok → Sayım, Hareketler, Maliyet raporu, Bütçe | Stok aktörü |
 | K — Acente grubu toplu giriş | Resepsiyon şefi, muhasebe | Acenteler (kontrat, kota), Yeni rezervasyon (grup, rooming list), Gruplar, Folyolar, Faturalar, Ön muhasebe, Acente primleri | Oda, folyo, muhasebe, kanal aktörleri |
 | L — Bordro onayı ve ödemesi | İK, müdür, muhasebe | Bordro (puantaj, servis payı, bordro ekranı, ayarlar), Personel, Onaylar, Ön muhasebe, Demirbaş | Muhasebe aktörü |
+| M — Ay sonu mizan ve dönem kapanışı | Muhasebe, müdür | Genel muhasebe (Ayarlar → Eşitle, Mizan, hesap ekstresi, Yevmiye, Kurallar, Dönem kilidi), Görevler | Muhasebe aktörü (yevmiye ve günlük gelir fişleri) |
+| N — Yanlış kasa çıkışı fişinin düzeltilmesi | Muhasebe | Ön muhasebe (Kasa / banka → Çıkış, Fişler), Genel muhasebe (Yevmiye, fiş iptali, Fiş gir, Hesap planı) | Muhasebe aktörü |
 
 ## Senaryo A — Bir misafirin yolculuğu
 
@@ -498,7 +500,7 @@ Telefonla gelen rezervasyonda 1–3. adımların yerine resepsiyon **Rezervasyon
 | 9 | Merve **Çıktılar**: bordro listesi PDF, pusulalar PDF (departman departman), departman icmali, **banka dosyası** (Excel; IBAN + ödenecek), müşavir tablosu. Onaylı olduğu için "TASLAK" damgası yok. | PDF'ler sunucuda; 2.500 kişilik bordro ~5 sn. | Bordro ekranı → Çıktılar. |
 | 10 | Hande 5 Mayıs: Bordro ekranı → **Öde** → yöntem banka, hesap "İş Bankası TRY", tarih 5 Mayıs (bugünü geçemez). Bankaya dosyayı yükler. | Ödeme kaydı; `payroll.run.changed PAID` → **muhasebe aktörü**: İş Bankası hesabından **tek çıkış** (banka ödemelilerin toplamı), her personelin carisine **borç** → cariler sıfırlanır. | Kasa / banka → İş Bankası (kaynak "Bordro"); personel ekstreleri 0. |
 | 11 | İki personel elden alıyor: **Öde → elden → Resepsiyon kasası**. | Elden ödeme **yalnız kasadan**; kasa yetersizse reddedilir ("kasa eksiye düşmez"). Kasadan çıkış + iki personel carisi kapanır. | Kasa hareketleri. |
-| 12 | Ay sonu Hande, Ön muhasebe → Cariler → **SGK** → **Ödeme fişi** → banka (tutar carinin bakiyesi); aynı şekilde **vergi dairesi**. | Fişler eşik üstüyse dört göz onayı. Cari borçlar kapanır. **Gider tarafı** (personel gideri, SGK işveren payı hesapları) bu sürümde yok — genel muhasebe (48) ile. | Fişler; cari ekstreleri. |
+| 12 | Ay sonu Hande, Ön muhasebe → Cariler → **SGK** → **Ödeme fişi** → banka (tutar carinin bakiyesi); aynı şekilde **vergi dairesi**. | Fişler eşik üstüyse dört göz onayı. Cari borçlar kapanır. **Gider tarafı** genel muhasebede: 8. adımdaki tahakkuk aynı anda yevmiye fişi olur — `770` (işveren maliyeti; departman kuralı varsa departman hesaplarına) borç / `335` net ücret, `361` SGK, `360` vergi, `369` BES, `336` icra alacak. Bu ödeme fişleri de `361` / `360` borç, `102.01` alacak fişi olur. | Fişler; cari ekstreleri; Genel muhasebe → Yevmiye (kaynak "Bordro tahakkuku", "Ön muhasebe fişi"). |
 | 13 | 12 Mayıs: Mehmet'in Nisan fazla mesaisi 12 değil 20 saatmiş. Merve Nisan → **Fark bordrosu aç** → kalem: fazla çalışma +8 saat → Hesapla → Onaya gönder → Burak onaylar → öde. | Fark bordrosu: ay onaylı girdi + yeni kalemlerle baştan hesaplanır, önceki onaylı tutarlar çıkarılır (fark eksi olabilir). BES / avans / icra kesintisi yapılmaz. Tahakkuk ve ödeme aynı yolla (eksi tutarda ters taraf). | Bordrolar listesi: Nisan aylık (onaylı, ödendi) + Nisan fark. |
 | 14 | 31 Mayıs: komi Ahmet Çelik işten çıkıyor. Personel → Ahmet → **İşten çıkış** → tarih, sebep → **önizleme**: kıdem (yalnız DV, tavanlı; tavan çıkış gününde yürürlükteki setten), ihbar (GV + DV, SGK yok), kullanılmayan izin 6 gün (tam tabi) → **Kaydet**. Pencerede **zimmetli demirbaş uyarısı**: "DM-000087 El terminali — iade alınmadı" (engellemez). | Kalemler Mayıs bordrosuna düşer; çıkış geri alınabilir. Demirbaş → kart → **İade al** ayrıca yapılır. | Mayıs bordrosu satırı; Demirbaş kartı. |
 
@@ -519,6 +521,61 @@ Telefonla gelen rezervasyonda 1–3. adımların yerine resepsiyon **Rezervasyon
 | Hesap 2.500 kişide uzun sürüyor | ~3,6 sn normal; aynı anda ikinci hesap bekler | Bekleyin |
 | İşten çıkışta zimmet uyarısı | Engellemez; demirbaş iadesi ayrı işlem | Demirbaş → kart → İade al |
 
+## Senaryo M — Ay sonu mizan ve dönem kapanışı (genel muhasebe)
+
+**Hikâye:** Kasım 2026 kapanıyor. Muhasebe Hande ayın mizanını müşavire verecek ve ayı kilitleyecek. Ay boyunca ön büro tahsilatları, restoran adisyonları, mal kabuller, acente aktarımları ve bordro **kendiliğinden** yevmiye fişi oldu; her gün kapanışında günlük gelir fişi yazıldı. Hande'nin işi: eksik kalanı tamamlamak, mizanı denetlemek, bir düzeltme fişi girmek, dönemi kilitlemek. Örnek sayılar: ay içinde 120.01'e 2.200,00 + 1.100,00 TL gelir borcu yazıldı, 1.000,00 TL nakit tahsilat alacaklandı; kasadan 750,00 TL elektrik çıkışı yanlışlıkla `770` yerine `760`'a gitmiş.
+
+| Adım | Ekranda ne yapılır | Arka planda ne olur | Nerede görünür |
+| --- | --- | --- | --- |
+| 1 | 1 Aralık sabahı Hande, Genel muhasebe → **Ayarlar**: "Fişlenmemiş cari hareketi 3", "Fişlenmemiş kasa / banka hareketi 1". Görevler'de iki "Ön muhasebe kaydı (FOLIO_PAYMENT) yevmiye fişine çevrilecek" görevi; açıklamada "100.03 Döviz kasası (USD) hareketi için 28.11.2026 kuru yok". | Ay içinde bir USD nakit tahsilat fişlenemedi (ön muhasebeye yazıldı, kuru yok). Mizan bu kaydı içermiyor; Mizan sekmesinde "Fişlenmemiş hareket var" uyarısı. | Ayarlar sayaçları; Mizan uyarısı; Görevler. |
+| 2 | Kasa → Döviz kurları → 28 Kasım USD kurunu girer. Genel muhasebe → Ayarlar → **Eşitle**: 1–30 Kasım → **Eşitle**. | Dönemdeki fişlenmemiş belgeler fişlenir (USD hareketi günün kuruyla `100.03` borç / `120.01` alacak); Kasım'ın 30 kapanmış günü için gelir fişi hedefi yeniden hesaplanır — değişmeyen günler "Atlandı", geç kalem işlenmiş 2 gün "(düzeltme)" fişi alır. Sonuç: İşlendi 4, Atlandı 28, Hata 0, Kalan 0. | Eşitle sonuç kutusu; Yevmiye'de yeni fişler; Ayarlar sayaçları 0. Görevler kapatılır. |
+| 3 | Genel muhasebe → **Mizan**: 01.11–30.11, "Yalnız hareketliler" açık. Rozet **Mizan dengeli**, uyarı yok. | Her fiş dengeli yazıldığı için dip toplam borç = alacak. Üst hesaplar alt hesapların toplamı: `120` = 120.01 + 120.02 + …; `6` = bütün gelir tablosu. | Mizan tablosu; dip toplam. |
+| 4 | Hande `120.01` satırına tıklar → **ekstre** aynı dönemle açılır: her gün "Günlük gelir fişi" borç satırları, tahsilat fişleri alacak satırları, yürüyen bakiye. Kapanış 2.300,00 (B) = 2.200,00 + 1.100,00 − 1.000,00: ay sonunda tahsil edilmemiş folyo alacağı. Folyolar → açık folyolar toplamıyla karşılaştırır: tutar. | Ekstre satırları fiş sayfasına, fiş sayfası kaynak belgeye (folyo ödemesi, gün) bağlanır. | `/genel-muhasebe/hesaplar/:id` |
+| 5 | Mizanda `760 Pazarlama Satış ve Dağıtım Giderleri` 750,00 borç kalanı görür; beklemiyordu. Yevmiye → Hesap süzgeci 760 → fiş `YEV-2026-00231` "Ön muhasebe fişi · Elektrik faturası": `760` 750,00 / `100.01` 750,00. Sebep: carisiz çıkış fişinde karşı hesap seçilmemiş ve "Carisiz çıkışın karşı hesabı" kuralı birisi tarafından 760'a çevrilmiş. | Otomatik fiş kuralı o anki hâliyle uygulamıştır; fiş doğru yazılmış, kural yanlıştı. | Yevmiye liste ve fiş sayfası (kaynak bağlantısı ön muhasebe fişine gider). |
+| 6 | Kurallar → "Carisiz kasa / banka çıkışının karşı hesabı" satırını `770`'e geri alır (sil → varsayılan) → **Kaydet**. Sonra fiş `YEV-2026-00231` → **İptal et**: ters kaydın günü 30 Kasım, sebep "Yanlış gider hesabı (760 → 770)". Ardından Yevmiye → **Fiş gir**: gün 30 Kasım, "Elektrik faturası — düzeltme", satır 1 `770` borç 750,00, satır 2 `100.01` alacak 750,00 → Dengeli → **Kaydet**. | Kural yalnız yeni fişleri etkiler. İptal: asıl fiş "İptal edildi", ters fiş `YEV-2026-00298` (`100.01` 750,00 borç / `760` 750,00 alacak). Elle fiş `YEV-2026-00299`. Ön muhasebedeki kasa hareketi fişli kalır, yeniden fişlenmez. Mizan: `760` kalan 0 (borç 750 / alacak 750), `770` +750,00; `100.01` kalanı değişmedi (−750 +750 −750). | Fiş sayfaları birbirine bağlı; mizan güncel (canlı kanal). |
+| 7 | Mizan yeniden: dengeli, `760` "yalnız hareketliler" açıkken hâlâ görünür (dönemde hareketi var, kalanı 0). Hande dönemi Excel'e alır / ekran görüntüsünü müşavire gönderir. | — | Mizan. |
+| 8 | Ayarlar → **Dönem kilidi**: Kilit günü **30.11.2026** → Kaydet: "Dönem 30.11.2026 gününe kadar kilitlendi". | 30 Kasım'a kadar (dahil) elle fiş girilemez, fiş iptal edilemez. Aralık'ta gelen ama Kasım'a ait bir belge (ör. geç işlenen 29 Kasım tarihli ödeme) kilit sonrasındaki ilk güne, 1 Aralık'a yazılır; açıklamasında "(kilitli dönem 29.11.2026, 01.12.2026 gününe yazıldı)" notu. | Ayarlar "Kilitli dönem"; Yevmiye'de kilit notlu fişler. |
+| 9 | 3 Aralık: Hande Kasım'a ait bir elle düzeltme daha gerektiğini görür. Fiş gir → gün 30 Kasım → "Dönem 30.11.2026 gününe kadar kilitli". Fişi **3 Aralık** tarihiyle "Kasım düzeltmesi: …" açıklamasıyla girer (cari ayda düzeltme). | Kilit korur; kapanan ayın rakamı değişmez. Gerçekten Kasım'a yazılması gerekiyorsa yetkili kilidi geçici olarak 31 Ekim'e çeker, fişi girer, kilidi geri koyar (denetim izinde görünür). | Yevmiye. |
+
+### Ters giderse (Senaryo M)
+
+| Durum | Ne olur | Ne yapılır |
+| --- | --- | --- |
+| Eşitle "Hata 2": "… için … kuru yok" | Döviz kasası hareketi fişlenemedi | Kasa → Döviz kurları → o günün kuru → Eşitle |
+| Eşitle "Hata": "600.03 … satır alamaz (pasif …)" | Kuraldaki hesap pasif ya da alt hesabı açılmış ana hesap | Hesap planı → hesabı etkinleştir ya da Kurallar → yaprak hesap seç → Eşitle |
+| Eşitle "Kalan 120" | 20 saniyelik süre doldu | Yeniden Eşitle; kaldığı yerden sürer |
+| "Mizan dengesiz" rozeti | Normal işletimde görülmez; veri sorunu | Yevmiye'de o günün fişlerini inceleyin; teknik ekibe bildirin |
+| Fişlenmemiş hareket uyarısı sayıları Eşitle'den sonra da sıfırlanmıyor | O belgeler hata listesinde | Hata mesajını okuyup kuralı / hesabı / kuru düzeltin |
+| Kilit günü bugünden sonra | Reddedilir | En çok bugün |
+| Otomatik fişi iptal etti, Eşitle yeniden yazmadı | Beklenen: kaynak kayıt fişli kalır | Doğru satırlarla elle fiş |
+| Ters kayıt fişini iptal etmeye çalıştı | "Ters kayıt fişi iptal edilemez" | Yeni elle fiş |
+| Muhasebe aktörü kapalı | Fiş yok, Görevler'de "yevmiye fişine çevrilecek" / "gelir fişi yazılacak" | Genel muhasebe → Ayarlar → Eşitle; görevleri kapat |
+| Müşavir "120'de misafir alacağı çok yüksek" dedi | 120.01 kalanı tahsil edilmemiş açık folyoları gösterir (gelir gün gün yazılır, tahsilat çıkışta) | Folyolar → açık folyolarla karşılaştırın; normaldir |
+
+## Senaryo N — Yanlış kasa çıkışı fişinin düzeltilmesi
+
+**Hikâye:** Resepsiyon kasasından 1.250,00 TL temizlik malzemesi ödendi. Muhasebe Hande ön muhasebede **Çıkış** fişi kesti ama "Karşı hesap" alanına yanlışlıkla `760` (pazarlama) seçti ve tutarı 1.520,00 yazdı. Senaryo iki düzeltme yolunu gösterir: tutar yanlışsa **ön muhasebe fişi** iptal edilir (kasa da düzelir); yalnız gider hesabı yanlışsa **yevmiye fişi** iptal edilip elle fiş girilir (kasaya dokunulmaz).
+
+| Adım | Ekranda ne yapılır | Arka planda ne olur | Nerede görünür |
+| --- | --- | --- | --- |
+| 1 | Ön muhasebe → Kasa / banka → **Çıkış**: hesap Resepsiyon kasası, tutar **1.520,00**, açıklama "Temizlik malzemesi", **Karşı hesap** `760`. Kaydet. | Fiş `CKS-2026-0042`; kasadan 1.520,00 çıkış; `accounting.posted` → muhasebe aktörü yevmiye fişi `YEV-2026-00310`: `760` 1.520,00 borç / `100.01` 1.520,00 alacak (fişte seçilen hesap kuralın önüne geçer). | Fişler; Kasa / banka hareketleri; Yevmiye (kaynak "Ön muhasebe fişi", bağlantı `CKS-2026-0042`). |
+| 2 | Hande hatayı görür: tutar 1.250,00 olmalıydı. Ön muhasebe → Fişler → `CKS-2026-0042` → **İptal** (gerekçe "Tutar hatalı"). | Ön muhasebe ters kaydı: kasaya 1.520,00 geri (kasa yeterli). `accounting.posted` (ters kayıt) → yevmiyede **ayrı** fiş `YEV-2026-00311` "Ön muhasebe fişi — ters kayıt": `100.01` 1.520,00 borç / `760` 1.520,00 alacak. `YEV-2026-00310` "İşlendi" olarak **kalır**; net sıfır. | Fişler (iptal); Yevmiye'de iki fiş; `760` ekstresinde +1.520 / −1.520. |
+| 3 | Yeni **Çıkış** fişi: 1.250,00, Karşı hesap bu kez `770`. | Kasadan 1.250,00; yevmiye `YEV-2026-00312`: `770` 1.250,00 / `100.01` 1.250,00. | Kasa bakiyesi doğru; mizanda `770` +1.250,00. |
+| 4 | **Varyant:** tutar doğru, yalnız hesap yanlış olsaydı (1.250,00 ama `760`). Ön muhasebe fişine dokunulmaz (kasa doğru). Genel muhasebe → Yevmiye → `YEV-2026-00310` → **İptal et** (ters kaydın günü = bugün, sebep "Gider hesabı 760 yerine 770"). | Asıl fiş "İptal edildi", ters fiş `100.01` 1.250,00 borç / `760` 1.250,00 alacak. Ön muhasebedeki kasa hareketi **fişli kalır** (Eşitle yeniden yazmaz). | Fiş sayfası: "İptal edildi" kutusu, ters fişe bağlantı. |
+| 5 | Yevmiye → **Fiş gir**: gün bugün, açıklama "Temizlik malzemesi — gider hesabı düzeltmesi (CKS-2026-0042)", satır 1 `770` borç 1.250,00, satır 2 `100.01` alacak 1.250,00 → Dengeli → Kaydet. | Elle fiş `YEV-2026-00313`. `100.01` net etkisi: −1.250 (otomatik) +1.250 (ters) −1.250 (elle) = −1.250 → kasa hesabı doğru; `760` 0; `770` +1.250. Kasa bakiyesi ön muhasebede zaten doğruydu. | Mizan; `770` ve `760` ekstreleri. |
+| 6 | Hande bir dahaki sefere kuralı düzeltir: Kurallar → "Carisiz kasa / banka çıkışının karşı hesabı" `770` (varsayılan) kalsın; sık kullanılan masraflar için `770.01 Elektrik`, `770.02 Temizlik malzemesi` alt hesapları açar ve resepsiyona "Çıkış fişinde karşı hesabı seçin" der. | `770` alt hesabı açıldığı için artık satır almaz; eski `770` satırları yerinde kalır. | Hesap planı. |
+
+### Ters giderse (Senaryo N)
+
+| Durum | Ne olur | Ne yapılır |
+| --- | --- | --- |
+| Ön muhasebe fişi iptal edilemiyor ("kasa eksiye düşer") | Çıkış iptali kasaya para geri getirir, bu durumda sorun olmaz; **giriş** fişi iptalinde kasa yetersiz olabilir | Virmanla kasaya para aktarın |
+| Yevmiye fişini iptal etti, kasa bakiyesi değişmedi | Doğru: yevmiye iptali ön muhasebeye dokunmaz | Tutar yanlışsa ön muhasebe fişini iptal edin |
+| Hem ön muhasebe fişini hem yevmiye fişini iptal etti | Çift ters kayıt: `100.01` ve `760` fazladan 1.520 ters döner, mizan hesapları kayar (yine dengeli) | Elle fiş ile düzeltin (`760` borç / `100.01` alacak); bir daha yalnız birini iptal edin |
+| Elle fişte `770` seçilemiyor | `770`'in alt hesabı açılmış, ana hesap satır almaz | `770.xx` alt hesabını seçin |
+| Ters kaydın günü kilitli dönemde | "Dönem … gününe kadar kilitli" | Ters kaydın gününü bugüne alın ya da kilidi geçici açın |
+| Fiş "başkası değiştirdi" | Aynı fişi iki kişi aynı anda iptal etmeye çalıştı | Yenileyin; fiş zaten iptal edilmişse ikinci iptal 409 |
+
 ## Senaryolarda geçen olaylar, aktörler, onaylar ve görevler
 
 Bu bölüm senaryoları başkasına anlatırken "bunu kim yapıyor?" sorusuna hızlı cevap için bir başvuru tablosudur. Olay adları Aktivite → Olaylar ekranında Türkçe karşılıklarıyla görünür; buradaki teknik adlar yalnız eşleştirmek içindir.
@@ -533,7 +590,7 @@ Bu bölüm senaryoları başkasına anlatırken "bunu kim yapıyor?" sorusuna h�
 | `guest.checked_out` | Çıkış servisi | Oda aktörü → boş + kirli; kat hizmetleri aktörü → çıkış temizliği; folyo aktörü → kalan gece / geç çıkış, kapanış; bildirim → teşekkür; anket işi → çıkış sonrası anket | A, I, K |
 | `guest.check_in_reverted` / `check_out_reverted` | Geri alma | Oda aktörü doluluğu düzeltir; folyo aktörü ücreti / teminatı ters kayıtla düşer, folyoyu yeniden açar | A |
 | `folio.room_charges.due` | Gün dönüşü zamanlayıcısı | Folyo aktörü → eksik geceler (100'lük parçalar) | A, C |
-| `night.audit.started` / `night.audit.closed` | Gün kapanışı | Folyo aktörü → ön basım; (2.0: gece müdürü, kârlılık, dış muhasebe) | C |
+| `night.audit.started` / `night.audit.closed` | Gün kapanışı | Folyo aktörü → ön basım; **muhasebe aktörü → günlük gelir fişi** (`businessDay` günü; genel muhasebe); (2.0: gece müdürü, kârlılık, dış muhasebe) | C, M |
 | `fnb.order.placed` | POS (adisyon turu, oda servisi, paket) | Mutfak ekranı panosu | B |
 | `fnb.order.status_changed` | Mutfak ekranı | POS adisyon ekranı rozeti; garson zili ("hazır") | B |
 | `fnb.order.charged` | POS "odaya yaz", oda servisi teslimi | Folyo aktörü → folyo kalemi (vergi kategorisiyle) | A, G |
@@ -549,6 +606,8 @@ Bu bölüm senaryoları başkasına anlatırken "bunu kim yapıyor?" sorusuna h�
 | `agency.bonus.changed` | Prim hak edişi | Muhasebe aktörü → acente carisine alacak (fark kaydı) | K |
 | `banquet.event.changed` | Etkinlik durumu | Muhasebe aktörü → müşteri carisine bedel / iptal bedeli / geri alma | H |
 | `payroll.run.approved` / `payroll.run.changed PAID` | Bordro onayı / ödemesi | Muhasebe aktörü → tahakkuk / ödeme kayıtları | L |
+| `accounting.posted` (`sourceId` ile) | Muhasebe aktörü (ön muhasebe kaydı yazıldığında), Ön muhasebe → Eşitle | Muhasebe aktörü → belgenin fişlenmemiş kayıtlarını **yevmiye fişine** çevirir (genel muhasebe) | A, B, H, K, L, M, N |
+| `ledger.changed` | Yevmiye fişi, hesap planı, kural, ayar değişikliği | Genel muhasebe ekranları (Mizan, Yevmiye, Hesap planı) tazelenir | M, N |
 | `rate.changed` | Fiyat planı, sezon, onaylı fiyat önerisi, Excel fiyat yüklemesi | Kanal aktörü → fiyat farkı; fiyat önbelleği tazelenir | F |
 | `agency.allotment.changed` | Kota tanımı | Kanal aktörü → OTA'ya giden boş sayıdan kota düşülür; bekleme listesi taraması | K |
 | `channel.booking.received` | Channex revizyonu / iCal | Kanal aktörü → rezervasyon açar / günceller / iptal eder | D |
@@ -586,7 +645,7 @@ Bu bölüm senaryoları başkasına anlatırken "bunu kim yapıyor?" sorusuna h�
 | Modül (görev sütunu) | Örnek başlık | Kim görür | Nasıl tamamlanır |
 | --- | --- | --- | --- |
 | Folyo | "Misafir girişi: folyo açılacak, teminat işlenecek"; "Restoran adisyonu folyoya yazılacak"; "Kapanan folyonun fatura taslağı açılacak" | `folio.post` | Folyo ekranından aynı iş; Faturalanacaklar'dan taslak |
-| Ön muhasebe | "Folyo tahsilatı muhasebeye işlenecek (kasa / banka ya da cari)"; "Mal kabul tedarikçi carisine işlenecek"; "Onaylanan bordro carilere tahakkuk ettirilecek" | `accounting.manage` | Eşleme / cari düzelt → Ayarlar → Eşitle |
+| Ön muhasebe | "Folyo tahsilatı muhasebeye işlenecek (kasa / banka ya da cari)"; "Mal kabul tedarikçi carisine işlenecek"; "Onaylanan bordro carilere tahakkuk ettirilecek"; **genel muhasebe:** "Ön muhasebe kaydı (FOLIO_PAYMENT) yevmiye fişine çevrilecek: kuralı / hesabı düzeltip Genel muhasebe → Ayarlar → Eşitle", "2026-11-25 gününün gelir fişi yazılacak (Genel muhasebe → Ayarlar → Eşitle)" | `accounting.manage` | Eşleme / cari düzelt → Ön muhasebe → Ayarlar → Eşitle; kural / hesap düzelt → Genel muhasebe → Ayarlar → Eşitle |
 | Oda işlemleri | "Rezervasyona oda atanacak"; "Oda dolu olarak işaretlenecek" | `rooms.operate` | Oda atama / oda planı |
 | Kat hizmetleri | Oda durumu güncellemesi | Kat yetkisi | Kat haritasından |
 | Stok | "Adisyon ADS-… için satış düşümü yapılacak" | `stock.manage` | Hareket gir (çıkış) |
@@ -603,4 +662,4 @@ Bu bölüm senaryoları başkasına anlatırken "bunu kim yapıyor?" sorusuna h�
 4. **Aktör kapalıysa iş personele düşer.** Görevler ekranı boş değilse birisi bir şeyi elle yapmalı demektir; aktörü açmak eski görevleri kendiliğinden kapatmaz.
 5. **Sürüm damgası veriyi korur.** İki kişi aynı kaydı değiştirirse ikincisi "başkası değiştirdi, yenileyin" görür. Hata değil, güvenlik.
 6. **İş günü ≠ takvim günü.** Oda ücreti, kasa ve raporlar iş gününe; fatura tarihi ve anket saati takvime bağlıdır.
-7. **Dürüst sınırlar:** e-posta geçidi gerçek gönderici değil (SMS kurulabilir), e-belge gerçek entegratöre bağlı değil, genel muhasebe yok, online kart ödemesi yok, KBS bildirimi yok. Bunlar yol haritasındadır ve ekranlar bunu söyler; sahte "gönderildi" yazan hiçbir şey yoktur.
+7. **Dürüst sınırlar:** e-posta geçidi gerçek gönderici değil (SMS kurulabilir), e-belge gerçek entegratöre bağlı değil, e-Defter dosyası ve dış muhasebe aktarımı yok (yevmiye ve mizan ekranda var), online kart ödemesi yok, KBS bildirimi yok. Bunlar yol haritasındadır ve ekranlar bunu söyler; sahte "gönderildi" yazan hiçbir şey yoktur.

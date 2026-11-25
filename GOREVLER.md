@@ -3617,14 +3617,50 @@ olay kataloğu, zamanlanmış işler, tablolar, modül durumu; elle düzenlenmez
 
 ### 48. Genel muhasebe — Ali Kemal
 **Gün sonu:** Tek Düzen Hesap Planı yüklü; her satış / tahsilat otomatik yevmiye fişi oluyor; mizan çıkıyor.
-- [ ] Backend: ChartOfAccounts (ağaç), Journal, JournalLine tabloları + API; Tek Düzen seed
-- [ ] Backend: otomatik fiş kuralları tablosu (event tipi → borç hesap / alacak hesap)
-- [ ] Backend: mizan sorgusu (tarih aralığı, hesap bazlı borç / alacak / bakiye)
-- [ ] Ekran: Hesap planı ağacı + hesap ekle
-- [ ] Ekran: Fiş listesi + manuel fiş girişi (borç = alacak kontrolü)
-- [ ] Ekran: Mizan
-- [ ] Ekran: Otomatik fiş kuralları ayarı
-- [ ] Aktör: accounting-worker'a fiş üretim kuralları
+- [x] Backend: `GlAccount` (ağaç), `JournalEntry`, `JournalLine` + API (`/ledger`); Tek Düzen seed (ilk kullanımda, `ensureChart`)
+- [x] Backend: otomatik fiş kuralları (`JournalRule`: kaynak × anahtar → hesap; varsayılanlar koddan `DEFAULT_JOURNAL_RULES`)
+- [x] Backend: mizan (devir / dönem borç-alacak / kapanış, ağaçta üst toplamı) + hesap ekstresi (kebir, imleçli)
+- [x] Ekran: Hesap planı ağacı + hesap ekle / düzenle (`/genel-muhasebe/hesap-plani`)
+- [x] Ekran: Yevmiye listesi + fiş sayfası + elle fiş (borç = alacak) + iptal (`/genel-muhasebe/yevmiye`)
+- [x] Ekran: Mizan (`/genel-muhasebe/mizan`) + hesap ekstresi (`/genel-muhasebe/hesaplar/:id`)
+- [x] Ekran: Kurallar (`/genel-muhasebe/kurallar`) + Ayarlar (dönem kilidi, eşitle; `/genel-muhasebe/ayarlar`)
+- [x] Aktör: accounting-worker `accounting.posted` → yevmiye fişi, `night.audit.closed` → günlük gelir fişi
+
+> **📌 Modül 48 tamamlandı (25 Kasım 2026 — Ali Kemal).** Kararlar: **her ön muhasebe hareketi fiş olur** — 47'nin cari ve
+> kasa / banka kayıtları belge bazında (`sourceId`; `accounting.posted` yüküne eklendi) yevmiye fişine çevrilir: kasa / banka hareketi
+> kasanın hesabına (100.xx / 102.xx, hesap açılırken kendiliğinden açılır), cari hareketi türünün kontrol hesabına (acente 120.02,
+> şirket 120.03, şahıs 120.04, diğer 136, tedarikçi 320, personel 335; bordro yükümlülükleri SGK 361 / vergi 360 / BES 369 / icra 336),
+> kalan fark kaynağa göre **tamamlayıcı ağırlıklarla** bölünür (`completers.js`: mal kabul → 150 + oran bazında 191; etkinlik bedeli /
+> serbest fatura → gelir + oran bazında 391; fiş çek satırları → 101 / 103 / 121 / 321; carisiz giriş / çıkış → fişte seçilen
+> `glAccountId` ya da kural 649 / 770; bordro → departman ağırlığıyla 770; açılış → 500; kalan kuruş / kur farkı → 646 / 656).
+> Tahsilatlar ve folyonun cariye aktarımı **120.01 misafir ve adisyon hesabını** alacaklandırır; **gelir gün kapanışında** yazılır
+> (`journalizeDay`: folyo kalemleri hizmet gününe göre tür → 600.01–600.09 / 611 / 360, `taxLines` oran bazında 391; kapanan
+> adisyonların odaya yazılmayan payı; spa randevularının spa kasasında ödenen payı; borç 120.01) ve yeniden çalıştırmada yalnız
+> **fark** yazılır. Fişlenen 47 kaydının `journalEntryId`'si dolar (ikinci kez fişlenmez; kayıt kilidi FOR UPDATE ile eşzamanlı çağrı
+> sıralanır). Kural / hesap sorunu (kural yok, hesap pasif, ana hesap) → iş "Ön muhasebe" manuel görevine, düzeltilince
+> **Eşitle** (`syncJournals`: fişlenmemiş kayıtların kaynakları + kapanmış günler, 20 sn süre sınırı). Döviz kasası hareketi ön büro
+> ödemesinin folyo karşılığıyla, yoksa günün kuruyla çevrilir (kur yoksa iş hatası). **Düzeltme ters kayıtla:** fiş silinmez, iptal
+> edilen fiş VOIDED + ters fiş; ön muhasebe fişinin iptali yevmiyede ayrı ters fiş yazar. **Dönem kilidi** (`glLockedThrough`):
+> kilitli güne elle fiş / iptal yok; otomatik fiş kilit sonrası ilk güne, açıklamada notla. Yalnız yaprak hesap satır alır;
+> satırı olan hesaba alt hesap açılamaz. Hesabın `department` alanı (oda / F&B / diğer / dağıtılmamış) 93 USALI için hazır.
+> Varsayılan kurallar tabloya yazılmaz (koddan okunur; otel yazdığı kuralla ezer, silince varsayılana döner).
+>
+> **API** `/ledger`: `chart` (+ `picker`, `seed`, `:id`, `:id/lines`), `journals` (+ `:id`, `:id/void`), `trial-balance`, `rules`,
+> `settings`, `sync`. İzinler yeni: `ledger.view` / `ledger.manage` / `ledger.setup` (müdür ve muhasebe üçüne de sahip). Olay
+> `ledger.changed` (kanal `ledger.changed`). 47'ye eklenen: `AccountingVoucher.glAccountId` (kasa / banka giriş-çıkış fişinde karşı
+> hesap, VoucherDialog alanı), `LedgerEntry.journalEntryId`, `TreasuryMovement.journalEntryId`, `AccountingSettings.glLockedThrough /
+> glChartSeededAt`. Migration `20261125090000_general_ledger` (CHECK: satırın tek tarafı, iptal izi).
+>
+> **Test:** saf kurallar 8 (gruplama, ağırlıkla bölme, toplama, kur, kilit, fark), sözleşme (ledger.js index'te), aktör +2,
+> entegrasyon 10 (Tek Düzen yüklemesi ve sıra, hesap açma / üst yok / satırlı üst, aktör zinciriyle nakit / acente / döviz fişleri,
+> tahsilat fişi + çek + tahsil + carisiz çıkış + fiş iptali, mal kabul KDV oran ayrımı kuralla, günlük gelir fişi ve fark düzeltmesi
+> ve mizan ağaç toplamı, pasif hesap → manuel görev → eşitleme (kapanmış günün gelir fişi dahil), elle fiş API (201 / 200 / 400 /
+> 409) + iptal + ekstre imleci, dönem kilidi, izinler). Ön muhasebe ve bordro entegrasyon setleri yeniden koşturuldu.
+>
+> **Bilinçli devir / sınırlar:** e-Defter (49'un kalanı) bu fişlerden üretilecek; USALI eşlemesi (93) `department` alanını kullanır;
+> dış muhasebe aktarımı (96) `GlAccount.code` eşlemesi. Restoran gelirinin KDV'si adisyon toplamından (oran bazında ayrılmaz; kural
+> `VAT_OUTPUT` boş anahtar); spa KDV'si randevunun net / toplam farkından. Demirbaş amortismanı (46) yevmiyeye henüz yazılmaz
+> (elle fiş). Kılavuz: Arka ofis → Genel muhasebe bölümü + arka planda / senaryolar / SSS.
 
 > **FlexAI 2.0'dan not (3 Kasım 2026 — Ahmet):** 93 (USALI) her hesabı bir USALI satırına / departmana, 96 (dış muhasebe
 > aktarımı) hedef programın hesap koduna eşleyecek. Hesabın departmanını (oda, F&B, diğer, dağıtılmamış) tutabilecek

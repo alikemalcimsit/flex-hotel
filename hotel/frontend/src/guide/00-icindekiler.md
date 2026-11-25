@@ -21,8 +21,8 @@ Sol taraftaki bölümler sırayla okunacak şekilde dizildi; ama her bölüm ken
 | Satış ve gelir yönetimi | Satış, gelir yöneticisi | Fiyat planları, dinamik fiyat önerileri, acenteler, gruplar, promosyonlar, kanallar, web widget'ı, satış CRM, bütçe |
 | Restoran, mutfak ve oda servisi | F&B | Menü, vardiya, masa planı ve adisyon, mutfak ekranı, oda servisi, paket servis, reçeteler, etkinlikler |
 | Satın alma ve stok | Satın alma, depo, F&B | Talep → teklif → sipariş → mal kabul, depolar, hareketli ortalama maliyet, hareketler, sayım, satış düşümü, maliyet raporu |
-| Arka ofis | Muhasebe, İK | Faturalar ve e-belge, ön muhasebe, personel ve bordro, demirbaş ve amortisman |
-| Uçtan uca senaryolar | Herkes | Bir misafirin yolculuğu, bir yemeğin yolculuğu, gün kapanışı, OTA rezervasyonu, arıza, fiyat önerisi |
+| Arka ofis | Muhasebe, İK | Faturalar ve e-belge, ön muhasebe, **genel muhasebe** (Tek Düzen hesap planı, otomatik yevmiye fişleri, günlük gelir fişi, mizan, hesap ekstresi, kurallar, dönem kilidi), personel ve bordro, demirbaş ve amortisman |
+| Uçtan uca senaryolar | Herkes | Bir misafirin yolculuğu, bir yemeğin yolculuğu, gün kapanışı, OTA rezervasyonu, arıza, fiyat önerisi, bordro, ay sonu mizan ve dönem kapanışı, yanlış fişin düzeltilmesi |
 | Sık sorulan sorular | Herkes | Hata mesajları, sorun giderme, modül durumu tablosu |
 | Teknik referans (otomatik) | Yönetici, teknik ekip | Koddan her derlemede üretilir: menü haritası ve izinler, rol varsayılanları, aktör bildirgeleri, olay kataloğu, zamanlanmış işler, tablolar, modül durumu |
 
@@ -49,3 +49,5 @@ Sol taraftaki bölümler sırayla okunacak şekilde dizildi; ama her bölüm ken
 | **İş günü** | Otelin "bugün"ü. Gün kapanışı (night audit) yapılana kadar değişmez; raporlar ve oda ücretleri buna göre işler. |
 | **Folyo** | Misafirin konaklama hesabı. Oda ücreti, restoran, minibar vb. kalemler buraya yazılır; çıkışta kapanır ve fatura taslağı olur. |
 | **Sürüm damgası** | Bir kaydı iki kişi aynı anda düzenlerse ikincisine "başkası değiştirdi, yenileyin" denir. Veri ezilmez. |
+| **Yevmiye fişi** | Genel muhasebede bir belgenin Tek Düzen hesaplarına çift taraflı kaydı (borç = alacak). Ön muhasebe hareketleri kendiliğinden fiş olur; fiş silinmez, iptali ters kayıtla olur. |
+| **Mizan** | Bir dönemde her hesabın devri, borç / alacak toplamı ve kalanı; dip toplamda borç = alacak ("dengeli"). Müşavire giden özet. |

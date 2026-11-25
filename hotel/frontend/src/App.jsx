@@ -202,6 +202,14 @@ const InstrumentsPage = lazy(() => import('./pages/accounting/InstrumentsPage.js
 const VouchersPage = lazy(() => import('./pages/accounting/VouchersPage.jsx').then((m) => ({ default: m.VouchersPage })));
 const VoucherPage = lazy(() => import('./pages/accounting/VouchersPage.jsx').then((m) => ({ default: m.VoucherPage })));
 const AccountingSettingsPage = lazy(() => import('./pages/accounting/AccountingSettingsPage.jsx').then((m) => ({ default: m.AccountingSettingsPage })));
+const LedgerLayout = lazy(() => import('./pages/ledger/LedgerLayout.jsx').then((m) => ({ default: m.LedgerLayout })));
+const TrialBalancePage = lazy(() => import('./pages/ledger/TrialBalancePage.jsx').then((m) => ({ default: m.TrialBalancePage })));
+const JournalsPage = lazy(() => import('./pages/ledger/JournalsPage.jsx').then((m) => ({ default: m.JournalsPage })));
+const JournalPage = lazy(() => import('./pages/ledger/JournalPage.jsx').then((m) => ({ default: m.JournalPage })));
+const ChartPage = lazy(() => import('./pages/ledger/ChartPage.jsx').then((m) => ({ default: m.ChartPage })));
+const GlAccountPage = lazy(() => import('./pages/ledger/GlAccountPage.jsx').then((m) => ({ default: m.GlAccountPage })));
+const RulesPage = lazy(() => import('./pages/ledger/RulesPage.jsx').then((m) => ({ default: m.RulesPage })));
+const LedgerSettingsPage = lazy(() => import('./pages/ledger/LedgerSettingsPage.jsx').then((m) => ({ default: m.LedgerSettingsPage })));
 const InvoicingLayout = lazy(() => import('./pages/invoicing/InvoicingLayout.jsx').then((m) => ({ default: m.InvoicingLayout })));
 const InvoiceablesPage = lazy(() => import('./pages/invoicing/InvoiceablesPage.jsx').then((m) => ({ default: m.InvoiceablesPage })));
 const InvoicesPage = lazy(() => import('./pages/invoicing/InvoicesPage.jsx').then((m) => ({ default: m.InvoicesPage })));
@@ -1142,6 +1150,38 @@ export default function App() {
               element={
                 <RequirePermission permission={PERMISSIONS.ACCOUNTING_VIEW}>
                   <AccountPage />
+                </RequirePermission>
+              }
+            />
+            {/* Genel muhasebe (modül 48): mizan, yevmiye, hesap planı, kurallar, ayarlar; fiş ve hesap ekstresi ayrı. */}
+            <Route
+              path="genel-muhasebe"
+              element={
+                <RequirePermission permission={PERMISSIONS.LEDGER_VIEW}>
+                  <LedgerLayout />
+                </RequirePermission>
+              }
+            >
+              <Route index element={<Navigate to="mizan" replace />} />
+              <Route path="mizan" element={<TrialBalancePage />} />
+              <Route path="yevmiye" element={<JournalsPage />} />
+              <Route path="hesap-plani" element={<ChartPage />} />
+              <Route path="kurallar" element={<RulesPage />} />
+              <Route path="ayarlar" element={<LedgerSettingsPage />} />
+            </Route>
+            <Route
+              path="genel-muhasebe/yevmiye/:journalId"
+              element={
+                <RequirePermission permission={PERMISSIONS.LEDGER_VIEW}>
+                  <JournalPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="genel-muhasebe/hesaplar/:accountId"
+              element={
+                <RequirePermission permission={PERMISSIONS.LEDGER_VIEW}>
+                  <GlAccountPage />
                 </RequirePermission>
               }
             />

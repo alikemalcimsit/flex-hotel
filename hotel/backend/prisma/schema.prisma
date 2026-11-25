@@ -912,6 +912,9 @@ model Hotel {
   treasuryMappings       TreasuryMapping[]
   accountingVouchers     AccountingVoucher[]
   instruments            Instrument[]
+  glAccounts             GlAccount[]
+  journalEntries         JournalEntry[]
+  journalRules           JournalRule[]
   assetCategories        AssetCategory[]
   assetAreas             AssetArea[]
   assets                 Asset[]
@@ -5957,14 +5960,18 @@ enum InstrumentAction {
 
 /// Ön muhasebe ayarı: otomatik kayıtların başlangıç günü (öncesi açılış bakiyesiyle) ve ödeme fişi onay eşiği.
 model AccountingSettings {
-  hotelId               String   @id
+  hotelId               String    @id
   /// Bu günden (dahil) sonraki belgeler cari / kasaya otomatik işlenir.
-  startDate             DateTime @db.Date
+  startDate             DateTime  @db.Date
   /// Bu tutar ve üstündeki ödeme fişi dört göz onayına gider (0 = onay yok).
-  paymentApprovalAmount Decimal  @default(50000) @db.Decimal(14, 2)
+  paymentApprovalAmount Decimal   @default(50000) @db.Decimal(14, 2)
+  /// Genel muhasebe (modül 48): bu güne (dahil) kadar yevmiye fişi girilemez / iptal edilemez; otomatik fiş kilit sonrasına düşer.
+  glLockedThrough       DateTime? @db.Date
+  /// Tek Düzen Hesap Planı bu otele yüklendi (ilk genel muhasebe kullanımında).
+  glChartSeededAt       DateTime?
   updatedBy             String?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   hotel Hotel @relation(fields: [hotelId], references: [id])
 }
@@ -6022,6 +6029,7 @@ model LedgerAccount {
   endorsements      Instrument[]        @relation("InstrumentEndorsee")
   treasuryMovements TreasuryMovement[]
   payments          Payment[]
+  journalLines      JournalLine[]
 
   @@unique([hotelId, code])
   // Cari listesi: türe ve duruma göre ada göre; bakiyeye göre sıralı (en borçlu).
@@ -6032,34 +6040,37 @@ model LedgerAccount {
 
 /// Cari hareket (ekstre satırı): borç ya da alacak; kaynağı tekil — aynı belge iki kez yazılmaz. Düzeltme ters kayıtla.
 model LedgerEntry {
-  id            String       @id @default(uuid())
-  hotelId       String
-  accountId     String
+  id             String       @id @default(uuid())
+  hotelId        String
+  accountId      String
   /// Belge günü (ekstre sırası) ve vade (yaşlandırma).
-  date          DateTime     @db.Date
-  dueDate       DateTime?    @db.Date
-  debit         Decimal      @default(0) @db.Decimal(14, 2)
-  credit        Decimal      @default(0) @db.Decimal(14, 2)
-  description   String
-  reference     String?
+  date           DateTime     @db.Date
+  dueDate        DateTime?    @db.Date
+  debit          Decimal      @default(0) @db.Decimal(14, 2)
+  credit         Decimal      @default(0) @db.Decimal(14, 2)
+  description    String
+  reference      String?
   /// Bağlı faturanın numarası (modül 16 / 49): folyo aktarımı ve etkinlik bedeli alacağına fatura kesilince yazılır, iptalde silinir.
-  invoiceNumber String?
-  sourceType    LedgerSource
-  sourceId      String
+  invoiceNumber  String?
+  sourceType     LedgerSource
+  sourceId       String
   /// Tekrar işleme anahtarı (otel başına tekil): "PAYMENT:<id>", "GOODS_RECEIPT:<id>", "EVENT:<id>:<n>"…
-  sourceKey     String
-  voucherId     String?
-  instrumentId  String?
-  reversalOfId  String?      @unique
-  createdBy     String
-  createdAt     DateTime     @default(now())
+  sourceKey      String
+  voucherId      String?
+  instrumentId   String?
+  reversalOfId   String?      @unique
+  /// Girdiği yevmiye fişi (modül 48); boşsa henüz fişlenmedi.
+  journalEntryId String?
+  createdBy      String
+  createdAt      DateTime     @default(now())
 
-  hotel      Hotel              @relation(fields: [hotelId], references: [id])
-  account    LedgerAccount      @relation(fields: [accountId], references: [id], onDelete: Restrict)
-  voucher    AccountingVoucher? @relation(fields: [voucherId], references: [id], onDelete: Restrict)
-  instrument Instrument?        @relation(fields: [instrumentId], references: [id], onDelete: Restrict)
-  reversalOf LedgerEntry?       @relation("LedgerEntryReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
-  reversal   LedgerEntry?       @relation("LedgerEntryReversal")
+  hotel        Hotel              @relation(fields: [hotelId], references: [id])
+  account      LedgerAccount      @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  journalEntry JournalEntry?      @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
+  voucher      AccountingVoucher? @relation(fields: [voucherId], references: [id], onDelete: Restrict)
+  instrument   Instrument?        @relation(fields: [instrumentId], references: [id], onDelete: Restrict)
+  reversalOf   LedgerEntry?       @relation("LedgerEntryReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversal     LedgerEntry?       @relation("LedgerEntryReversal")
 
   @@unique([hotelId, sourceKey])
   // Ekstre (belge günü + kayıt anı + kimlik, imleçli) ve devir toplamı.
@@ -6069,6 +6080,8 @@ model LedgerEntry {
   @@index([hotelId, date, id])
   @@index([voucherId])
   @@index([instrumentId])
+  // Fişlenmemiş kayıtlar (genel muhasebe eşitlemesi).
+  @@index([hotelId, journalEntryId, date])
 }
 
 /// Kasa ya da banka hesabı (kendi para biriminde). Bakiye hareketlerle aynı işlemde güncellenir.
@@ -6091,13 +6104,14 @@ model TreasuryAccount {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  hotel       Hotel                   @relation(fields: [hotelId], references: [id])
-  movements   TreasuryMovement[]
-  mappings    TreasuryMapping[]
-  vouchers    AccountingVoucher[]     @relation("VoucherTreasury")
-  transfersIn AccountingVoucher[]     @relation("VoucherTargetTreasury")
-  lines       AccountingVoucherLine[]
-  instruments Instrument[]
+  hotel        Hotel                   @relation(fields: [hotelId], references: [id])
+  movements    TreasuryMovement[]
+  mappings     TreasuryMapping[]
+  vouchers     AccountingVoucher[]     @relation("VoucherTreasury")
+  transfersIn  AccountingVoucher[]     @relation("VoucherTargetTreasury")
+  lines        AccountingVoucherLine[]
+  instruments  Instrument[]
+  journalLines JournalLine[]
 
   @@unique([hotelId, code])
   @@index([hotelId, kind, isActive, name])
@@ -6124,11 +6138,14 @@ model TreasuryMovement {
   voucherId         String?
   instrumentId      String?
   reversalOfId      String?        @unique
+  /// Girdiği yevmiye fişi (modül 48); boşsa henüz fişlenmedi.
+  journalEntryId    String?
   createdBy         String
   createdAt         DateTime       @default(now())
 
   hotel         Hotel              @relation(fields: [hotelId], references: [id])
   account       TreasuryAccount    @relation(fields: [treasuryAccountId], references: [id], onDelete: Restrict)
+  journalEntry  JournalEntry?      @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
   ledgerAccount LedgerAccount?     @relation(fields: [ledgerAccountId], references: [id], onDelete: Restrict)
   voucher       AccountingVoucher? @relation(fields: [voucherId], references: [id], onDelete: Restrict)
   instrument    Instrument?        @relation(fields: [instrumentId], references: [id], onDelete: Restrict)
@@ -6143,6 +6160,7 @@ model TreasuryMovement {
   @@index([voucherId])
   @@index([instrumentId])
   @@index([ledgerAccountId])
+  @@index([hotelId, journalEntryId, date])
 }
 
 /// Yöntem → kasa / banka eşlemesi: ön büro, etkinlik ve restoran tahsilatı hangi hesaba girer (para birimi boş = hepsi).
@@ -6184,6 +6202,8 @@ model AccountingVoucher {
   /// Çift gönderim anahtarı (otel başına tekil).
   requestId               String
   approvalId              String?
+  /// Kasa / banka giriş-çıkış fişinde yevmiyenin karşı hesabı (masraf / gelir; modül 48). Boşsa kural hesabı.
+  glAccountId             String?
   createdBy               String
   createdAt               DateTime                @default(now())
   updatedAt               DateTime                @updatedAt
@@ -6199,6 +6219,7 @@ model AccountingVoucher {
   treasuryAccount   TreasuryAccount?        @relation("VoucherTreasury", fields: [treasuryAccountId], references: [id], onDelete: Restrict)
   targetTreasury    TreasuryAccount?        @relation("VoucherTargetTreasury", fields: [targetTreasuryAccountId], references: [id], onDelete: Restrict)
   approval          Approval?               @relation(fields: [approvalId], references: [id], onDelete: Restrict)
+  glAccount         GlAccount?              @relation(fields: [glAccountId], references: [id], onDelete: Restrict)
   lines             AccountingVoucherLine[]
   ledgerEntries     LedgerEntry[]
   treasuryMovements TreasuryMovement[]
@@ -6302,6 +6323,202 @@ model InstrumentMovement {
   instrument Instrument @relation(fields: [instrumentId], references: [id], onDelete: Restrict)
 
   @@index([instrumentId, createdAt])
+}
+
+// ═══════════════════════ Genel muhasebe (modül 48) ═══════════════════════
+
+/// Hesap sınıfı — Tek Düzen'de kodun ilk hanesi: 1–2 varlık, 3–4 borç, 5 öz kaynak, 6 gelir, 7 maliyet, 8 serbest (gider), 9 nazım.
+enum GlAccountClass {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  COST
+  EXPENSE
+  OFF_BALANCE
+}
+
+/// Hesabın departmanı (USALI / sahip raporu 93 ve dış muhasebe aktarımı 96 için yer): oda, yiyecek-içecek, diğer işletme, dağıtılmamış.
+enum GlDepartment {
+  ROOMS
+  FNB
+  OTHER
+  UNDISTRIBUTED
+}
+
+enum JournalEntryType {
+  AUTO
+  MANUAL
+}
+
+enum JournalEntryStatus {
+  POSTED
+  VOIDED
+}
+
+/// Yevmiye fişinin kaynağı: ön muhasebe kaynakları (47) + gün kapanışı gelir fişi + elle fiş + ters kayıt.
+enum JournalSource {
+  FOLIO_PAYMENT
+  FOLIO_TRANSFER
+  EVENT_PAYMENT
+  EVENT_CHARGE
+  POS_PAYMENT
+  SPA_PAYMENT
+  GOODS_RECEIPT
+  AGENCY_BONUS
+  INVOICE
+  VOUCHER
+  OPENING
+  INSTRUMENT
+  PAYROLL
+  PAYROLL_PAYMENT
+  EMPLOYEE_ADVANCE
+  DAILY_REVENUE
+  MANUAL
+  REVERSAL
+}
+
+/// Otomatik fiş kuralı: hangi kaynak (ve anahtar) hangi hesaba gider. Anahtar boşsa kaynağın varsayılanı.
+enum JournalRuleSource {
+  TREASURY
+  LEDGER_TYPE
+  LEDGER_ACCOUNT
+  GUEST_LEDGER
+  REVENUE
+  VAT_OUTPUT
+  VAT_INPUT
+  PURCHASE
+  AGENCY_BONUS
+  PAYROLL_EXPENSE
+  PAYROLL_LIABILITY
+  INSTRUMENT
+  TREASURY_IN
+  TREASURY_OUT
+  OPENING
+  FX_GAIN
+  FX_LOSS
+}
+
+/// Hesap planı (Tek Düzen): ağaç. Yalnız yaprak (`isPostable`) hesaba satır yazılır; satırı olan hesaba alt hesap açılamaz.
+/// Seed hesapları (`isSystem`) silinmez, kodu değişmez; adı ve departmanı düzenlenebilir.
+model GlAccount {
+  id         String         @id @default(uuid())
+  hotelId    String
+  /// "100", "100.01", "600.02" — noktalı alt kod; sıralama ve ağaç bu koddan.
+  code       String
+  name       String
+  parentId   String?
+  depth      Int            @default(0)
+  class      GlAccountClass
+  department GlDepartment?
+  isPostable Boolean        @default(true)
+  isSystem   Boolean        @default(false)
+  isActive   Boolean        @default(true)
+  createdBy  String
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  hotel    Hotel               @relation(fields: [hotelId], references: [id])
+  parent   GlAccount?          @relation("GlAccountTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children GlAccount[]         @relation("GlAccountTree")
+  lines    JournalLine[]
+  rules    JournalRule[]
+  vouchers AccountingVoucher[]
+
+  @@unique([hotelId, code])
+  @@index([hotelId, parentId, code])
+  @@index([hotelId, isActive, code])
+}
+
+/// Yevmiye fişi: borç toplamı = alacak toplamı. Otomatik fiş kaynak belgeden (kaynak anahtarı tekil: ikinci kez yazılmaz);
+/// elle fiş `requestId` ile çift gönderime kapalı. Düzeltme ters kayıtla (iptal edilen fiş VOIDED, ters fiş `reversalOfId`).
+model JournalEntry {
+  id           String             @id @default(uuid())
+  hotelId      String
+  /// "YEV-2026-00001"
+  number       String
+  type         JournalEntryType
+  status       JournalEntryStatus @default(POSTED)
+  date         DateTime           @db.Date
+  description  String
+  reference    String?
+  source       JournalSource
+  /// Kaynak belgenin kimliği (ödeme, fiş, mal kabul, bordro, çek…); günlük gelirde gün.
+  sourceId     String?
+  /// Tekrar işleme anahtarı (otel başına tekil): "VOUCHER:<id>", "DAILY_REVENUE:2026-11-24#2"…
+  sourceKey    String?
+  /// Borç toplamı (= alacak toplamı).
+  total        Decimal            @db.Decimal(16, 2)
+  lineCount    Int                @default(0)
+  requestId    String?
+  reversalOfId String?            @unique
+  voidedAt     DateTime?
+  voidedBy     String?
+  voidReason   String?
+  createdBy    String
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  hotel             Hotel              @relation(fields: [hotelId], references: [id])
+  reversalOf        JournalEntry?      @relation("JournalEntryReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversal          JournalEntry?      @relation("JournalEntryReversal")
+  lines             JournalLine[]
+  ledgerEntries     LedgerEntry[]
+  treasuryMovements TreasuryMovement[]
+
+  @@unique([hotelId, number])
+  @@unique([hotelId, sourceKey])
+  @@unique([hotelId, requestId])
+  // Fiş listesi (gün + kimlik), kaynağın fişleri, durum süzgeci.
+  @@index([hotelId, date, id])
+  @@index([hotelId, source, sourceId])
+  @@index([hotelId, status, createdAt])
+}
+
+/// Fiş satırı: tek taraf dolu (borç ya da alacak). `date` fişin günüdür (mizan / ekstre taraması fişe dönmeden).
+model JournalLine {
+  id                String   @id @default(uuid())
+  hotelId           String
+  entryId           String
+  sortOrder         Int
+  accountId         String
+  date              DateTime @db.Date
+  debit             Decimal  @default(0) @db.Decimal(16, 2)
+  credit            Decimal  @default(0) @db.Decimal(16, 2)
+  description       String?
+  /// Satırı doğuran cari (muavin izi; birden çok cari toplanmışsa boş).
+  ledgerAccountId   String?
+  treasuryAccountId String?
+
+  entry           JournalEntry     @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  account         GlAccount        @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  ledgerAccount   LedgerAccount?   @relation(fields: [ledgerAccountId], references: [id], onDelete: Restrict)
+  treasuryAccount TreasuryAccount? @relation(fields: [treasuryAccountId], references: [id], onDelete: Restrict)
+
+  @@unique([entryId, sortOrder])
+  // Mizan (dönem toplamı) ve hesap ekstresi (gün + fiş sırası).
+  @@index([hotelId, accountId, date])
+  @@index([accountId, date, entryId])
+  @@index([ledgerAccountId])
+  @@index([treasuryAccountId])
+}
+
+/// Otomatik fiş kuralı: (kaynak, anahtar) → hesap. Anahtar boş = kaynağın varsayılanı (ör. bütün KDV oranları 391).
+model JournalRule {
+  id        String            @id @default(uuid())
+  hotelId   String
+  source    JournalRuleSource
+  key       String            @default("")
+  accountId String
+  updatedBy String
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  hotel   Hotel     @relation(fields: [hotelId], references: [id])
+  account GlAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@unique([hotelId, source, key])
+  @@index([accountId])
 }
 
 /**

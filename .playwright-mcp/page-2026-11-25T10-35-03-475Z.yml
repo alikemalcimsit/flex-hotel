@@ -1,0 +1,185 @@
+- generic [ref=f5e2]:
+  - generic [ref=f5e94]:
+    - link "İçeriğe geç" [ref=f5e95] [cursor=pointer]:
+      - /url: "#main-content"
+    - complementary "Yan menü" [ref=f5e96]:
+      - generic [ref=f5e97]:
+        - generic [ref=f5e98]:
+          - link "FlexHotel — panel ana sayfası" [ref=f5e99] [cursor=pointer]:
+            - /url: /
+            - generic [ref=f5e100]:
+              - generic [ref=f5e101]: Flex
+              - text: Hotel
+          - button "Menüyü kapat" [ref=f5e102]
+        - generic [ref=f5e110]:
+          - generic [ref=f5e111]: Demo Otel
+          - generic [ref=f5e112]: "Kod: DEMO"
+        - navigation "Ana menü" [ref=f5e113]:
+          - generic [ref=f5e114]:
+            - paragraph [ref=f5e115]: Genel
+            - list [ref=f5e116]:
+              - listitem [ref=f5e117]:
+                - link "Panel" [ref=f5e118] [cursor=pointer]:
+                  - /url: /
+              - listitem [ref=f5e126]:
+                - link "Görevler 2 manuel görev açık, 2 tanesini kimse üstlenmedi" [ref=f5e127] [cursor=pointer]:
+                  - /url: /gorevler
+                  - generic [ref=f5e131]: Görevler
+                  - generic [aria-hidden] [ref=f5e132]: "2"
+                  - generic [ref=f5e133]: 2 manuel görev açık, 2 tanesini kimse üstlenmedi
+              - listitem [ref=f5e134]:
+                - link "Kılavuz" [ref=f5e135] [cursor=pointer]:
+                  - /url: /kilavuz
+          - generic [ref=f5e140]:
+            - paragraph [ref=f5e141]: Ön büro
+            - list [ref=f5e142]:
+              - listitem [ref=f5e143]:
+                - button "Giriş / çıkış" [ref=f5e144]
+              - listitem [ref=f5e151]:
+                - button "Rezervasyonlar" [ref=f5e152]
+              - listitem [ref=f5e158]:
+                - link "Oda planı" [ref=f5e159] [cursor=pointer]:
+                  - /url: /oda-plani
+              - listitem [ref=f5e165]:
+                - link "Misafirler" [ref=f5e166] [cursor=pointer]:
+                  - /url: /misafirler
+              - listitem [ref=f5e173]:
+                - link "Satış CRM" [ref=f5e174] [cursor=pointer]:
+                  - /url: /satis
+              - listitem [ref=f5e179]:
+                - link "Folyolar" [ref=f5e180] [cursor=pointer]:
+                  - /url: /folyolar
+              - listitem [ref=f5e186]:
+                - button "Kasa" [ref=f5e187]
+              - listitem [ref=f5e194]:
+                - button "Minibar & çamaşır" [ref=f5e195]
+              - listitem [ref=f5e202]:
+                - button "Kat hizmetleri" [ref=f5e203]
+              - listitem [ref=f5e210]:
+                - link "Kayıp eşya" [ref=f5e211] [cursor=pointer]:
+                  - /url: /kayip-esya
+              - listitem [ref=f5e218]:
+                - button "Teknik servis" [ref=f5e219]
+              - listitem [ref=f5e225]:
+                - button "Raporlar" [ref=f5e226]
+              - listitem [ref=f5e233]:
+                - button "Gün kapanış" [ref=f5e234]
+              - listitem [ref=f5e241]:
+                - link "Bütçe" [ref=f5e242] [cursor=pointer]:
+                  - /url: /butce/plan
+              - listitem [ref=f5e248]:
+                - link "Acenteler" [ref=f5e249] [cursor=pointer]:
+                  - /url: /acenteler
+              - listitem [ref=f5e255]:
+                - link "Acente primleri" [ref=f5e256] [cursor=pointer]:
+                  - /url: /acente-primleri
+              - listitem [ref=f5e262]:
+                - link "Etkinlikler" [ref=f5e263] [cursor=pointer]:
+                  - /url: /etkinlikler
+              - listitem [ref=f5e269]:
+                - button "Restoran" [ref=f5e270]
+              - listitem [ref=f5e277]:
+                - link "Promosyonlar" [ref=f5e278] [cursor=pointer]:
+                  - /url: /promosyonlar
+              - listitem [ref=f5e285]:
+                - link "Kanallar" [ref=f5e286] [cursor=pointer]:
+                  - /url: /kanallar
+              - listitem [ref=f5e292]:
+                - link "Mesajlar" [ref=f5e293] [cursor=pointer]:
+                  - /url: /mesajlar
+              - listitem [ref=f5e298]:
+                - link "İstekler 1 açık istek, 1 tanesi gecikmiş" [ref=f5e299] [cursor=pointer]:
+                  - /url: /istekler
+                  - generic [ref=f5e305]: İstekler
+                  - generic [aria-hidden] [ref=f5e306]: "1"
+                  - generic [ref=f5e307]: 1 açık istek, 1 tanesi gecikmiş
+              - listitem [ref=f5e308]:
+                - link "Anketler" [ref=f5e309] [cursor=pointer]:
+                  - /url: /anketler
+              - listitem [ref=f5e314]:
+                - link "Spa" [ref=f5e315] [cursor=pointer]:
+                  - /url: /spa
+              - listitem [ref=f5e321]:
+                - button "Mutfak" [ref=f5e322]
+              - listitem [ref=f5e328]:
+                - button "Satın alma" [ref=f5e329]
+              - listitem [ref=f5e337]:
+                - button "Stok" [ref=f5e338]
+              - listitem [ref=f5e346]:
+                - button "Demirbaş" [ref=f5e347]
+              - listitem [ref=f5e354]:
+                - button "Faturalar" [ref=f5e355]
+              - listitem [ref=f5e362]:
+                - link "Personel" [ref=f5e363] [cursor=pointer]:
+                  - /url: /personel
+              - listitem [ref=f5e370]:
+                - button "Bordro" [ref=f5e371]
+              - listitem [ref=f5e378]:
+                - button "Ön muhasebe" [ref=f5e379]
+              - listitem [ref=f5e386]:
+                - button "Genel muhasebe" [expanded] [ref=f5e387]
+                - list [ref=f5e393]:
+                  - listitem [ref=f5e394]:
+                    - link "Mizan" [ref=f5e395] [cursor=pointer]:
+                      - /url: /genel-muhasebe/mizan
+                  - listitem [ref=f5e396]:
+                    - link "Yevmiye" [ref=f5e397] [cursor=pointer]:
+                      - /url: /genel-muhasebe/yevmiye
+                  - listitem [ref=f5e398]:
+                    - link "Hesap planı" [ref=f5e399] [cursor=pointer]:
+                      - /url: /genel-muhasebe/hesap-plani
+              - listitem [ref=f5e400]:
+                - link "Toplanacak tepsiler" [ref=f5e401] [cursor=pointer]:
+                  - /url: /oda-servisi/tepsiler
+              - listitem [ref=f5e406]:
+                - button "Odalar" [ref=f5e407]
+          - generic [ref=f5e415]:
+            - paragraph [ref=f5e416]: Yönetim
+            - list [ref=f5e417]:
+              - listitem [ref=f5e418]:
+                - button "Onaylar" [ref=f5e419]
+              - listitem [ref=f5e425]:
+                - link "Fiyat önerileri" [ref=f5e426] [cursor=pointer]:
+                  - /url: /fiyat-onerileri
+              - listitem [ref=f5e432]:
+                - button "Bildirimler" [ref=f5e433]
+              - listitem [ref=f5e440]:
+                - button "Aktivite" [ref=f5e441]
+              - listitem [ref=f5e447]:
+                - link "Excel'den yükle" [ref=f5e448] [cursor=pointer]:
+                  - /url: /ice-aktar
+              - listitem [ref=f5e453]:
+                - link "Aktörler" [ref=f5e454] [cursor=pointer]:
+                  - /url: /aktorler
+              - listitem [ref=f5e461]:
+                - button "Ayarlar" [ref=f5e462]
+    - generic [ref=f5e469]:
+      - banner [ref=f5e470]:
+        - generic [ref=f5e471]:
+          - button "Menüyü aç" [ref=f5e472]
+          - navigation "Konum" [ref=f5e475]:
+            - list [ref=f5e476]:
+              - listitem [ref=f5e477]:
+                - generic [ref=f5e478]: Ön büro
+              - listitem [ref=f5e481]:
+                - generic [ref=f5e482]: Genel muhasebe
+              - listitem [ref=f5e485]:
+                - generic [ref=f5e486]: Yevmiye
+        - generic [ref=f5e487]:
+          - generic [ref=f5e488]:
+            - button "Uyarılar, 10 yeni" [ref=f5e489]:
+              - generic [aria-hidden] [ref=f5e493]: "10"
+            - generic [ref=f5e494]: 10 yeni uyarı
+          - button "Tam ekran" [ref=f5e495]
+          - button "Admin Yönetici" [ref=f5e499]:
+            - generic [aria-hidden] [ref=f5e500]: A
+            - generic [ref=f5e501]:
+              - generic [ref=f5e502]: Admin
+              - generic [ref=f5e503]: Yönetici
+      - main [ref=f5e6]:
+        - status [ref=f5e610]:
+          - generic [ref=f5e612]: Yükleniyor…
+  - status:
+    - generic [ref=f5e613]:
+      - generic [ref=f5e618]: YEV-2026-00001 işlendi
+      - button "Bildirimi kapat" [ref=f5e619]

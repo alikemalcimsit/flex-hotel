@@ -114,6 +114,10 @@ Sol menüdeki her sayfa, yolu ve görmek için gereken izin. Bir sayfa menüde y
 | ↳ Kasa / banka | `/muhasebe/kasa-banka` | üst menüyle aynı |
 | ↳ Çek / senet | `/muhasebe/cek-senet` | üst menüyle aynı |
 | ↳ Fişler | `/muhasebe/fisler` | üst menüyle aynı |
+| **Genel muhasebe** | `/genel-muhasebe` | Hesap planı, yevmiye fişleri, mizan ve hesap ekstresini görüntüle |
+| ↳ Mizan | `/genel-muhasebe/mizan` | üst menüyle aynı |
+| ↳ Yevmiye | `/genel-muhasebe/yevmiye` | üst menüyle aynı |
+| ↳ Hesap planı | `/genel-muhasebe/hesap-plani` | üst menüyle aynı |
 | **Toplanacak tepsiler** | `/oda-servisi/tepsiler` | şunlardan biri: POS: vardiya aç / kapat, adisyon aç, sipariş gönder, ödeme al, odaya yaz; İstekleri yönet |
 | **Odalar** | `/odalar` | herkes (giriş yapmış) |
 | ↳ Oda listesi | `/odalar/liste` | üst menüyle aynı |
@@ -154,7 +158,7 @@ Sol menüdeki her sayfa, yolu ve görmek için gereken izin. Bir sayfa menüde y
 
 ## İzinler ve roller
 
-Sistemde 115 izin var; roller bu izinlerin varsayılan paketleridir. Yönetici (Ayarlar → Kullanıcılar / roller) bir kullanıcıya izin ekleyip çıkarabilir. Aşağıdaki tablo **varsayılan** dağılımdır.
+Sistemde 118 izin var; roller bu izinlerin varsayılan paketleridir. Yönetici (Ayarlar → Kullanıcılar / roller) bir kullanıcıya izin ekleyip çıkarabilir. Aşağıdaki tablo **varsayılan** dağılımdır.
 
 ### Ayarlar
 
@@ -386,6 +390,14 @@ Sistemde 115 izin var; roller bu izinlerin varsayılan paketleridir. Yönetici (
 | `accounting.manage` | Tahsilat / ödeme / virman fişi gir, çek / senet işlemleri, cari kartı aç ve düzenle | ✓ | ✓ |  |  | ✓ |  |
 | `accounting.setup` | Kasa / banka tanımları, yöntem eşlemesi, başlangıç günü ve onay eşiği, açılış bakiyesi, fiş iptali | ✓ | ✓ |  |  |  |  |
 
+### Genel muhasebe
+
+| İzin | Ne yaptırır | Yönetici | Müdür | Ön büro | Kat hizmetleri | Muhasebe | Yiyecek & İçecek |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `ledger.view` | Hesap planı, yevmiye fişleri, mizan ve hesap ekstresini görüntüle | ✓ | ✓ |  |  | ✓ |  |
+| `ledger.manage` | Elle yevmiye fişi gir, fişlenmemiş hareketleri eşitle | ✓ | ✓ |  |  | ✓ |  |
+| `ledger.setup` | Hesap planı ve otomatik fiş kuralları, dönem kilidi, yevmiye fişi iptali | ✓ | ✓ |  |  | ✓ |  |
+
 ### Fatura ve e-belge
 
 | İzin | Ne yaptırır | Yönetici | Müdür | Ön büro | Kat hizmetleri | Muhasebe | Yiyecek & İçecek |
@@ -474,11 +486,11 @@ Her aktör bir bildirgeyle tanımlıdır: hangi olayları dinler, hangilerini ya
 
 **Tür:** worker · **Paket:** `@hotelos/accounting-worker` · **Kapalıyken iş düşer:** Ön muhasebe · **Tekrar deneme:** 3 kez (400 ms artan bekleme)
 
-Ön büro, etkinlik, restoran ve spa tahsilatlarını yöntem eşlemesine göre kasaya / bankaya işler; "Acente / cari" ve voucher'la kapatılan folyoyu seçilen cariye borç yazar. Etkinlik tahsilatını müşteri carisinden düşer, gerçekleşen etkinliğin bedelini (iptalde iptal bedelini) müşteri carisine borç yazar. Mal kabulü tedarikçi carisine vadeli borcumuz olarak, onaylanan acente primini acente carisine alacak olarak işler. Ödeme iptalini ters kayıtla düşer. Kesilen faturanın numarasını alacağı doğuran cari harekete bağlar; serbest faturayı cariye borç yazar, iptalinde bağı çözer ve serbest faturanın borcunu ters kayıtla düşer. Onaylanan bordroyu personel (net ücret), SGK, vergi dairesi, BES ve icra / nafaka carilerine tahakkuk ettirir; maaş ödemesini kasadan / bankadan çıkış ve personel carisine borç olarak işler. Kapalıyken ya da işleyemediğinde iş manuel görev olarak düşer.
+Ön büro, etkinlik, restoran ve spa tahsilatlarını yöntem eşlemesine göre kasaya / bankaya işler; "Acente / cari" ve voucher'la kapatılan folyoyu seçilen cariye borç yazar. Etkinlik tahsilatını müşteri carisinden düşer, gerçekleşen etkinliğin bedelini (iptalde iptal bedelini) müşteri carisine borç yazar. Mal kabulü tedarikçi carisine vadeli borcumuz olarak, onaylanan acente primini acente carisine alacak olarak işler. Ödeme iptalini ters kayıtla düşer. Kesilen faturanın numarasını alacağı doğuran cari harekete bağlar; serbest faturayı cariye borç yazar, iptalinde bağı çözer ve serbest faturanın borcunu ters kayıtla düşer. Onaylanan bordroyu personel (net ücret), SGK, vergi dairesi, BES ve icra / nafaka carilerine tahakkuk ettirir; maaş ödemesini kasadan / bankadan çıkış ve personel carisine borç olarak işler. Genel muhasebe (48): yazdığı her cari / kasa-banka hareketini belgenin yevmiye fişine çevirir (kasa hesabı, cari kontrol hesabı, gelir / KDV / stok / gider karşı hesapları kurallardan); gün kapanışında günün gelir fişini yazar (folyo kalemleri, adisyonlar, spa). Kapalıyken ya da işleyemediğinde iş manuel görev olarak düşer.
 
 | Dinlediği olaylar | Yayınladığı olaylar | Onaya götürdüğü işler |
 | --- | --- | --- |
-| `payment.received`, `payment.refunded`, `payment.voided`, `banquet.payment.changed`, `pos.payment.changed`, `spa.payment.changed`, `purchase.goods.received`, `agency.bonus.changed`, `banquet.event.changed`, `invoice.issued`, `invoice.cancelled`, `payroll.run.approved`, `payroll.run.changed` | `accounting.posted` | — |
+| `payment.received`, `payment.refunded`, `payment.voided`, `banquet.payment.changed`, `pos.payment.changed`, `spa.payment.changed`, `purchase.goods.received`, `agency.bonus.changed`, `banquet.event.changed`, `invoice.issued`, `invoice.cancelled`, `payroll.run.approved`, `payroll.run.changed`, `accounting.posted`, `night.audit.closed` | `accounting.posted`, `ledger.changed` | — |
 
 ### Folyo aktörü (`billing-worker`)
 
@@ -632,7 +644,7 @@ Misafire yazılan cevapları WhatsApp Cloud API ile gönderir, teslim durumunu m
 
 ## Olay kataloğu
 
-Sistem 200 tür olay yayınlar. Olay = "şu oldu" kaydı; aktörler ve ekranlar bunları dinler. Açıklamalar kataloğun kendi yorumlarından alınmıştır (boşsa olayın adı yeterince anlatıyor demektir).
+Sistem 201 tür olay yayınlar. Olay = "şu oldu" kaydı; aktörler ve ekranlar bunları dinler. Açıklamalar kataloğun kendi yorumlarından alınmıştır (boşsa olayın adı yeterince anlatıyor demektir).
 
 ### accounting.*
 
@@ -842,6 +854,12 @@ Sistem 200 tür olay yayınlar. Olay = "şu oldu" kaydı; aktörler ve ekranlar 
 | --- | --- |
 | `laundry.charged` |  |
 | `laundry.order.changed` | Çamaşır siparişi açıldı, sayımı düzeldi ya da durumu değişti. |
+
+### ledger.*
+
+| Olay | Açıklama |
+| --- | --- |
+| `ledger.changed` | Genel muhasebe (modül 48): yevmiye fişi yazıldı / iptal edildi, hesap planı, kural ya da dönem kilidi değişti. Ekranlar (mizan, fiş listesi, hesap planı) bununla tazelenir. |
 
 ### lost_item.*
 
@@ -1344,7 +1362,7 @@ Anketin zamanlanmış işi (yalnızca sunucu sürecinde, modül 55).
 
 ## Veri modeli
 
-Veritabanında 229 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan sayısı ilişkiler hariç yaklaşık değerdir.
+Veritabanında 233 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan sayısı ilişkiler hariç yaklaşık değerdir.
 
 | Tablo | Alan | Açıklama |
 | --- | --- | --- |
@@ -1498,17 +1516,21 @@ Veritabanında 229 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan
 | `StockMovement` | 17 | Stok hareketi (değişmez kayıt): işaretli miktar, birim maliyet, hareket sonrası kartın mevcudu ve ortalama maliyeti, kaynağı. |
 | `StockCount` | 17 | Stok sayımı (modül 44): depo başına; açılışta deponun mevcutları "beklenen" olarak dondurulur, sayılan miktarlar girilir, onayda fark (sayılan − o anki mevcut) `COUNT_ADJUST` hareketi olur. Depoda aynı anda tek açık sayım (kısmi tekil indeks, migration'da). |
 | `StockCountLine` | 10 | Sayım satırı: beklenen (açılıştaki mevcut), sayılan (boş = sayılmadı), onayda yazılan fark ve o anki birim maliyet. |
-| `AccountingSettings` | 6 | Ön muhasebe ayarı: otomatik kayıtların başlangıç günü (öncesi açılış bakiyesiyle) ve ödeme fişi onay eşiği. |
+| `AccountingSettings` | 8 | Ön muhasebe ayarı: otomatik kayıtların başlangıç günü (öncesi açılış bakiyesiyle) ve ödeme fişi onay eşiği. |
 | `AccountingSequence` | 4 | Belge numarası ve cari / kasa kodu sırası (otel × önek × yıl; kodlarda yıl 0). |
 | `LedgerAccount` | 25 | Cari hesap: acente, tedarikçi, etkinlik müşterisi (bire bir bağlı) ya da elle açılan şirket / şahıs. Bakiye = borç − alacak. |
-| `LedgerEntry` | 18 | Cari hareket (ekstre satırı): borç ya da alacak; kaynağı tekil — aynı belge iki kez yazılmaz. Düzeltme ters kayıtla. |
+| `LedgerEntry` | 19 | Cari hareket (ekstre satırı): borç ya da alacak; kaynağı tekil — aynı belge iki kez yazılmaz. Düzeltme ters kayıtla. |
 | `TreasuryAccount` | 17 | Kasa ya da banka hesabı (kendi para biriminde). Bakiye hareketlerle aynı işlemde güncellenir. |
-| `TreasuryMovement` | 19 | Kasa / banka hareketi: + giriş, − çıkış (hesabın para biriminde). Kaynağı tekil; düzeltme ters kayıtla. |
+| `TreasuryMovement` | 20 | Kasa / banka hareketi: + giriş, − çıkış (hesabın para biriminde). Kaynağı tekil; düzeltme ters kayıtla. |
 | `TreasuryMapping` | 9 | Yöntem → kasa / banka eşlemesi: ön büro, etkinlik ve restoran tahsilatı hangi hesaba girer (para birimi boş = hepsi). |
-| `AccountingVoucher` | 25 | Fiş: tahsilat, ödeme (eşik üstü dört göz), virman, kasa / banka giriş-çıkış, açılış bakiyesi. İptal ters kayıtla. |
+| `AccountingVoucher` | 26 | Fiş: tahsilat, ödeme (eşik üstü dört göz), virman, kasa / banka giriş-çıkış, açılış bakiyesi. İptal ters kayıtla. |
 | `AccountingVoucherLine` | 14 | Fişin para satırı: kasa / banka, alınan ya da verilen çek-senet (bilgisi satırda, işlenince kartı açılır), portföyden ciro. |
 | `Instrument` | 20 | Çek / senet: alınan (müşteriden, portföy) ya da verilen (bizim). Durum makinesi ve geçmişi; tutar otelin para biriminde. |
 | `InstrumentMovement` | 13 | Çek / senet durum geçmişi: kim, ne zaman, hangi işlemle, hangi hesaba. |
+| `GlAccount` | 14 | Hesap planı (Tek Düzen): ağaç. Yalnız yaprak (`isPostable`) hesaba satır yazılır; satırı olan hesaba alt hesap açılamaz. Seed hesapları (`isSystem`) silinmez, kodu değişmez; adı ve departmanı düzenlenebilir. |
+| `JournalEntry` | 21 | Yevmiye fişi: borç toplamı = alacak toplamı. Otomatik fiş kaynak belgeden (kaynak anahtarı tekil: ikinci kez yazılmaz); elle fiş `requestId` ile çift gönderime kapalı. Düzeltme ters kayıtla (iptal edilen fiş VOIDED, ters fiş `reversalOfId`). |
+| `JournalLine` | 11 | Fiş satırı: tek taraf dolu (borç ya da alacak). `date` fişin günüdür (mizan / ekstre taraması fişe dönmeden). |
+| `JournalRule` | 8 | Otomatik fiş kuralı: (kaynak, anahtar) → hesap. Anahtar boş = kaynağın varsayılanı (ör. bütün KDV oranları 391). |
 | `Invoice` | 54 | Fatura (modül 16 çekirdeği + 49). Taslak düzenlenir; kesimde numara (seri + yıl + 9 hane), belge türü (e-Fatura / e-Arşiv), alıcı ve UBL belgesi donar — kesilmiş fatura değişmez, iptal onay kuyruğundan. Folyo ve etkinlik başına en fazla bir geçerli (iptal edilmemiş) fatura: kısmi tekil index'ler migration'da. Alıcının bütün bilgisi `buyer`da (JSON); liste ve arama için ad ve vergi no ayrıca. |
 | `InvoiceLine` | 18 | Fatura satırı: folyo faturasında gelir grubu, etkinlikte kalem, serbest faturada girilen satır. Eksi satır yoktur (ters kayıt grubun içinde, indirim satır iskontosu). |
 | `InvoiceDocument` | 5 | Kesimde donan UBL-TR belgesi (gönderim ve tekrar gönderim bunu kullanır). |
@@ -1631,7 +1653,7 @@ Geliştirme listesinden (GOREVLER.md) türetilir: işaretli maddeler ve "tamamla
 | 45 | Satın alma | arkadaşın | tamamlandı |
 | 46 | Demirbaş & amortisman | Ali Kemal | tamamlandı |
 | 47 | Ön muhasebe | arkadaşın | tamamlandı |
-| 48 | Genel muhasebe | Ali Kemal | planlı |
+| 48 | Genel muhasebe | Ali Kemal | tamamlandı |
 | 49 | e-Fatura / e-Arşiv / e-Defter | arkadaşın | kısmi (4/6) |
 | 50 | Sanal POS / ödeme geçidi | Ali Kemal | planlı |
 | 51 | Personel & bordro | arkadaşın | tamamlandı |
@@ -1642,7 +1664,7 @@ Geliştirme listesinden (GOREVLER.md) türetilir: işaretli maddeler ve "tamamla
 | 56 | Sadakat programı | Ali Kemal | planlı |
 | 57 | SPA & spor salonu randevu | arkadaşın | tamamlandı |
 | 58 | Emniyet kimlik bildirimi (KBS) | Ali Kemal | planlı |
-| 59 | Kimlik / pasaport okuma (OCR) | arkadaşın | planlı |
+| 59 | Kimlik / pasaport okuma (OCR) | arkadaşın | tamamlandı |
 | 60 | Çoklu dil & çoklu para birimi | Ali Kemal | planlı |
 | 61 | Webhook & açık API | arkadaşın | planlı |
 | 62 | Donanım entegrasyonları | Ali Kemal | planlı |
