@@ -137,6 +137,7 @@ export * from './notifications.js';
 export * from './approvals.js';
 export * from './reservations.js';
 export * from './front-desk.js';
+export * from './mrz.js';
 export * from './concierge.js';
 export * from './activity.js';
 export * from './actors.js';

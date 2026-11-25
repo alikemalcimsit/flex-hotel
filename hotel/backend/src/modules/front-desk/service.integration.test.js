@@ -564,4 +564,145 @@ describe('check-in / check-out (entegrasyon)', { skip }, () => {
       assert.equal((await db.reservation.findUnique({ where: { id: owing.id } })).status, 'CHECKED_IN');
     });
   });
+
+  /* ══════════════════ Kimlik okuma (modül 59) ══════════════════ */
+
+  describe('kimlik okuma (modül 59)', () => {
+    const d = (text) => String(contracts.mrzCheckDigit(text));
+    /** Sağlamaları hesaplı kurgusal TC kimlik kartı (TD1). */
+    const tcCard = ({ tckn = TC, birth = '900115', name = 'YILMAZ<<AYSE' } = {}) => {
+      const doc = 'A01B23456';
+      const optional1 = tckn.padEnd(15, '<');
+      const line1 = `I<TUR${doc}${d(doc)}${optional1}`;
+      const optional2 = '<'.repeat(11);
+      const expiry = '310101';
+      const composite = d(`${line1.slice(5, 30)}${birth}${d(birth)}${expiry}${d(expiry)}${optional2}`);
+      return [line1, `${birth}${d(birth)}F${expiry}${d(expiry)}TUR${optional2}${composite}`, name.padEnd(30, '<')].join('\n');
+    };
+    /** Kurgusal Alman pasaportu (TD3). */
+    const dePassport = ({ doc = 'C01X00T47', birth = '850316', name = 'MUSTERMANN<<ERIKA' } = {}) => {
+      const expiry = '330110';
+      const personal = '<'.repeat(14);
+      const line2 = `${doc}${d(doc)}D<<${birth}${d(birth)}F${expiry}${d(expiry)}${personal}<`;
+      const composite = d(`${doc}${d(doc)}${birth}${d(birth)}${expiry}${d(expiry)}${personal}<`);
+      return [`P<D<<${name}`.padEnd(44, '<'), `${line2}${composite}`].join('\n');
+    };
+    const TC_IDENTITY = { idType: 'NATIONAL_ID', idNumber: TC, nationality: 'TR', birthDate: '1990-01-15' };
+
+    it('okunan kimlikle giriş: kart "kimlikten okundu", MRZ metni hiçbir yere yazılmaz', async () => {
+      const stay = await book();
+      await doCheckIn(stay.id, { guest: { ...TC_IDENTITY, documentRead: { mrz: tcCard(), via: 'STAFF_SCAN' } } });
+      const guest = await db.guest.findUnique({ where: { id: stay.guest.id } });
+      assert.equal(guest.idReadVia, 'STAFF_SCAN');
+      assert.equal(guest.idReadBy, DESK);
+      assert.ok(guest.idReadAt);
+      assert.equal(core.toIsoDay(guest.birthDate), '1990-01-15');
+      const audits = await db.auditLog.findMany({ where: { hotelId } });
+      assert.ok(!JSON.stringify(audits).includes('I<TUR'), 'MRZ denetim izine yazılmaz');
+      assert.ok(!JSON.stringify(audits).includes(TC), 'TC no denetim izinde açık değil');
+    });
+
+    it('okunandan değiştirilmiş kimlik ve sağlaması tutmayan okuma reddedilir', async () => {
+      const stay = await book();
+      await assert.rejects(
+        doCheckIn(stay.id, { guest: { ...TC_IDENTITY, birthDate: '1990-01-16', documentRead: { mrz: tcCard(), via: 'STAFF_SCAN' } } }),
+        (error) => error.code === 'VALIDATION' && /değiştirilmiş \(doğum tarihi\)/.test(error.message),
+      );
+      const broken = tcCard().replace('900115', '900116');
+      await assert.rejects(
+        doCheckIn(stay.id, { guest: { ...TC_IDENTITY, documentRead: { mrz: broken, via: 'STAFF_SCAN' } } }),
+        (error) => error.code === 'VALIDATION' && /doğrulanamadı/.test(error.message),
+      );
+      assert.equal((await db.reservation.findUnique({ where: { id: stay.id } })).status, 'CONFIRMED', 'giriş yapılmadı');
+    });
+
+    it('girişte ad belgedeki gibi düzeltilir (denetim izine eski ad); refakatçi pasaportla okunur', async () => {
+      const stay = await book({ guest: { firstName: 'Aise', lastName: 'Yilmas' } });
+      await doCheckIn(stay.id, {
+        guest: { ...TC_IDENTITY, documentRead: { mrz: tcCard(), via: 'ONLINE_PHOTO' } },
+        guestName: { firstName: 'Ayşe', lastName: 'Yılmaz' },
+        companions: [{ firstName: 'Erika', lastName: 'Mustermann', idType: 'PASSPORT', idNumber: 'C01X00T47', nationality: 'DE', birthDate: '1985-03-16', documentRead: { mrz: dePassport(), via: 'STAFF_SCAN' } }],
+      });
+      const guest = await db.guest.findUnique({ where: { id: stay.guest.id } });
+      assert.deepEqual([guest.firstName, guest.lastName, guest.idReadVia], ['Ayşe', 'Yılmaz', 'ONLINE_PHOTO']);
+      const rename = await db.auditLog.findFirst({ where: { hotelId, entity: 'Guest', entityId: guest.id, action: 'UPDATE' } });
+      assert.equal(rename.before.firstName, 'Aise');
+      const companion = await db.guest.findFirst({ where: { hotelId, idNumber: 'C01X00T47' } });
+      assert.equal(companion.idReadVia, 'STAFF_SCAN');
+    });
+
+    it('elle değişen kimlik işareti siler; kimliğe dokunmayan düzenleme korur; aynı belge başka kartta bulunur', async () => {
+      const crm = await import('../guests/service.js');
+      const stay = await book();
+      await doCheckIn(stay.id, { guest: { ...TC_IDENTITY, documentRead: { mrz: tcCard(), via: 'STAFF_SCAN' } } });
+      const guestId = stay.guest.id;
+      await as(() => crm.updateGuestCard(hotelId, guestId, contracts.guestCardUpdateSchema.parse({ tags: ['VIP'] })));
+      assert.ok((await db.guest.findUnique({ where: { id: guestId } })).idReadAt, 'etiket değişikliği işareti silmez');
+      await as(() => crm.updateGuestCard(hotelId, guestId, contracts.guestCardUpdateSchema.parse({ idType: 'NATIONAL_ID', idNumber: TC_OTHER, nationality: 'TR', birthDate: '1990-01-15' })));
+      const edited = await db.guest.findUnique({ where: { id: guestId } });
+      assert.equal(edited.idNumber, TC_OTHER);
+      assert.equal(edited.idReadAt, null, 'elle değişen kimlik "okundu" sayılmaz');
+      // Kart düzenlemede okuma: okunan kimlikle işaret geri gelir; denetim izinde numara maskeli.
+      const card = await as(() => crm.updateGuestCard(hotelId, guestId, contracts.guestCardUpdateSchema.parse({ ...TC_IDENTITY, documentRead: { mrz: tcCard(), via: 'STAFF_SCAN' } })));
+      assert.equal(card.idRead.via, 'STAFF_SCAN');
+      const audit = await db.auditLog.findFirst({ where: { hotelId, entity: 'Guest', entityId: guestId }, orderBy: { createdAt: 'desc' } });
+      assert.ok(!JSON.stringify(audit.after).includes(TC));
+      // Geçersiz kimlik kartta da reddedilir (eskiden sessizce atlanıyordu).
+      assert.throws(() => contracts.guestCardUpdateSchema.parse({ idType: 'NATIONAL_ID', idNumber: '12345678901', nationality: 'TR' }), /TC kimlik numarası geçersiz/);
+      // Başka kartta aynı belge.
+      const twin = await db.guest.create({ data: { hotelId, firstName: 'Ayşe', lastName: 'Yılmaz', idNumber: TC, nationality: null } });
+      const matches = await crm.findIdentityMatches(hotelId, contracts.identityMatchQuerySchema.parse({ idNumber: TC, nationality: 'TR', excludeGuestIds: [guestId] }));
+      assert.deepEqual(matches.items.map((row) => row.id), [twin.id]);
+      assert.notEqual(matches.items[0].idNumber, TC, 'numara maskeli');
+    });
+
+    it('online check-in belgesi: okunan misafirin yazdığıyla karşılaştırılır; değerler değil sonuç saklanır', async () => {
+      const portal = await import('../guest-portal/service.js');
+      const stay = await book({ checkIn: 1 });
+      const online = await db.onlineCheckin.create({
+        data: {
+          hotelId,
+          reservationId: stay.id,
+          status: 'SUBMITTED',
+          arrivalDate: new Date(day(1)),
+          searchText: 'x',
+          guest: { idType: 'NATIONAL_ID', idNumber: TC, nationality: 'TR', birthDate: '1990-01-16' },
+          companions: [{ firstName: 'Erika', lastName: 'Mustermann', isChild: false, idType: 'PASSPORT', idNumber: 'C01X00T47', nationality: 'DE', birthDate: '1985-03-16' }],
+          paymentPreference: 'CARD_AT_DESK',
+          language: 'tr',
+          consents: {},
+          signatureKey: 'x',
+          submittedAt: new Date(Date.now() - 60_000),
+        },
+      });
+      const doc = (person) => db.onlineCheckinDocument.create({ data: { hotelId, reservationId: stay.id, onlineCheckinId: online.id, person, contentType: 'image/jpeg', sizeBytes: 1, thumbBytes: 1 } });
+      const [primary, companion, unread] = [await doc(0), await doc(1), await doc(1)];
+      const first = await as(() => portal.recordDocumentOcr(hotelId, online.id, primary.id, { mrz: tcCard() }));
+      assert.deepEqual([first.status, first.mismatch], ['MISMATCH', ['birthDate']]);
+      const second = await as(() => portal.recordDocumentOcr(hotelId, online.id, companion.id, { mrz: dePassport() }));
+      assert.equal(second.status, 'MATCH');
+      const third = await as(() => portal.recordDocumentOcr(hotelId, online.id, unread.id, { mrz: null }));
+      assert.equal(third.status, 'UNREADABLE');
+      const detail = await portal.getOnlineCheckin(hotelId, online.id);
+      assert.deepEqual(detail.documents.map((row) => row.ocr?.status), ['MISMATCH', 'MATCH', 'UNREADABLE']);
+      assert.equal((await db.onlineCheckin.findUnique({ where: { id: online.id } })).updatedAt.getTime(), online.updatedAt.getTime(), 'online check-in sürümü ilerlemez');
+      // Misafir yeniden gönderince eski okumalar eskir.
+      await db.onlineCheckin.update({ where: { id: online.id }, data: { submittedAt: new Date(Date.now() + 60_000) } });
+      assert.ok((await portal.getOnlineCheckin(hotelId, online.id)).documents.every((row) => row.ocr === null));
+      // Silinmiş belge okunamaz; başka otel göremez.
+      await db.onlineCheckinDocument.update({ where: { id: primary.id }, data: { purgedAt: new Date() } });
+      await assert.rejects(as(() => portal.recordDocumentOcr(hotelId, online.id, primary.id, { mrz: tcCard() })), (error) => error.code === 'DOCUMENT_PURGED');
+      const other = await db.hotel.create({ data: { name: 'Başka', code: `O${randomUUID().slice(0, 5).toUpperCase()}`, timezone: ZONE } });
+      await assert.rejects(as(() => portal.recordDocumentOcr(other.id, online.id, companion.id, { mrz: dePassport() })), (error) => error.code === 'NOT_FOUND');
+    });
+
+    it('toplu girişte belgesiz kayıtlı refakatçi çocuk sayılır (Ali 30 düzeltmesi)', async () => {
+      const stay = await book({ adults: 1, children: 1 });
+      const child = await db.guest.create({ data: { hotelId, firstName: 'Can', lastName: 'Yılmaz' } });
+      await db.guest.update({ where: { id: stay.guest.id }, data: { idType: 'NATIONAL_ID', idNumber: TC, nationality: 'TR' } });
+      await db.reservationGuest.create({ data: { hotelId, reservationId: stay.id, guestId: child.id, isPrimary: false } });
+      const result = await as(async () => frontDesk.checkInBatch(hotelId, [{ id: stay.id, expectedUpdatedAt: await version(stay.id) }], { now: AFTERNOON() }));
+      assert.equal(result.succeeded, 1, JSON.stringify(result.results));
+    });
+  });
 });

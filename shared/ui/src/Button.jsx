@@ -33,9 +33,12 @@ const ICON_SIZES = { sm: 'size-3.5', md: 'size-4' };
  *   className?: string,
  * } & React.ButtonHTMLAttributes<HTMLButtonElement>} props
  */
-export function Button({ variant = 'primary', size = 'md', icon, className = '', children, ...rest }) {
+export function Button({ variant = 'primary', size = 'md', icon, className = '', type = 'button', children, ...rest }) {
+  // Varsayılan "button": form içindeki türsüz düğme (satır sil, Vazgeç…) formu göndermesin. Gönderen düğme
+  // `type="submit"` yazar.
   return (
     <button
+      type={type}
       className={`inline-flex items-center justify-center whitespace-nowrap border font-semibold leading-5 transition duration-200 ease-out active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 ${SIZES[size]} ${VARIANTS[variant]} ${className}`}
       {...rest}
     >

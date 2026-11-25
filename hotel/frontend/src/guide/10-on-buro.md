@@ -353,7 +353,7 @@ Satırda: misafir, oda (yoksa "oda verilmemiş"), odanın hazırlığı (temiz /
 
 1. "Giriş yap"a basın. Pencere konaklamayı yükler; **giriş yapılamayacak** bir durum varsa (çıkış günü geçmiş, iptal edilmiş, zaten içeride) üstte sebebiyle söyler.
 2. **Oda:** verilmemişse aday odalar listelenir — misafirin tipi önce, en hazır (kontrol edilmiş / temiz) oda başta; kapasitesi yetmeyen ya da overbooking yaratacak oda listelenmez. Seçilen oda girişle **aynı işlemde** atanır. Odada önceki misafir hâlâ içerideyse ya da oda arızalıysa giriş olmaz; oda **kirliyse** uyarı çıkar, personel onaylayarak devam edebilir (otelin tercihi).
-3. **Kimlik (KBS):** rezervasyon sahibinin belgesi zorunludur — Belge türü (Kimlik kartı / Pasaport / Diğer), Belge numarası (TC kimlik no sağlaması yapılır, pasaport biçimi denetlenir), uyruk, isteğe bağlı doğum tarihi. Otelin politikası "Bütün yetişkinler" ise refakatçi yetişkinlerin de belgesi girilir; **çocuk** işaretlenen refakatçide belge isteğe bağlıdır. Refakatçi belge numarasından tanınır: aynı kişiye ikinci kart açılmaz; belge başka adla kayıtlıysa pencere söyler.
+3. **Kimlik (KBS):** belgeyi **Kimlik tara** ile okutabilirsiniz (aşağıda ayrı anlatılır) ya da elle girersiniz. Rezervasyon sahibinin belgesi zorunludur — Belge türü (Kimlik kartı / Pasaport / Diğer), Belge numarası (TC kimlik no sağlaması yapılır, pasaport biçimi denetlenir), uyruk, isteğe bağlı doğum tarihi. Otelin politikası "Bütün yetişkinler" ise refakatçi yetişkinlerin de belgesi girilir; **çocuk** işaretlenen refakatçide belge isteğe bağlıdır. Refakatçi belge numarasından tanınır: aynı kişiye ikinci kart açılmaz; belge başka adla kayıtlıysa pencere söyler.
 4. **Online check-in'den dolduruldu** uyarısı görürseniz misafir bilgilerini portaldan göndermiştir; form onunla dolu gelir, onay durumu uyarıda yazar. Yalnızca kontrol edin.
 5. **Araç plakası** (isteğe bağlı).
 6. **Teminat:** Teminat yok / Nakit / Kart provizyonu / Havale-EFT; tutar ve isteğe bağlı provizyon-dekont no. **Kart numarası yazmayın** — kart numarasına benzeyen dizi referansa ve nota kaydedilemez.
@@ -378,6 +378,35 @@ Satırda: misafir, oda (yoksa "oda verilmemiş"), odanın hazırlığı (temiz /
 | Giriş geri alındı | Oda aktörü / folyo aktörü | Oda Boş; erken giriş ücreti ve teminat ödemesi ters kayıtla düşer; online check-in "Onaylandı"ya döner | Folyo, oda listesi | Manuel görevler |
 
 **Örnek — teminat 1.000 TL nakit:** 14 Kasım 13:30, Deluxe 405, 3 gece 3.300 TL / gece, otelin giriş saati 14:00, erken giriş ücreti "gecelik fiyatın %20'si". Check-in penceresi: oda 405 "Kontrol edildi" (hazır); kimlik: TC kimlik no girilir (sağlama geçer); refakatçi 1 yetişkin (politika "yalnızca sahibi" — belge istenmez), 1 çocuk; plaka 34 ABC 123; **Teminat: Nakit 1.000 TL**; **Erken giriş ücreti: 660,00 TL** uyarısı (3.300 × %20) — resepsiyon "Ücret uygulama" işaretler (oda hazırdı). "Giriş yap". 13:30:02 oda aktörü 405'i Dolu yapar. 13:30:02 folyo aktörü folyoyu açar: kalem yok (ücretten vazgeçildi; denetim izinde "politika tutarı 660, uygulanmadı"), **ödeme: Nakit 1.000,00 · Giriş teminatı · İşlendi**. Folyo: Harcamalar 0,00 · Ödenen 1.000,00 · **Bakiye −1.000,00** (misafir alacaklı). Kasa 14 Kasım: Nakit tahsilat +1.000 (kaynak Konaklama, alan: resepsiyonist). Gece kapanışlarıyla 3 × 3.300 işlenir → çıkışta bakiye 9.900 − 1.000 = **8.900 TL** ödenecek. Teminat **kart provizyonu** seçilmiş olsaydı: ödeme yazılmaz, folyoda "Provizyon var — çıkışta kartla tahsil edin" şeridi; çıkışta 9.900 kartla çekilir. Eşik 500 TL olsaydı nakit teminat "Onay bekliyor" kalır, müdür onaylayınca kasaya girerdi.
+
+### Kimlik tarama (pasaport / kimlik kartı)
+
+**Nerede:** check-in penceresinde "Misafirin kimliği"nin yanında **Kimlik tara**; refakatçilerde her kişide **Kimlik tara** ve **Tarayarak ekle**; misafir kartında "Kartı düzenle" → **Kimlik tara**; online check-in inceleme penceresinde **Belgeyi oku / Belgeleri oku**.
+
+**Ne okunur:** belgenin altındaki **makine okunur satırlar** (MRZ, `<<<` dolgulu satırlar): pasaportun fotoğraflı sayfası (2 × 44 karakter) ve yeni TC kimlik kartının **arka yüzü** (3 × 30). Satırlardan ad, soyad, belge türü, belge numarası, **TC kimlik no** (kimlik kartında ve Türk pasaportunda), uyruk, doğum tarihi ve son kullanma tarihi çıkar. Eski tip nüfus cüzdanında ve ehliyette bu satır yoktur — bilgiler elle girilir.
+
+**Görüntü nereye gider:** hiçbir yere. Okuma bu bilgisayarda / telefonda tarayıcının içinde yapılır; fotoğraf sunucuya gönderilmez ve saklanmaz. Sunucuya yalnızca seçtiğiniz değerler ve okunan satırların metni gider; sunucu satırları **kendisi yeniden sağlar** ve saklamaz. Okuyucu ilk kullanımda ~7 MB dosya indirir (bir kez; tarayıcı önbelleğe alır), sonra her okuma 1–5 saniyedir.
+
+**Adım adım:**
+
+1. **Kimlik tara**'ya basın. Kaynak seçin: **Kamerayla tara** (telefon / tablette arka kamera; çerçevedeki kesikli alana `<<<` satırlarını hizalayıp **Çek ve oku**), **Fotoğraf / tarama dosyası seç** (belge tarayıcısının çıktısı ya da telefon fotoğrafı) ya da misafir online check-in'de fotoğraf yüklediyse **misafirin yüklediği belge**.
+2. Okunan satırlar ve özet gelir. **Sağlama haneleri tuttu** yazıyorsa belge numarası, doğum ve son kullanma tarihi doğrulanmıştır. Tutmadıysa satırları belgeye bakarak düzeltebilir (kutu düzenlenebilir) ya da yeniden tarayabilirsiniz. Okunamazsa **Satırları elle yaz** da olur.
+3. **Karşılaştır:** her alan için "Kayıttaki" ve "Belgeden okunan" yan yana; **aynı / farklı** işaretli. Kimlik alanlarında varsayılan belgedeki; **adda** varsayılan kayıttaki (adın sağlaması yoktur, okuma hatası olabilir; MRZ'de Ç, Ş, Ğ, İ, Ö, Ü yoktur — "Öztürk" ile "OZTURK" aynı sayılır). Farklı adı belgedekiyle değiştirmek için o satırda "Belgeden okunan"ı seçin.
+4. **Forma yaz.** Kimlik alanlarının yanında **Kimlikten okundu** rozeti çıkar. Rezervasyon sahibinin adı değiştiyse pencerede "Ad belgedeki gibi düzeltilecek" uyarısı ve **Geri al** görünür; ad girişle birlikte misafir kartına yazılır (denetim izine eski adla).
+5. Okumadan sonra bir kimlik alanını elle değiştirirseniz rozet **"okunduktan sonra elle değişti"** olur: kimlik artık elle girilmiş sayılır.
+
+**Uyarılar:** belgenin **süresi dolmuşsa** kırmızı uyarı (giriş engellenmez; geçerli belge isteyin). Aynı belge numarası **başka bir misafir kartında** kayıtlıysa uyarı ve kartın adı — aynı kişiyse Misafirler ekranından kartları birleştirin. Ad satıra sığmadıysa (uzun adlar) "kısaltılmış olabilir" notu.
+
+**Arka planda:** sunucu satırları ayrıştırıp sağlar ve gönderilen kimlik alanlarıyla karşılaştırır. Tutarsa misafir kartına **"kimlikten okundu"** işareti (kim, ne zaman, nereden: resepsiyonda tarandı / online check-in belgesinden) yazılır; tutmazsa giriş "Kimlikten okunan bilgiler değiştirilmiş" sebebiyle durur. Kimlik sonradan elle değiştirilirse işaret kendiliğinden silinir; kartta yalnızca etiket / telefon değişirse kalır. Denetim izinde belge numarası maskelidir, okunan satırlar hiçbir yere yazılmaz.
+
+| Tetikleyici | Ne olur | Nerede görünür | Hatada |
+| --- | --- | --- | --- |
+| Okunan kimlikle "Giriş yap" | Kart "kimlikten okundu" (resepsiyonda tarandı) | Misafir kartı kimlik satırı, sonraki girişlerde rozet | Okunan değiştirilmişse ya da sağlama tutmuyorsa giriş durur, sebep alanın altında |
+| Belgedeki ada göre düzeltme | Misafir kartının adı değişir | Kart, denetim izi (eski ad) | — |
+| Misafir kartında okuma + Kaydet | Aynı işaret; kimlik değişti | Kart | Aynı |
+| Kimlik elle değişti | İşaret silinir | Kartta rozet yok | — |
+
+**Örnek — OTA'dan yanlış yazılmış ad:** Booking'den "Aise Yilmas" adıyla gelen rezervasyon. Misafir TC kimlik kartını uzatır; resepsiyon arka yüzü kameraya tutar → 2 saniyede okunur: YILMAZ / AYSE, TC 1•••••••••6, 15.01.1990, son kullanma 2031. Karşılaştırma: soyad "farklı" (Yilmas / Yilmaz), ad "farklı" (Aise / Ayse) — resepsiyon ikisinde de "Belgeden okunan"ı seçer, formda "Ayşe Yılmaz" olarak Türkçe harfleri düzeltir; kimlik alanları belgedeki. **Giriş yap** → kart "Ayşe Yılmaz", kimlikten okundu; denetim izinde "Aise Yilmas → Ayşe Yılmaz, girişte belgedeki ada göre düzeltildi".
 
 ### Gidecekler
 
@@ -511,6 +540,7 @@ Girişten "Online check-in kaç gün önce açılır" (varsayılan 7) gün önce
 
 - **Onayla:** "bilgiler ve belge görüldü" demektir. Online check-in girişi **hızlandırır, yerine geçmez**: giriş yine Gelecekler'den ya da bu pencereden "Girişi yap" ile yapılır ve check-in penceresi bu bilgilerle dolu açılır.
 - **Düzeltme iste:** sebep yazın; misafir portalda görür (kendi dilinde), düzeltip yeniden gönderir → yeniden "İnceleme bekliyor".
+- **Belgeleri oku:** fotoğraflardaki makine okunur satırlar bu bilgisayarda okunur ve misafirin yazdıklarıyla karşılaştırılır; her fotoğrafın altında **Belgeyle uyuşuyor**, **Uyuşmuyor: Belge numarası, Doğum tarihi…**, **Satır okunamadı** ya da **Belgenin süresi dolmuş** yazar. Sunucuya değerler değil sonuç gider. Misafir formu yeniden gönderirse eski sonuçlar düşer; yeniden okuyun. Uyuşmazlık varsa **Düzeltme iste** ile misafire söyleyin ya da girişte belgeyi tarayın.
 - Misafir onaydan **sonra** bilgi değiştirirse kayıt yeniden incelemeye düşer.
 
 #### Online check-in sekmesi — ekranda gördüğünüz alanlar
@@ -625,7 +655,7 @@ Ad, telefon ya da e-posta ile arama; her kartta konaklama sayısı, toplam harca
 
 ### Misafir kartı
 
-Üstte **özet**: tamamlanmış konaklama sayısı (ilk / son konaklama), **toplam harcama** (folyolara işlenen borç), son konaklama. "Kartı düzenle": ad, soyad, telefon, e-posta, uyruk, doğum tarihi, kimlik türü ve no. Telefonu ülke kodu olmadan yazarsanız otelin kodu varsayılır.
+Üstte **özet**: tamamlanmış konaklama sayısı (ilk / son konaklama), **toplam harcama** (folyolara işlenen borç), son konaklama. "Kartı düzenle": ad, soyad, telefon, e-posta, uyruk, doğum tarihi, kimlik türü ve no — kimlik girişteki kurallarla denetlenir (TC no sağlaması, uyruk listeden, belge eksiksiz) ve **Kimlik tara** ile belgeden okunabilir. Boş bırakılan telefon / e-posta karttan silinir. Telefonu ülke kodu olmadan yazarsanız otelin kodu varsayılır. Kimlik satırında belge türü, maskeli numara ve belgeden okunduysa **Kimlikten okundu** rozeti görünür.
 
 **Etiketler:** VIP, Sorunlu, Sadık, Kurumsal, Balayı, Engelli erişimi (öneriler; serbest etiket de girilir). Etiketler rezervasyon formundaki CRM önizlemesinde görünür.
 

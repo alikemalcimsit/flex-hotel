@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  DOCUMENT_OCR_FIELD_LABELS,
   GUEST_PORTAL_LANGUAGE_LABELS,
   ID_DOCUMENT_TYPE_LABELS,
   ONLINE_CHECKIN_PAYMENT_PREFERENCE_LABELS,
@@ -9,11 +10,12 @@ import {
 } from '@hotelos/hotel-contracts';
 import { Alert, Badge, Button, Spinner, Textarea } from '@hotelos/ui';
 import { Modal } from '../../components/Modal.jsx';
-import { api, apiPost } from '../../lib/api.js';
+import { api, apiBlob, apiPost } from '../../lib/api.js';
 import { COUNTRY_OPTIONS } from '../../lib/front-desk.js';
 import { formatDate, formatDateTime } from '../../lib/format.js';
 import { documentPath, guestPortalKeys, personLabel, signaturePath } from '../../lib/guestPortal.js';
 import { useProtectedImage } from '../../lib/lost-items.js';
+import { readMrzFromImage } from '../../lib/mrzReader.js';
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 import { useHotelToday } from '../../lib/useHotel.js';
 import { toastError, toastSuccess } from '../../store/toast.js';
@@ -37,6 +39,9 @@ export function OnlineCheckinDialog({ onlineCheckinId, onClose }) {
   const [reasonError, setReasonError] = useState(null);
   const [checkingIn, setCheckingIn] = useState(false);
   const [zoom, setZoom] = useState(null);
+  // Belge okuma (modül 59): fotoğraf bu tarayıcıda okunur, yalnız MRZ satırları sunucuya gider.
+  const [readingId, setReadingId] = useState(null);
+  const [readAllBusy, setReadAllBusy] = useState(false);
   const query = useQuery({ queryKey: guestPortalKeys.detail(onlineCheckinId), queryFn: () => api(`/guest-portal/online-checkins/${onlineCheckinId}`) });
   const detail = query.data;
   const decide = useMutation({
@@ -71,6 +76,36 @@ export function OnlineCheckinDialog({ onlineCheckinId, onClose }) {
   }
 
   const canManage = can(PERMISSIONS.GUEST_PORTAL_MANAGE);
+  const readable = detail.documents.filter((doc) => !doc.purged && doc.person != null);
+  const unread = readable.filter((doc) => !doc.ocr);
+
+  /** Bir fotoğrafı okur ve sonucu kaydeder; hata toast olur, sıradaki belgeye geçilir. @param {any} doc */
+  async function readDocument(doc) {
+    setReadingId(doc.id);
+    try {
+      const blob = await apiBlob(documentPath(detail.id, doc.id, 'full'));
+      const result = await readMrzFromImage(blob, { today });
+      const saved = await apiPost(`/guest-portal/online-checkins/${detail.id}/documents/${doc.id}/ocr`, { mrz: result?.text ?? null });
+      await queryClient.invalidateQueries({ queryKey: guestPortalKeys.detail(onlineCheckinId) });
+      return saved;
+    } catch (error) {
+      toastError(`Belge okunamadı: ${error.message}`);
+      return null;
+    } finally {
+      setReadingId(null);
+    }
+  }
+  async function readAll() {
+    setReadAllBusy(true);
+    let mismatched = 0;
+    for (const doc of unread) {
+      const saved = await readDocument(doc);
+      if (saved && saved.status !== 'MATCH') mismatched += 1;
+    }
+    setReadAllBusy(false);
+    if (mismatched === 0) toastSuccess('Belgeler okundu: bilgiler belgelerle uyuşuyor');
+    else toastError(`${mismatched} belgede uyuşmazlık ya da okunamayan satır var; kişilerin altına bakın`);
+  }
   const open = !['COMPLETED'].includes(detail.status) && ['PENDING', 'CONFIRMED'].includes(detail.reservationStatus);
   const arrivalDue = today && detail.checkIn <= today;
   const people = [{ ...detail.guest, isChild: false }, ...detail.companions];
@@ -125,8 +160,19 @@ export function OnlineCheckinDialog({ onlineCheckinId, onClose }) {
           {detail.documentsPurgedAt && <Alert tone="info">Belge fotoğrafları saklama süresi dolduğu için {formatDateTime(detail.documentsPurgedAt)} tarihinde silindi (KVKK).</Alert>}
           {detail.status === 'SUBMITTED' && detail.submitCount > 1 && <Alert tone="info">Misafir {detail.submitCount}. kez gönderdi (düzeltme ya da onaydan sonra değişiklik).</Alert>}
 
+          {canManage && readable.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-panel border border-line bg-surface-muted p-3">
+              <p className="text-xs text-ink-soft">
+                Belge fotoğraflarındaki makine okunur satır (MRZ) bu bilgisayarda okunup misafirin yazdıklarıyla karşılaştırılır; fotoğraf sunucuya yeniden gönderilmez.
+              </p>
+              <Button type="button" size="sm" variant="outline" icon="checkCheck" onClick={readAll} disabled={readAllBusy || Boolean(readingId) || unread.length === 0}>
+                {readAllBusy ? 'Okunuyor…' : unread.length === 0 ? 'Hepsi okundu' : `Belgeleri oku (${unread.length})`}
+              </Button>
+            </div>
+          )}
+
           {people.map((person, index) => (
-            <PersonCard key={index} person={person} index={index} detail={detail} onZoom={setZoom} />
+            <PersonCard key={index} person={person} index={index} detail={detail} onZoom={setZoom} onRead={canManage ? readDocument : null} readingId={readingId} busy={readAllBusy} />
           ))}
 
           <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
@@ -187,8 +233,8 @@ function Row({ label, children }) {
   );
 }
 
-/** Kişinin kimliği ve belge fotoğrafları. */
-function PersonCard({ person, index, detail, onZoom }) {
+/** Kişinin kimliği ve belge fotoğrafları (okuma sonucuyla). */
+function PersonCard({ person, index, detail, onZoom, onRead, readingId, busy }) {
   const photos = detail.documents.filter((doc) => doc.person === index);
   return (
     <section className="rounded-panel border border-line p-4">
@@ -210,11 +256,35 @@ function PersonCard({ person, index, detail, onZoom }) {
       {photos.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-2">
           {photos.map((doc) => (
-            <Thumb key={doc.id} onlineCheckinId={detail.id} doc={doc} onZoom={onZoom} />
+            <div key={doc.id} className="flex w-40 flex-col gap-1">
+              <Thumb onlineCheckinId={detail.id} doc={doc} onZoom={onZoom} />
+              <OcrResult doc={doc} />
+              {onRead && !doc.purged && (
+                <Button type="button" size="sm" variant="ghost" icon="eye" onClick={() => onRead(doc)} disabled={busy || Boolean(readingId)}>
+                  {readingId === doc.id ? 'Okunuyor…' : doc.ocr ? 'Yeniden oku' : 'Belgeyi oku'}
+                </Button>
+              )}
+            </div>
           ))}
         </div>
       )}
     </section>
+  );
+}
+
+/** Okumanın sonucu (misafirin son gönderiminden sonraki okuma; yeniden gönderimde eskir). */
+function OcrResult({ doc }) {
+  if (!doc.ocr) return null;
+  const { status, mismatch, expired } = doc.ocr;
+  return (
+    <div className="flex flex-col gap-1 text-xs">
+      {status === 'MATCH' && <Badge tone="success">Belgeyle uyuşuyor</Badge>}
+      {status === 'MISMATCH' && (
+        <span className="font-semibold text-sec-strong">Uyuşmuyor: {mismatch.map((field) => DOCUMENT_OCR_FIELD_LABELS[field] ?? field).join(', ')}</span>
+      )}
+      {status === 'UNREADABLE' && <Badge tone="warning">Satır okunamadı</Badge>}
+      {expired && <Badge tone="danger">Belgenin süresi dolmuş</Badge>}
+    </div>
   );
 }
 

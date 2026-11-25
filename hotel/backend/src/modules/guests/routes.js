@@ -5,6 +5,7 @@ import {
   guestNoteUpdateSchema,
   guestPreferenceSchema,
   guestPreferenceUpdateSchema,
+  identityMatchQuerySchema,
   mergeGuestsSchema,
   paginationQuerySchema,
 } from '@hotelos/hotel-contracts';
@@ -37,6 +38,9 @@ export async function guestRoutes(app) {
   /* ── Liste / arama ── */
   app.get('/', { ...view, schema: { querystring: guestListQuerySchema } }, async (req) => ok(await service.listGuests(req.hotelId, req.query)));
   app.get('/search', { ...view, schema: { querystring: searchQuery } }, async (req) => ok(await service.searchGuestCards(req.hotelId, req.query.q)));
+
+  /* ── Belge eşleşmesi (modül 59; numara gövdede) ── */
+  app.post('/identity-matches', { ...manage, schema: { body: identityMatchQuerySchema } }, async (req) => ok(await service.findIdentityMatches(req.hotelId, req.body)));
 
   /* ── Birleştirme (sabit yol, :id'den önce) ── */
   app.post('/merge', { ...merge, schema: { body: mergeGuestsSchema } }, async (req) => ok(await service.mergeGuests(req.hotelId, req.body)));

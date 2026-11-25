@@ -1,4 +1,5 @@
 import { listQuerySchema } from './fields.js';
+import { documentReadSchema, optionalIdentityShape, refineOptionalIdentity } from './front-desk.js';
 import { z } from './locale.js';
 
 /**
@@ -39,16 +40,33 @@ export const SUGGESTED_GUEST_TAGS = Object.freeze(['VIP', 'Sorunlu', 'Sadık', '
 
 const optionalTrimmed = (max) => z.string().trim().max(max).optional().or(z.literal('')).transform((v) => (v ? v : undefined));
 
-/** Misafir kartı düzenleme (iletişim, kimlik, etiketler). */
-export const guestCardUpdateSchema = z.object({
-  firstName: z.string().trim().min(1, 'Ad zorunlu').max(100).optional(),
-  lastName: z.string().trim().min(1, 'Soyad zorunlu').max(100).optional(),
-  phone: optionalTrimmed(40),
-  email: optionalTrimmed(200),
-  nationality: optionalTrimmed(2),
-  birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Geçersiz tarih').optional(),
-  tags: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
-});
+/** Silinebilir metin: '' → null (temizle), gönderilmezse dokunulmaz. */
+const clearable = (max) =>
+  z
+    .string()
+    .trim()
+    .max(max, `En fazla ${max} karakter`)
+    .transform((value) => value || null)
+    .nullish();
+
+/**
+ * Misafir kartı düzenleme (iletişim, kimlik, etiketler). Kimlik alanları girişteki kurallarla denetlenir (TC no
+ * sağlaması, uyruk listesi, eksiksiz belge); belge okuması (modül 59) varsa sunucu MRZ'yi yeniden sağlar.
+ */
+export const guestCardUpdateSchema = z
+  .object({
+    firstName: z.string().trim().min(1, 'Ad zorunlu').max(100).optional(),
+    lastName: z.string().trim().min(1, 'Soyad zorunlu').max(100).optional(),
+    phone: clearable(40),
+    email: clearable(200).refine((value) => value == null || z.string().email().safeParse(value).success, { message: 'Geçersiz e-posta' }),
+    ...optionalIdentityShape,
+    documentRead: documentReadSchema.nullish(),
+    tags: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
+  })
+  .superRefine((value, ctx) => {
+    refineOptionalIdentity(value, ctx);
+    if (value.documentRead && !value.idNumber) ctx.addIssue({ code: 'custom', path: ['documentRead'], message: 'Okunan belgenin numarası boş bırakılamaz' });
+  });
 
 export const guestPreferenceSchema = z.object({
   category: z.enum(PREFERENCE_CATEGORIES, { error: 'Kategori seçin' }),

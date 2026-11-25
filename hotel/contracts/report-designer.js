@@ -160,6 +160,8 @@ export const MAX_DESIGNER_SORTS = 3;
 /** Önizleme satırı; çalıştırma (Excel) üst sınırı. */
 export const DESIGNER_PREVIEW_ROWS = 100;
 export const MAX_DESIGNER_ROWS = 5000;
+/** Kişi başı kayıtlı tasarım (rapor asistanındaki kayıtlı rapor sınırıyla aynı). */
+export const MAX_DESIGNS_PER_USER = 100;
 export const MAX_DESIGNER_TEXT_FILTER = 100;
 
 /** Toplam sütununun anahtarı: "COUNT", "SUM:totalPrice". @param {{ fn: string, column?: string | null }} aggregate */

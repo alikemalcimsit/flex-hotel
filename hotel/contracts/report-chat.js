@@ -89,6 +89,8 @@ export const MAX_PENDING_REPORT_QUESTIONS = 3;
 export const REPORT_CHAT_HISTORY = 30;
 /** Kişi başı en fazla kayıtlı rapor. */
 export const MAX_SAVED_REPORTS_PER_USER = 100;
+/** Kayıtlı rapor / tasarım listesinin üst sınırı (paylaşılanlar bütün kullanıcılardan gelir; en yeni önce). */
+export const MAX_REPORT_LIST = 200;
 /** Bekleyen soru bu süreden sonra "zamanında cevaplanmadı" sayılır (ms). */
 export const REPORT_QUESTION_TIMEOUT_MS = 3 * 60_000;
 /** Manuel görev modülü (ajan kapalıyken soru "rapor talebi" olarak personele düşer). */

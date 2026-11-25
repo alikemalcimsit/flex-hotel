@@ -6,6 +6,7 @@ import {
   guestPortalSettingsSchema,
   guestPortalTokenSchema,
   onlineCheckinApproveSchema,
+  onlineCheckinDocumentOcrSchema,
   onlineCheckinDocumentStaffParamSchema,
   onlineCheckinListQuerySchema,
   onlineCheckinParamSchema,
@@ -55,6 +56,10 @@ export async function guestPortalRoutes(app) {
     '/online-checkins/:onlineCheckinId/documents/:documentId',
     { ...view, schema: { params: onlineCheckinDocumentStaffParamSchema, querystring: z.object({ size: z.enum(['full', 'thumb']).default('full') }) } },
     async (req, reply) => sendFile(reply, await documents.openDocument(req.hotelId, req.params.onlineCheckinId, req.params.documentId, { thumb: req.query.size === 'thumb' })),
+  );
+  // Belge okuma sonucu (modül 59): personelin tarayıcısı fotoğraftaki MRZ'yi okur; sunucu karşılaştırır.
+  app.post('/online-checkins/:onlineCheckinId/documents/:documentId/ocr', { ...manage, schema: { params: onlineCheckinDocumentStaffParamSchema, body: onlineCheckinDocumentOcrSchema } }, async (req) =>
+    ok(await service.recordDocumentOcr(req.hotelId, req.params.onlineCheckinId, req.params.documentId, req.body)),
   );
   app.get('/online-checkins/:onlineCheckinId/signature', { ...view, schema: { params: onlineCheckinParamSchema } }, async (req, reply) =>
     sendFile(reply, await documents.openSignature(req.hotelId, req.params.onlineCheckinId)),

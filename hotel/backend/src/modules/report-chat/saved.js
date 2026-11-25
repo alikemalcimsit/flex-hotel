@@ -1,5 +1,5 @@
 import { currentActor } from '@hotelos/core';
-import { MAX_SAVED_REPORTS_PER_USER } from '@hotelos/hotel-contracts';
+import { MAX_REPORT_LIST, MAX_SAVED_REPORTS_PER_USER } from '@hotelos/hotel-contracts';
 import { prisma } from '../../db.js';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../lib/errors.js';
 import { updateWithVersionCheck } from '../../lib/versioned-update.js';
@@ -42,7 +42,7 @@ async function visibleReport(hotelId, id) {
 export async function listSavedReports(hotelId, { scope }) {
   const me = currentActor();
   const where = scope === 'MINE' ? { hotelId, owner: me } : { hotelId, shared: true };
-  const rows = await prisma.savedReport.findMany({ where, orderBy: [{ updatedAt: 'desc' }] });
+  const rows = await prisma.savedReport.findMany({ where, orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }], take: MAX_REPORT_LIST });
   return { items: rows.map((row) => toSavedDto(row, me)) };
 }
 

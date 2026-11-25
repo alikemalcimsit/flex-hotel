@@ -118,7 +118,8 @@ export async function seedGuestPortalDemo({ prisma, core, contracts, hotelId, to
   /** @param {any} reservation @param {'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'COMPLETED'} status @param {Date} submittedAt */
   const submit = (reservation, status, submittedAt) => {
     const nationality = reservation.guest.nationality || 'TR';
-    const names = FIRST_NAMES[nationality] ?? FIRST_NAMES.OTHER;
+    // Refakatçinin adı rezervasyon sahibininkinden farklı (aynı adlı iki kişi KBS'de ve ekranda karışıyordu).
+    const names = (FIRST_NAMES[nationality] ?? FIRST_NAMES.OTHER).filter((name) => name !== reservation.guest.firstName);
     const primary = reservation.guest.idNumber
       ? { idType: reservation.guest.idType, idNumber: reservation.guest.idNumber, nationality, birthDate: reservation.guest.birthDate ? core.toIsoDay(reservation.guest.birthDate) : identity(nationality).birthDate }
       : identity(nationality);

@@ -106,9 +106,17 @@ describe('CRM / misafir kartı (entegrasyon)', { skip }, () => {
     const sStay = await seedStay(source.id, { offset: -4 });
     await as(DESK, () => crm.addPreference(hotelId, source.id, { category: 'PILLOW', value: 'Sert yastık' }));
     await as(DESK, () => crm.addNote(hotelId, source.id, { body: 'Erken giriş istedi' }));
+    // Satış adayı (modül 36) da kaynağa bağlı: birleştirmede taşınmalı (eskiden silinen kartta kalıyordu).
+    const lead = await db.lead.create({ data: { hotelId, name: 'Mehmet Kaya', phone: '+905551112244', guestId: source.id, createdBy: DESK } });
+    // "Kimlikten okundu" (modül 59): kaynağın okunmuş kimliği seçilirse işareti de gelir.
+    await db.guest.update({ where: { id: source.id }, data: { idType: 'PASSPORT', idNumber: 'U1234567', nationality: 'DE', idReadAt: new Date(), idReadBy: DESK, idReadVia: 'STAFF_SCAN' } });
 
     const merged = await as(DESK, () =>
-      crm.mergeGuests(hotelId, { sourceId: source.id, targetId: target.id, keep: { firstName: 'Mehmet', lastName: 'Kaya', phone: '+905551112233', email: 'mehmet@example.com' } }),
+      crm.mergeGuests(hotelId, {
+        sourceId: source.id,
+        targetId: target.id,
+        keep: { firstName: 'Mehmet', lastName: 'Kaya', phone: '+905551112233', email: 'mehmet@example.com', idType: 'PASSPORT', idNumber: 'U1234567', nationality: 'DE' },
+      }),
     );
 
     // Hedef: iki konaklama, birleşmiş etiket, kaynaktan taşınan tercih+not.
@@ -121,6 +129,9 @@ describe('CRM / misafir kartı (entegrasyon)', { skip }, () => {
     // Kaynağın rezervasyonu ve folyosu hedefe taşındı.
     assert.equal((await db.reservation.findUnique({ where: { id: sStay.id } })).guestId, target.id);
     assert.equal((await db.folio.findFirst({ where: { reservationId: sStay.id } })).guestId, target.id);
+    assert.equal((await db.lead.findUnique({ where: { id: lead.id } })).guestId, target.id);
+    const kept = await db.guest.findUnique({ where: { id: target.id } });
+    assert.deepEqual([kept.idNumber, kept.idReadVia], ['U1234567', 'STAFF_SCAN']);
     // Kaynak kart silindi.
     assert.ok((await db.guest.findUnique({ where: { id: source.id } })).deletedAt);
     // Hedefin kendi kaydı duruyor.

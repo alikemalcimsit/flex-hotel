@@ -287,6 +287,55 @@ export const companionSchema = z
   })
   .superRefine((value, ctx) => refineIdentity(value, ctx, !value.isChild));
 
+/* ─────────────── Kimlik okuma (modül 59) ─────────────── */
+
+/** Kimliğin nereden okunduğu: resepsiyonda taranan belge ya da online check-in'de misafirin yüklediği fotoğraf. */
+export const ID_READ_VIAS = Object.freeze(['STAFF_SCAN', 'ONLINE_PHOTO']);
+export const ID_READ_VIA_LABELS = Object.freeze({ STAFF_SCAN: 'Resepsiyonda tarandı', ONLINE_PHOTO: 'Online check-in belgesinden' });
+/** İstemcinin gönderdiği MRZ metninin üst sınırı (3 satır × 44 + satır sonları, bolca pay). */
+export const MAX_MRZ_TEXT_LENGTH = 200;
+
+/**
+ * Belgeden okuma: tarayıcıdaki okuyucunun bulduğu MRZ satırları (görüntü değil). Sunucu satırları kendisi
+ * ayrıştırıp sağlar, kimlik alanlarıyla karşılaştırır; tutarsa kişiye "kimlikten okundu" işareti yazılır. MRZ
+ * metni saklanmaz.
+ */
+export const documentReadSchema = z.object({
+  mrz: z.string().trim().min(1, 'Okuma boş').max(MAX_MRZ_TEXT_LENGTH, 'Okuma çok uzun'),
+  via: z.enum(ID_READ_VIAS).default('STAFF_SCAN'),
+});
+
+/** Girişte rezervasyon sahibinin kimliği: her zaman zorunlu, isteğe bağlı belge okumasıyla. */
+export const checkInGuestSchema = z
+  .object({ ...identityShape, documentRead: documentReadSchema.nullish() })
+  .superRefine((value, ctx) => refineIdentity(value, ctx, true));
+
+/** Girişte refakatçi (belge okumasıyla). */
+export const checkInCompanionSchema = z
+  .object({
+    firstName: nameField('Ad'),
+    lastName: nameField('Soyad'),
+    isChild: z.boolean().default(false),
+    ...identityShape,
+    documentRead: documentReadSchema.nullish(),
+  })
+  .superRefine((value, ctx) => {
+    refineIdentity(value, ctx, !value.isChild);
+    if (value.documentRead && !value.idNumber) ctx.addIssue({ code: 'custom', path: ['documentRead'], message: 'Okunan belgenin numarası boş bırakılamaz' });
+  });
+
+/**
+ * Misafir kartında kimlik (CRM düzenleme): hepsi boş ya da eksiksiz. Alanlar gönderilmezse dokunulmaz; biri
+ * gönderilirse üçü birden (tür, numara, uyruk) beklenir — yarım kimlik KBS'ye gidemez.
+ */
+export const optionalIdentityShape = identityShape;
+/** @param {any} value @param {import('zod').RefinementCtx} ctx */
+export function refineOptionalIdentity(value, ctx) {
+  const touched = ['idType', 'idNumber', 'nationality'].some((key) => value[key] !== undefined);
+  if (!touched) return;
+  refineIdentity(value, ctx, false);
+}
+
 export const depositSchema = z
   .object({
     method: z.enum(DEPOSIT_METHODS, { error: 'Teminat türü seçin' }).default('NONE'),
@@ -308,6 +357,23 @@ export const depositSchema = z
     }
   });
 
+/**
+ * Aynı belge numarası başka kartta mı (modül 59)? Numara gövdede gider (adres satırına / erişim günlüğüne düşmesin).
+ * `excludeGuestId`: düzenlenen kartın kendisi.
+ */
+export const identityMatchQuerySchema = z.object({
+  idNumber: z
+    .string()
+    .trim()
+    .min(1, 'Belge numarası boş')
+    .max(MAX_ID_NUMBER_LENGTH + 10, 'Belge numarası çok uzun')
+    .transform((value) => normalizeIdNumber(value)),
+  nationality: nationalityField.nullish(),
+  excludeGuestIds: z.array(z.string().uuid()).max(MAX_COMPANIONS + 1).default([]),
+});
+/** Eşleşmede gösterilecek en fazla kart. */
+export const MAX_IDENTITY_MATCHES = 5;
+
 /* ─────────────── Giriş / çıkış ─────────────── */
 
 export const checkInSchema = z.object({
@@ -316,8 +382,13 @@ export const checkInSchema = z.object({
   roomId: z.string().uuid({ message: 'Geçersiz oda' }).nullish(),
   /** Oda kirli / temizleniyor: personel gördü, yine de giriş yapılıyor. */
   acceptRoomNotReady: z.boolean().default(false),
-  guest: guestIdentitySchema,
-  companions: z.array(companionSchema).max(MAX_COMPANIONS, `En fazla ${MAX_COMPANIONS} refakatçi`).default([]),
+  guest: checkInGuestSchema,
+  /**
+   * Rezervasyondaki ad belgedekinden farklıysa (OTA'dan yanlış yazılmış ad) personel kartı belgedeki gibi düzeltir.
+   * Boşsa ad değişmez.
+   */
+  guestName: z.object({ firstName: nameField('Ad'), lastName: nameField('Soyad') }).nullish(),
+  companions: z.array(checkInCompanionSchema).max(MAX_COMPANIONS, `En fazla ${MAX_COMPANIONS} refakatçi`).default([]),
   vehiclePlate: z
     .string()
     .trim()
