@@ -632,3 +632,27 @@ export function lockAssets(tx, hotelId, assetIds) {
 export function lockAssetCounts(tx, hotelId, countIds, { shared = false } = {}) {
   return lockPlainRows(tx, 'AssetCount', hotelId, countIds, shared);
 }
+
+/**
+ * Açık API uygulaması (modül 61): anahtar / abonelik sayısı sınırı ve durum değişikliği bu kilit altında (iki yönetici
+ * aynı anda 10. anahtarı açamaz; kapatılan uygulamaya o sırada anahtar eklenmez). Uygulama → abonelik sırası.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} clientIds
+ */
+export function lockApiClients(tx, hotelId, clientIds) {
+  return lockRows(tx, 'ApiClient', hotelId, clientIds);
+}
+
+/**
+ * Webhook aboneliği (modül 61): ayar değişikliği, sır yenileme, silme. Gönderici aboneliğin sayaçlarını koşullu
+ * güncellemeyle yazar (kilit almaz).
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} hotelId
+ * @param {string[]} subscriptionIds
+ */
+export function lockWebhookSubscriptions(tx, hotelId, subscriptionIds) {
+  return lockRows(tx, 'WebhookSubscription', hotelId, subscriptionIds);
+}

@@ -227,6 +227,11 @@ const PromotionCouponsTab = lazy(() => import('./pages/promotions/PromotionCoupo
 const PromotionUsageTab = lazy(() => import('./pages/promotions/PromotionUsageTab.jsx').then((m) => ({ default: m.PromotionUsageTab })));
 const ChannelListPage = lazy(() => import('./pages/channels/ChannelListPage.jsx').then((m) => ({ default: m.ChannelListPage })));
 const ChannelPage = lazy(() => import('./pages/channels/ChannelPage.jsx').then((m) => ({ default: m.ChannelPage })));
+// Entegrasyon (modül 61): açık API uygulamaları, anahtarlar, webhook abonelikleri ve teslimat logu.
+const IntegrationsPage = lazy(() => import('./pages/integrations/IntegrationsPage.jsx').then((m) => ({ default: m.IntegrationsPage })));
+const ApiClientsTab = lazy(() => import('./pages/integrations/ApiClientsTab.jsx').then((m) => ({ default: m.ApiClientsTab })));
+const ApiClientPage = lazy(() => import('./pages/integrations/ApiClientPage.jsx').then((m) => ({ default: m.ApiClientPage })));
+const DeliveriesTab = lazy(() => import('./pages/integrations/DeliveriesTab.jsx').then((m) => ({ default: m.DeliveriesTab })));
 const ChannelSettingsTab = lazy(() => import('./pages/channels/ChannelSettingsTab.jsx').then((m) => ({ default: m.ChannelSettingsTab })));
 const ChannelMappingTab = lazy(() => import('./pages/channels/ChannelMappingTab.jsx').then((m) => ({ default: m.ChannelMappingTab })));
 const ChannelStopSaleTab = lazy(() => import('./pages/channels/ChannelStopSaleTab.jsx').then((m) => ({ default: m.ChannelStopSaleTab })));
@@ -345,6 +350,26 @@ export default function App() {
                 <RequireTaskScope>
                   <ManualTasksPage />
                 </RequireTaskScope>
+              }
+            />
+            <Route
+              path="entegrasyonlar"
+              element={
+                <RequirePermission permission={PERMISSIONS.INTEGRATIONS_VIEW}>
+                  <IntegrationsPage />
+                </RequirePermission>
+              }
+            >
+              <Route index element={<Navigate to="/entegrasyonlar/uygulamalar" replace />} />
+              <Route path="uygulamalar" element={<ApiClientsTab />} />
+              <Route path="teslimatlar" element={<DeliveriesTab />} />
+            </Route>
+            <Route
+              path="entegrasyonlar/uygulamalar/:clientId"
+              element={
+                <RequirePermission permission={PERMISSIONS.INTEGRATIONS_VIEW}>
+                  <ApiClientPage />
+                </RequirePermission>
               }
             />
             <Route

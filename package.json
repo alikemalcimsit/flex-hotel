@@ -26,5 +26,8 @@
   },
   "engines": {
     "node": ">=22"
+  },
+  "scarfSettings": {
+    "enabled": false
   }
 }

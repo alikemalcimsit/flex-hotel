@@ -62,7 +62,7 @@ export const PROMOTION_DISCOUNT_TYPE_LABELS = Object.freeze({
  * Promosyonun uygulanabileceği satış kaynakları: rezervasyon kaynakları eksi
  * acente (kontrat fiyatı nettir). Prisma `ReservationSource` değerleri.
  */
-export const PROMOTION_SOURCES = Object.freeze(['UI', 'PHONE', 'EMAIL', 'WEBCHAT', 'WHATSAPP', 'WIDGET', 'OTA']);
+export const PROMOTION_SOURCES = Object.freeze(['UI', 'PHONE', 'EMAIL', 'WEBCHAT', 'WHATSAPP', 'WIDGET', 'OTA', 'API']);
 
 /** Yeni promosyonda seçili gelen kaynaklar: doğrudan satış (OTA fiyatını kanal verir, bilerek seçilir). */
 export const DEFAULT_PROMOTION_SOURCES = Object.freeze(['UI', 'PHONE', 'EMAIL', 'WEBCHAT', 'WHATSAPP', 'WIDGET']);

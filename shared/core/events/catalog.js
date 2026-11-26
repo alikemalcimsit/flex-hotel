@@ -543,6 +543,7 @@ export const EVENT_CATALOG = Object.freeze({
       'SALES_FOLLOW_UP',
       'ASSET',
       'STOCK',
+      'INTEGRATION',
     ]),
     userId: z.string().uuid().nullable(),
     permission: z.string().nullable(),

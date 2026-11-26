@@ -62,6 +62,8 @@ enum ReservationSource {
   OTA
   AGENCY
   PHONE
+  /// Açık API ile bağlanan dış sistem (modül 61); hangi uygulama olduğu rezervasyonun `apiClientId` alanında.
+  API
 }
 
 enum BoardType {
@@ -249,6 +251,8 @@ enum StaffAlertKind {
   ASSET
   /// Modül 44: minimum altına düşen malzeme için stok talebi açıldı (satın alma yetkilisine).
   STOCK
+  /// Modül 61: webhook aboneliği art arda başarısız teslimat yüzünden kendiliğinden kapandı (entegrasyon yetkilisine).
+  INTEGRATION
 }
 
 /// Rezervasyon fiyatının kaynağı (modül 4): sistem hesabı ya da yetkili
@@ -921,6 +925,10 @@ model Hotel {
   savedReports           SavedReport[]
   reportDefinitions      ReportDefinition[]
   dataImports            DataImport[]
+  apiClients             ApiClient[]
+  apiKeys                ApiKey[]
+  webhookSubscriptions   WebhookSubscription[]
+  webhookDeliveries      WebhookDelivery[]
 }
 
 model User {
@@ -1614,6 +1622,8 @@ model Guest {
   @@index([email])
   // Girişte refakatçiyi belgesinden tanıma (aynı kişiye ikinci kart açılmasın).
   @@index([hotelId, idNumber])
+  // Açık API değişiklik senkronu (modül 61).
+  @@index([hotelId, updatedAt, id])
   // Ada göre arama (trigram). E-posta eşleştirmesi için ifade index'i
   // `Guest_hotelId_email_lower_idx` (lower(email)) migration'da.
   @@index([firstName(ops: raw("gin_trgm_ops"))], map: "Guest_firstName_trgm_idx", type: Gin)
@@ -1683,6 +1693,8 @@ model Reservation {
   requestId           String?
   /// Acente adına açıldıysa acente (modül 29); kaynak "Acente" olur.
   agencyId            String?
+  /// Açık API ile açıldıysa uygulama (modül 61). Uygulama yalnız kendi açtığı rezervasyonu değiştirebilir / iptal edebilir.
+  apiClientId         String?
   /// Rezervasyon açıldığı andaki acente komisyon yüzdesi (acente kartı sonradan değişse de bu kalır).
   agencyCommissionPct Decimal?             @db.Decimal(5, 2)
   /// Uygulanan promosyon (modül 31) ve (kuponla uygulandıysa) kupon. `promotionTerms`
@@ -1746,6 +1758,7 @@ model Reservation {
   agency                 Agency?                 @relation(fields: [agencyId], references: [id], onDelete: Restrict)
   package                Package?                @relation(fields: [packageId], references: [id], onDelete: Restrict)
   promotion              Promotion?              @relation(fields: [promotionId], references: [id], onDelete: Restrict)
+  apiClient              ApiClient?              @relation(fields: [apiClientId], references: [id], onDelete: Restrict)
   coupon                 Coupon?                 @relation(fields: [couponId], references: [id], onDelete: Restrict)
   channelBooking         ChannelBooking?         @relation(fields: [channelBookingId], references: [id], onDelete: Restrict)
   nights                 ReservationNight[]
@@ -1801,6 +1814,8 @@ model Reservation {
   @@index([hotelId, status, checkOut, id])
   @@index([hotelId, checkedInAt])
   @@index([hotelId, checkedOutAt])
+  // Açık API değişiklik senkronu (modül 61): "şu andan sonra değişenler" (updatedAt, id) artan imleçle.
+  @@index([hotelId, updatedAt, id])
 }
 
 /// Grup rezervasyonu (modül 4): tek formda açılan birden fazla oda. Odalar
@@ -7281,7 +7296,7 @@ model OnlineCheckin {
 /// Belge fotoğrafı (disk: `online-checkin/<otel>/<kimlik>.jpg` + önizleme). Yüklenince gönderime bağlanmamış
 /// (`onlineCheckinId` boş) bekler; bağlanmayan 48 saat sonra, bağlanan saklama süresi sonunda silinir.
 model OnlineCheckinDocument {
-  id              String    @id @default(uuid())
+  id              String             @id @default(uuid())
   hotelId         String
   reservationId   String
   onlineCheckinId String?
@@ -7290,13 +7305,13 @@ model OnlineCheckinDocument {
   contentType     String
   sizeBytes       Int
   thumbBytes      Int
-  createdAt       DateTime  @default(now())
+  createdAt       DateTime           @default(now())
   purgedAt        DateTime?
   /// Personelin tarayıcısında okunan MRZ'nin sonucu (modül 59). Değerler değil yalnız sonuç ve tutmayan
   /// alanların adları saklanır (`ocrMismatch`: idNumber, birthDate, nationality, idType, name).
   ocrStatus       DocumentOcrStatus?
-  ocrMismatch     String[]  @default([])
-  ocrExpired      Boolean   @default(false)
+  ocrMismatch     String[]           @default([])
+  ocrExpired      Boolean            @default(false)
   ocrCheckedAt    DateTime?
   ocrCheckedBy    String?
 
@@ -8480,4 +8495,145 @@ model DataImport {
   hotel Hotel @relation(fields: [hotelId], references: [id])
 
   @@index([hotelId, createdAt])
+}
+
+/// Açık API uygulaması (modül 61): otele bağlanan dış sistem (CRM, kurumsal seyahat aracı, acente yazılımı). Anahtarlar
+/// ve webhook abonelikleri uygulamaya bağlıdır; uygulama kapatılınca hepsi durur. Silme yumuşaktır (geçmiş teslimat ve
+/// rezervasyon bağı kalsın). Ad otelde tekildir (silinmemişler arasında; kısmi tekil indeks migration'da).
+model ApiClient {
+  id                 String            @id @default(uuid())
+  hotelId            String
+  name               String
+  description        String?
+  contactEmail       String?
+  status             ApiClientStatus   @default(ACTIVE)
+  /// Uygulamanın bütün anahtarlarının toplam dakikalık istek sınırı.
+  rateLimitPerMinute Int               @default(120)
+  /// API'den açılan rezervasyonun durumu: opsiyonlu (resepsiyon kesinleştirir) ya da kesin.
+  bookingStatus      ReservationStatus @default(PENDING)
+  createdBy          String
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  deletedAt          DateTime?
+
+  hotel         Hotel                 @relation(fields: [hotelId], references: [id])
+  keys          ApiKey[]
+  subscriptions WebhookSubscription[]
+  reservations  Reservation[]
+
+  @@index([hotelId, name])
+}
+
+/// API anahtarı: `fhk_<önek>_<sır>`. Yalnız SHA-256 özeti saklanır; anahtar bir kez, oluşturulunca gösterilir. Önek
+/// tekildir ve anahtarı bulmak içindir (ekranda da görünür). İptal geri alınmaz; yerine yeni anahtar açılır.
+model ApiKey {
+  id         String    @id @default(uuid())
+  hotelId    String
+  clientId   String
+  name       String
+  prefix     String    @unique
+  secretHash String
+  /// `API_SCOPES` değerleri (sözleşmelerde).
+  scopes     String[]
+  expiresAt  DateTime?
+  lastUsedAt DateTime?
+  lastUsedIp String?
+  revokedAt  DateTime?
+  revokedBy  String?
+  createdBy  String
+  createdAt  DateTime  @default(now())
+
+  hotel  Hotel     @relation(fields: [hotelId], references: [id])
+  client ApiClient @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  @@index([hotelId, clientId, createdAt])
+}
+
+/// Webhook aboneliği: seçilen olaylar uygulamanın adresine imzalı gider. İmza sırrı şifreli saklanır (imzalamak için
+/// açılması gerekir; `SETTINGS_SECRET_KEY`). Sır yenilenince eskisi kısa süre ikinci imza olarak gönderilir (geçiş).
+/// Art arda başarısız teslimatlar sınırı aşarsa abonelik kendiliğinden kapanır (`DISABLED`, sebebiyle).
+model WebhookSubscription {
+  id                      String        @id @default(uuid())
+  hotelId                 String
+  clientId                String
+  url                     String
+  /// `WEBHOOK_EVENTS` değerleri (sözleşmelerde).
+  events                  String[]
+  secretSealed            String
+  previousSecretSealed    String?
+  previousSecretExpiresAt DateTime?
+  status                  WebhookStatus @default(ACTIVE)
+  consecutiveFailures     Int           @default(0)
+  disabledReason          String?
+  disabledAt              DateTime?
+  lastSuccessAt           DateTime?
+  lastFailureAt           DateTime?
+  /// Kesintisiz başarısızlığın başladığı an (ilk başarısız deneme; başarıda silinir). Kapanma kuralı buna bakar.
+  failingSince            DateTime?
+  createdBy               String
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+  deletedAt               DateTime?
+
+  hotel      Hotel             @relation(fields: [hotelId], references: [id])
+  client     ApiClient         @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  deliveries WebhookDelivery[]
+
+  @@index([hotelId, clientId])
+  @@index([hotelId, status])
+}
+
+/// Bir olayın bir aboneliğe teslimatı. Aynı olay aynı aboneliğe bir kez yazılır (tekil: outbox olayı yeniden dağıtsa da).
+/// Gönderici due kayıtları sahiplenir (`SENDING` + `lockedUntil`; süreç düşerse süre dolunca yeniden alınır), başarısızda
+/// artan bekleme ile yeniden dener, deneme hakkı bitince `FAILED`. Gövde incedir (kişisel veri yok). 30 gün saklanır.
+model WebhookDelivery {
+  id             String                @id @default(uuid())
+  hotelId        String
+  subscriptionId String
+  /// Olayın kimliği (`EventLog.id`; deneme gönderiminde rastgele). Alıcı tekrar gelen teslimatı bununla tanır.
+  eventId        String
+  eventType      String
+  payload        Json
+  status         WebhookDeliveryStatus @default(PENDING)
+  attempts       Int                   @default(0)
+  nextAttemptAt  DateTime?
+  lockedUntil    DateTime?
+  lastAttemptAt  DateTime?
+  responseStatus Int?
+  responseBody   String?
+  error          String?
+  durationMs     Int?
+  /// Denemelerin kısa dökümü ({ at, status, durationMs, error }), en fazla deneme hakkı kadar.
+  attemptLog     Json                  @default("[]")
+  deliveredAt    DateTime?
+  createdAt      DateTime              @default(now())
+
+  hotel        Hotel               @relation(fields: [hotelId], references: [id])
+  subscription WebhookSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@unique([subscriptionId, eventId])
+  @@index([hotelId, createdAt, id])
+  @@index([hotelId, status, createdAt, id])
+  @@index([hotelId, eventType, createdAt, id])
+  @@index([subscriptionId, createdAt, id])
+  @@index([createdAt])
+}
+
+enum ApiClientStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum WebhookStatus {
+  ACTIVE
+  PAUSED
+  DISABLED
+}
+
+enum WebhookDeliveryStatus {
+  PENDING
+  SENDING
+  RETRYING
+  SUCCEEDED
+  FAILED
 }

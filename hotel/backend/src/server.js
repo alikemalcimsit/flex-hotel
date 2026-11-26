@@ -31,6 +31,7 @@ import { startChannelManagerJobs } from './modules/channel-manager/jobs.js';
 import { startAgencyBonusJobs } from './modules/agency-bonus/jobs.js';
 import { startBanquetJobs } from './modules/banquet/jobs.js';
 import { startPosJobs } from './modules/pos/jobs.js';
+import { startIntegrationJobs } from './modules/integrations/jobs.js';
 import { disconnectReporting } from './modules/reports/queries.js';
 import { closeProviders } from './modules/notifications/providers/index.js';
 
@@ -118,6 +119,8 @@ const stopChannelManagerJobs = startChannelManagerJobs(app.log);
 const stopAgencyBonusJobs = startAgencyBonusJobs(app.log);
 const stopBanquetJobs = startBanquetJobs(app.log);
 const stopPosJobs = startPosJobs(app.log);
+// Webhook gönderimi ve teslimat temizliği (modül 61).
+const stopIntegrationJobs = startIntegrationJobs(app.log);
 
 // Açık socket bağlantıları kapatılmazsa HTTP sunucusu kapanmayı bekler ve
 // süreç yöneticisi (systemd) onu zorla öldürene kadar asılı kalır.
@@ -144,6 +147,7 @@ app.addHook('onClose', async () => {
   stopAgencyBonusJobs();
   stopBanquetJobs();
   stopPosJobs();
+  stopIntegrationJobs();
   if (!(await actorRegistry.idle(SHUTDOWN_DRAIN_MS))) {
     app.log.warn('Arka plan aktörleri kapanış süresinde bitmedi; kalan işler açılışta toplanacak');
   }

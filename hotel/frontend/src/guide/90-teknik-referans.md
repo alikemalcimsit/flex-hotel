@@ -137,6 +137,9 @@ Sol menüdeki her sayfa, yolu ve görmek için gereken izin. Bir sayfa menüde y
 | ↳ Olaylar | `/aktivite/olaylar` | üst menüyle aynı |
 | ↳ Denetim kaydı | `/aktivite/denetim` | Denetim kaydını görüntüle |
 | **Excel'den yükle** | `/ice-aktar` | şunlardan biri: Misafir kartı düzenle, tercih / not / etiket; Ayarları yönet |
+| **Entegrasyon** | `/entegrasyonlar` | API uygulamalarını, anahtar listesini, webhook aboneliklerini ve teslimat logunu görüntüle |
+| ↳ Uygulamalar | `/entegrasyonlar/uygulamalar` | üst menüyle aynı |
+| ↳ Webhook teslimatları | `/entegrasyonlar/teslimatlar` | üst menüyle aynı |
 | **Aktörler** | `/aktorler` | Aktör panelini görüntüle |
 | **Ayarlar** | `/ayarlar` | herkes (giriş yapmış) |
 | ↳ Otel bilgileri | `/ayarlar/otel` | üst menüyle aynı |
@@ -154,7 +157,7 @@ Sol menüdeki her sayfa, yolu ve görmek için gereken izin. Bir sayfa menüde y
 
 ## İzinler ve roller
 
-Sistemde 115 izin var; roller bu izinlerin varsayılan paketleridir. Yönetici (Ayarlar → Kullanıcılar / roller) bir kullanıcıya izin ekleyip çıkarabilir. Aşağıdaki tablo **varsayılan** dağılımdır.
+Sistemde 117 izin var; roller bu izinlerin varsayılan paketleridir. Yönetici (Ayarlar → Kullanıcılar / roller) bir kullanıcıya izin ekleyip çıkarabilir. Aşağıdaki tablo **varsayılan** dağılımdır.
 
 ### Ayarlar
 
@@ -451,6 +454,13 @@ Sistemde 115 izin var; roller bu izinlerin varsayılan paketleridir. Yönetici (
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `channel_manager.view` | Kanalları, senkron logunu ve kanal rezervasyonlarını görüntüle | ✓ | ✓ |  |  |  |  |
 | `channel_manager.manage` | Kanal bağla, eşleştir, stop-sale koy, elle senkronla | ✓ | ✓ |  |  |  |  |
+
+### Entegrasyon (API ve webhook)
+
+| İzin | Ne yaptırır | Yönetici | Müdür | Ön büro | Kat hizmetleri | Muhasebe | Yiyecek & İçecek |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `integrations.view` | API uygulamalarını, anahtar listesini, webhook aboneliklerini ve teslimat logunu görüntüle | ✓ | ✓ |  |  |  |  |
+| `integrations.manage` | API uygulaması ve anahtarı oluştur / iptal et, webhook aboneliği kur, teslimatı yeniden gönder | ✓ |  |  |  |  |  |
 
 ### İzleme
 
@@ -1216,6 +1226,17 @@ Kat hizmetlerinin zamanlanmış işi (yalnızca sunucu sürecinde).
 üretmez. Sunucu kapalıyken geçen sabah sonraki açılışta telafi edilir —
 iş "saat 06:00'da üret" değil "bugünün görevleri eksikse tamamla"dır.
 
+### integrations
+
+Aralık sabitleri: `SEND_INTERVAL_MS` = 15_000 · `PURGE_INTERVAL_MS` = 60 * 60_000
+
+Entegrasyonun zamanlanmış işleri (yalnızca sunucu sürecinde, modül 61).
+
+| İş                 | Sıklık | Neden |
+|--------------------|--------|-------|
+| Webhook gönderimi  | 15 sn  | Yeniden denemelerin vakti gelenler; olay anında da uyandırılır (`kickWebhookSender`) |
+| Teslimat temizliği | 1 sa   | 30 günden eski teslimatlar silinir, süresi geçen eski imza sırları atılır |
+
 ### lost-items
 
 Aralık sabitleri: `PHOTO_PURGE_INTERVAL_MS` = 60 * 60_000
@@ -1344,7 +1365,7 @@ Anketin zamanlanmış işi (yalnızca sunucu sürecinde, modül 55).
 
 ## Veri modeli
 
-Veritabanında 229 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan sayısı ilişkiler hariç yaklaşık değerdir.
+Veritabanında 233 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan sayısı ilişkiler hariç yaklaşık değerdir.
 
 | Tablo | Alan | Açıklama |
 | --- | --- | --- |
@@ -1374,7 +1395,7 @@ Veritabanında 229 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan
 | `Guest` | 19 |  |
 | `GuestPreference` | 12 | Misafir tercihi (modül 22): kategori + değer + kaynak + güven + son teyit. Serbest metin değil yapılandırılmış; birleştirmede (`mergeGuests`) hedef misafire taşınır. VIP / sorunlu gibi işaretler `Guest.tags` üzerinde. |
 | `GuestNote` | 9 | Misafir notu (modül 22): tarihli, yazarlı; sabitlenen not kartın üstünde. |
-| `Reservation` | 53 |  |
+| `Reservation` | 54 |  |
 | `ReservationGroup` | 9 | Grup rezervasyonu (modül 4): tek formda açılan birden fazla oda. Odalar ayrı `Reservation` kayıtlarıdır; grup yalnızca onları bağlar. |
 | `ReservationNight` | 12 | Konaklamanın gece gece fiyatı (modül 4). Toplam fiyat bunların toplamıdır; gelir raporları (modül 13, 23) ve folyo (modül 15) geceyi buradan okur. `baseRate`/`multiplier` hesaplanan fiyatta dolu, elle fiyatta ve eski kayıtlardan aktarılan gecelerde boştur. |
 | `WaitlistEntry` | 24 | Bekleme listesi (modül 4): yer yokken "listeye al"; yer açılınca personele uyarı gider (`AVAILABLE`), rezervasyona çevrilince kapanır. |
@@ -1577,6 +1598,10 @@ Veritabanında 229 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan
 | `SavedReport` | 11 | Kayıtlı rapor: tanım + grafik. Sahibi düzenler / siler; paylaşılan rapor rapor yetkisi olan herkese görünür. |
 | `ReportDefinition` | 10 | Tasarımcıda kurulan rapor: kaynak + sütunlar + filtreler + gruplama + sıralama (`reportDesignSchema`). Sahibi düzenler / siler; paylaşılan rapor rapor yetkisi olan herkese görünür (kaynağın yetkisi de gerekir). |
 | `DataImport` | 10 | Excel'den toplu yükleme (misafir listesi / fiyat planı). Kimlik sihirbazın ürettiği yükleme kimliğidir: aynı yükleme ikinci kez gönderilirse yazılmaz, bu kayıt döner. |
+| `ApiClient` | 12 | Açık API uygulaması (modül 61): otele bağlanan dış sistem (CRM, kurumsal seyahat aracı, acente yazılımı). Anahtarlar ve webhook abonelikleri uygulamaya bağlıdır; uygulama kapatılınca hepsi durur. Silme yumuşaktır (geçmiş teslimat ve rezervasyon bağı kalsın). Ad otelde tekildir (silinmemişler arasında; kısmi tekil indeks migration'da). |
+| `ApiKey` | 14 | API anahtarı: `fhk_<önek>_<sır>`. Yalnız SHA-256 özeti saklanır; anahtar bir kez, oluşturulunca gösterilir. Önek tekildir ve anahtarı bulmak içindir (ekranda da görünür). İptal geri alınmaz; yerine yeni anahtar açılır. |
+| `WebhookSubscription` | 19 | Webhook aboneliği: seçilen olaylar uygulamanın adresine imzalı gider. İmza sırrı şifreli saklanır (imzalamak için açılması gerekir; `SETTINGS_SECRET_KEY`). Sır yenilenince eskisi kısa süre ikinci imza olarak gönderilir (geçiş). Art arda başarısız teslimatlar sınırı aşarsa abonelik kendiliğinden kapanır (`DISABLED`, sebebiyle). |
+| `WebhookDelivery` | 18 | Bir olayın bir aboneliğe teslimatı. Aynı olay aynı aboneliğe bir kez yazılır (tekil: outbox olayı yeniden dağıtsa da). Gönderici due kayıtları sahiplenir (`SENDING` + `lockedUntil`; süreç düşerse süre dolunca yeniden alınır), başarısızda artan bekleme ile yeniden dener, deneme hakkı bitince `FAILED`. Gövde incedir (kişisel veri yok). 30 gün saklanır. |
 
 ## Modül durumu
 
@@ -1642,7 +1667,7 @@ Geliştirme listesinden (GOREVLER.md) türetilir: işaretli maddeler ve "tamamla
 | 56 | Sadakat programı | Ali Kemal | planlı |
 | 57 | SPA & spor salonu randevu | arkadaşın | tamamlandı |
 | 58 | Emniyet kimlik bildirimi (KBS) | Ali Kemal | planlı |
-| 59 | Kimlik / pasaport okuma (OCR) | arkadaşın | planlı |
+| 59 | Kimlik / pasaport okuma (OCR) | arkadaşın | tamamlandı |
 | 60 | Çoklu dil & çoklu para birimi | Ali Kemal | planlı |
 | 61 | Webhook & açık API | arkadaşın | planlı |
 | 62 | Donanım entegrasyonları | Ali Kemal | planlı |

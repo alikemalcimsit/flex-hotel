@@ -101,6 +101,9 @@ import { roomsRoutes } from './modules/rooms/routes.js';
 import { settingsRoutes } from './modules/settings/routes.js';
 import { pricingRoutes } from './modules/pricing/routes.js';
 import { salesRoutes } from './modules/sales/routes.js';
+import { integrationRoutes } from './modules/integrations/routes.js';
+import { registerWebhookSubscribers } from './modules/integrations/outbox.js';
+import { publicApiRoutes } from './modules/public-api/routes.js';
 import { registerPricingSubscribers, setPricingSubscriberLogger } from './modules/pricing/subscribers.js';
 
 /**
@@ -196,6 +199,8 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   registerHousekeepingSubscribers();
   registerSpaSubscribers(app.log);
   registerPricingSubscribers();
+  // Webhook (modül 61): dışarıya açılan iş olayları teslimat kuyruğuna.
+  registerWebhookSubscribers();
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
@@ -221,7 +226,8 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
     },
     methods: [...CORS_METHODS],
     allowedHeaders: [...CORS_ALLOWED_HEADERS],
-    exposedHeaders: ['x-correlation-id'],
+    // Açık API (modül 61): hız sınırı başlıkları tarayıcıdan da okunabilsin.
+    exposedHeaders: ['x-correlation-id', 'x-ratelimit-limit', 'x-ratelimit-remaining', 'x-ratelimit-reset', 'retry-after'],
   });
   await app.register(jwt, { secret: resolveJwtSecret(app.log) });
 
@@ -409,6 +415,9 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   await app.register(promotionRoutes, { prefix: '/promotions' });
   await app.register(channelManagerRoutes, { prefix: '/channel-manager' });
   await app.register(manualTaskRoutes, { prefix: '/manual-tasks' });
+  // Açık API ve webhook yönetimi (modül 61): panel uçları + dış sistemlerin anahtarla bağlandığı `/v1`.
+  await app.register(integrationRoutes, { prefix: '/integrations' });
+  await app.register(publicApiRoutes);
   await app.register(conciergeRoutes, { prefix: '/ai' });
   await app.register(messagingChannelRoutes, { prefix: '/messaging-channels' });
   await app.register(webhookRoutes, { prefix: '/webhooks' });

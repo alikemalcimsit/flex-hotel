@@ -55,7 +55,7 @@ const ALANLAR = [
   { ad: 'Spa ve wellness', aciklama: 'Masaj, hamam, bakım ve kişisel antrenman randevuları; yoga ve pilates dersleri; oda hesabına ya da spa kasasına ödeme.', moduller: [57] },
   { ad: 'Satın alma ve stok', aciklama: 'Talepten teklife, siparişten mal kabulüne; depo ve stok hareketleri.', moduller: [45] },
   { ad: 'Personel ve bordro', aciklama: 'Personel kartları, puantaj ve servis payı; aylık bordro, onayı, ödemesi ve muhasebeye akışı.', moduller: [51] },
-  { ad: 'Yönetim ve denetim', aciklama: 'Ayarlar, roller ve yetkiler, onaylar, otomasyon paneli, canlı akış ve günlük durum.', moduller: [13, 1, 2, 11, 12, 10] },
+  { ad: 'Yönetim ve denetim', aciklama: 'Ayarlar, roller ve yetkiler, onaylar, otomasyon paneli, canlı akış ve günlük durum; dış sistemlerin bağlandığı açık API ve webhook.', moduller: [13, 1, 2, 11, 12, 10, 61] },
 ];
 const alanOf = (numara) => ALANLAR.find((alan) => alan.moduller.includes(numara))?.ad ?? '';
 

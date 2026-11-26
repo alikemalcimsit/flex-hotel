@@ -180,6 +180,8 @@ export * from './report-chat.js';
 export * from './report-designer.js';
 export * from './data-import.js';
 export * from './events.js';
+export * from './integrations.js';
+export * from './public-api-spec.js';
 export { displayPhone, internationalPhone } from './phone.js';
 export {
   DEFAULT_ROLE_PERMISSIONS,

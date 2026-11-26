@@ -4167,15 +4167,66 @@ olay kataloğu, zamanlanmış işler, tablolar, modül durumu; elle düzenlenmez
 
 ### 61. Webhook & açık API — arkadaşın
 **Gün sonu:** Dış sistemler API key ile bağlanıyor; istedikleri event'i kendi URL'lerine alıyor; dokümantasyon sayfası var.
-- [ ] Backend: ApiKey, WebhookSubscription, WebhookDelivery tabloları + API
-- [ ] Backend: public REST API (rezervasyon, müsaitlik, misafir; rate limit); OpenAPI dokümanı
-- [ ] Backend: webhook gönderici (event → URL; imza; tekrar deneme)
-- [ ] Ekran: API key yönetimi
-- [ ] Ekran: Webhook abonelikleri + teslimat logu
-- [ ] Doküman sayfası (Swagger UI)
+- [x] Backend: ApiKey, WebhookSubscription, WebhookDelivery tabloları + API
+- [x] Backend: public REST API (rezervasyon, müsaitlik, misafir; rate limit); OpenAPI dokümanı
+- [x] Backend: webhook gönderici (event → URL; imza; tekrar deneme)
+- [x] Ekran: API key yönetimi
+- [x] Ekran: Webhook abonelikleri + teslimat logu
+- [x] Doküman sayfası (Swagger UI)
 
 > **FlexAI 2.0'dan not (3 Kasım 2026 — Ahmet):** anahtarları kapsamlı (scope) kur ve bir "uygulama" kavramı bırak: 86 uzaktan
 > MCP istemcilerini (OAuth 2.1) buradan kaydedecek; 100 (acente portalı) ve 85'in webhook eylemi bu altyapıyı kullanacak.
+
+> **✅ Modül 61 tamamlandı (26 Kasım 2026 — Ahmet).** Kararlar (kullanıcı): API **okuma + rezervasyon yazma** (açma /
+> değiştirme / iptal; misafir yalnız okunur); webhook gövdesi **ince** (kimlik, durum, tarih, tutar — kişisel veri yok, ayrıntı
+> API'den çekilir); doküman **Swagger UI, kendi sunucumuzdan** (swagger-ui-dist 5.34.1, CDN yok); webhook adresi **yalnız HTTPS,
+> iç ağ yasak** (kayıtta ve gönderimde).
+>
+> **Kurulan:** *Uygulama* (ApiClient: ad, iletişim, dakikalık hız sınırı, API rezervasyonunun durumu — opsiyonlu / kesin, aç / kapat,
+> yumuşak silme) → *anahtar* (`fhk_<önek>_<sır>`, yalnız SHA-256 özeti saklanır, bir kez gösterilir; kapsamlar
+> availability:read / reservations:read / reservations:write / guests:read, yazma okumayı ister; süre; iptal) ve *webhook
+> aboneliği* (HTTPS adres + 17 olay; sır şifreli saklanır, bir kez gösterilir; yenilenince eski sır 24 sa ikinci imza). Açık API
+> `/v1`: otel, oda tipleri, müsaitlik + fiyat (fiyat motoru, kişi sayısıyla), rezervasyon listesi (`updatedSince` senkronu,
+> imleç) / ayrıntı / açma (`Idempotency-Key` zorunlu, yer yoksa 409, onaya gitmez) / değiştirme / iptal (yalnız kendi açtığı,
+> sürüm denetimi, iptal cezası silinemez), misafir listesi / ayrıntısı (kimlik belgesi hiç dönmez). Uçlar sözleşmedeki tablodan
+> kaydedilir (`PUBLIC_API_ROUTES`) ve OpenAPI 3.1 dokümanı (webhook olaylarının gövdeleri dahil) aynı tablodan üretilir; tabloda
+> işleyicisi olmayan uç varsa sunucu açılmaz. Panel: Yönetim → **Entegrasyon** (uygulamalar, uygulama kartı: anahtarlar, abonelikler,
+> son 24 saat; teslimat logu: süzgeç, ayrıntı, yeniden gönder), `/api-docs/`. İzinler `integrations.view` (müdür) /
+> `integrations.manage` (yönetici).
+>
+> **Güvenlik:** anahtar doğrulaması sabit süreli özet karşılaştırması; geçersiz anahtar denemesi IP başına dakikada 60'tan sonra 429;
+> uygulama başına dakikalık sınır (`X-RateLimit-*`, 429 + `Retry-After`); işlem kaydında kişi "api:<uygulama> (fhk_<önek>)";
+> API hata gövdesinden `details` atılır (eşleşen başka misafir kartı vb. sızmaz); misafir iletişimi başka adlı kartla çakışırsa
+> yeni kart açılır (kart sızdırılmaz). Webhook gönderimi çözülen IP'ye bağlanır ve o IP denetlenir (`lib/ssrf.js`: özel / döngü /
+> bağlantı-yerel / meta-veri / CGNAT / IPv6 ULA / eşlemeli), yönlendirme takip edilmez, cevabın yalnız başı okunur. İmza
+> `X-FlexHotel-Signature: t=,v1=` (HMAC-SHA256, zaman imzaya dahil).
+>
+> **Teslimat:** olay commit sonrası yalnız isteyen açık aboneliklere kuyruğa yazılır (`(abonelik, olay)` tekil — outbox tekrarında
+> çift teslimat yok); gönderici `FOR UPDATE SKIP LOCKED` ile sahiplenir, abonelik başına sırayla / abonelikler arası paralel
+> gönderir, ulaşılamayan alıcıda turdaki diğerlerinin deneme hakkı yanmaz; 1 dk → 24 sa çizelgesiyle 8 deneme (Retry-After'a uyulur);
+> art arda 20 başarısızlık **ve** 72 saat başarısızlıkta abonelik kendiliğinden kapanır + zil (`INTEGRATION`); yeniden açınca
+> bekleyenler hemen gider; 30 gün saklanır. Sayaç yazımları sürümü (updatedAt) ilerletmez.
+>
+> **Ölçek:** anahtar satırı 60 sn, otelin abonelikleri 30 sn önbellekte (değişiklikte hemen silinir; abonelik yoksa iş olayı sorgu
+> atmaz); "son kullanım" dakikada en fazla bir yazım; senkron için `(hotelId, updatedAt, id)` indeksleri (Reservation, Guest);
+> teslimat taraması kısmi indekste; temizlik paketler hâlinde. **Testler:** sözleşme 15 (anahtar biçimi, kapsam gereksinimi, adres
+> kuralı, deneme çizelgesi, kapanma kuralı, her olay örneğinin ince gövdesi + doküman şeması, OpenAPI), backend birim 9 (SSRF IPv4 /
+> IPv6 / çözüm, imza + geçiş, anahtar özeti, Idempotency-Key, olay kataloğu, tablo ↔ işleyici), ön yüz 2 (kapsam seçimi),
+> entegrasyon 12 (yukarıdaki her kural gerçek veritabanıyla); tam paketler yeşil (backend birim 786, sözleşme 660, ön yüz 140,
+> entegrasyon 817). Tarayıcıda: uygulama açma, anahtar (bir kez, kopyalamadan kapatma
+> uyarısı), kapsam seçimi, abonelik (http reddi, sır bir kez), API'den müsaitlik / rezervasyon (201, tekrar 200), gerçek
+> göndericiyle teslimat (`.invalid` adres → "Alan adı çözülemedi", yeniden denenecek), teslimat ayrıntısı, Swagger UI (10 uç, 18
+> webhook, şema hatası yok), mobil.
+>
+> **Canlıya alırken:** migration 20261126090000_open_api_webhooks; `npm install` (swagger-ui-dist 5.34.1 — kök package.json'da
+> `scarfSettings.enabled: false`: paketin kurulum istatistiği kapalı); derleme `dist/api-docs`; nginx'te değişiklik yok
+> (`/api/v1` → backend, `/api-docs/` statik). Demo: "Kurumsal seyahat aracı (örnek)" (anahtarları kullanılamaz, abonelik
+> duraklatılmış ve `.invalid` adreste — dışarıya istek yok), 18 API rezervasyonu, teslimat geçmişi.
+>
+> **Sonraki modüllere:** 86 (uzaktan MCP, OAuth 2.1) istemcileri uygulama olarak kaydedebilir; 100 (acente portalı) uygulamayı
+> acenteye bağlayacak (bu modülde uygulama–acente bağı yok: okuma kapsamı otelin bütün rezervasyonlarıdır); 85'in webhook eylemi
+> `WEBHOOK_EVENTS` / gönderici altyapısını kullanır. Hız sınırı sayacı süreç içidir (tek süreçte doğru; çok süreçte paylaşılan
+> depo gerekir).
 
 ### 62. Donanım entegrasyonları — Ali Kemal
 **Gün sonu:** Check-in'de kapı kartı kodlanıyor, oda telefonu açılıyor; check-out'ta kapanıyor; POS cihazından ödeme sonucu geliyor.
