@@ -71,6 +71,8 @@ export const NAV_SECTIONS = Object.freeze([
       { label: 'Oda planı', to: '/oda-plani', icon: 'calendar' },
       // Misafir CRM (modül 22): kart, tercih, geçmiş, birleştirme.
       { label: 'Misafirler', to: '/misafirler', icon: 'users', permission: PERMISSIONS.GUESTS_VIEW },
+      // Sadakat programı (modül 56): üyeler, puan, seviye, ayarlar.
+      { label: 'Sadakat', to: '/sadakat', icon: 'star', permission: PERMISSIONS.LOYALTY_VIEW },
       // Satış CRM (modül 36): fırsat panosu, arama günlüğü, teklifler.
       { label: 'Satış CRM', to: '/satis', icon: 'phone', permission: PERMISSIONS.SALES_VIEW },
       // Konaklamaların hesabı (modül 15): kat hizmetleri görmez.

@@ -1,0 +1,14 @@
+{
+  "name": "@hotelos/loyalty-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "description": "Sadakat aktörü: kapanan folyodan ve spa kasasından puan kazandırır, yeniden açılan folyonun puanını geri alır, iptal edilen puan indirimini iade eder",
+  "scripts": {
+    "test": "node --test \"*.test.js\""
+  },
+  "dependencies": {
+    "@hotelos/actor-kit": "*"
+  }
+}

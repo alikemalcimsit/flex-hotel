@@ -33,6 +33,7 @@ Okumaya başlamadan iki hatırlatma:
 | N — Yanlış kasa çıkışı fişinin düzeltilmesi | Muhasebe | Ön muhasebe (Kasa / banka → Çıkış, Fişler), Genel muhasebe (Yevmiye, fiş iptali, Fiş gir, Hesap planı) | Muhasebe aktörü |
 | O — Personel izin istiyor | Personel, İK, müdür | İzinlerim (`/ik/benim`), İK → İzinler, İzin bakiyeleri, Vardiya, Puantaj (Bordroya aktar), Onaylar, Personel kartı, Bordro → Puantaj ve kalemler | Aktör yok (İK servisi ve onay kararı dinleyicisi) |
 | P — Gece vardiyası ve mesai | İK, departman şefi | İK → Vardiya (çakışma, dinlenme ve haftalık saat uyarıları), Puantaj (gece çıkışı, mesai, Bordroya aktar), İzinlerim, Bordro | Aktör yok |
+| Q — Sadık misafir puanını kullanıyor | Resepsiyon, müdür | Sadakat (Ayarlar, Üyeler, hesap sayfası), Misafir kartı (sadakat kutusu), Rezervasyon ayrıntısı (Sadakat kartı → Puan kullan), Folyolar (indirim, kalem iptali), Onaylar, Gün kapanış, Genel muhasebe, Misafir portalı | Sadakat aktörü, muhasebe aktörü |
 
 ## Senaryo A — Bir misafirin yolculuğu
 
@@ -638,6 +639,37 @@ Telefonla gelen rezervasyonda 1–3. adımların yerine resepsiyon **Rezervasyon
 | Kasım bordrosu onaylandıktan sonra Perşembe saati düzeltilmek istendi | "Ay kilitli" | Fark bordrosu, fazla çalışmayı kalem olarak ekleyin |
 | Mesai görünmüyor | Günlük norm yüksek girilmiş olabilir (ör. 9 saat) | İK → Ayarlar → günlük norm |
 
+## Senaryo Q — Sadık misafir puanını kullanıyor
+
+**Hikâye:** Kerem Aydın otelin düzenli misafiri. Mart 2026'da bir haftalık iş konaklamasının folyosu 30.000 TL ile kapandı. Kasım'da 2 gece için yeniden geliyor ve çıkışta biriken puanını kullanmak istiyor. Resepsiyonda Elif (Ön büro rolü, `loyalty.view` + `loyalty.redeem`) çalışıyor. Müdür Zeynep (`loyalty.manage`) programı kurdu. Program varsayılanlarla çalışıyor: adı "FlexClub", 10 TL = 1 puan, 1 puan = 0,50 TL, en az 100 puan, folyonun en çok %50'si, 24 ay süre, Klasik 0 / Gümüş 1.000 ×1,25 / Altın 3.000 ×1,5. Senaryo **kazanma → seviye → harcama (folyoda indirim) → yanlış kalemin iptali ve iade → indirimli tutardan yeniden kazanma** zincirini anlatır. Sayıları sade tutmak için Kerem'in folyolarında ayrı vergi satırı olmadığı varsayılmıştır (vergi kalemleri zaten puana sayılmaz).
+
+| Adım | Ekranda ne yapılır | Arka planda ne olur | Nerede görünür |
+| --- | --- | --- | --- |
+| 1 | (Bir kez) Zeynep **Sadakat → Ayarlar** (`/sadakat/ayarlar`) sayfasında **Program açık** kutusunu işaretler, adı "FlexClub" yazar, diğer alanları varsayılanda bırakır ve **Kaydet**'e basar. | Ayar kaydedilir ve denetim izine yazılır. `loyalty.changed` (SETTINGS) yayınlanır. Örnek kutusu "2.480,00 ₺ harcama → 248 puan (Klasik), 124,00 ₺ değerinde" der. | Ayarlar sekmesi; Aktivite → Denetim kaydı. |
+| 2 | Mart: Kerem'in 30.000 TL'lik folyosu çıkışta kapanır. Personel ek bir şey yapmaz. | `folio.closed` → **sadakat aktörü** uygun harcamayı (vergi kalemleri hariç) hesaplar: 30.000 ÷ 10 × 1 = **3.000**. Kerem'in hesabı yoktu; otomatik üyelik açık olduğu için `SDK-000001` açılır. "Kazanıldı +3.000" paketi 24 ay süreyle yazılır, `loyalty.points.changed` yayınlanır. Son 12 ayda 3.000 puan olduğu için Kerem doğrudan **Altın** olur. İlk seviye ataması olduğundan zil çalmaz. | Sadakat → **Üyeler** (`/sadakat/uyeler`): SDK-000001, Altın, 3.000 puan (1.500 TL). |
+| 3 | Kasım: Elif girişte Kerem'in misafir kartını açar. | Sadakat kutusu `GET /loyalty/guests/…` ile okunur. | Kutuda Altın rozeti, 3.000 puan = 1.500 TL ve avantaj "Oda yükseltme (müsaitliğe göre), geç çıkış 16:00, hoş geldin ikramı" yazar. Elif odayı müsaitliğe göre yükseltir ve hoş geldin ikramını kat hizmetlerine iletir. Avantajları sistem uygulamaz, resepsiyon uygular. |
+| 4 | Çıkış sabahı folyoda 2.000 TL harcama var. Kerem "puanımı kullanayım" der. Elif rezervasyon ayrıntısını açar. | `GET /loyalty/reservations/…`: açık folyo 2.000 TL, sınır %50 = 1.000 TL ÷ 0,50 = **2.000 puan**. Bakiye 3.000 olduğu için sınır yüzdedir. | **Sadakat** kartı: açık folyo satırında "en çok 2.000 puan (1.000 TL)" ve **Puan kullan** düğmesi. |
+| 5 | Kerem 2.500 puan ister. Elif **Puan kullan** penceresine 2.500 yazar. | Sunucu reddeder: "Bu folyoda en çok 2000 puan kullanılır (harcamanın %50'i)" (`LOYALTY_LIMIT`). Hiçbir şey yazılmaz. | Pencerede hata. |
+| 6 | Kerem 400 puanda karar kılar. Elif 400 yazar, ama gelir türünü yanlışlıkla **Diğer** seçip onaylar. Wi-Fi takıldığı için düğmeye iki kez basar. | Hesap kilitlenir. 400 puan en eski paketten (FIFO) düşülür: "Harcandı −400", kalan paket 3.000 → 2.600. Folyoya "FlexClub puan indirimi (400 puan)" açıklamalı **−200 TL** indirim kalemi (gelir türü Diğer) yazılır. İkinci basış **aynı istek kimliğiyle** gelir: ikinci kalem açılmaz, ilk sonuç döner. | Folyo: tek indirim satırı. Sadakat kartı: bakiye 2.600 (1.300 TL); son hareketlerde "Harcandı −400". |
+| 7 | Elif gelir türünün **Oda** olması gerektiğini fark eder. Folyodan indirim kalemine **iptal** ister ("Yanlış gelir türü"). Zeynep Onaylar → Bekleyen'den onaylar. | Dört göz: iptali isteyen Elif kendisi onaylayamaz. Kalem iptal edilince `folio.item.voided` yayınlanır. Sadakat aktörü kalemin bir puan harcaması olduğunu görür ve 400 puanı düşüldüğü pakete geri yazar ("Harcama iade edildi +400"). Bakiye 3.000 olur. | Folyo: indirim satırı üstü çizili. Hesap sayfası: "Harcama iade edildi +400". |
+| 8 | Elif yeniden **Puan kullan** penceresini açar, 400 puan yazar, gelir türü **Oda** seçer ve onaylar. | Yeni istek kimliği açılır. "Harcandı −400" yazılır, folyoya Oda gelir türünde −200 TL indirim kalemi düşer. Folyo harcaması 2.000 − 200 = 1.800 TL olur. | Folyo bakiyesi 1.800 TL; Sadakat kartı: bakiye 2.600. |
+| 9 | Kerem kalan 1.800 TL'yi kartla öder. Elif çıkışı yapar ve folyo kapanır. | `folio.closed` → sadakat aktörü indirimli harcamadan Altın çarpanıyla hesaplar: 1.800 ÷ 10 × 1,5 = **+270**. Bakiye 2.600 + 270 = **2.870** olur. Seviye Altın kalır, zil çalmaz. | Hesap sayfası (`/sadakat/uyeler/:accountId`) hareketler: Kazanıldı +3.000 · Harcandı −400 · Harcama iade edildi +400 · Harcandı −400 · Kazanıldı +270. |
+| 10 | Gece gün kapanışı yapılır. | Muhasebe aktörü günlük gelir fişini yazar. Geçerli indirim kalemi (−200 TL, Oda) **611 Satış İskontoları** hesabına gider. İptal edilen ilk kalem gelire sayılmaz. Fatura 1.800 TL'den kesilir. | Genel muhasebe → Yevmiye: günlük gelir fişinde 611 satırı. |
+| 11 | Ertesi gün Kerem misafir portalı bağlantısını yeniden açar. | Portal ana sayfası sadakat kutusunu okur. | "FlexClub · Altın · 2.870 puan (1.435 TL)" kutusu, avantajlar ile birlikte. |
+
+### Ters giderse (Senaryo Q)
+
+| Durum | Ne olur | Ne yapılır |
+| --- | --- | --- |
+| Kerem çıkıştan **sonra** puan kullanmak istedi | Folyo kapalı: "Konaklamanın açık folyosu yok; puan girişten sonra (folyo açıkken) kullanılır" (`LOYALTY_NO_OPEN_FOLIO`) | Puan bir sonraki konaklamada kullanılır. Folyoyu sırf bunun için yeniden açmak, o folyonun kazandırdığı puanı da geri alır |
+| 50 puan kullanmak istedi | "En az 100 puan kullanılır" | En az 100 puan |
+| Kartta sadakat kutusu "Üye değil" diyor | Otomatik üyelik kapalı ya da misafir hiç puan kazanmamış | **Üye yap** (açık rıza işaretiyle); puanı olmadığı için o konaklamada kullanamaz |
+| Mart konaklaması acente ödemeliydi | Puan 0, açıklamada "acente / cari ödemeli folyo puan kazanmaz" | Ayardaki kutu kapatılırsa sonraki folyolar kazanır; geçmiş için müdür gerekçeli elle düzeltme girebilir |
+| Kerem'in iki misafir kartı vardı (puan bölünmüş) | Sadakat kartı yalnız rezervasyon sahibinin hesabını gösterir | Misafir kartında **Birleştir**: hesaplar birleşir, puanlar toplanır |
+| Sadakat aktörü kapalıyken kalem iptal edildi | İade yazılmaz; Görevler'de "İptal edilen kalem puan indirimiyse puan iade edilecek" görevi çıkar | Zeynep hesap sayfasında **Düzeltme** +400 ("İptal edilen puan indirimi iadesi") girer ve görevi tamamlar |
+| Kalem yazılırken folyo başka bir pencerede kapandı | Puan düşüldü ama kalem yazılamadı → puan kendiliğinden iade ("Folyoya yazılamadı: …") | Bir şey yapmaya gerek yok; açık folyo varsa yeniden deneyin |
+| İki resepsiyonist aynı anda puan kullandırdı | Hesap kilitlenir; ikincisi güncel bakiyeyle denetlenir, yetmezse "Bakiye yetersiz" | İkinci isteği bakiyeye göre düzeltin |
+
 ## Senaryolarda geçen olaylar, aktörler, onaylar ve görevler
 
 Bu bölüm senaryoları başkasına anlatırken "bunu kim yapıyor?" sorusuna hızlı cevap için bir başvuru tablosudur. Olay adları Aktivite → Olaylar ekranında Türkçe karşılıklarıyla görünür; buradaki teknik adlar yalnız eşleştirmek içindir.
@@ -660,7 +692,10 @@ Bu bölüm senaryoları başkasına anlatırken "bunu kim yapıyor?" sorusuna h�
 | `pos.payment.changed` / `banquet.payment.changed` / `spa.payment.changed` | POS, banket, spa ödemeleri | Muhasebe aktörü → kasa / banka (+ etkinlikte müşteri carisi); yalnız işlenmiş / iptal | B, H |
 | `minibar.consumed` / `laundry.charged` / `spa.charged` | Minibar fişi, çamaşır teslimi, spa randevusu | Folyo aktörü → kalem (çıkmış misafirde açık folyoya geç kalem) | A |
 | `payment.received` / `refunded` / `voided` | Ödeme servisi | Muhasebe aktörü → kasa / banka ya da cari; folyo aktörü → bitmiş konaklamanın sıfırlanan folyosunu kapatır | A, K |
-| `folio.closed` | Folyo aktörü / kapatma | Folyo aktörü → fatura taslağı | A, K |
+| `folio.closed` | Folyo aktörü / kapatma | Folyo aktörü → fatura taslağı; **sadakat aktörü → misafire puan** (vergi kalemleri hariç, seviye çarpanıyla) | A, K, Q |
+| `folio.reopened` | Folyo yeniden açma | Sadakat aktörü → o folyodan kazanılan puanı geri alır (yeniden kapanınca fark yazılır) | Q |
+| `folio.item.voided` | Folyo kalemi iptali (onaylı) | Sadakat aktörü → kalem puan indirimiyse puanı iade eder | Q |
+| `loyalty.points.changed` / `loyalty.tier.changed` / `loyalty.changed` | Sadakat aktörü, puan kullanma, üyelik, elle düzeltme, süre işi, ayar | Sadakat ekranları, misafir kartı ve rezervasyon kartı tazelenir (`loyalty.changed` kanalı); seviye yükselişinde zil (`LOYALTY`) | Q |
 | `invoice.issued` / `invoice.cancelled` | Fatura kesimi / iptali | Muhasebe aktörü → numara cari harekete / serbest fatura alacağı / ters kayıt | A, H, K |
 | `stock.changed` | Stok hareketleri (mal kabul, satış, sayım, elle) | Stok aktörü (yalnız SALE / MOVEMENT / COUNT) → minimum altı talebi + zil | B, J |
 | `purchase.goods.received` | Mal kabul | Muhasebe aktörü → tedarikçi carisine KDV dahil borç, vade | B |
@@ -690,7 +725,7 @@ Bu bölüm senaryoları başkasına anlatırken "bunu kim yapıyor?" sorusuna h�
 
 | Onay türü | Kim ister | Ne zaman | Senaryo |
 | --- | --- | --- | --- |
-| Folyo kalemi iptali | Folyo yetkilisi | Her elle kalem iptali | A |
+| Folyo kalemi iptali | Folyo yetkilisi | Her elle kalem iptali (puan indirimi kalemi dahil; iptal olunca puan iade edilir) | A, Q |
 | İade | Ödeme alan | Her iade | A, H |
 | Büyük ödeme | Ödeme servisi | Folyo ödemesi eşiğe eşit / üstü (Ayarlar → Genel parametreler) | A |
 | Ödeme iptali | Ödeme alan | Hatalı giriş | A, B |
@@ -717,6 +752,7 @@ Bu bölüm senaryoları başkasına anlatırken "bunu kim yapıyor?" sorusuna h�
 | Kanal rezervasyonu | "Elle işlenmeli: eşleşmeyen fiyat planı" | `reservations.manage` | Rezervasyonu elle aç / düzenle; kaydı notla kapat |
 | Mesajlar | Cevapsız konuşma (AI kapalı / bütçe) | Mesaj yazma yetkisi | Konuşmayı personel yürütür |
 | Rapor talebi | "Rapor talebi: geçen ayın haftalık doluluğu" | `reports.view` | Raporu elle hazırlayıp kişiye iletme |
+| Sadakat | "Kapanan folyonun sadakat puanı yazılacak"; "Yeniden açılan folyonun sadakat puanı geri alınacak"; "İptal edilen kalem puan indirimiyse puan iade edilecek"; "Spa randevusunun sadakat puanı yazılacak" | `loyalty.manage` | Sadakat → Üyeler → hesap → **Düzeltme** (gerekçeli ± puan) |
 | Onay kuyruğu | Aktörü kayıttan kalkmış onaylanan iş | Ayar yöneticisi | İşi elle yap |
 
 ## Senaryoların ortak dersleri

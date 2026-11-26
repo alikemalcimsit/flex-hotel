@@ -224,6 +224,10 @@ const PayrollRunPage = lazy(() => import('./pages/payroll/RunPage.jsx').then((m)
 const PayrollAttendancePage = lazy(() => import('./pages/payroll/AttendancePage.jsx').then((m) => ({ default: m.AttendancePage })));
 const ServiceChargePage = lazy(() => import('./pages/payroll/ServiceChargePage.jsx').then((m) => ({ default: m.ServiceChargePage })));
 const PayrollSettingsPage = lazy(() => import('./pages/payroll/PayrollSettingsPage.jsx').then((m) => ({ default: m.PayrollSettingsPage })));
+const LoyaltyLayout = lazy(() => import('./pages/loyalty/LoyaltyLayout.jsx').then((m) => ({ default: m.LoyaltyLayout })));
+const LoyaltyMembersPage = lazy(() => import('./pages/loyalty/MembersPage.jsx').then((m) => ({ default: m.MembersPage })));
+const LoyaltyAccountPage = lazy(() => import('./pages/loyalty/AccountPage.jsx').then((m) => ({ default: m.AccountPage })));
+const LoyaltySettingsPage = lazy(() => import('./pages/loyalty/LoyaltySettingsPage.jsx').then((m) => ({ default: m.LoyaltySettingsPage })));
 const HrLayout = lazy(() => import('./pages/hr/HrLayout.jsx').then((m) => ({ default: m.HrLayout })));
 const HrLeavesPage = lazy(() => import('./pages/hr/LeavesPage.jsx').then((m) => ({ default: m.LeavesPage })));
 const HrLeaveBalancesPage = lazy(() => import('./pages/hr/LeaveBalancesPage.jsx').then((m) => ({ default: m.LeaveBalancesPage })));
@@ -1302,6 +1306,27 @@ export default function App() {
               element={
                 <RequirePermission permission={PERMISSIONS.PAYROLL_VIEW}>
                   <PayrollRunPage />
+                </RequirePermission>
+              }
+            />
+            {/* Sadakat programı (modül 56): üyeler, ayarlar; hesap sayfası kabuğun dışında. */}
+            <Route
+              path="sadakat"
+              element={
+                <RequirePermission permission={PERMISSIONS.LOYALTY_VIEW}>
+                  <LoyaltyLayout />
+                </RequirePermission>
+              }
+            >
+              <Route index element={<Navigate to="/sadakat/uyeler" replace />} />
+              <Route path="uyeler" element={<LoyaltyMembersPage />} />
+              <Route path="ayarlar" element={<LoyaltySettingsPage />} />
+            </Route>
+            <Route
+              path="sadakat/uyeler/:accountId"
+              element={
+                <RequirePermission permission={PERMISSIONS.LOYALTY_VIEW}>
+                  <LoyaltyAccountPage />
                 </RequirePermission>
               }
             />

@@ -4057,11 +4057,39 @@ olay kataloğu, zamanlanmış işler, tablolar, modül durumu; elle düzenlenmez
 
 ### 56. Sadakat programı — Ali Kemal
 **Gün sonu:** Misafir her konaklamada puan kazanıyor, seviyesi yükseliyor, puanla indirim alıyor.
-- [ ] Backend: LoyaltyProgram, LoyaltyAccount, LoyaltyTransaction tabloları; puan kazanma kuralı (`folio.closed` → harcama × oran)
-- [ ] Ekran: Program kuralları (puan oranı, seviyeler, seviye avantajları)
-- [ ] Ekran: Misafir kartına "puan / seviye" kutusu (22)
-- [ ] Ekran: Puan harcama (rezervasyonda indirim olarak kullan)
-- [ ] Portala (53) puan görünümü
+- [x] Backend: `LoyaltySettings`, `LoyaltyAccount`, `LoyaltyTransaction` (lot / FIFO); kazanma kuralı (`folio.closed` → harcama ÷ birim × seviye çarpanı) — aktör `loyalty-worker`
+- [x] Ekran: Program kuralları (`/sadakat/ayarlar`: oranlar, sınırlar, süre, seviyeler ve avantajlar)
+- [x] Ekran: Misafir kartına "puan / seviye" kutusu (22) + üye yap (açık rıza)
+- [x] Ekran: Puan harcama (rezervasyon ayrıntısında "Puan kullan" → açık folyoya indirim kalemi)
+- [x] Portala (53) puan görünümü
+
+> **📌 Modül 56 tamamlandı (26 Kasım 2026 — Ali Kemal).** Kararlar: **kazanma folyo kapanınca** — rezervasyon sahibi misafir, uygun
+> harcamadan (folyo kalemleri, vergi kalemleri hariç, indirimler düşülmüş) `floor(harcama / spendPerPoint × seviye çarpanı)` kazanır;
+> acente / voucher ödemeli folyo ayara göre kazanmaz; spa kasasında ödenen tamamlanmış randevu ayara göre kazanır. Kaynak başına
+> **hedefe eşitleme** (hedef − yazılmış): folyo yeniden açılınca geri alınır, yeniden kapanınca fark; aynı olay iki kez gelse de tek
+> yazım. **Harcama açık folyoda indirimdir** — puan × puan değeri tutarında `DISCOUNT` kalemi (gelir türü seçilir), en az
+> `minRedeemPoints`, folyo harcamasının en çok `maxRedeemPct`'i; önce puan FIFO düşülür (lot kaydı `consumed`), sonra kalem
+> `postCharge` ile aynı istek kimliğiyle (çift gönderim tek kalem), kalem yazılamazsa puan iade; kalem iptal edilince
+> (`folio.item.voided`) puan lotlarına iade. Muhasebe ayrıca bir şey yazmaz: indirim kalemi genel muhasebede 611'e gider (48).
+> **Seviye** son 12 ayda kazanılan puanla (yükselişte `LOYALTY` zili, düşebilir); **süre** `expiryMonths` (0 = süresiz), 12 saatlik iş
+> kullanılmamış lotları düşer ve seviye penceresini kaydırır. **Üyelik** otomatik (ilk kazanmada) ya da elle (KVKK açık rıza işareti);
+> numara `SDK-000001`. Elle düzeltme gerekçeli (`loyalty.manage`; bakiyeden fazla düşülemez). Misafir kartları birleşince hesaplar
+> birleşir (hedefte yoksa taşınır, varsa hareketler ve bakiye aktarılır, kaynak kapanır).
+>
+> **API** `/loyalty`: `settings`, `accounts` (+ `:id`, `:id/transactions`, `:id/adjust`), `guests/:id` (+ `enroll`),
+> `reservations/:id` (+ `redeem`). İzinler yeni: `loyalty.view` (müdür, ön büro, muhasebe), `loyalty.redeem` (müdür, ön büro),
+> `loyalty.manage` (müdür). Olaylar `loyalty.points.changed`, `loyalty.tier.changed`, `loyalty.changed`; zil `LOYALTY`; kanal
+> `loyalty.changed`; manuel görev modülü "Sadakat". Portal özetine `loyalty` alanı. Migration `20261126090000_loyalty` (CHECK: lot
+> kalanı, sıfır hareket, ayar aralıkları).
+>
+> **Test:** sözleşme 6 (puan hesabı, değer, en çok kullanım, FIFO, seviye, ayar şeması), aktör 3, entegrasyon 4 (aktör zinciriyle
+> kazanma, yeniden açma / fark, acente ödemeli 0; kullanma, sınırlar, çift gönderim, iptalde iade, indirimli tutardan kazanma, Altın
+> çarpanı; seviye zili, süre dolumu, elle düzeltme, birleştirme, portal; izinler ve elle üyelik). Misafir, folyo, portal, spa ve ödeme
+> entegrasyon setleri yeniden koşturuldu.
+>
+> **Devir:** 80 (misafir tanıma) seviye ve `loyalty.tier.changed`'i VIP kuralında kullanır; 84 (hediye çeki / üyelik) ayrı ödeme
+> aracıdır, puanla karışmaz; 102 kalite raporu `loyalty.points.changed`. Bilinçli sınır: rezervasyon fiyatına (giriş öncesi) puan
+> uygulanmaz — kullanım folyo açıkken; puan kuponu (M31) üretilmez.
 
 > **📌 Ali'ye not (modül 57, 19 Kasım 2026 — Ahmet):** spa ücreti iki yoldan kapanır: odaya yazılan `spa.charged` olayıyla folyoya düşer
 > (`folio.closed` kuralınız onu kendiliğinden sayar); **spa kasasında** ödenen ise folyoya girmez (`SpaPayment`, olay

@@ -280,6 +280,35 @@ Sorun giderirken üç ekranı yanınızda tutun:
 - **Sebep:** gelir raporu, panel, bütçe ve gün kapanışı **aynı tanımları** kullanır (satılabilir = oda − arızalı; hizmet dışı paydada kalır; gelir vergiler hariç; gece fiyatları gece tablosundan). Bütçe gerçekleşeni **yalnız kapanmış günleri** sayar; içinde bulunulan ayın planı kapanmış gün oranında; tahsilat onay bekleyenleri saymaz; **gider gerçekleşeni elle** girilir (satın alma / ön muhasebeden otomatik beslenme yol haritasında). Rapor tasarımcısı kayıt anlarını otelin saat diliminde güne çevirir.
 - **Çözüm:** gün kapanışlarının güncel olduğundan emin olun; bütçede yılın onaylı bütçesi yoksa taslak kullanılır (işaretli).
 
+## Sadakat programı
+
+### Misafirin folyosu kapandı ama puan gelmedi
+
+- **Sebep / çözüm:** Hesap sayfasında (Sadakat → **Üyeler** → misafir) ya da misafir kartının sadakat kutusunda sırayla şunlara bakın:
+  1. **Program açık mı?** Sadakat → **Ayarlar** (`/sadakat/ayarlar`) sayfasında **Program açık** işaretli olmalı. "Program henüz kurulmadı" uyarısı varsa program hiç kaydedilmemiştir.
+  2. **Misafir üye mi?** Otomatik üyelik kapalıysa yalnız üye yapılan misafir kazanır. Misafir kartında "Üye değil" yazıyorsa önce **Üye yap** (açık rızayla). O folyonun puanı kendiliğinden gelmez; müdür gerekçeli **Düzeltme** ile ekleyebilir.
+  3. **Folyo acente / voucher ödemeli mi?** Ayar açıkken bu folyolar puan kazanmaz. Hareket açıklamasında "acente / cari ödemeli folyo puan kazanmaz" yazar.
+  4. **Doğru misafir mi?** Puanı rezervasyon sahibi kazanır. Refakatçi kazanmaz, mükerrer kart da ayrı hesap demektir.
+  5. **Aktör açık mı?** Görevler'de "Kapanan folyonun sadakat puanı yazılacak" görevi varsa sadakat aktörü kapalıdır (Yönetim → Aktörler). Görev hesap sayfasında elle düzeltmeyle tamamlanır.
+
+  Tutar beklediğinizden azsa unutmayın: vergi kalemleri sayılmaz, indirimler düşülür ve küsurat aşağı yuvarlanır (2.489,99 TL → 248 puan).
+
+### "Bu folyoda en çok N puan kullanılır" / "Puan kullan" düğmesi çalışmıyor
+
+- **Sebep / çözüm:** Bir folyoda en çok, folyo harcamasının ayardaki yüzdesi (varsayılan %50) kadar puan kullanılır. 2.000 TL'lik folyoda 1.000 TL, yani 0,50 TL'lik puanla **2.000 puan** kullanılabilir. Bakiye daha azsa sınır bakiyedir. Bu sınır en az kullanımın (varsayılan 100) altında kalıyorsa satırda 0 görünür. Folyoya harcama işlendikçe sınır büyür. Satır hiç yoksa konaklamanın **açık folyosu** yoktur: puan girişten sonra, çıkıştan önce kullanılır (`LOYALTY_NO_OPEN_FOLIO`). Düğme hiç görünmüyorsa `loyalty.redeem` izniniz yoktur (Muhasebe rolü yalnız görür).
+
+### Yanlış puan indirimi yaptım, nasıl geri alırım?
+
+- **Cevap:** Folyodan indirim kalemine **iptal** isteyin. İptal dört göz onayıyla kesinleşince sadakat aktörü puanı kendiliğinden iade eder ("Harcama iade edildi"). Puan düşüldüğü paketlere döner, son kullanma günleri değişmez. Ardından doğru tutar ve gelir türüyle yeniden **Puan kullan** penceresini açın. Hesaba ayrıca elle artı düzeltme girmeyin; yoksa puan iki kez döner. Çift tıklamadan korkmayın: aynı pencereden gelen ikinci gönderim ikinci kalem açmaz.
+
+### Misafirin seviyesi neden düştü? / Puanı neden azaldı?
+
+- **Cevap:** Seviye **son 12 ayda kazanılan** puana göre hesaplanır ve pencere her gün kayar. Misafir bir yıl gelmezse eski kazanmalar pencereden çıkar ve seviye düşer; bakiye bundan etkilenmez. Harcanan puan seviyeyi düşürmez, ama geri alınan kazanma (folyo yeniden açıldı) düşürür. Bakiyenin azalmasının sebebi hareketler tablosunda yazar: "Süresi doldu" (kullanılmayan puan ayardaki ay sonunda düşer, varsayılan 24 ay; **Sadakat puan süresi** işi 12 saatte bir çalışır), "Kazanma geri alındı" (folyo yeniden açıldı) ya da "Elle düzeltme" (gerekçesiyle). Süresi 30 gün içinde dolacak puan misafir kartında önceden uyarı olarak görünür.
+
+### Kazanma oranını ya da seviye eşiklerini değiştirirsem eski puanlar ne olur?
+
+- **Cevap:** Değişmez. Yeni oran, çarpan ve puan değeri bundan sonraki işlemlere uygulanır. Kazanılmış puan aynı sayıda kalır, ama kullanılırken **yeni puan değeriyle** TL'ye çevrilir; puan değerini düşürmek dolaşımdaki puanın karşılığını da düşürür (Üyeler → "Karşılığı" kutusu). Seviye eşiği değişince üyelerin seviyesi bir sonraki harekette ya da 12 saatlik işte yeniden hesaplanır; yükselenler için zil çalar. Ayarı kaydetmek için `loyalty.manage` gerekir; kayıt denetim izine düşer.
+
 ## Genel kullanım soruları
 
 **Bir işi kimin yaptığını nasıl bulurum?** Aktivite → Canlı akış (zincir kimliği ile aktör işleri) ve Aktivite → Denetim kaydı (personel işlemleri; kimlik numaraları maskeli). Folyo kalemi, ödeme, fiş, fatura, demirbaş kartı kendi zaman çizelgesini / hareket geçmişini taşır.
@@ -392,7 +421,7 @@ Durum sözlüğü: **Tamam** = görev listesindeki maddelerin tümü işaretli v
 | 53 | Temassız (online check-in, portal) | concierge-agent | Kısmi | Portal, online check-in, folyo, QR menü tamam; **kart adımı 50'ye, dijital anahtar 62'ye bağlı (pasif)** |
 | 54 | Misafir yorum entegrasyonu + duygu analizi | insight-agent | **Planlı** | |
 | 55 | Anket & memnuniyet | notification-worker + insight-agent | Tamam | |
-| 56 | Sadakat programı | manuel | **Planlı** | |
+| 56 | Sadakat programı | loyalty-worker | Tamam | Folyo kapanınca puan (vergi hariç, indirim düşülmüş, seviye çarpanı; acente ödemeli hariç; spa kasası), yeniden açılınca geri alma; açık folyoda puanla indirim (611), iptalde iade; son 12 aya göre seviye ve yükseliş zili (`LOYALTY`); süre dolumu (12 saatlik iş, FIFO); elle düzeltme; misafir birleştirmede hesap birleşir; portal kutusu. Kampanya / bonus puan kuralları, puanla oda satışı ve zincir genelinde ortak hesap yok |
 | 57 | SPA & spor salonu | manuel | Tamam | |
 
 ### 9. Yasal & entegrasyon, 10. Dikey paketler
@@ -400,7 +429,7 @@ Durum sözlüğü: **Tamam** = görev listesindeki maddelerin tümü işaretli v
 | No | Modül | Durum | Not |
 | --- | --- | --- | --- |
 | 58 | Emniyet kimlik bildirimi (KBS) | **Planlı** | Check-in'de kimlik alanları KBS'ye uygun toplanır, bildirim gönderilmez |
-| 59 | Kimlik / pasaport okuma (OCR) | **Planlı** | |
+| 59 | Kimlik / pasaport okuma (OCR) | **Tamam** | |
 | 60 | Çoklu dil & çoklu para birimi | **Planlı** | Misafir portalı ve widget metinleri çok dilli hazır; panel Türkçe; döviz yalnız ödemede |
 | 61 | Webhook & açık API | **Planlı** | |
 | 62 | Donanım entegrasyonları | **Planlı** | |
@@ -413,6 +442,6 @@ Tamamı **planlı**dır; kod yok. Başlıklar: 69–74 sağlam zemin (göç sihi
 
 ### Özet sayılar
 
-- 1–68 arası: **51 tamam**, **6 kısmi** (9, 38, 42, 49, 53 ve e-posta bağımlılığıyla 32'nin bildirim adımı), **11 planlı** (50, 54, 56, 58–63, 64–68 dikey paketler tek satırda sayılırsa).
+- 1–68 arası: **52 tamam**, **6 kısmi** (9, 38, 42, 49, 53 ve e-posta bağımlılığıyla 32'nin bildirim adımı), **10 planlı** (50, 54, 58–63, 64–68 dikey paketler tek satırda sayılırsa).
 - Otelin **günlük operasyonu** (rezervasyon → giriş → folyo → ödeme → çıkış → fatura → muhasebe; restoran → stok → satın alma; kat hizmetleri, teknik servis, anket, spa) uçtan uca çalışır.
 - **Dış dünyaya bağlanan** parçaların bir kısmı taslaktır: e-posta gönderimi, e-belge entegratörü, online kart ödemesi, KBS. Ekranlar bunu açıkça söyler; "gönderildi" gibi görünen ama gitmeyen hiçbir şey yoktur.

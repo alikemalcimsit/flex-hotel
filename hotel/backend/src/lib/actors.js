@@ -37,6 +37,8 @@ import * as paymentService from '../modules/payments/service.js';
 import * as accountingPostings from '../modules/accounting/postings.js';
 import { syncPayrollRun } from '../modules/payroll/postings.js';
 import { journalizeDay, journalizeSource } from '../modules/ledger/journalize.js';
+import { createLoyaltyWorker } from '@hotelos/loyalty-worker';
+import { onFolioItemVoided, syncFolioPoints, syncSpaPoints } from '../modules/loyalty/earning.js';
 import { consumeSale } from '../modules/stock/sales.js';
 import { suggestPurchases } from '../modules/stock/suggestions.js';
 import * as invoiceService from '../modules/invoicing/invoices.js';
@@ -352,6 +354,10 @@ export function registerActors() {
         deps,
       ),
     );
+  }
+  // Sadakat aktörü (modül 56): kapanan folyo / spa kasası → puan; yeniden açılan folyo → geri alma; iptal edilen puan indirimi → iade.
+  if (!actorRegistry.get('loyalty-worker')) {
+    actorRegistry.register(createLoyaltyWorker({ syncFolioPoints, syncSpaPoints, onFolioItemVoided }, deps));
   }
   // Stok aktörü (modül 44): kapanan adisyon → reçeteden düşüm; miktarı düşen malzeme minimum altındaysa → stok talebi.
   if (!actorRegistry.get('inventory-worker')) {

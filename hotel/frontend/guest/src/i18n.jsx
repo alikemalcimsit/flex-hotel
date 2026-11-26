@@ -74,6 +74,8 @@ export function formatters(language) {
     day: (value) => (value ? day.format(new Date(`${String(value).slice(0, 10)}T00:00:00Z`)) : '—'),
     shortDay: (value) => (value ? short.format(new Date(`${String(value).slice(0, 10)}T00:00:00Z`)) : '—'),
     dateTime: (value) => (value ? time.format(new Date(value)) : '—'),
+    /** 1250 → "1.250" (dilin binlik ayracıyla) */
+    number: (value) => new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(Number(value ?? 0)),
     money: (value, currency) => {
       try {
         return new Intl.NumberFormat(locale, { style: 'currency', currency: currency || 'TRY' }).format(Number(value));

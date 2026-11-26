@@ -543,6 +543,7 @@ export const STAFF_ALERT_KINDS = Object.freeze([
   'ASSET',
   'STOCK',
   'HR',
+  'LOYALTY',
 ]);
 
 export const STAFF_ALERT_KIND_LABELS = Object.freeze({
@@ -572,6 +573,7 @@ export const STAFF_ALERT_KIND_LABELS = Object.freeze({
   ASSET: 'Demirbaş (garantisi bitecekler)',
   STOCK: 'Stok (minimum altı; talep açıldı)',
   HR: 'İK (izin talebi / kararı, süresi dolacak belge)',
+  LOYALTY: 'Sadakat (seviye yükseldi, puanın süresi doluyor)',
 });
 
 export const STAFF_ALERT_SEVERITIES = Object.freeze(['INFO', 'WARNING', 'CRITICAL']);

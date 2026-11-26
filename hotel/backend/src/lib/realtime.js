@@ -17,6 +17,7 @@ import {
   INVOICE_EVENTS,
   PAYROLL_EVENTS,
   HR_EVENTS,
+  LOYALTY_EVENTS,
   GUEST_PORTAL_EVENTS,
   SURVEY_EVENTS,
   SPA_EVENTS,
@@ -159,6 +160,8 @@ export const INVOICES_CHANNEL = 'invoices.changed';
 export const PAYROLL_CHANNEL = 'payroll.changed';
 /** İK (modül 52): izinler, vardiya, puantaj, belgeler. */
 export const HR_CHANNEL = 'hr.changed';
+/** Sadakat (modül 56): üyeler, puan hareketleri, seviye, ayar. */
+export const LOYALTY_CHANNEL = 'loyalty.changed';
 
 /** Misafir portalı ve online check-in (modül 53). */
 export const GUEST_PORTAL_CHANNEL = 'guest-portal.changed';
@@ -217,6 +220,7 @@ const CHANNEL_EVENTS = Object.freeze({
   [INVOICES_CHANNEL]: INVOICE_EVENTS,
   [PAYROLL_CHANNEL]: PAYROLL_EVENTS,
   [HR_CHANNEL]: HR_EVENTS,
+  [LOYALTY_CHANNEL]: LOYALTY_EVENTS,
   [GUEST_PORTAL_CHANNEL]: GUEST_PORTAL_EVENTS,
   [SURVEY_CHANNEL]: SURVEY_EVENTS,
   [SPA_CHANNEL]: SPA_EVENTS,

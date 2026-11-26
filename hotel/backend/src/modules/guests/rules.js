@@ -11,8 +11,8 @@ export const GUEST_REASSIGN_MODELS = Object.freeze([
   'reservation', 'conversation', 'guestRequest', 'folio', 'lostItem', 'invoice', 'waitlistEntry', 'notification',
   'guestPreference', 'guestNote', 'lead', 'surveyInvitation', 'surveyResponse', 'spaAppointment',
 ]);
-/** `mergeGuests`'in ayrıca (çakışma temizliğiyle) taşıdığı tablolar. */
-export const GUEST_MERGE_SPECIAL_MODELS = Object.freeze(['reservationGuest']);
+/** `mergeGuests`'in ayrıca (çakışma temizliğiyle) taşıdığı tablolar; sadakat hesabı birleştirilir (modül 56). */
+export const GUEST_MERGE_SPECIAL_MODELS = Object.freeze(['reservationGuest', 'loyaltyAccount']);
 
 /**
  * İki etiket listesini birleştirir: sıra korunur, tekrarlar (büyük/küçük harf

@@ -251,6 +251,8 @@ enum StaffAlertKind {
   STOCK
   /// Modül 52: izin talebi / kararı, süresi dolacak özlük belgesi.
   HR
+  /// Modül 56: sadakat seviyesi yükseldi, puanın süresi doluyor.
+  LOYALTY
 }
 
 /// Rezervasyon fiyatının kaynağı (modül 4): sistem hesabı ya da yetkili
@@ -923,6 +925,9 @@ model Hotel {
   timesheets             Timesheet[]
   employeeDocuments      EmployeeDocument[]
   hrSettings             HrSettings?
+  loyaltySettings        LoyaltySettings?
+  loyaltyAccounts        LoyaltyAccount[]
+  loyaltyTransactions    LoyaltyTransaction[]
   assetCategories        AssetCategory[]
   assetAreas             AssetArea[]
   assets                 Asset[]
@@ -1621,6 +1626,7 @@ model Guest {
   preferenceEntries GuestPreference[]
   noteEntries       GuestNote[]
   leads             Lead[]
+  loyaltyAccount    LoyaltyAccount?
 
   @@index([phone])
   @@index([email])
@@ -7372,6 +7378,112 @@ model HrSettings {
   updatedAt             DateTime @updatedAt
 
   hotel Hotel @relation(fields: [hotelId], references: [id])
+}
+
+// ═══════════════════════ Sadakat programı (modül 56) ═══════════════════════
+
+enum LoyaltyAccountStatus {
+  ACTIVE
+  CLOSED
+}
+
+/// Puan hareketi: kazanma, harcama, geri almaları, süre dolumu, elle düzeltme.
+enum LoyaltyTransactionKind {
+  EARN
+  EARN_REVERSAL
+  REDEEM
+  REDEEM_REVERSAL
+  EXPIRE
+  ADJUST
+}
+
+/// Otelin sadakat programı: kazanma ve harcama oranları, sınırlar, süre, seviyeler (JSON).
+model LoyaltySettings {
+  hotelId           String   @id
+  isEnabled         Boolean  @default(false)
+  programName       String   @default("Sadakat programı")
+  /// 1 puan için harcanacak tutar (otel para birimi).
+  spendPerPoint     Decimal  @default(10) @db.Decimal(12, 2)
+  /// 1 puanın harcamadaki değeri (otel para birimi).
+  pointValue        Decimal  @default(0.5) @db.Decimal(12, 4)
+  minRedeemPoints   Int      @default(100)
+  /// Folyo harcamasının en çok yüzde kaçı puanla ödenir.
+  maxRedeemPct      Int      @default(50)
+  /// Kazanılan puanın geçerlilik süresi (ay); 0 = süresiz.
+  expiryMonths      Int      @default(24)
+  autoEnroll        Boolean  @default(true)
+  excludeLedgerPaid Boolean  @default(true)
+  earnOnSpa         Boolean  @default(true)
+  /// [{ code, name, minPoints, multiplier, perks }]
+  tiers             Json     @default("[]")
+  updatedBy         String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+}
+
+/// Misafirin sadakat hesabı (misafir kartı başına bir tane). Bakiye hareketlerle aynı işlemde güncellenir.
+model LoyaltyAccount {
+  id               String               @id @default(uuid())
+  hotelId          String
+  guestId          String               @unique
+  /// "SDK-000001"
+  number           String
+  status           LoyaltyAccountStatus @default(ACTIVE)
+  tierCode         String?
+  balance          Int                  @default(0)
+  lifetimePoints   Int                  @default(0)
+  /// Son 12 ayda kazanılan puan (seviye eşiği bununla).
+  qualifyingPoints Int                  @default(0)
+  enrolledAt       DateTime             @default(now())
+  enrolledBy       String
+  /// KVKK açık rıza işareti (elle üyelikte).
+  consentAt        DateTime?
+  lastActivityAt   DateTime?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  hotel        Hotel                @relation(fields: [hotelId], references: [id])
+  guest        Guest                @relation(fields: [guestId], references: [id], onDelete: Restrict)
+  transactions LoyaltyTransaction[]
+
+  @@unique([hotelId, number])
+  @@index([hotelId, status, tierCode])
+  @@index([hotelId, balance])
+}
+
+/// Puan hareketi (işaretli). Artı lotlar (`remaining`) FIFO harcanır; `consumed` harcamanın hangi lotlardan düştüğünü tutar (iade için).
+model LoyaltyTransaction {
+  id            String                 @id @default(uuid())
+  hotelId       String
+  accountId     String
+  kind          LoyaltyTransactionKind
+  points        Int
+  remaining     Int                    @default(0)
+  expiresOn     DateTime?              @db.Date
+  sourceType    String
+  sourceId      String?
+  sourceKey     String
+  /// Puanın para karşılığı (harcamada indirim tutarı; kazanmada uygun harcama).
+  amount        Decimal                @default(0) @db.Decimal(14, 2)
+  consumed      Json                   @default("[]")
+  reservationId String?
+  folioId       String?
+  folioItemId   String?
+  description   String
+  createdBy     String
+  createdAt     DateTime               @default(now())
+
+  hotel   Hotel          @relation(fields: [hotelId], references: [id])
+  account LoyaltyAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@unique([hotelId, sourceKey])
+  @@index([accountId, createdAt])
+  // FIFO harcama ve süre dolumu: kalanı olan lotlar.
+  @@index([accountId, remaining, expiresOn])
+  @@index([hotelId, expiresOn])
+  @@index([hotelId, sourceType, sourceId])
 }
 
 /// Bir aya girilen ek ödeme / kesinti. `runId` boşsa ayın aylık bordrosuna, doluysa o fark bordrosuna aittir.

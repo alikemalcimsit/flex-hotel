@@ -95,6 +95,8 @@ export const CHANNEL_MANAGER_CHANNEL = 'channel-manager.changed';
 export const PAYROLL_CHANNEL = 'payroll.changed';
 /** İK (modül 52): izin talebi / kararı, vardiya çizelgesi, puantaj, özlük belgeleri, ayar. */
 export const HR_CHANNEL = 'hr.changed';
+/** Sadakat (modül 56): puan hareketi, seviye, üyelik, ayar. */
+export const LOYALTY_CHANNEL = 'loyalty.changed';
 /** Misafir portalı ve online check-in (modül 53): gönderim, onay, düzeltme, giriş, bağlantı, ayar. */
 export const GUEST_PORTAL_CHANNEL = 'guest-portal.changed';
 /** Anket ve memnuniyet (modül 55): cevap, takip, AI etiketi / özeti, tasarım, ayar. */

@@ -41,6 +41,7 @@ Olay adları aile aile gruplanır; birkaç örnek:
 | Kanal | kanal rezervasyonu alındı / değişti, fiyat değişti | Kanal yönetimi |
 | Muhasebe, fatura, bordro | muhasebe kaydı işlendi, fatura kesildi / iptal edildi, bordro onaylandı / değişti | Muhasebe aktörü, fatura, bordro |
 | İK | izin talebi açıldı / onaylandı / reddedildi / iptal edildi (`hr.leave.changed`); İK değişti — vardiya, puantaj, bordroya aktarım, belge, ayar, bakiye düzeltmesi (`hr.changed`) | İK servisi ve onay kararı dinleyicisi |
+| Sadakat | sadakat puanı hareketi — kazanma, geri alma, harcama, iade, süre dolumu, düzeltme (`loyalty.points.changed`); sadakat seviyesi değişti (`loyalty.tier.changed`); üyelik / program ayarı değişti (`loyalty.changed`) | Sadakat aktörü, puan kullanma ve üyelik ekranları, süre işi |
 
 ### Outbox: olay kaybolmaz
 
@@ -189,6 +190,19 @@ Kural tabanlı. Kapalıyken satış düşümü **"Stok"** modülüne düşer (el
 | --- | --- | --- | --- |
 | Adisyon ödendi (kapandı) | Satılan, ikram edilen ve hazırlanıp iptal edilen ürünleri reçetelerinden malzemeye açar, satış noktasının deposundan düşer; adisyon yeniden açılıp kapanırsa farkı düzeltir; reçetesi olmayan ürünü atlar; tepsi / paket ücretini düşmez | Stok değişti | "Adisyon 1187 stoktan düşülecek (4 ürün)" |
 | Stok değişti (çıkış, fire, transfer, sayım) | Minimumun altına inen malzeme için (yoldaki ve talepteki düşüldükten sonra) satın alma talebi açar, satın alma yetkilisine zil | Satın alma talebi değişti, personel uyarısı | **Atlanır** — satın alma ekranındaki öneri listesi aynı hesabı her an gösterir |
+
+#### Sadakat aktörü (loyalty-worker)
+
+Kural tabanlı (modül 56). Misafire puan kazandırır ve kazanılanı düzeltir. Puan kullanma (folyoya indirim) aktörün işi değildir; resepsiyon rezervasyon ayrıntısından yapar. Kapalıyken iş **"Sadakat"** modülüne manuel görev olarak düşer (`loyalty.manage` sahibi görür) ve hesap sayfasında elle düzeltmeyle tamamlanır. Her kaynakta puan "hak edilen − yazılmış = fark" mantığıyla yazıldığı için aktör yeniden açılıp aynı olay gelse de puan iki kez yazılmaz. 3 deneme, 400 ms. İş kuralı hatası (ör. hesap kapalı) yeniden denenmez, doğrudan göreve düşer.
+
+| Tetikleyen olay | Yaptığı iş | Ürettiği olay | Kapalıysa (görev başlığı) |
+| --- | --- | --- | --- |
+| Folyo kapandı (`folio.closed`) | Rezervasyon sahibine uygun harcamadan puan yazar: vergi kalemleri hariç, indirimler düşülmüş, seviye çarpanıyla, aşağı yuvarlı. Otomatik üyelik açıksa hesabı açar. Acente / voucher ödemeli folyoda (ayar açıkken) 0 | Sadakat puanı hareketi; seviye değiştiyse sadakat seviyesi değişti ve yükselişte zil (`LOYALTY`) | "Kapanan folyonun sadakat puanı yazılacak" |
+| Folyo yeniden açıldı (`folio.reopened`) | O folyodan kazanılanı geri alır. Folyo yeniden kapanınca yeni toplamın puanı yazılır | Sadakat puanı hareketi | "Yeniden açılan folyonun sadakat puanı geri alınacak" |
+| Folyo kalemi iptal edildi (`folio.item.voided`) | Kalem bir puan indirimiyse puanı düşüldüğü paketlere iade eder; değilse bir şey yapmaz | Sadakat puanı hareketi | "İptal edilen kalem puan indirimiyse puan iade edilecek" |
+| Spa randevusu değişti (`spa.appointment.changed`: tamamlandı, geri alındı, ücretlendi, fiyatı değişti) | Misafir kartına bağlı randevuda spa kasasında ödenen tutarın puanını yazar ya da düzeltir (ayarda "Spa kasasında ödenen randevu kazanır" açıksa) | Sadakat puanı hareketi | "Spa randevusunun sadakat puanı yazılacak" |
+
+*Örnek:* Ayşe Demir'in 2.480 TL'lik folyosu kapandı. Aktör `folio.closed`'u yakaladı. Ayşe'nin hesabı yoktu; otomatik üyelik açık olduğu için `SDK-000001` açıldı ve "Kazanıldı +248" yazıldı. Aktör `loyalty.points.changed` yayınladı; Aktivite → Canlı akış'ta aktörün işi "SDK-000001: +248 puan" diye göründü. Ertesi hafta müdür folyoyu yeniden açtı ve aktör −248 yazdı. Folyo 3.000 TL ile yeniden kapanınca aktör +300 yazdı. Aktör o sırada kapalı olsaydı Görevler'de "Kapanan folyonun sadakat puanı yazılacak" görevi çıkardı; müdür Sadakat → Üyeler → hesap → **Düzeltme** ile +248 girip (gerekçe: "Folyo … puanı, aktör kapalıydı") görevi tamamlardı.
 
 #### Kanal aktörü (channel-sync-worker)
 
@@ -407,13 +421,14 @@ Olaylar sistemin ana tetikleyicisidir; zamanlanmış işler **güvenlik ağı** 
 | Restoran POS | Oda servisi süpürmesi | 1 dk | Zamanı gelen planlı siparişi mutfağa düşürür; konaklaması biten siparişi iptal eder; kabul bekleyen / geciken sipariş ve toplanmayan tepsi uyarıları |
 | Demirbaş | Garanti zili | 6 sa | Garantisi uyarı penceresine giren kartlar için zil (kart başına bir kez; aynı günün kartları tek zilde) |
 | İK | Özlük belgesi hatırlatması | 12 sa | Süresi İK ayarındaki gün (varsayılan 30) içinde dolacak / dolmuş belgeler için `hr.manage` sahiplerine tek özet zil (`HR`); aynı belge 7 günde bir |
+| Sadakat | Sadakat puan süresi | 12 sa | Programı açık her otelde son kullanma günü geçmiş, kullanılmamış puanı "Süresi doldu" hareketiyle düşer (hesap başına günde bir); 12 aylık seviye penceresi kaydığı için etkin hesapların seviyesini yeniden hesaplar (yükselişte zil `LOYALTY`, düşüşte zil yok) |
 | Faturalar | E-belge gönderimi | 30 sn | Sıradaki e-Fatura / e-Arşiv belgelerini entegratöre gönderir, durumunu izler |
 
 *Örnek:* Sunucu bakım için pazar 03:00–05:00 arası kapalıydı. Açılışta: outbox tarayıcısı dağıtılmamış 3 olayı dağıttı; oda ücreti işi cumartesi gecesini (zaten kapatılmıştı) kontrol etti, eksik yoktu; konaklayan temizliği pazar sabahının görevlerini açtı; bekleyen mesajlar işi 03:12'de personelin yazdığı ama gönderilemeyen WhatsApp cevabını gönderdi. Kimse bir şey yapmadı.
 
 ## Canlı kanallar: ekranlar nasıl kendiliğinden yenilenir
 
-Sunucu, bir şey değiştiğinde panellere socket üzerinden **yalnızca haber** gönderir ("bu otelde envanter değişti", "onaylar değişti", "manuel görevler değişti", "mesajlar değişti", "genel muhasebe değişti" — `ledger.changed`, "İK değişti" — `hr.changed`); veri göndermez. Haber yalnızca o kanala abone olan — yani ilgili ekranı açık tutan — panellere gider; otelin tamamına yayın yapılmaz. Panel haberi alınca kendi sorgusunu tazeler (bazı ekranlarda en sık 10–15 saniyede bir).
+Sunucu, bir şey değiştiğinde panellere socket üzerinden **yalnızca haber** gönderir ("bu otelde envanter değişti", "onaylar değişti", "manuel görevler değişti", "mesajlar değişti", "genel muhasebe değişti" — `ledger.changed`, "İK değişti" — `hr.changed`, "sadakat değişti" — `loyalty.changed`: puan hareketi, seviye, üyelik, ayar); veri göndermez. Haber yalnızca o kanala abone olan — yani ilgili ekranı açık tutan — panellere gider; otelin tamamına yayın yapılmaz. Panel haberi alınca kendi sorgusunu tazeler (bazı ekranlarda en sık 10–15 saniyede bir).
 
 Zil haberi kişiye (`kullanıcı`) ya da izne (`perm`) gider; rozet sunucudan bir kez gelir, sonra haberle artar. Aktivite akışı 500 ms'de bir toplu "yeni satır kimlikleri" alır; içerik HTTP'den okunur (socket kimliği şimdilik istemcinin söylediği e-postadır, bu yüzden socket'ten içerik taşınmaz).
 
@@ -489,6 +504,9 @@ Bu yolculukta personel üç kez dokundu: online check-in onayı, giriş ve çık
 | Aktivite akışı | Aktörlerin işlerinin defteri |
 | İzin bakiyesi | Personelin yıllık ücretli izin hakkı (4857 md. 53: işe giriş yıl dönümlerinde 14 / 20 / 26 gün; 18 yaş altı ve 50 yaş üstüne en az 20) + elle düzeltmeler − onaylı yıllık izinler; iş günüyle |
 | Puantaj (günlük) | Bir personelin bir günü: geldi / gelmedi / izinli / hafta tatili / resmî tatil, giriş-çıkış, mola, çalışılan ve norm üstü dakika; ay sonunda bordroya aktarılır (kaynak TIMESHEET) |
+| Sadakat puanı | Folyo kapanınca harcamadan kazanılan tamsayı puan (varsayılan 10 TL = 1 puan); açık folyoda indirim olarak harcanır (varsayılan 1 puan = 0,50 TL) |
+| Sadakat seviyesi | Son 12 ayda kazanılan puana göre Klasik / Gümüş / Altın…; çarpanı kazanmaya uygulanır, düşebilir |
+| Puan paketi (lot) ve FIFO | Her kazanma ayrı paket olur (kendi son kullanma günüyle); harcama ve süre dolumu en eski paketten başlar |
 
 ## Sık sorulanlar
 

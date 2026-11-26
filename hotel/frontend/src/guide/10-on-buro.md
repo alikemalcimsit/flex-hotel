@@ -666,6 +666,7 @@ Ad, telefon ya da e-posta ile arama; her kartta konaklama sayısı, toplam harca
 - **Harcama:** misafirin folyoları (borç / ödeme / bakiye).
 - **Notlar:** tarihli, yazarlı; sabitlenen üstte durur.
 - Bildirim tercihi: misafir kanal bazında bildirim istemiyorsa (SMS, e-posta) kartta işaretlenir; o kanaldan gönderim yapılmaz.
+- **Sadakat kutusu** (`loyalty.view`; program kapalıysa görünmez): üyeyse hesap numarası, seviye rozeti, bakiye ve TL karşılığı, sonraki seviyeye ilerleme çubuğu, 30 gün içinde süresi dolacak puan uyarısı ve hesap sayfasına bağlantı. Üye değilse "Üye değil" yazar ve `loyalty.redeem` sahibine **Üye yap** düğmesi (açık rıza işaretiyle) çıkar. Ayrıntı: aşağıdaki "Sadakat programı" bölümü.
 
 ### Mükerrer kart birleştirme
 
@@ -678,7 +679,7 @@ Ad, telefon ya da e-posta ile arama; her kartta konaklama sayısı, toplam harca
 3. Her alan için hangi değerin kalacağını seçin (telefon, e-posta, kimlik…).
 4. Onaylayın. **Geri alınamaz.**
 
-**Arka planda:** kaynağın rezervasyonları, refakatçi kayıtları, konuşmaları, istekleri, folyoları, kayıp eşyaları, faturaları, bekleme listesi kayıtları, bildirimleri, tercihleri ve notları hedefe taşınır; etiketler birleştirilir; kaynak kart silinmiş olarak işaretlenir (iz kalır).
+**Arka planda:** kaynağın rezervasyonları, refakatçi kayıtları, konuşmaları, istekleri, folyoları, kayıp eşyaları, faturaları, bekleme listesi kayıtları, bildirimleri, tercihleri ve notları hedefe taşınır; etiketler birleştirilir; **sadakat hesabı** hedefe taşınır ya da hedefin hesabıyla birleşir; kaynak kart silinmiş olarak işaretlenir (iz kalır).
 
 #### Misafir kartı — ekranda gördüğünüz alanlar
 
@@ -714,6 +715,237 @@ Ad, telefon ya da e-posta ile arama; her kartta konaklama sayısı, toplam harca
 - Rezervasyon formu telefon / e-posta eşleşmesiyle mevcut kartı bulur.
 - Online check-in kimlik bilgilerini karta işler; saklama süresi sonunda kimlik numarası kopyası temizlenir.
 - Toplam harcama, folyolara işlenen borçlardan hesaplanır; ödeme değil borç ölçülür.
+
+## Sadakat programı
+
+**Ne işe yarar:** Misafir konaklamasında harcadığı tutara göre **puan** kazanır. Bu puanı sonraki konaklamasında **folyosunda indirim** olarak kullanır. Son 12 ayda kazandığı puana göre bir **seviyeye** (Klasik, Gümüş, Altın…) girer. Seviyesi yükseldikçe daha hızlı kazanır ve otelin tanımladığı avantajları (geç çıkış, oda yükseltme…) alır. Puanı kimse elle yazmaz: folyo kapanınca puanı **sadakat aktörü** yazar. Resepsiyonun işi puanı kullandırmak ve gerekirse misafiri üye yapmaktır.
+
+**Nerede:**
+
+| Ekran | Adres | Ne var |
+| --- | --- | --- |
+| **Sadakat** (menü) | `/sadakat` | Sayfa başlığı "Sadakat programı" ve iki sekme. Açılınca Üyeler sekmesine gider |
+| **Üyeler** | `/sadakat/uyeler` | Özet kutuları, arama ve süzgeç, üye tablosu |
+| Hesap sayfası | `/sadakat/uyeler/:accountId` | Tek bir üyenin kartı, hareketleri ve **Düzeltme** düğmesi |
+| **Ayarlar** | `/sadakat/ayarlar` | Program, kazanma ve kullanım kuralları, seviyeler |
+| Misafir kartı | `/misafirler/<kimlik>` | Sadakat kutusu: numara, seviye, bakiye. Üye değilse **Üye yap** |
+| Rezervasyon ayrıntısı | `/rezervasyonlar/<kimlik>` | **Sadakat** kartı: hesap özeti, açık folyo için **Puan kullan**, son hareketler |
+| Misafir portalı | misafirin bağlantısı | Ana sayfada puan ve seviye kutusu |
+
+**Yetki:**
+
+| İzin | Ne açar | Varsayılan rol |
+| --- | --- | --- |
+| `loyalty.view` | Üyeleri, hesabı, hareketleri, ayarları **görmek**; misafir kartındaki kutu, rezervasyondaki kart | Müdür, ön büro, muhasebe |
+| `loyalty.redeem` | Folyoda **puan kullanmak** (indirim), misafiri **üye yapmak** | Müdür, ön büro |
+| `loyalty.manage` | Program **ayarlarını** ve seviyeleri kaydetmek, **elle puan düzeltmesi** | Müdür |
+
+Kat hizmetleri ve F&B rolleri sadakat ekranlarını görmez; adresi yazsalar da "Bu işlem için yetkiniz yok" alırlar. Muhasebe bakiyeleri ve hareketleri görür ama puan kullandıramaz.
+
+### Kavramlar
+
+| Kavram | Anlamı |
+| --- | --- |
+| **Puan** | Her zaman tamsayıdır, kesirli puan olmaz. Hesaplamada küsurat **aşağı** yuvarlanır |
+| **Kazanma oranı** ("1 puan için harcama") | Kaç TL harcamanın 1 puan ettiği. Varsayılan **10 TL = 1 puan** |
+| **Puan değeri** | 1 puanın indirim karşılığı. Varsayılan **1 puan = 0,50 TL**. Varsayılanlarla 10 TL harcama 1 puan, 1 puan da 0,50 TL eder; misafire harcamasının **%5**'i kadar geri döner |
+| **Seviye** | Son 12 ayda **kazanılan** puana göre belirlenir. Harcanan puan seviyeyi düşürmez. Varsayılan: Klasik (0), Gümüş (1.000), Altın (3.000) |
+| **Çarpan** | Seviyenin kazanma hızı. Klasik ×1, Gümüş ×1,25, Altın ×1,5. Çarpan **kazanmaya** uygulanır, puan değerine uygulanmaz |
+| **Avantaj** | Seviyenin serbest metni ("Geç çıkış 16:00, oda yükseltme"). Misafir kartında, rezervasyonda ve portalda görünür. Sistem avantajı kendiliğinden uygulamaz; resepsiyona hatırlatır |
+| **Lot** | Her kazanma ve her artı düzeltme ayrı bir "puan paketi" olur. Paketin kendi son kullanma günü ve kalan puanı vardır |
+| **FIFO** | Harcamada puan **en eski paketten** düşülür; önce son kullanma günü en yakın olan kullanılır. Böylece misafirin puanı mümkün olduğunca yanmaz |
+| **Süre** | Kazanılan puanın kullanılmayan kısmı ayardaki ay kadar sonra düşer. Varsayılan **24 ay**, 0 yazılırsa süresizdir |
+| **Hesap numarası** | `SDK-000001` biçiminde, otel içinde sıralıdır |
+| **Hareket türleri** | Kazanıldı · Kazanma geri alındı · Harcandı · Harcama iade edildi · Süresi doldu · Elle düzeltme |
+
+### İlk kurulum (Ayarlar)
+
+Program kurulmadan önce Ayarlar sekmesi varsayılanlarla açılır ve üstte "Program henüz kurulmadı" uyarısını gösterir. Kaydedip açana kadar kimse puan kazanmaz. Kurulumu `loyalty.manage` izni olan kişi (müdür) yapar.
+
+1. **Sadakat → Ayarlar** (`/sadakat/ayarlar`) sekmesini açın.
+2. **Program** kartında **Program açık** kutusunu işaretleyin ve bir **Program adı** yazın (ör. "FlexClub"). Bu ad folyodaki indirim satırında ve misafir portalında görünür. Program sonradan kapatılırsa kimse puan kazanmaz ve harcamaz, ama mevcut bakiyeler korunur.
+3. **Kazanma ve kullanım** kartını doldurun:
+   - **1 puan için harcama (TRY):** 10. 0,01 ile 100.000 arasında olmalı.
+   - **Puan değeri (TRY):** 0,50.
+   - **Süre (ay, 0 = süresiz):** 24. En çok 120 ay girilebilir.
+   - **En az kullanım (puan):** 100. Misafir bir seferde bundan az puan kullanamaz.
+   - **Folyonun en çok %'si:** 50. Bir folyonun harcamasının en fazla bu kadarı puanla ödenebilir.
+   - **Otomatik üyelik:** açık. Puan kazanan misafire hesap kendiliğinden açılır. Kapalıysa yalnız misafir kartından **Üye yap** ile (açık rızalı) üye yapılan misafir kazanır.
+   - **Acente / cari ödemeli folyo kazanmaz:** açık. Acente ya da voucher ödemesiyle kapanan folyo puan getirmez.
+   - **Spa kasasında ödenen randevu kazanır:** açık.
+4. **Seviyeler** tablosunu gözden geçirin. Her satırda **Kod** (2–20 karakter, büyük harf, rakam ya da `_`), **Ad**, **Eşik (puan)**, **Çarpan** (1 ile 5 arası) ve **Avantaj** (en çok 300 karakter) alanları vardır. **Seviye ekle** ile en çok 6 seviye tanımlanır. Bir seviyenin eşiği **0** olmalıdır; bu başlangıç seviyesidir. Kodlar ve eşikler tekrar edemez.
+5. Formun altındaki **örnek hesap** kutusu girdiğiniz değerleri canlı sınar: "Örnek: 2.480,00 ₺ harcama → 248 puan (Klasik), 124,00 ₺ değerinde."
+6. **Kaydet.** Başka biri bu arada ayarı değiştirdiyse "Ayar bu arada değişti" uyarısı çıkar; sayfayı yenileyip tekrar kaydedin. Kayıt denetim izine yazılır.
+
+**Ayar değişince ne olur:** Yeni oran ve çarpanlar yalnızca **bundan sonraki** kazanmalara uygulanır; yazılmış puanlar değişmez. Seviye eşiğini değiştirirseniz üyelerin seviyesi bir sonraki harekette ya da 12 saatlik işte yeniden hesaplanır.
+
+### Puan kazanma
+
+**Ne zaman:** Konaklamanın folyosu **kapanınca** (`folio.closed`). Puanı rezervasyon sahibi olan misafir kazanır. Ek folyo pencereleri ayrı ayrı sayılır; her pencere kapandığında kendi puanını getirir.
+
+**Ne sayılır (uygun harcama):** Folyodaki kalemlerin toplamıdır.
+
+- Folyoda ayrı satır olarak duran **vergi kalemleri** (ör. konaklama vergisi) sayılmaz.
+- **İndirimler düşülür.** Promosyon, elle indirim ve puan indirimi folyoda eksi kalem olduğu için toplamı azaltır.
+- İptal edilmiş kalemler sayılmaz.
+
+**Formül:** puan = aşağı yuvarla(uygun harcama ÷ 1 puan için harcama × seviye çarpanı). Çarpan, folyo kapandığı andaki seviyenindir.
+
+**Örnek:** Ayşe Demir 2 gece kaldı. Folyosunda 2.000 TL oda, 40 TL konaklama vergisi ve 480 TL restoran var. Uygun harcama 2.000 + 480 = 2.480 TL'dir; vergi sayılmaz. Ayşe Klasik seviyede (×1) olduğu için puanı 2.480 ÷ 10 = **248** olur. Folyo kapanır kapanmaz hesabına "Kazanıldı +248" hareketi düşer. Bu puan 24 ay sonra, kullanılmamışsa, süresi dolarak düşer.
+
+**Acente / cari ödemeli folyo:** Folyo acente ya da voucher ödemesiyle kapandıysa (ayar açıkken) puan **0** olur. Hareket açıklamasında "acente / cari ödemeli folyo puan kazanmaz" yazar. Bedeli acente ödüyor, misafir değil.
+
+**Spa kasası:** Misafir kartına bağlı bir spa randevusu **tamamlandığında**, spa kasasında ödenen tutar (ayar açıkken) aynı formülle puan getirir. Odaya yazılan spa ücreti zaten folyodadır ve folyo kapanınca sayılır; iki kez kazandırmaz. Misafir kartına bağlı olmayan randevu puan getirmez. Randevu geri alınırsa ya da ücreti yeniden belirlenirse puan buna göre düzeltilir.
+
+**Yeniden açma ve fark mantığı:** Aktör her kaynak için (bir folyo, bir spa randevusu) "bu kaynaktan şu an kaç puan hak ediliyor" sorusunu sorar. Sonra yazılmış olanla arasındaki **farkı** yazar.
+
+- Folyo **yeniden açılınca** (`folio.reopened`) hak edilen 0 olur. Kazanılan puan **geri alınır** ("Kazanma geri alındı −248").
+- Folyo **yeniden kapanınca** yeni toplamın puanı yazılır.
+- Aynı kapanış olayı iki kez gelirse fark 0'dır ve hiçbir şey yazılmaz.
+
+*Örnek:* Ayşe'nin 2.480 TL'lik folyosu 248 puan getirdi. Müdür folyoyu "Ek harcama" gerekçesiyle yeniden açtı. Hesaba −248 düştü ve bakiye 0 oldu. Folyoya 520 TL ek kalem işlendi ve folyo yeniden kapandı. Yeni toplam 3.000 TL olduğu için +300 yazıldı ve bakiye **300** oldu. Hareketler sırasıyla: Kazanıldı +248 · Kazanma geri alındı −248 · Kazanıldı +300.
+
+Geri alınacak puan misafir tarafından harcanmışsa önce o folyonun kendi paketinden, yetmezse diğer paketlerden (FIFO) düşülür.
+
+**Üyelik:**
+
+- **Otomatik üyelik açıkken**, puan kazanan misafire ilk kazanmada hesap kendiliğinden açılır (`SDK-…`). Açan "loyalty-worker" olarak yazılır.
+- **Otomatik üyelik kapalıyken** yalnızca üye olan misafir kazanır. Üye olmayanın folyosu kapanınca hiçbir şey yazılmaz.
+- **Elle üyelik:** Misafir kartındaki sadakat kutusunda "Üye değil" yazıyorsa, `loyalty.redeem` sahibi **Üye yap** düğmesine basar. Pencerede misafirin **açık rızası** (KVKK) işaretlenmeden üyelik açılmaz; işaretsiz istek reddedilir. Rıza zamanı hesaba yazılır ve hesap sayfasında görünür. Kapatılmış bir hesap aynı yolla yeniden etkinleşir. Misafir zaten üyeyse "Misafir zaten üye (SDK-…)" uyarısı çıkar.
+- Program kapalıysa misafir kartındaki kutu hiç görünmez.
+
+**KVKK notu:** Otomatik üyelik, misafirin harcamasını puan hesabına bağlar. Otel politikanız açık rıza istiyorsa otomatik üyeliği kapatın ve üyeliği misafir kartından rızayla açın.
+
+### Puan harcama (folyoda indirim)
+
+Puan **konaklama sırasında**, açık folyoya indirim olarak kullanılır. Nakde çevrilmez, başka misafire devredilmez.
+
+**Adım adım:**
+
+1. Rezervasyon ayrıntısını açın. **Sadakat** kartında misafirin numarası, seviyesi, bakiyesi ve TL karşılığı görünür.
+2. Konaklamanın her **açık folyosu** için bir satır ve "en çok N puan (X TL)" bilgisi vardır. **Puan kullan** düğmesine basın. Bunun için `loyalty.redeem` izni gerekir.
+3. Pencerede **puanı** girin. Üst sınır satırdaki "en çok" değeridir. TL karşılığı siz yazarken canlı hesaplanır.
+4. **Gelir türünü** seçin: Oda (varsayılan), Restoran, Minibar, Çamaşırhane, SPA ya da Diğer. İndirim, muhasebede ve raporlarda bu gelir türünün indirimi olarak görünür.
+5. Onaylayın. Folyoya "FlexClub puan indirimi (400 puan)" açıklamalı bir **indirim kalemi** düşer. Hesaba "Harcandı −400" hareketi yazılır.
+
+**Sınırlar:**
+
+| Kural | Varsayılan | Aşılırsa |
+| --- | --- | --- |
+| En az kullanım | 100 puan | "En az 100 puan kullanılır" |
+| Folyonun en çok yüzdesi | %50 | "Bu folyoda en çok N puan kullanılır (harcamanın %50'i)" |
+| Bakiye | Hesaptaki puan | "Bakiye yetersiz: N puan var" |
+| Açık folyo | Konaklamanın açık folyosu olmalı | "Konaklamanın açık folyosu yok; puan girişten sonra (folyo açıkken) kullanılır" |
+| Üyelik | Misafirin etkin hesabı olmalı | "Misafir sadakat üyesi değil" |
+| Program | Açık olmalı | "Sadakat programı kapalı" |
+
+Yüzde sınırı folyonun **o anki** harcamasına göre hesaplanır. 2.000 TL'lik folyoda %50 = 1.000 TL eder; 0,50 TL'lik puanla bu **2.000 puan** demektir. Bakiye bundan azsa sınır bakiyedir. Kullanılabilecek en çok puan en az kullanımın (100) altında kalıyorsa satırda 0 görünür ve düğme işe yaramaz. Gelecek rezervasyonun henüz folyosu yoktur; puan **girişten sonra**, folyo açıkken kullanılır.
+
+**Arka planda:**
+
+1. Misafirin hesabı kilitlenir ve sınırlar yeniden denetlenir. Aynı anda iki resepsiyonist aynı puanı harcayamaz.
+2. Puan en eski paketten başlanarak (FIFO) düşülür ve hangi paketten ne kadar düşüldüğü kaydedilir.
+3. Folyoya indirim kalemi yazılır.
+4. Kalem yazılamazsa (ör. folyo tam o anda kapandıysa) puan **kendiliğinden iade** edilir. "Harcama iade edildi" hareketi açıklamasında sebebi yazar.
+
+**Çift gönderim koruması:** Pencere açılırken bir istek kimliği alır. Çift tık, ağ kopması ya da tekrar gönderme aynı kimlikle gelir: ikinci kalem açılmaz, puan iki kez düşmez ve ilk sonuç döner. Yeni bir kullanım için pencereyi kapatıp yeniden açın.
+
+**İptal edilirse iade:** İndirim kalemi folyodan iptal edilirse (folyo kalemi iptali, dört göz onayıyla) aktör puanı **iade eder** ("Harcama iade edildi +400"). Puan düşüldüğü paketlere geri döner ve son kullanma günleri değişmez. Süresi bu arada dolmuş bir pakete dönen puan bir sonraki süre işinde düşer.
+
+**Muhasebe:** Puan indirimi folyoda sıradan bir **indirim kalemidir**. Gün kapanışında günlük gelir fişi indirimleri **611 Satış İskontoları** hesabına yazar; muhasebecinin ayrıca bir şey yapması gerekmez. Fatura indirimli tutarla kesilir. İndirim folyo toplamını düşürdüğü için, folyo kapanınca kazanılacak puan da indirimli tutardan hesaplanır.
+
+### Seviyeler
+
+**Hesap:** Seviye son 12 ayda **kazanılan** puanla belirlenir: kazanmalar toplanır, geri alınan kazanmalar çıkarılır. Harcama, süre dolumu ve elle düzeltme seviyeyi etkilemez. Eşiği geçilen en yüksek seviye geçerlidir. Hesap sayfasında ve misafir kartında **sonraki seviyeye kalan** puan ilerleme çubuğuyla görünür (ör. "Altın'a 1.800 puan").
+
+**Ne zaman hesaplanır:** Her puan hareketinde ve 12 saatte bir çalışan süre işinde.
+
+**Yükseliş zili:** Seviye yükselince, `loyalty.view` sahiplerinin ziline **Sadakat** (`LOYALTY`) türünde uyarı düşer: "Ayşe Demir Altın seviyesine yükseldi". Uyarının gövdesinde hesap numarası, son 12 aydaki puan ve avantajlar yazar. Bağlantı misafir kartını açar. Aynı yükseliş için tek zil çalar. Yeni açılan hesabın ilk seviye ataması (ör. ilk konaklamada doğrudan Gümüş) yükseliş sayılmaz ve zil çalmaz.
+
+**Düşme:** 12 aylık pencere her gün kayar. Misafir bir yıl gelmezse eski kazanmalar pencereden çıkar ve seviyesi kendiliğinden düşer. Düşüşte zil çalmaz, ama `loyalty.tier.changed` olayı yazılır. Bakiyesi bundan etkilenmez.
+
+### Süre dolumu
+
+**Sadakat puan süresi** işi 12 saatte bir, programı açık her otel için çalışır:
+
+1. Son kullanma günü otelin bugününden önce kalmış ve kullanılmamış puanı olan paketleri bulur. Her hesap için bunları tek bir "Süresi doldu −N" hareketiyle düşer.
+2. Etkin hesapların seviyesini yeniden hesaplar.
+
+Misafir kartında ve hesap sayfasında **30 gün içinde** süresi dolacak puan ve ilk düşeceği gün uyarı olarak görünür. Misafiri bu puanı kullanması için uyarabilirsiniz. Süre işi aynı hesabı aynı gün iki kez düşmez. Sunucu kapalı kaldıysa açılışta kaldığı yerden tamamlar.
+
+### Elle düzeltme
+
+Hesap sayfasında (**Sadakat → Üyeler** → satır) **Düzeltme** düğmesi yalnız `loyalty.manage` sahibine görünür.
+
+- **Puan (+ ekler, − düşer):** sıfır olamaz.
+- **Gerekçe:** en az 3 karakter. Hareket açıklamasına "Elle düzeltme: …" diye yazılır ve denetim izine eski / yeni bakiyeyle kaydedilir.
+- **Artı** düzeltme yeni bir paket açar. Paket süreli olur (ayardaki ay); süresiz programda süresiz kalır. Seviyeyi etkilemez.
+- **Eksi** düzeltme FIFO ile düşer. **Bakiyeden fazla düşülemez:** "Bakiye 0 puan; daha fazlası düşülemez".
+
+Kullanım örnekleri: şikâyet telafisi, eski sistemden devreden puan, yanlış kayıtlı kişiye gitmiş puan.
+
+### Misafir kartları birleşince
+
+Mükerrer kart birleştirmede (Misafir kartı → **Birleştir**) sadakat hesapları da birleşir:
+
+- Yalnız **silinen** kartın hesabı varsa, hesap kalan karta taşınır; numarası aynı kalır.
+- **İkisinin de** hesabı varsa, silinen kartın bütün hareketleri, bakiyesi, ömür boyu ve son 12 ay puanları kalan karta aktarılır. Silinen kartın hesabı **Kapalı** olur ve bakiyesi sıfırlanır.
+
+Puanlar paketleriyle birlikte taşındığından son kullanma günleri korunur.
+
+### Üyeler ve hesap sayfası
+
+**Üyeler** sekmesi:
+
+- **Özet kutuları:** Üye (etkin hesap sayısı), Dolaşımdaki puan (kullanılmamış bakiye), Karşılığı (puan değeriyle olası indirim). Dolaşımdaki puanın karşılığı, otelin misafirlere verdiği indirim sözüdür.
+- **Süzgeçler:** Ara (ad, numara, telefon, e-posta), Seviye, Durum (Etkin / Kapalı), Sıralama (Son hareket / Bakiye / Ad).
+- **Tablo:** Numara · Misafir (misafir kartına bağlantı) · Seviye rozeti · Bakiye ve TL karşılığı · Son 12 ay · Son hareket. Satıra tıklayınca hesap sayfası açılır.
+
+**Hesap sayfası** (`/sadakat/uyeler/:accountId`):
+
+- **Hesap kartı:** numara, misafir, seviye ve avantajları, sonraki seviyeye kalan, **Bakiye** ve TL karşılığı, **Ömür boyu** (toplam kazanılan), yakında süresi dolacak puan, üyelik / açık rıza zamanı.
+- **Hareketler** tablosu (sayfalı): Tür · Puan (artı yeşil, eksi kırmızı) · Tutar · Açıklama · Son kullanma · Kim / ne zaman.
+
+Kapalı hesapta "Hesap kapalı: puan kazanmaz ve harcanmaz" uyarısı görünür. Ekranlar `loyalty.changed` kanalıyla canlı tazelenir.
+
+### Misafir portalında
+
+Misafirin portal bağlantısında (online check-in, folyo, QR menü ile aynı sayfa) program açıksa ve misafir etkin üyeyse ana sayfada bir **sadakat kutusu** çıkar. Kutuda program adı, seviye, bakiye ve TL karşılığı, sonraki seviyeye kalan puan ve seviyenin avantajları yer alır. Metinler portalın dört dilinde gösterilir. Üye olmayan misafire ya da program kapalıyken kutu hiç görünmez. Misafir portaldan puan kullanamaz; kullanım resepsiyondan yapılır.
+
+### Örnekler (varsayılan ayarla: 10 TL = 1 puan, 1 puan = 0,50 TL, en az 100, en çok %50, 24 ay)
+
+| # | Durum | Hesap | Sonuç |
+| --- | --- | --- | --- |
+| 1 | Klasik misafirin folyosu 2.480 TL ile kapandı | 2.480 ÷ 10 × 1 | **+248 puan** (124 TL değerinde). Hesap `SDK-000001` kendiliğinden açıldı |
+| 2 | Aynı folyo 2.489,99 TL olsaydı | 248,999 → aşağı | Yine **248** |
+| 3 | Folyo yeniden açıldı, 520 TL eklendi, yeniden kapandı | hedef 0 → −248; yeni hedef 3.000 ÷ 10 | Kazanma geri alındı **−248**, sonra Kazanıldı **+300**. Bakiye 300 |
+| 4 | Aynı misafirin 1.000 TL'lik acente ödemeli folyosu kapandı | Acente / cari ödemeli | **0 puan**. Bakiye 300 kalır |
+| 5 | 30.000 TL'lik konaklama kapandı | 30.000 ÷ 10 × 1 | **+3.000**. Son 12 ay 3.000 → **Altın** |
+| 6 | Bakiye 3.000, açık folyo 2.000 TL | %50 = 1.000 TL ÷ 0,50 | Bu folyoda **en çok 2.000 puan = 1.000 TL** |
+| 7 | 50 puan kullanmak istendi; sonra 2.500 puan | En az 100; en çok 2.000 | "En az 100 puan kullanılır"; "Bu folyoda en çok 2000 puan kullanılır" |
+| 8 | 400 puan kullanıldı (gelir türü Diğer) | 400 × 0,50 | Folyoya **−200 TL** indirim kalemi; bakiye **2.600**. En eski paketin kalanı 3.000 → 2.600 |
+| 9 | Aynı istek ikinci kez gönderildi (çift tık) | Aynı istek kimliği | İkinci kalem **açılmaz**, puan ikinci kez düşmez |
+| 10 | İndirim kalemi iptal edildi (dört göz onaylı) | İade | **+400** "Harcama iade edildi". Bakiye 3.000, paket geri doldu |
+| 11 | O folyo 2.000 TL ile kapandı; misafir Altın (×1,5) | 2.000 ÷ 10 × 1,5 | **+300**. Bakiye 3.300 |
+| 12 | Gümüş (×1,25) misafirin 2.480 TL'lik folyosu | 2.480 ÷ 10 × 1,25 | **+310** |
+| 13 | Yeni misafirin ilk folyosu 12.000 TL | 12.000 ÷ 10 | +1.200 → doğrudan **Gümüş**. İlk atama olduğu için zil çalmaz |
+| 14 | Bu 1.200 puan kullanılmadan son kullanma günü geçti | Süre işi | "Süresi doldu **−1.200**". Bakiye 0 |
+| 15 | Müdür −5 düzeltme denedi; sonra "Şikâyet telafisi" ile +2.500 | Bakiye 0 | İlki reddedilir ("daha fazlası düşülemez"); ikincisi bakiyeyi **2.500** yapar, seviyeyi değiştirmez |
+| 16 | Bu misafirin 20.000 TL'lik konaklaması kapandı | Gümüş ×1,25 → 2.500 puan | Son 12 ay 3.700 → **Altın**. Zile "… Altın seviyesine yükseldi" düşer |
+| 17 | İkinci kartında 1.000 TL'den 100 puan birikmişti; kartlar birleştirildi | Aktarma | Kalan kartın bakiyesi **+100**. İkinci kartın hesabı **Kapalı** |
+| 18 | Misafir portalı açtı | Etkin üye | Kutu: "FlexClub · Altın · bakiye ve TL karşılığı · avantajlar" |
+
+### Dikkat edilecekler
+
+- **Puan folyo kapanınca gelir, girişte ya da kalem işlenirken gelmez.** Konaklayan misafir o konaklamanın puanını aynı konaklamada harcayamaz; ancak önceki konaklamalardan biriken puanı kullanır.
+- **Puan yalnız açık folyoya kullanılır.** Çıkış yapılıp folyo kapandıysa artık kullanılamaz. Misafir puan kullanmak istiyorsa bunu çıkıştan **önce** yapın.
+- **Yanlış indirimi kalem iptaliyle geri alın.** İndirim kalemini iptal edin; puan kendiliğinden iade edilir. Ayrıca elle artı düzeltme girmeyin, yoksa puan iki kez döner.
+- **Acente misafiri puan kazanmaz** (ayar açıkken). Misafir sorarsa sebebi hareketin açıklamasında yazar.
+- **Seviye avantajları kendiliğinden uygulanmaz.** Geç çıkışı ya da oda yükseltmeyi resepsiyon verir; sistem yalnızca hatırlatır.
+- **Ayar değişikliği geçmişi değiştirmez.** Oranı 10'dan 5'e indirmek yazılmış puanları ikiye katlamaz.
+- **Programı kapatmak bakiyeleri silmez.** Yalnızca kazanmayı ve harcamayı durdurur; yeniden açınca kaldığı yerden sürer.
+- **Mükerrer kartları birleştirin.** Aynı misafirin iki kartı iki ayrı hesap demektir; puanlar bölünür ve seviye geç gelir.
+- **Sadakat aktörü kapatılırsa** kazanma, geri alma ve iade işleri **Sadakat** manuel görevine düşer. Yetkili bunları hesap sayfasından elle düzeltmeyle tamamlar. Aktör sonra açılıp aynı olay gelse de puan iki kez yazılmaz.
 
 ## Sık sorulanlar
 

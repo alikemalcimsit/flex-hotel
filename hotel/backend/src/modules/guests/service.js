@@ -9,6 +9,7 @@ import { buildPage, toSkipTake } from '../../lib/pagination.js';
 import { writeWithEvents } from '../../lib/write.js';
 import { guestFullName, searchGuests, storablePhone, toGuestDto } from '../reservations/guests.js';
 import { getHotelSettings } from '../settings/service.js';
+import { mergeLoyaltyAccounts } from '../loyalty/accounts.js';
 import { GUEST_REASSIGN_MODELS, mergeTags } from './rules.js';
 
 /* ───────────────────────── Özet (konaklama / harcama) ───────────────────────── */
@@ -344,6 +345,9 @@ export async function mergeGuests(hotelId, input) {
       Object.assign(data, sameIdentity(finalIdentity, source) ? readOf(source) : { idReadAt: null, idReadBy: null, idReadVia: null });
     }
     await tx.guest.update({ where: { id: targetId }, data });
+
+    // Sadakat hesabı (modül 56): hedefte yoksa taşınır, varsa hareketler ve bakiye aktarılır.
+    await mergeLoyaltyAccounts(tx, hotelId, sourceId, targetId);
 
     // Kaynağı sil.
     await tx.guest.update({ where: { id: sourceId }, data: { deletedAt: new Date() } });

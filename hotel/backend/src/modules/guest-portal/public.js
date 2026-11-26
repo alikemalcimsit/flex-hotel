@@ -25,6 +25,7 @@ import { decodeSignature, detachReplacedDocuments, signatureKey } from './docume
 import { resolvePortalToken, touchPortalLink } from './links.js';
 import { loadSpaSettings } from '../spa/shared.js';
 import { surveyPath } from '../surveys/shared.js';
+import { portalLoyalty } from '../loyalty/accounts.js';
 import { iso, prisma, shortGuestName } from './shared.js';
 
 /**
@@ -63,7 +64,7 @@ async function webchatKeyFor(hotelId, publicBaseUrl) {
 export async function portalOverview(token) {
   const { link, reservation, settings, today } = await resolvePortalToken(prisma, token);
   const hotelId = link.hotelId;
-  const [hotel, submission, posSettings, webchatKey, survey, spaSettings] = await Promise.all([
+  const [hotel, submission, posSettings, webchatKey, survey, spaSettings, loyalty] = await Promise.all([
     getHotelSettings(hotelId),
     prisma.onlineCheckin.findUnique({ where: { reservationId: reservation.id }, select: { status: true, rejectReason: true, submittedAt: true } }),
     loadPosSettings(prisma, hotelId),
@@ -71,6 +72,8 @@ export async function portalOverview(token) {
     // Açık anket (55): bağlantı kaybolsa da misafir portaldan ulaşır.
     prisma.surveyInvitation.findFirst({ where: { reservationId: reservation.id, respondedAt: null, expiresAt: { gt: new Date() } }, orderBy: { sentAt: 'desc' }, select: { id: true, nonce: true, kind: true } }),
     loadSpaSettings(prisma, hotelId),
+    // Sadakat (56): misafirin puanı ve seviyesi.
+    portalLoyalty(hotelId, reservation.guestId),
   ]);
   const days = reservationDays(reservation);
   const window = onlineCheckinWindow(days, { today, openDays: settings.checkinOpenDays, submission, enabled: settings.enabled });
@@ -92,6 +95,7 @@ export async function portalOverview(token) {
       roomTypeName: reservation.roomType?.name ?? null,
       roomNumber: inHouse ? (reservation.room?.number ?? null) : null,
     },
+    loyalty,
     checkin: { ...window, status: submission?.status ?? null, rejectReason: submission?.status === 'REJECTED' ? submission.rejectReason : null, submittedAt: iso(submission?.submittedAt) },
     features: {
       checkin: !['CHECKED_IN', 'CHECKED_OUT'].includes(reservation.status),

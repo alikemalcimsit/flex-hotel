@@ -544,6 +544,7 @@ export const EVENT_CATALOG = Object.freeze({
       'ASSET',
       'STOCK',
       'HR',
+      'LOYALTY',
     ]),
     userId: z.string().uuid().nullable(),
     permission: z.string().nullable(),
@@ -1053,6 +1054,21 @@ export const EVENT_CATALOG = Object.freeze({
   }),
   /** Ekran olayı: vardiya çizelgesi, günlük puantaj, bordroya aktarım, özlük belgesi ya da İK ayarı değişti. */
   'hr.changed': hotelScoped.extend({ area: z.enum(['SHIFTS', 'TIMESHEETS', 'ATTENDANCE_EXPORT', 'DOCUMENTS', 'SETTINGS', 'LEAVE_BALANCE']) }),
+
+  /* ── Sadakat (modül 56) ── */
+
+  /** İş olayı: puan hareketi yazıldı (kazanma, harcama, iade, süre dolumu, düzeltme); 80 / 82 / 102 dinler. */
+  'loyalty.points.changed': hotelScoped.extend({
+    accountId: z.string().uuid(),
+    guestId: z.string().uuid(),
+    kind: z.enum(['EARN', 'EARN_REVERSAL', 'REDEEM', 'REDEEM_REVERSAL', 'EXPIRE', 'ADJUST']),
+    points: z.number().int(),
+    balance: z.number().int(),
+  }),
+  /** İş olayı: misafirin seviyesi değişti (80 misafir tanıma, 75 patron uygulaması). */
+  'loyalty.tier.changed': hotelScoped.extend({ accountId: z.string().uuid(), guestId: z.string().uuid(), from: z.string().nullable(), to: z.string() }),
+  /** Ekran olayı: üyelik açıldı / kapandı ya da program ayarı değişti. */
+  'loyalty.changed': hotelScoped.extend({ area: z.enum(['ACCOUNT', 'SETTINGS']) }),
 
   /* ── Temassız uygulamalar (modül 53) ── */
   /** Online check-in gönderildi / onaylandı / düzeltme istendi / giriş yapıldı / belgeleri silindi. Kişisel veri taşımaz. */
@@ -1626,6 +1642,9 @@ export const PAYROLL_EVENTS = Object.freeze(['employee.changed', 'payroll.run.ch
 
 /** İK (modül 52): izin, vardiya, puantaj, belge ekranları (`hr.changed` kanalı). */
 export const HR_EVENTS = Object.freeze(['hr.leave.changed', 'hr.changed', 'employee.changed']);
+
+/** Sadakat (modül 56): üyeler, puan, seviye, ayar ekranları (`loyalty.changed` kanalı). */
+export const LOYALTY_EVENTS = Object.freeze(['loyalty.points.changed', 'loyalty.tier.changed', 'loyalty.changed']);
 
 /** Misafir portalı ve online check-in (modül 53): ekranlar bunlarla tazelenir (`guest-portal.changed` kanalı). */
 export const GUEST_PORTAL_EVENTS = Object.freeze(['online_checkin.changed', 'guest_portal.link.changed', 'guest_portal.settings.changed']);

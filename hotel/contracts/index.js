@@ -161,6 +161,7 @@ export * from './stock.js';
 export * from './accounting.js';
 export * from './ledger.js';
 export * from './hr.js';
+export * from './loyalty.js';
 export * from './invoicing.js';
 export * from './pos.js';
 export * from './room-service.js';

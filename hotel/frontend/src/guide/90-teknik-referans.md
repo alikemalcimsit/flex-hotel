@@ -11,7 +11,7 @@ Sol menüdeki her sayfa, yolu ve görmek için gereken izin. Bir sayfa menüde y
 | Sayfa | Yol | Kim görür |
 | --- | --- | --- |
 | **Panel** | `/` | herkes (giriş yapmış) |
-| **Görevler** | `/gorevler` | şunlardan biri: Oda işlemleri (atama, durum); Bildirim ayarlarını yönet; Rezervasyonları yönet; Onayla / reddet; Mesaj yaz / yönet; Folyoya harcama işle, aktar, böl, birleştir; Tahsilat / ödeme / virman fişi gir, çek / senet işlemleri, cari kartı aç ve düzenle; Temizlik görevini başlat / bitir, sorun bildir; Gelir raporlarını görüntüle (doluluk, ADR, RevPAR); Depo tanımları, minimum stok seviyesi, elle hareket (çıkış / fire / transfer), sayım, satış noktası → depo eşlemesi; Ayarları yönet |
+| **Görevler** | `/gorevler` | şunlardan biri: Oda işlemleri (atama, durum); Bildirim ayarlarını yönet; Rezervasyonları yönet; Onayla / reddet; Mesaj yaz / yönet; Folyoya harcama işle, aktar, böl, birleştir; Tahsilat / ödeme / virman fişi gir, çek / senet işlemleri, cari kartı aç ve düzenle; Temizlik görevini başlat / bitir, sorun bildir; Gelir raporlarını görüntüle (doluluk, ADR, RevPAR); Depo tanımları, minimum stok seviyesi, elle hareket (çıkış / fire / transfer), sayım, satış noktası → depo eşlemesi; Sadakat programı ayarları ve seviyeler, elle puan düzeltmesi; Ayarları yönet |
 | **Kılavuz** | `/kilavuz` | herkes (giriş yapmış) |
 
 ### Ön büro
@@ -30,6 +30,7 @@ Sol menüdeki her sayfa, yolu ve görmek için gereken izin. Bir sayfa menüde y
 | ↳ Gruplar | `/gruplar` | üst menüyle aynı |
 | **Oda planı** | `/oda-plani` | herkes (giriş yapmış) |
 | **Misafirler** | `/misafirler` | Misafir kartlarını görüntüle (CRM) |
+| **Sadakat** | `/sadakat` | Sadakat üyelerini, puan bakiyesini ve hareketlerini görüntüle |
 | **Satış CRM** | `/satis` | Satış fırsatlarını, arama kayıtlarını ve teklifleri görüntüle |
 | **Folyolar** | `/folyolar` | Folyoları görüntüle |
 | **Kasa** | `/kasa` | şunlardan biri: Kasayı görüntüle; Günlük döviz kurunu gir |
@@ -164,7 +165,7 @@ Sol menüdeki her sayfa, yolu ve görmek için gereken izin. Bir sayfa menüde y
 
 ## İzinler ve roller
 
-Sistemde 121 izin var; roller bu izinlerin varsayılan paketleridir. Yönetici (Ayarlar → Kullanıcılar / roller) bir kullanıcıya izin ekleyip çıkarabilir. Aşağıdaki tablo **varsayılan** dağılımdır.
+Sistemde 124 izin var; roller bu izinlerin varsayılan paketleridir. Yönetici (Ayarlar → Kullanıcılar / roller) bir kullanıcıya izin ekleyip çıkarabilir. Aşağıdaki tablo **varsayılan** dağılımdır.
 
 ### Ayarlar
 
@@ -437,6 +438,14 @@ Sistemde 121 izin var; roller bu izinlerin varsayılan paketleridir. Yönetici (
 | `hr.manage` | İzin onayla / iptal et, çizelge ve puantaj yaz, bordroya aktar, belge yükle, İK ayarları | ✓ | ✓ |  |  | ✓ |  |
 | `hr.self` | Kendi izin talebini gir; kendi izinlerini, bakiyesini ve vardiyalarını gör | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 
+### Sadakat programı
+
+| İzin | Ne yaptırır | Yönetici | Müdür | Ön büro | Kat hizmetleri | Muhasebe | Yiyecek & İçecek |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `loyalty.view` | Sadakat üyelerini, puan bakiyesini ve hareketlerini görüntüle | ✓ | ✓ | ✓ |  | ✓ |  |
+| `loyalty.redeem` | Folyoda puan kullan (indirim), misafiri sadakat programına üye yap | ✓ | ✓ | ✓ |  |  |  |
+| `loyalty.manage` | Sadakat programı ayarları ve seviyeler, elle puan düzeltmesi | ✓ | ✓ |  |  |  |  |
+
 ### Misafir portalı ve online check-in
 
 | İzin | Ne yaptırır | Yönetici | Müdür | Ön büro | Kat hizmetleri | Muhasebe | Yiyecek & İçecek |
@@ -545,6 +554,16 @@ Kapanan adisyonun ürünlerini (satılan, ikram, hazırlanıp iptal edilen) reç
 | Dinlediği olaylar | Yayınladığı olaylar | Onaya götürdüğü işler |
 | --- | --- | --- |
 | `fnb.order.paid`, `stock.changed` | `stock.changed`, `purchase.request.changed`, `staff.alert.raised` | — |
+
+### Sadakat aktörü (`loyalty-worker`)
+
+**Tür:** worker · **Paket:** `@hotelos/loyalty-worker` · **Kapalıyken iş düşer:** Sadakat · **Tekrar deneme:** 3 kez (400 ms artan bekleme)
+
+Folyo kapanınca konaklamanın misafirine uygun harcamadan (vergi kalemleri hariç) seviyesinin çarpanıyla puan kazandırır; folyo yeniden açılınca kazanılanı geri alır, yeniden kapanınca farkı yazar. Spa kasasında ödenen tamamlanmış randevuya (ayarda açıksa) puan verir. Puanla yapılan folyo indirimi iptal edilince puanı iade eder. Seviye yükselince ön büroya haber verir. Kapalıyken iş sadakat yetkilisine manuel görev olarak düşer.
+
+| Dinlediği olaylar | Yayınladığı olaylar | Onaya götürdüğü işler |
+| --- | --- | --- |
+| `folio.closed`, `folio.reopened`, `folio.item.voided`, `spa.appointment.changed` | `loyalty.points.changed`, `loyalty.tier.changed`, `staff.alert.raised` | — |
 
 ### Rezervasyon aktörü (`reservation-worker`)
 
@@ -658,7 +677,7 @@ Misafire yazılan cevapları WhatsApp Cloud API ile gönderir, teslim durumunu m
 
 ## Olay kataloğu
 
-Sistem 203 tür olay yayınlar. Olay = "şu oldu" kaydı; aktörler ve ekranlar bunları dinler. Açıklamalar kataloğun kendi yorumlarından alınmıştır (boşsa olayın adı yeterince anlatıyor demektir).
+Sistem 206 tür olay yayınlar. Olay = "şu oldu" kaydı; aktörler ve ekranlar bunları dinler. Açıklamalar kataloğun kendi yorumlarından alınmıştır (boşsa olayın adı yeterince anlatıyor demektir).
 
 ### accounting.*
 
@@ -894,6 +913,14 @@ Sistem 203 tür olay yayınlar. Olay = "şu oldu" kaydı; aktörler ve ekranlar 
 | Olay | Açıklama |
 | --- | --- |
 | `lost_items.settings.changed` | Saklama süreleri değişti ("süresi dolan" listesi yeniden hesaplanır). |
+
+### loyalty.*
+
+| Olay | Açıklama |
+| --- | --- |
+| `loyalty.points.changed` | İş olayı: puan hareketi yazıldı (kazanma, harcama, iade, süre dolumu, düzeltme); 80 / 82 / 102 dinler. |
+| `loyalty.tier.changed` | İş olayı: misafirin seviyesi değişti (80 misafir tanıma, 75 patron uygulaması). |
+| `loyalty.changed` | Ekran olayı: üyelik açıldı / kapandı ya da program ayarı değişti. |
 
 ### maintenance.*
 
@@ -1275,6 +1302,16 @@ Kayıp eşya modülünün zamanlanmış işi (yalnızca sunucu sürecinde).
 |---------------------------------|--------|-------|
 | Kapanan eşyaların fotoğrafları  | 1 sa   | Teslim edilen / kapatılan eşyanın fotoğrafı bir ay sonra gereksiz kişisel veri; disk de dolmasın |
 
+### loyalty
+
+Aralık sabitleri: `INTERVAL_MS` = 12 * 60 * 60_000
+
+Sadakatin zamanlanmış işi (yalnızca sunucu sürecinde).
+
+| İş                              | Sıklık  | Neden |
+|---------------------------------|---------|-------|
+| Puan süresi ve seviye tazeleme  | 12 saat | Süresi dolan kullanılmamış puan düşer; 12 aylık seviye penceresi kayar |
+
 ### maintenance
 
 Aralık sabitleri: `PLAN_CHECK_INTERVAL_MS` = 6 * 60 * 60_000 · `PHOTO_PURGE_INTERVAL_MS` = 24 * 60 * 60_000
@@ -1393,7 +1430,7 @@ Anketin zamanlanmış işi (yalnızca sunucu sürecinde, modül 55).
 
 ## Veri modeli
 
-Veritabanında 239 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan sayısı ilişkiler hariç yaklaşık değerdir.
+Veritabanında 242 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan sayısı ilişkiler hariç yaklaşık değerdir.
 
 | Tablo | Alan | Açıklama |
 | --- | --- | --- |
@@ -1586,6 +1623,9 @@ Veritabanında 239 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan
 | `Timesheet` | 16 | Günlük puantaj: giriş / çıkış, mola, çalışılan ve norm üstü dakika; izinli / tatil günleri durumla. |
 | `EmployeeDocument` | 17 | Özlük belgesi: dosya diskte (`fileKey`), kayıt burada; süresi dolacak belgeler İK'ya hatırlatılır. Yumuşak silme. |
 | `HrSettings` | 10 | İK ayarları: hafta tatili günü, günlük / haftalık çalışma normu, resmî tatiller, izin onayı, belge hatırlatma süresi. |
+| `LoyaltySettings` | 15 | Otelin sadakat programı: kazanma ve harcama oranları, sınırlar, süre, seviyeler (JSON). |
+| `LoyaltyAccount` | 15 | Misafirin sadakat hesabı (misafir kartı başına bir tane). Bakiye hareketlerle aynı işlemde güncellenir. |
+| `LoyaltyTransaction` | 18 | Puan hareketi (işaretli). Artı lotlar (`remaining`) FIFO harcanır; `consumed` harcamanın hangi lotlardan düştüğünü tutar (iade için). |
 | `PayrollItem` | 15 | Bir aya girilen ek ödeme / kesinti. `runId` boşsa ayın aylık bordrosuna, doluysa o fark bordrosuna aittir. |
 | `EmployeeTermination` | 21 | İşten çıkış ve hesaplanan hakları (kıdem, ihbar, kullanılmayan izin). Tutarlar çıkış ayının kalemlerine yazılır. |
 | `PayrollRun` | 35 | Bordro (ay × tür). Aylık bordro ayda bir tanedir (sequence 1); fark bordroları sırayla numaralanır. |
@@ -1698,7 +1738,7 @@ Geliştirme listesinden (GOREVLER.md) türetilir: işaretli maddeler ve "tamamla
 | 53 | Temassız uygulamalar | arkadaşın | tamamlandı |
 | 54 | Misafir yorum entegrasyonu + duygu analizi | Ali Kemal | planlı |
 | 55 | Anket & memnuniyet | arkadaşın | tamamlandı |
-| 56 | Sadakat programı | Ali Kemal | planlı |
+| 56 | Sadakat programı | Ali Kemal | tamamlandı |
 | 57 | SPA & spor salonu randevu | arkadaşın | tamamlandı |
 | 58 | Emniyet kimlik bildirimi (KBS) | Ali Kemal | planlı |
 | 59 | Kimlik / pasaport okuma (OCR) | arkadaşın | tamamlandı |

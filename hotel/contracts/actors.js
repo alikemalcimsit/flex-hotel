@@ -116,6 +116,8 @@ export const MANUAL_TASK_MODULE_PERMISSIONS = Object.freeze({
   // Modül 44: stok aktörü kapalıyken / düşemeyince (depo yok, reçete bozuk) satış düşümü stok yetkilisinin önüne düşer;
   // elle çıkış hareketiyle (kaynak: adisyon numarası) tamamlanır.
   Stok: PERMISSIONS.STOCK_MANAGE,
+  // Modül 56: sadakat aktörü kapalıyken / işleyemeyince folyonun puanı elle (Sadakat → hesap → düzeltme) ya da yeniden işlenir.
+  Sadakat: PERMISSIONS.LOYALTY_MANAGE,
 });
 
 export const MANUAL_TASK_KNOWN_MODULES = Object.freeze(Object.keys(MANUAL_TASK_MODULE_PERMISSIONS));

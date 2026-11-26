@@ -20,6 +20,7 @@ import { NotesTab } from './NotesTab.jsx';
 import { StaysTab } from './StaysTab.jsx';
 import { SpendTab } from './SpendTab.jsx';
 import { MergeDialog } from './MergeDialog.jsx';
+import { LoyaltyGuestBox } from '../loyalty/LoyaltyGuestBox.jsx';
 
 const TABS = [
   { key: 'prefs', label: 'Tercihler' },
@@ -88,6 +89,9 @@ export function GuestCardPage() {
         <SummaryTile label="Toplam harcama" value={formatMoney(guest.summary.totalSpend)} hint="Folyolara işlenen borç" icon="wallet" />
         <SummaryTile label="Son konaklama" value={guest.summary.lastStay ? formatDate(guest.summary.lastStay.checkIn) : '—'} hint={guest.summary.lastStay?.confirmationCode ?? ''} icon="calendar" />
       </div>
+
+      {/* Sadakat (modül 56) */}
+      {can(PERMISSIONS.LOYALTY_VIEW) && <LoyaltyGuestBox guestId={guest.id} />}
 
       {/* Sekmeler */}
       <div className="inline-flex gap-1 rounded-control border border-line bg-surface p-1 shadow-soft">
