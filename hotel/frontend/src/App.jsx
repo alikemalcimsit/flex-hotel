@@ -228,6 +228,11 @@ const LoyaltyLayout = lazy(() => import('./pages/loyalty/LoyaltyLayout.jsx').the
 const LoyaltyMembersPage = lazy(() => import('./pages/loyalty/MembersPage.jsx').then((m) => ({ default: m.MembersPage })));
 const LoyaltyAccountPage = lazy(() => import('./pages/loyalty/AccountPage.jsx').then((m) => ({ default: m.AccountPage })));
 const LoyaltySettingsPage = lazy(() => import('./pages/loyalty/LoyaltySettingsPage.jsx').then((m) => ({ default: m.LoyaltySettingsPage })));
+const KbsLayout = lazy(() => import('./pages/kbs/KbsLayout.jsx').then((m) => ({ default: m.KbsLayout })));
+const KbsNotificationsPage = lazy(() => import('./pages/kbs/NotificationsPage.jsx').then((m) => ({ default: m.NotificationsPage })));
+const KbsNotificationPage = lazy(() => import('./pages/kbs/NotificationPage.jsx').then((m) => ({ default: m.NotificationPage })));
+const KbsReconciliationPage = lazy(() => import('./pages/kbs/ReconciliationPage.jsx').then((m) => ({ default: m.ReconciliationPage })));
+const KbsSettingsPage = lazy(() => import('./pages/kbs/KbsSettingsPage.jsx').then((m) => ({ default: m.KbsSettingsPage })));
 const HrLayout = lazy(() => import('./pages/hr/HrLayout.jsx').then((m) => ({ default: m.HrLayout })));
 const HrLeavesPage = lazy(() => import('./pages/hr/LeavesPage.jsx').then((m) => ({ default: m.LeavesPage })));
 const HrLeaveBalancesPage = lazy(() => import('./pages/hr/LeaveBalancesPage.jsx').then((m) => ({ default: m.LeaveBalancesPage })));
@@ -1330,6 +1335,21 @@ export default function App() {
                 </RequirePermission>
               }
             />
+            {/* KBS kimlik bildirimi (modül 58): bildirimler (ayrıntı dahil), mutabakat, ayarlar. */}
+            <Route
+              path="kbs"
+              element={
+                <RequirePermission permission={PERMISSIONS.KBS_VIEW}>
+                  <KbsLayout />
+                </RequirePermission>
+              }
+            >
+              <Route index element={<Navigate to="/kbs/bildirimler" replace />} />
+              <Route path="bildirimler" element={<KbsNotificationsPage />} />
+              <Route path="bildirimler/:notificationId" element={<KbsNotificationPage />} />
+              <Route path="mutabakat" element={<KbsReconciliationPage />} />
+              <Route path="ayarlar" element={<KbsSettingsPage />} />
+            </Route>
             {/* İK (modül 52): izinler, izin bakiyeleri, vardiya, puantaj, belgeler, ayarlar; personelin kendi sayfası ayrı. */}
             <Route
               path="ik/benim"

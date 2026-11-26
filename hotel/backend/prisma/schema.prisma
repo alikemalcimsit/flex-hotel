@@ -253,6 +253,7 @@ enum StaffAlertKind {
   HR
   /// Modül 56: sadakat seviyesi yükseldi, puanın süresi doluyor.
   LOYALTY
+  KBS
 }
 
 /// Rezervasyon fiyatının kaynağı (modül 4): sistem hesabı ya da yetkili
@@ -294,6 +295,12 @@ enum IdDocumentType {
 enum IdReadVia {
   STAFF_SCAN
   ONLINE_PHOTO
+}
+
+/// Kişinin cinsiyeti (KBS bildirimi; modül 58).
+enum PersonGender {
+  FEMALE
+  MALE
 }
 
 /// Online check-in belge fotoğrafının okunma sonucu (modül 59): misafirin yazdıklarıyla karşılaştırma.
@@ -928,6 +935,9 @@ model Hotel {
   loyaltySettings        LoyaltySettings?
   loyaltyAccounts        LoyaltyAccount[]
   loyaltyTransactions    LoyaltyTransaction[]
+  kbsSettings            KbsSettings?
+  kbsNotifications       KbsNotification[]
+  kbsLogs                KbsLog[]
   assetCategories        AssetCategory[]
   assetAreas             AssetArea[]
   assets                 Asset[]
@@ -1603,6 +1613,11 @@ model Guest {
   idReadAt    DateTime?
   idReadBy    String?
   idReadVia   IdReadVia?
+  /// KBS ek alanları (modül 58): ayara göre girişte zorunlu.
+  gender      PersonGender?
+  birthPlace  String?
+  fatherName  String?
+  motherName  String?
   notes       String?
   preferences Json            @default("{}")
   tags        String[]        @default([])
@@ -1627,6 +1642,7 @@ model Guest {
   noteEntries       GuestNote[]
   leads             Lead[]
   loyaltyAccount    LoyaltyAccount?
+  kbsNotifications  KbsNotification[]
 
   @@index([phone])
   @@index([email])
@@ -1793,6 +1809,7 @@ model Reservation {
   spaRoomCharges         SpaRoomCharge[]
   leads                  Lead[]
   quote                  Quote?
+  kbsNotifications       KbsNotification[]
 
   // Müsaitlik sorgusunun sıcak yolu: "şu otelde, şu oda tipinde, şu tarihlerde
   // envanteri tüketen rezervasyonlar". Dolu bir otelde saniyede onlarca kez çalışır.
@@ -9031,4 +9048,120 @@ model DataImport {
   hotel Hotel @relation(fields: [hotelId], references: [id])
 
   @@index([hotelId, createdAt])
+}
+
+/**
+ * ══════════════════ KBS kimlik bildirimi (modül 58) ══════════════════
+ */
+
+enum KbsProvider {
+  TEST
+  EGM
+  JANDARMA
+}
+
+enum KbsKind {
+  CHECK_IN
+  CHECK_OUT
+  ROOM_CHANGE
+}
+
+enum KbsState {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+  CANCELLED
+  MANUAL
+}
+
+enum KbsTestBehavior {
+  ACCEPT
+  REJECT
+  UNAVAILABLE
+}
+
+/// Otelin KBS ayarı. Parola secret-box ile mühürlü saklanır, hiçbir cevapta dönmez.
+model KbsSettings {
+  hotelId            String          @id
+  isEnabled          Boolean         @default(false)
+  provider           KbsProvider     @default(TEST)
+  facilityCode       String?
+  username           String?
+  passwordSealed     String?
+  sendCheckOut       Boolean         @default(true)
+  sendRoomChange     Boolean         @default(true)
+  requireGender      Boolean         @default(true)
+  requireBirthDate   Boolean         @default(true)
+  requireParentNames Boolean         @default(false)
+  requireBirthPlace  Boolean         @default(false)
+  citizenIdOnly      Boolean         @default(true)
+  testBehavior       KbsTestBehavior @default(ACCEPT)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  updatedBy          String?
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+}
+
+/// Bir kişinin bir bildirimi (giriş / çıkış / oda değişikliği). Kimlik gönderim anında kartın güncel halinden kurulur;
+/// burada yalnız ekran için maskeli özet tutulur.
+model KbsNotification {
+  id                 String    @id @default(uuid())
+  hotelId            String
+  reservationId      String
+  guestId            String
+  kind               KbsKind
+  state              KbsState  @default(PENDING)
+  /// Tekrar gelen olay ikinci bildirim açmasın (otel içinde tekil).
+  sourceKey          String
+  /// Çıkış / oda değişikliği önce girişin bildirilmesini bekler.
+  dependsOnId        String?
+  roomNumber         String
+  previousRoomNumber String?
+  guestName          String
+  documentMasked     String?
+  nationality        String?
+  attempts           Int       @default(0)
+  nextAttemptAt      DateTime?
+  lockedAt           DateTime?
+  providerRef        String?
+  lastCode           String?
+  lastMessage        String?
+  sentAt             DateTime?
+  resolvedBy         String?
+  resolvedNote       String?
+  lateAlertedAt      DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  createdBy          String?
+
+  hotel       Hotel             @relation(fields: [hotelId], references: [id])
+  guest       Guest             @relation(fields: [guestId], references: [id])
+  reservation Reservation       @relation(fields: [reservationId], references: [id])
+  dependsOn   KbsNotification?  @relation("KbsDependency", fields: [dependsOnId], references: [id])
+  dependents  KbsNotification[] @relation("KbsDependency")
+  logs        KbsLog[]
+
+  @@unique([hotelId, sourceKey])
+  @@index([hotelId, reservationId])
+  @@index([hotelId, state, createdAt])
+  @@index([state, nextAttemptAt])
+}
+
+/// Her deneme ve personel işlemi (iz).
+model KbsLog {
+  id             String   @id @default(uuid())
+  hotelId        String
+  notificationId String
+  ok             Boolean
+  code           String?
+  message        String?
+  actor          String
+  createdAt      DateTime @default(now())
+
+  hotel        Hotel           @relation(fields: [hotelId], references: [id])
+  notification KbsNotification @relation(fields: [notificationId], references: [id])
+
+  @@index([notificationId, createdAt])
 }

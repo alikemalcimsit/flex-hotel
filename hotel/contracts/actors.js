@@ -118,6 +118,7 @@ export const MANUAL_TASK_MODULE_PERMISSIONS = Object.freeze({
   Stok: PERMISSIONS.STOCK_MANAGE,
   // Modül 56: sadakat aktörü kapalıyken / işleyemeyince folyonun puanı elle (Sadakat → hesap → düzeltme) ya da yeniden işlenir.
   Sadakat: PERMISSIONS.LOYALTY_MANAGE,
+  KBS: PERMISSIONS.KBS_SEND,
 });
 
 export const MANUAL_TASK_KNOWN_MODULES = Object.freeze(Object.keys(MANUAL_TASK_MODULE_PERMISSIONS));

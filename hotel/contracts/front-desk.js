@@ -36,6 +36,9 @@ export const IDENTITY_POLICY_LABELS = Object.freeze({
 
 /** Prisma `IdDocumentType` ile birebir. */
 export const ID_DOCUMENT_TYPES = Object.freeze(['NATIONAL_ID', 'PASSPORT', 'OTHER']);
+/** Kişinin cinsiyeti (KBS bildirimi ister; modül 58). */
+export const PERSON_GENDERS = Object.freeze(['FEMALE', 'MALE']);
+export const PERSON_GENDER_LABELS = Object.freeze({ FEMALE: 'Kadın', MALE: 'Erkek' });
 
 export const ID_DOCUMENT_TYPE_LABELS = Object.freeze({
   NATIONAL_ID: 'Kimlik kartı',
@@ -218,6 +221,15 @@ const reasonField = (label) =>
     .max(MAX_STAY_REASON_LENGTH, `${label} en fazla ${MAX_STAY_REASON_LENGTH} karakter`)
     .refine((value) => !looksLikeCardNumber(value), { message: 'Kart numarası yazılamaz' });
 
+/** Boş bırakılabilen kısa metin (boş → null). @param {string} label */
+const optionalTextField = (label) =>
+  z
+    .string()
+    .trim()
+    .max(100, `${label} en fazla 100 karakter`)
+    .transform((value) => value || null)
+    .nullish();
+
 const nationalityField = z
   .string({ error: 'Uyruk zorunlu' })
   .trim()
@@ -249,6 +261,11 @@ const identityShape = {
     .nullish(),
   nationality: nationalityField.nullish(),
   birthDate: birthDateField.nullish(),
+  /** KBS ek alanları (modül 58): isteğe bağlı; KBS ayarı açıkken girişte zorunlu olabilir (`kbsMissingFields`). */
+  gender: z.enum(PERSON_GENDERS, { error: 'Cinsiyet seçin' }).nullish(),
+  birthPlace: optionalTextField('Doğum yeri'),
+  fatherName: optionalTextField('Baba adı'),
+  motherName: optionalTextField('Anne adı'),
 };
 
 /**

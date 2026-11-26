@@ -4182,11 +4182,39 @@ olay kataloğu, zamanlanmış işler, tablolar, modül durumu; elle düzenlenmez
 
 ### 58. Emniyet kimlik bildirimi (KBS) — Ali Kemal
 **Gün sonu:** Her check-in sonrası misafir bilgisi KBS'ye otomatik gidiyor; hata olursa listede görünüp tekrar gönderiliyor.
-- [ ] Backend: KbsConfig, KbsLog tabloları; KBS web servis adaptörü
-- [ ] Backend: `guest.checked_in` → bildirim gönder (worker kuralı); `guest.checked_out` → çıkış bildirimi
-- [ ] Ekran: KBS ayarları (tesis kodu, kullanıcı)
-- [ ] Ekran: Bildirim logu (başarılı / hatalı, tekrar gönder)
-- [ ] Check-in formunda KBS için zorunlu alan kontrolü
+- [x] Backend: `KbsSettings`, `KbsNotification`, `KbsLog` tabloları; sağlayıcı arayüzü (Test ortamı hazır; Emniyet KBS / Jandarma JKBS iskeleti)
+- [x] Backend: `guest.checked_in` → kişi başına giriş bildirimi (aktör `kbs-worker`); `guest.checked_out` → çıkış; oda değişikliği; giriş / çıkış geri alma
+- [x] Ekran: KBS ayarları (tesis kodu, kullanıcı, parola, zorunlu alanlar, bağlantıyı dene)
+- [x] Ekran: Bildirim logu (durum, tekrar gönder, elle bildirildi) + mutabakat
+- [x] Check-in formunda KBS için zorunlu alan kontrolü (cinsiyet, doğum tarihi, anne / baba adı, doğum yeri — ayara göre)
+
+> **📌 Modül 58 tamamlandı (26 Kasım 2026 — Ali Kemal). Gerçek servis bağlantısı BEKLİYOR.** Emniyet KBS'si ve Jandarma JKBS'si
+> herkese açık değil: otelin il emniyet müdürlüğünden / jandarmadan aldığı tesis kodu, kullanıcı, parola ve yazılım firmasına verilen
+> servis dokümanı (adres, SOAP / XML şeması, hata kodları) gerekir. O güne kadar yalnız **Test ortamı** seçilebilir (dışarı göndermez;
+> kabul / ret / ulaşılamaz davranışı ayardan); hazır olmayan sağlayıcı açık ayarda seçilemez. Doküman gelince yalnız
+> `hotel/backend/src/modules/kbs/providers/official.js` yazılır ve sözleşmedeki `KBS_PROVIDER_READY` açılır — kuyruk, ekranlar aynı kalır.
+>
+> Kararlar: **bildirim kişi başına** (rezervasyon sahibi + belgesi girilen refakatçiler; belgesiz çocuk bildirilmez). Kişinin
+> **zinciri**: aynı konaklamada iptal edilmemiş bildirimleri; yeni bildirim son halkaya bağlanır (`dependsOnId`) — çıkış / oda
+> değişikliği, giriş bildirilmeden (ya da elle bildirildi işaretlenmeden) gönderilmez. Giriş geri alınınca gönderilmemiş bildirim
+> iptal, gönderilmişse çıkışla kapatılır; çıkış geri alınınca yeniden giriş. Girişte oda verilmesi sahte oda değişikliği üretmez
+> (bildirilen oda aynı). **Kimlik gönderim anında** kartın güncel halinden kurulur; listede yalnız maskeli belge. **Girişte zorunlu
+> alan**: KBS açıkken belge + ayarın istediği ek alanlar (TC vatandaşı TC kimlikle ise ek alan istenmez); eksikse giriş olmaz, alan
+> alan hata. Gönderici 30 sn'de bir (ve sıraya girince) `FOR UPDATE SKIP LOCKED` ile üstlenir; geçici hata 1 / 5 / 15 / 60 / 180 /
+> 360 dk, hak bitince ve kalıcı hatada "gönderilemedi" + `KBS` zili; 2 saattir bildirilemeyen girişte kritik zil; takılı kurtarma 5 dk.
+> Parola secret-box ile mühürlü, hiçbir cevapta dönmez.
+>
+> **API** `/kbs`: `settings` (+ `test`), `summary` (mutabakat), `notifications` (+ `:id`, `:id/retry`, `:id/manual`). Giriş önizlemesine
+> `kbs` bloğu; misafir kartına ve giriş gövdesine `gender`, `birthPlace`, `fatherName`, `motherName`. İzinler `kbs.view` / `kbs.send`
+> (müdür, ön büro), `kbs.manage` (müdür). Olaylar `kbs.notification.changed`, `kbs.settings.changed`; kanal `kbs.changed`; manuel
+> görev modülü "KBS". Migration `20261126120000_kbs`, `20261126120100_kbs_reservation`.
+>
+> **Test:** sözleşme 9, aktör 3, entegrasyon 4 (zorunlu alan, kişi başına giriş + belgesiz çocuk, gönderim + referans, mutabakat, oda
+> değişikliği, çıkış; geçici hata → hak bitince gönderilemedi + zil → tekrar gönder; kalıcı hata → elle bildirildi → bağlı çıkış;
+> giriş geri alma; gönderimde eksik alan; gecikme zili; ayar / parola / izinler).
+>
+> **Devir:** 96 (yasal takvim) bekleyen / hatalı bildirimi ve mutabakatı buradan okur. Online check-in (53) cinsiyet / anne-baba adı
+> toplamıyor; KBS açıkken yabancı misafirde girişte personel tamamlar.
 
 > **Modül 53'ten not (4 Kasım 2026 — Ahmet):** online check-in her yetişkinin belge türü / numarası / uyruğu / doğum tarihini toplar;
 > giriş penceresi bunlarla dolar, KBS bildirimi girişin kaydından gider (online check-in'in kendisi bildirilmez). Belge fotoğrafları

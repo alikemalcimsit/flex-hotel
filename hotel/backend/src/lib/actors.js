@@ -38,6 +38,8 @@ import * as accountingPostings from '../modules/accounting/postings.js';
 import { syncPayrollRun } from '../modules/payroll/postings.js';
 import { journalizeDay, journalizeSource } from '../modules/ledger/journalize.js';
 import { createLoyaltyWorker } from '@hotelos/loyalty-worker';
+import { createKbsWorker } from '@hotelos/kbs-worker';
+import { onCheckInReverted, onCheckOutReverted, onCheckedIn, onCheckedOut, onRoomAssigned } from '../modules/kbs/queue.js';
 import { onFolioItemVoided, syncFolioPoints, syncSpaPoints } from '../modules/loyalty/earning.js';
 import { consumeSale } from '../modules/stock/sales.js';
 import { suggestPurchases } from '../modules/stock/suggestions.js';
@@ -358,6 +360,10 @@ export function registerActors() {
   // Sadakat aktörü (modül 56): kapanan folyo / spa kasası → puan; yeniden açılan folyo → geri alma; iptal edilen puan indirimi → iade.
   if (!actorRegistry.get('loyalty-worker')) {
     actorRegistry.register(createLoyaltyWorker({ syncFolioPoints, syncSpaPoints, onFolioItemVoided }, deps));
+  }
+  // KBS aktörü (modül 58): giriş / çıkış / oda değişikliği / geri alma → kişi başına kimlik bildirimi kuyruğu.
+  if (!actorRegistry.get('kbs-worker')) {
+    actorRegistry.register(createKbsWorker({ onCheckedIn, onCheckedOut, onCheckInReverted, onCheckOutReverted, onRoomAssigned }, deps));
   }
   // Stok aktörü (modül 44): kapanan adisyon → reçeteden düşüm; miktarı düşen malzeme minimum altındaysa → stok talebi.
   if (!actorRegistry.get('inventory-worker')) {

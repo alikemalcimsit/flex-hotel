@@ -544,6 +544,7 @@ export const STAFF_ALERT_KINDS = Object.freeze([
   'STOCK',
   'HR',
   'LOYALTY',
+  'KBS',
 ]);
 
 export const STAFF_ALERT_KIND_LABELS = Object.freeze({
@@ -574,6 +575,7 @@ export const STAFF_ALERT_KIND_LABELS = Object.freeze({
   STOCK: 'Stok (minimum altı; talep açıldı)',
   HR: 'İK (izin talebi / kararı, süresi dolacak belge)',
   LOYALTY: 'Sadakat (seviye yükseldi, puanın süresi doluyor)',
+  KBS: 'KBS kimlik bildirimi (gönderilemedi, gecikti)',
 });
 
 export const STAFF_ALERT_SEVERITIES = Object.freeze(['INFO', 'WARNING', 'CRITICAL']);

@@ -223,6 +223,13 @@ export const PERMISSIONS = Object.freeze({
   LOYALTY_REDEEM: 'loyalty.redeem',
   /** Program ayarları (oranlar, seviyeler), elle puan düzeltmesi. */
   LOYALTY_MANAGE: 'loyalty.manage',
+
+  /** KBS (modül 58): kimlik bildirimlerinin listesi, mutabakat. */
+  KBS_VIEW: 'kbs.view',
+  /** Hatalı bildirimi tekrar göndermek, elle bildirildi işaretlemek. */
+  KBS_SEND: 'kbs.send',
+  /** KBS ayarları (tesis kodu, kullanıcı, parola, zorunlu alanlar), bağlantı denemesi. */
+  KBS_MANAGE: 'kbs.manage',
   /** Online check-in listesi ve ayrıntısı (belge fotoğrafları dahil), misafir portalı bağlantıları (modül 53). */
   GUEST_PORTAL_VIEW: 'guest_portal.view',
   /** Online check-in onayı / düzeltme isteği; portal bağlantısı ver / iptal et, daveti gönder. */
@@ -399,6 +406,9 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.LOYALTY_VIEW]: 'Sadakat üyelerini, puan bakiyesini ve hareketlerini görüntüle',
   [PERMISSIONS.LOYALTY_REDEEM]: 'Folyoda puan kullan (indirim), misafiri sadakat programına üye yap',
   [PERMISSIONS.LOYALTY_MANAGE]: 'Sadakat programı ayarları ve seviyeler, elle puan düzeltmesi',
+  [PERMISSIONS.KBS_VIEW]: 'KBS kimlik bildirimlerini ve mutabakatı görüntüle',
+  [PERMISSIONS.KBS_SEND]: 'Hatalı KBS bildirimini tekrar gönder, elle bildirildi olarak işaretle',
+  [PERMISSIONS.KBS_MANAGE]: 'KBS ayarları (tesis kodu, kullanıcı, parola, zorunlu alanlar) ve bağlantı denemesi',
   [PERMISSIONS.GUEST_PORTAL_VIEW]: 'Online check-in\'leri ve belge fotoğraflarını gör, misafir portalı bağlantısını gör',
   [PERMISSIONS.GUEST_PORTAL_MANAGE]: 'Online check-in onayla / düzeltme iste; portal bağlantısı ver, iptal et, davet gönder',
   [PERMISSIONS.GUEST_PORTAL_SETUP]: 'Misafir portalı ayarları: davet ve açılış günleri, belge saklama süresi, metinler',
@@ -522,6 +532,7 @@ export const PERMISSION_GROUPS = Object.freeze([
   { key: 'payroll', label: 'Bordro', permissions: [PERMISSIONS.PAYROLL_VIEW, PERMISSIONS.PAYROLL_MANAGE, PERMISSIONS.PAYROLL_PAY, PERMISSIONS.PAYROLL_SETUP] },
   { key: 'hr', label: 'İK', permissions: [PERMISSIONS.HR_VIEW, PERMISSIONS.HR_MANAGE, PERMISSIONS.HR_SELF] },
   { key: 'loyalty', label: 'Sadakat programı', permissions: [PERMISSIONS.LOYALTY_VIEW, PERMISSIONS.LOYALTY_REDEEM, PERMISSIONS.LOYALTY_MANAGE] },
+  { key: 'kbs', label: 'KBS kimlik bildirimi', permissions: [PERMISSIONS.KBS_VIEW, PERMISSIONS.KBS_SEND, PERMISSIONS.KBS_MANAGE] },
   { key: 'guest_portal', label: 'Misafir portalı ve online check-in', permissions: [PERMISSIONS.GUEST_PORTAL_VIEW, PERMISSIONS.GUEST_PORTAL_MANAGE, PERMISSIONS.GUEST_PORTAL_SETUP] },
   { key: 'surveys', label: 'Anket ve memnuniyet', permissions: [PERMISSIONS.SURVEYS_VIEW, PERMISSIONS.SURVEYS_FOLLOW_UP, PERMISSIONS.SURVEYS_SETUP] },
   { key: 'spa', label: 'Spa ve spor salonu', permissions: [PERMISSIONS.SPA_VIEW, PERMISSIONS.SPA_BOOK, PERMISSIONS.SPA_PAYMENT, PERMISSIONS.SPA_SUPERVISE, PERMISSIONS.SPA_SETUP] },
@@ -566,6 +577,9 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.LOYALTY_VIEW,
     PERMISSIONS.LOYALTY_REDEEM,
     PERMISSIONS.LOYALTY_MANAGE,
+    PERMISSIONS.KBS_VIEW,
+    PERMISSIONS.KBS_SEND,
+    PERMISSIONS.KBS_MANAGE,
     PERMISSIONS.SETTINGS_VIEW,
     PERMISSIONS.ROOMS_VIEW,
     PERMISSIONS.ROOMS_MANAGE,
@@ -705,6 +719,8 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
   ]),
   FRONT_DESK: Object.freeze([
     // Sadakat (modül 56): misafirin puanını görür, folyoda kullanır, üye yapar.
+    PERMISSIONS.KBS_VIEW,
+    PERMISSIONS.KBS_SEND,
     PERMISSIONS.LOYALTY_VIEW,
     PERMISSIONS.LOYALTY_REDEEM,
     // İK (modül 52): kendi izin talebi, bakiyesi ve vardiyası.

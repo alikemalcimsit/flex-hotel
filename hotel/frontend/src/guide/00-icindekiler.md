@@ -14,7 +14,7 @@ Sol taraftaki bölümler sırayla okunacak şekilde dizildi; ama her bölüm ken
 | Başlarken | Herkes | Sistem nedir, giriş, roller ve yetkiler, menü düzeni, ortak ekran kalıpları, ilk kurulum sırası |
 | Arka planda ne oluyor | Yönetici, meraklı personel | Olay tabanlı mimari, aktörler (otomatik çalışan işçiler), onay kuyruğu, AI ajanları, iş günü, zamanlanmış işler |
 | Yönetim ekranları | Yönetici / admin | Görevler, onaylar, bildirimler, aktivite ve denetim, aktör paneli, ayarlar, Excel'den yükleme, raporlar |
-| Ön büro | Resepsiyon | Rezervasyon, oda planı, giriş / çıkış, online check-in, odalar, misafir kartı, **sadakat programı** (puan kazanma ve kullanma, seviyeler, süre, elle düzeltme) |
+| Ön büro | Resepsiyon | Rezervasyon, oda planı, giriş / çıkış, online check-in, odalar, misafir kartı, **sadakat programı** (puan kazanma ve kullanma, seviyeler, süre, elle düzeltme), **KBS kimlik bildirimi** (girişte zorunlu alanlar, kişi başına giriş / çıkış / oda değişikliği bildirimi, yeniden deneme ve zil, elle bildirildi, mutabakat; gerçek Emniyet / Jandarma bağlantısı bekliyor, bugün test ortamı) |
 | Folyo, kasa ve ek hizmetler | Resepsiyon, kasa | Folyo kalemleri, ödemeler, kasa, minibar ve çamaşırhane, kayıp eşya, gün kapanışı |
 | Kat hizmetleri ve teknik servis | Kat, teknik | Görev panosu, kontrol, kat haritası, arıza biletleri, periyodik bakım |
 | Misafir iletişimi | Resepsiyon, misafir ilişkileri | Mesajlar ve AI concierge, istekler, anketler, spa, misafir portalı |
@@ -22,8 +22,8 @@ Sol taraftaki bölümler sırayla okunacak şekilde dizildi; ama her bölüm ken
 | Restoran, mutfak ve oda servisi | F&B | Menü, vardiya, masa planı ve adisyon, mutfak ekranı, oda servisi, paket servis, reçeteler, etkinlikler |
 | Satın alma ve stok | Satın alma, depo, F&B | Talep → teklif → sipariş → mal kabul, depolar, hareketli ortalama maliyet, hareketler, sayım, satış düşümü, maliyet raporu |
 | Arka ofis | Muhasebe, İK | Faturalar ve e-belge, ön muhasebe, **genel muhasebe** (Tek Düzen hesap planı, otomatik yevmiye fişleri, günlük gelir fişi, mizan, hesap ekstresi, kurallar, dönem kilidi), personel ve bordro, **İK** (izin talebi ve onayı, yıllık izin bakiyesi, vardiya çizelgesi, günlük puantaj ve bordroya aktarım, özlük belgeleri), demirbaş ve amortisman |
-| Uçtan uca senaryolar | Herkes | Bir misafirin yolculuğu, bir yemeğin yolculuğu, gün kapanışı, OTA rezervasyonu, arıza, fiyat önerisi, bordro, ay sonu mizan ve dönem kapanışı, yanlış fişin düzeltilmesi, personel izin talebi, gece vardiyası ve mesai, sadık misafirin puan kullanması |
-| Sık sorulan sorular | Herkes | Hata mesajları, sorun giderme, modül durumu tablosu |
+| Uçtan uca senaryolar | Herkes | Bir misafirin yolculuğu, bir yemeğin yolculuğu, gün kapanışı, OTA rezervasyonu, arıza, fiyat önerisi, bordro, ay sonu mizan ve dönem kapanışı, yanlış fişin düzeltilmesi, personel izin talebi, gece vardiyası ve mesai, sadık misafirin puan kullanması, KBS hatası (servis ulaşılamaz → gönderilemedi → elle bildir / tekrar gönder) |
+| Sık sorulan sorular | Herkes | Hata mesajları, sorun giderme (KBS dahil), modül durumu tablosu |
 | Teknik referans (otomatik) | Yönetici, teknik ekip | Koddan her derlemede üretilir: menü haritası ve izinler, rol varsayılanları, aktör bildirgeleri, olay kataloğu, zamanlanmış işler, tablolar, modül durumu |
 
 ## Kılavuz nasıl güncel kalır
@@ -53,4 +53,5 @@ Sol taraftaki bölümler sırayla okunacak şekilde dizildi; ama her bölüm ken
 | **İzin bakiyesi** | Personelin yıllık ücretli izin hakkı (işe giriş yıl dönümlerinde 14 / 20 / 26 gün) + düzeltmeler − onaylı yıllık izinler. İK → İzin bakiyeleri ve İzinlerim'de görünür. |
 | **Puantaj** | Personelin gün gün geldi / gelmedi / izinli kaydı, giriş-çıkış saatleri ve fazla çalışması; ay sonunda bordroya aktarılır. |
 | **Sadakat puanı** | Misafirin folyosu kapanınca harcamasından kazandığı puan (varsayılan 10 TL = 1 puan). Sonraki konaklamada açık folyoda indirim olarak kullanılır (varsayılan 1 puan = 0,50 TL). Son 12 ayda kazanılan puan misafirin **seviyesini** (Klasik / Gümüş / Altın) belirler. Sadakat → Üyeler'de görünür. |
+| **KBS bildirimi** | Misafirin kimliğinin Emniyet (KBS) ya da Jandarma (JKBS) kimlik bildirim sistemine giriş, çıkış ve oda değişikliğinde bildirilmesi. FlexHotel kişi başına bildirimi sıraya alır, gönderilemeyince zil çalar, **Mutabakat**'ta içerideki herkesin bildirilip bildirilmediğini gösterir. Gerçek servis bağlantısı henüz yoktur (test ortamı); otel resmî ekrandan elle bildirip **Elle bildirildi** işaretler. KBS → Bildirimler'de görünür. |
 | **Mizan** | Bir dönemde her hesabın devri, borç / alacak toplamı ve kalanı; dip toplamda borç = alacak ("dengeli"). Müşavire giden özet. |

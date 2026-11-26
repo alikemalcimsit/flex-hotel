@@ -9,7 +9,7 @@
  */
 export const GUEST_REASSIGN_MODELS = Object.freeze([
   'reservation', 'conversation', 'guestRequest', 'folio', 'lostItem', 'invoice', 'waitlistEntry', 'notification',
-  'guestPreference', 'guestNote', 'lead', 'surveyInvitation', 'surveyResponse', 'spaAppointment',
+  'guestPreference', 'guestNote', 'lead', 'surveyInvitation', 'surveyResponse', 'spaAppointment', 'kbsNotification',
 ]);
 /** `mergeGuests`'in ayrıca (çakışma temizliğiyle) taşıdığı tablolar; sadakat hesabı birleştirilir (modül 56). */
 export const GUEST_MERGE_SPECIAL_MODELS = Object.freeze(['reservationGuest', 'loyaltyAccount']);

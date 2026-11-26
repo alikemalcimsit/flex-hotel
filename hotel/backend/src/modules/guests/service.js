@@ -134,6 +134,11 @@ export async function getGuestCard(hotelId, guestId) {
     idType: guest.idType,
     idNumber: guest.idNumber,
     idRead: guest.idReadAt ? { at: guest.idReadAt.toISOString(), by: guest.idReadBy, via: guest.idReadVia } : null,
+    // KBS ek alanları (modül 58).
+    gender: guest.gender ?? null,
+    birthPlace: guest.birthPlace ?? null,
+    fatherName: guest.fatherName ?? null,
+    motherName: guest.motherName ?? null,
     tags: guest.tags,
     summary: summaryMap.get(guestId) ?? emptySummary(),
     preferences: prefs.map(toPreferenceDto),
@@ -191,6 +196,9 @@ export async function updateGuestCard(hotelId, guestId, input) {
     if (input.phone !== undefined) data.phone = input.phone ? storablePhone(input.phone, hotel.phoneCountryCode) : null;
     if (input.email !== undefined) data.email = input.email ? input.email.toLowerCase() : null;
     if (input.tags !== undefined) data.tags = [...new Set(input.tags)];
+    for (const field of ['gender', 'birthPlace', 'fatherName', 'motherName']) {
+      if (input[field] !== undefined) data[field] = input[field] ?? null;
+    }
     const identityTouched = ['idType', 'idNumber', 'nationality', 'birthDate'].some((field) => input[field] !== undefined);
     if (identityTouched || input.documentRead) {
       const next = {
@@ -335,6 +343,10 @@ export async function mergeGuests(hotelId, input) {
     const data = { tags: mergeTags(target.tags, source.tags) };
     for (const field of ['firstName', 'lastName', 'phone', 'email', 'nationality', 'idType', 'idNumber']) {
       if (keep[field] !== undefined) data[field] = keep[field];
+    }
+    // KBS ek alanları (modül 58): hedefte boşsa kaynaktaki kalır (bekleyen bildirim eksik bilgiye düşmesin).
+    for (const field of ['gender', 'birthPlace', 'fatherName', 'motherName']) {
+      if (!target[field] && source[field]) data[field] = source[field];
     }
     if (keep.birthDate !== undefined) data.birthDate = keep.birthDate ? new Date(`${keep.birthDate}T00:00:00.000Z`) : null;
     // "Kimlikten okundu" (modül 59) kalan kimlikle gider: kimlik hedefinki gibi kalırsa onun işareti, kaynağınki

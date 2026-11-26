@@ -1,6 +1,6 @@
 # Ön büro
 
-Bu bölüm resepsiyonun günlük işini anlatır: rezervasyon açmak, oda planına bakmak, misafiri karşılamak (check-in) ve uğurlamak (check-out), online check-in'i incelemek, odaların durumunu izlemek ve misafir kartını tanımak.
+Bu bölüm resepsiyonun günlük işini anlatır: rezervasyon açmak, oda planına bakmak, misafiri karşılamak (check-in) ve uğurlamak (check-out), online check-in'i incelemek, odaların durumunu izlemek, misafir kartını tanımak, sadakat puanını kullandırmak ve misafirin kimliğini KBS'ye bildirmek.
 
 Her ekran şu düzende anlatılır: **nerede bulunur**, **ne yapar**, **adım adım nasıl kullanılır**, **arka planda ne olur** (hangi aktör neyi kendiliğinden yapar) ve **dikkat edilecekler**.
 
@@ -30,11 +30,12 @@ Eski sistemlerdeki "boş / dolu / kirli / arızalı" tek kutusu burada üçe ayr
 
 ### Aktörler ve manuel görevler
 
-Ön büroyu ilgilendiren üç aktör vardır:
+Ön büroyu ilgilendiren başlıca aktörler:
 
 - **Oda aktörü** (room-worker): yeni rezervasyona uygun odayı seçip atar; misafir giriş yapınca odayı **dolu**, çıkış yapınca **boş + kirli** yapar; yanlış giriş/çıkış geri alınınca doluluğu düzeltir.
 - **Rezervasyon aktörü** (reservation-worker): kanaldan (WhatsApp, web chat, web sitesi widget'ı, OTA) gelen rezervasyon isteğini müsaitlik ve fiyat denetimiyle açar; yer yoksa gerekçeli ret üretir.
 - **Folyo aktörü** (billing-worker): girişte folyoyu açar, oda ücretlerini işler; ayrıntısı bir sonraki bölümde.
+- **KBS aktörü** (kbs-worker): giriş, çıkış, oda değişikliği ve geri almalarda kişi başına KBS kimlik bildirimini sıraya alır; ayrıntısı "KBS kimlik bildirimi" bölümünde.
 
 Bir aktör kapalıysa ya da hata verirse işi **kaybolmaz**: yan menüdeki **Görevler** ekranına "manuel görev" olarak düşer ve personel aynı işi elle yapar. Kılavuzun "Arka planda ne oluyor" bölümünde aktör paneli anlatılır.
 
@@ -353,7 +354,7 @@ Satırda: misafir, oda (yoksa "oda verilmemiş"), odanın hazırlığı (temiz /
 
 1. "Giriş yap"a basın. Pencere konaklamayı yükler; **giriş yapılamayacak** bir durum varsa (çıkış günü geçmiş, iptal edilmiş, zaten içeride) üstte sebebiyle söyler.
 2. **Oda:** verilmemişse aday odalar listelenir — misafirin tipi önce, en hazır (kontrol edilmiş / temiz) oda başta; kapasitesi yetmeyen ya da overbooking yaratacak oda listelenmez. Seçilen oda girişle **aynı işlemde** atanır. Odada önceki misafir hâlâ içerideyse ya da oda arızalıysa giriş olmaz; oda **kirliyse** uyarı çıkar, personel onaylayarak devam edebilir (otelin tercihi).
-3. **Kimlik (KBS):** belgeyi **Kimlik tara** ile okutabilirsiniz (aşağıda ayrı anlatılır) ya da elle girersiniz. Rezervasyon sahibinin belgesi zorunludur — Belge türü (Kimlik kartı / Pasaport / Diğer), Belge numarası (TC kimlik no sağlaması yapılır, pasaport biçimi denetlenir), uyruk, isteğe bağlı doğum tarihi. Otelin politikası "Bütün yetişkinler" ise refakatçi yetişkinlerin de belgesi girilir; **çocuk** işaretlenen refakatçide belge isteğe bağlıdır. Refakatçi belge numarasından tanınır: aynı kişiye ikinci kart açılmaz; belge başka adla kayıtlıysa pencere söyler.
+3. **Kimlik (KBS):** belgeyi **Kimlik tara** ile okutabilirsiniz (aşağıda ayrı anlatılır) ya da elle girersiniz. Rezervasyon sahibinin belgesi zorunludur — Belge türü (Kimlik kartı / Pasaport / Diğer), Belge numarası (TC kimlik no sağlaması yapılır, pasaport biçimi denetlenir), uyruk, isteğe bağlı doğum tarihi. Otelin politikası "Bütün yetişkinler" ise refakatçi yetişkinlerin de belgesi girilir; **çocuk** işaretlenen refakatçide belge isteğe bağlıdır. Refakatçi belge numarasından tanınır: aynı kişiye ikinci kart açılmaz; belge başka adla kayıtlıysa pencere söyler. **KBS açıksa** misafirin ve belgesi girilen her refakatçinin altında KBS alanları da çıkar (cinsiyet, doğum tarihi, baba adı, anne adı, doğum yeri; ayarın istediği zorunlu işaretli). Eksik varsa giriş olmaz ve mesaj kişi kişi söyler: "KBS bildirimi için eksik bilgi — Anna Schmidt: Cinsiyet, Doğum tarihi". Ayrıntı: aşağıdaki "KBS kimlik bildirimi" bölümü.
 4. **Online check-in'den dolduruldu** uyarısı görürseniz misafir bilgilerini portaldan göndermiştir; form onunla dolu gelir, onay durumu uyarıda yazar. Yalnızca kontrol edin.
 5. **Araç plakası** (isteğe bağlı).
 6. **Teminat:** Teminat yok / Nakit / Kart provizyonu / Havale-EFT; tutar ve isteğe bağlı provizyon-dekont no. **Kart numarası yazmayın** — kart numarasına benzeyen dizi referansa ve nota kaydedilemez.
@@ -366,6 +367,7 @@ Satırda: misafir, oda (yoksa "oda verilmemiş"), odanın hazırlığı (temiz /
 - **Folyo aktörü** konaklamanın **folyosunu açar**, erken giriş ücretini "Oda" vergisiyle kalem olarak işler ve nakit / havale **teminatı ödeme olarak** yazar (kart provizyonu ödeme değildir, çıkışta kartla tahsil edilir). Teminat tutarı büyük ödeme eşiğinin üstündeyse onaya gider.
 - **Bildirim merkezi** "hoş geldiniz" bildirimini kuyruğa alır (kanal ve şablon kurulmuşsa).
 - Online check-in kaydı varsa "Giriş yapıldı" olur.
+- **KBS aktörü** (KBS açıksa) belgesi girilen her kişi için KBS giriş bildirimini sıraya alır; gönderici saniyeler içinde gönderir (bugün yalnız test ortamı; aşağıdaki "KBS kimlik bildirimi" bölümüne bakın).
 - Kimlik numarası listelerde ve denetim izinde **maskeli** gösterilir (KVKK).
 
 | Tetikleyici | Aktör | Sonuç | Nerede görünür | Kapalıysa / hatada |
@@ -375,6 +377,7 @@ Satırda: misafir, oda (yoksa "oda verilmemiş"), odanın hazırlığı (temiz /
 | Teminat ≥ büyük ödeme eşiği | Folyo aktörü → onay kuyruğu | Ödeme "Onay bekliyor" | Onaylar; folyo "Giriş teminatı onay bekliyor" | — |
 | "Giriş yap" | Bildirim merkezi | "Hoş geldiniz" bildirimi (kanal + şablon varsa) | Bildirimler → Gönderim geçmişi | Kanal yoksa satır açılmaz |
 | "Giriş yap" | Online check-in | Kayıt "Giriş yapıldı" | Online check-in sekmesi | — |
+| "Giriş yap" (KBS açık) | KBS aktörü | Kişi başına KBS giriş bildirimi "Sırada" (belgesiz çocuk hariç) | KBS → Bildirimler; rezervasyondaki KBS kartı | "KBS" manuel görevi: "Giren misafirin KBS giriş bildirimi elle yapılacak" |
 | Giriş geri alındı | Oda aktörü / folyo aktörü | Oda Boş; erken giriş ücreti ve teminat ödemesi ters kayıtla düşer; online check-in "Onaylandı"ya döner | Folyo, oda listesi | Manuel görevler |
 
 **Örnek — teminat 1.000 TL nakit:** 14 Kasım 13:30, Deluxe 405, 3 gece 3.300 TL / gece, otelin giriş saati 14:00, erken giriş ücreti "gecelik fiyatın %20'si". Check-in penceresi: oda 405 "Kontrol edildi" (hazır); kimlik: TC kimlik no girilir (sağlama geçer); refakatçi 1 yetişkin (politika "yalnızca sahibi" — belge istenmez), 1 çocuk; plaka 34 ABC 123; **Teminat: Nakit 1.000 TL**; **Erken giriş ücreti: 660,00 TL** uyarısı (3.300 × %20) — resepsiyon "Ücret uygulama" işaretler (oda hazırdı). "Giriş yap". 13:30:02 oda aktörü 405'i Dolu yapar. 13:30:02 folyo aktörü folyoyu açar: kalem yok (ücretten vazgeçildi; denetim izinde "politika tutarı 660, uygulanmadı"), **ödeme: Nakit 1.000,00 · Giriş teminatı · İşlendi**. Folyo: Harcamalar 0,00 · Ödenen 1.000,00 · **Bakiye −1.000,00** (misafir alacaklı). Kasa 14 Kasım: Nakit tahsilat +1.000 (kaynak Konaklama, alan: resepsiyonist). Gece kapanışlarıyla 3 × 3.300 işlenir → çıkışta bakiye 9.900 − 1.000 = **8.900 TL** ödenecek. Teminat **kart provizyonu** seçilmiş olsaydı: ödeme yazılmaz, folyoda "Provizyon var — çıkışta kartla tahsil edin" şeridi; çıkışta 9.900 kartla çekilir. Eşik 500 TL olsaydı nakit teminat "Onay bekliyor" kalır, müdür onaylayınca kasaya girerdi.
@@ -497,6 +500,7 @@ Satırda folyo bakiyesi (folyoya bağlantı) ve alınan teminat görünür.
 | Çıkış geri alındı | Oda aktörü | Oda Dolu | Plan | Manuel görev |
 | Çıkış geri alındı | Kat hizmeti aktörü | Çıkış temizliği görevi iptal | Pano | Manuel görev |
 | Çıkış geri alındı | Folyo aktörü | Folyo yeniden açılır; geç çıkış ücreti düşer; fatura taslağı varsa durdurulur (fatura **kesilmişse** geri alma engellenir) | Folyo, Faturalar | Manuel görev |
+| Giriş / çıkış geri alındı (KBS açık) | KBS aktörü | Gönderilmemiş bildirim iptal; gönderilmiş giriş çıkışla kapatılır, gönderilmiş çıkıştan sonra yeniden giriş bildirilir | KBS → Bildirimler | "KBS" manuel görevi |
 
 **Örnek:** 14 Kasım 13:30'da 405'e yanlışlıkla "Kaya, C." yerine "Demir, A." giriş yapıldı (ikisi de Deluxe bekliyor). 13:35 Gelecekler → "Bugün girenler" → Demir, A. → **Geri al**, sebep "yanlış misafir". Oda aktörü 405'i Boş yapar; folyo aktörü 1.000 TL nakit teminat ödemesini iptal kaydıyla düşer (kasa: +1.000 ve −1.000 aynı gün, net 0); folyoda kalem yoktu, açık kalır; denetim izinde geri alma ve sebep. Ardından Kaya, C. için giriş yapılır; Demir, A. başka Deluxe'e girer. Aynı misafire folyoda resepsiyon ödemesi alınmış olsaydı (ör. 2.000 TL "Resepsiyon" kaynağıyla) geri alma **engellenir**: önce ödeme iptali (onaylı), sonra geri alma. Gün kapanmış olsaydı geri alma yoktur; çözüm rezervasyon düzenlemesi ve folyo aktarmasıyla.
 
@@ -655,7 +659,7 @@ Ad, telefon ya da e-posta ile arama; her kartta konaklama sayısı, toplam harca
 
 ### Misafir kartı
 
-Üstte **özet**: tamamlanmış konaklama sayısı (ilk / son konaklama), **toplam harcama** (folyolara işlenen borç), son konaklama. "Kartı düzenle": ad, soyad, telefon, e-posta, uyruk, doğum tarihi, kimlik türü ve no — kimlik girişteki kurallarla denetlenir (TC no sağlaması, uyruk listeden, belge eksiksiz) ve **Kimlik tara** ile belgeden okunabilir. Boş bırakılan telefon / e-posta karttan silinir. Telefonu ülke kodu olmadan yazarsanız otelin kodu varsayılır. Kimlik satırında belge türü, maskeli numara ve belgeden okunduysa **Kimlikten okundu** rozeti görünür.
+Üstte **özet**: tamamlanmış konaklama sayısı (ilk / son konaklama), **toplam harcama** (folyolara işlenen borç), son konaklama. "Kartı düzenle": ad, soyad, telefon, e-posta, uyruk, doğum tarihi, kimlik türü ve no, **KBS alanları** (cinsiyet, doğum yeri, baba adı, anne adı; hepsi isteğe bağlı) — kimlik girişteki kurallarla denetlenir (TC no sağlaması, uyruk listeden, belge eksiksiz) ve **Kimlik tara** ile belgeden okunabilir. Boş bırakılan telefon / e-posta karttan silinir. Telefonu ülke kodu olmadan yazarsanız otelin kodu varsayılır. Kimlik satırında belge türü, maskeli numara ve belgeden okunduysa **Kimlikten okundu** rozeti görünür.
 
 **Etiketler:** VIP, Sorunlu, Sadık, Kurumsal, Balayı, Engelli erişimi (öneriler; serbest etiket de girilir). Etiketler rezervasyon formundaki CRM önizlemesinde görünür.
 
@@ -686,7 +690,7 @@ Ad, telefon ya da e-posta ile arama; her kartta konaklama sayısı, toplam harca
 | Alan | Anlamı |
 | --- | --- |
 | Özet kutuları | Konaklama sayısı (ilk / son), **Toplam harcama** (folyolara işlenen borç), Son konaklama |
-| Kimlik / iletişim | Ad, soyad, telefon (`+90…`), e-posta, uyruk, doğum tarihi, kimlik türü, kimlik no (maskeli) |
+| Kimlik / iletişim | Ad, soyad, telefon (`+90…`), e-posta, uyruk, doğum tarihi, kimlik türü, kimlik no (maskeli); KBS için cinsiyet, doğum yeri, baba adı, anne adı |
 | Etiketler | VIP, Sorunlu, Sadık, Kurumsal, Balayı, Engelli erişimi, serbest |
 | Tercihler sekmesi | Kategori · değer · kaynak · güven · son teyit |
 | Konaklama geçmişi | Rezervasyonlar, durumları, odalar |
@@ -947,6 +951,219 @@ Misafirin portal bağlantısında (online check-in, folyo, QR menü ile aynı sa
 - **Mükerrer kartları birleştirin.** Aynı misafirin iki kartı iki ayrı hesap demektir; puanlar bölünür ve seviye geç gelir.
 - **Sadakat aktörü kapatılırsa** kazanma, geri alma ve iade işleri **Sadakat** manuel görevine düşer. Yetkili bunları hesap sayfasından elle düzeltmeyle tamamlar. Aktör sonra açılıp aynı olay gelse de puan iki kez yazılmaz.
 
+## KBS kimlik bildirimi
+
+**Ne işe yarar:** Konaklama tesisleri, tesise giren her misafirin kimliğini **Kimlik Bildirim Sistemi**ne bildirir. Şehir merkezinde bu Emniyet'in **KBS**'sidir, jandarma bölgesinde Jandarma'nın **JKBS**'sidir. Çıkışta ve oda değişikliğinde de bildirim yapılır. Bu yükümlülüğün süresi ve ayrıntıları otelin bağlı olduğu il emniyet müdürlüğü ya da jandarma tarafından belirlenir; kesin kuralı onlardan öğrenin. FlexHotel bu işi giriş / çıkış akışına bağlar. Girişte belgesi girilen her kişi için bir **giriş bildirimi** sıraya girer. Çıkışta, oda değişince, giriş ya da çıkış geri alınınca karşılığı açılır. Gönderilemeyen bildirim zil çalar. **Mutabakat** sekmesi de "içeride olup bildirilmemiş kimse var mı" sorusunu her an cevaplar.
+
+### Bağlantı durumu: gerçek KBS henüz bağlı değil
+
+Bunu baştan ve açıkça bilin:
+
+- Emniyet KBS'si ve Jandarma JKBS'si **henüz bağlı değildir**. Bu servisler herkese açık değildir. Bağlanmak için otelin il emniyet müdürlüğünden ya da jandarmadan aldığı **tesis kodu, kullanıcı adı ve parola** gerekir. Ayrıca servisin yazılım firmasına verilen **servis dokümanı** (adres, mesaj biçimi, hata kodları) gerekir.
+- Bugün Ayarlar'da yalnız **Test ortamı (dışarı göndermez)** seçilebilir. Test ortamı KBS'yi taklit eder; **dışarı hiçbir şey göndermez**. "Bildirildi" durumundaki bir bildirim, test ortamının verdiği `TKBS-…` referansını taşır. Bu, resmî bir bildirim değildir.
+- "Emniyet Genel Müdürlüğü KBS" ve "Jandarma JKBS" seçenekleri listede görünür ama pasiftir: "yakında — tesis yetkisi ve servis dokümanı gerekiyor". KBS açıkken bunlardan biri seçilip kaydedilirse sunucu reddeder: "Emniyet Genel Müdürlüğü KBS bağlantısı henüz kurulmadı (tesis yetkisi ve servis dokümanı gerekiyor); şimdilik Test ortamını seçin". Böylece canlıda sessizce bildirilmeyen misafir olmaz.
+- **Bağlantı gelene kadar ne yapılır:** otel bildirimi bugüne kadar nasıl yapıyorsa öyle yapmaya devam eder, yani resmî KBS ekranından **elle** bildirir. Sonra FlexHotel'de o bildirimi **Elle bildirildi** diye işaretler (not zorunlu, ör. "KBS ekranından elle girildi, ref 778812"). Sistem bu sırada kuyruğu, mutabakatı ve izi tutar. Kimin bildirilip kimin bildirilmediği tek ekrandan görünür.
+- **Bağlantı gelince:** yalnız sağlayıcı adaptörü yazılır. Ekranlar, durumlar, kuyruk ve mutabakat aynı kalır; personelin öğrendiği hiçbir şey değişmez. Gönderilecek alanlar (ad, soyad, belge türü ve numarası, uyruk, doğum tarihi, cinsiyet, doğum yeri, anne ve baba adı, oda, zaman) bugünden toplanmaktadır.
+
+### Nerede
+
+| Ekran | Adres | Ne var |
+| --- | --- | --- |
+| **KBS** (menü, Ön büro grubu) | `/kbs` | Sayfa başlığı "KBS kimlik bildirimi", üstte durum şeridi: KBS kapalı / Test ortamı uyarısı / sağlayıcı. Açılınca Bildirimler sekmesine gider |
+| **Bildirimler** | `/kbs/bildirimler` | Özet kutuları (Sırada, Gönderilemedi, Bugün bildirilen), süzgeçler, bildirim tablosu |
+| Bildirim ayrıntısı | `/kbs/bildirimler/:notificationId` | Bildirimin kartı, **Tekrar gönder**, **Elle bildirildi**, iz tablosu |
+| **Mutabakat** | `/kbs/mutabakat` | İçerideki kişi sayısı / bildirilmiş sayısı, eksikler tablosu |
+| **Ayarlar** | `/kbs/ayarlar` | Açık / kapalı, sağlayıcı, tesis kodu, kullanıcı, parola, gönderilecek bildirimler, zorunlu alanlar, test davranışı, **Bağlantıyı dene** |
+| Check-in penceresi | Ön büro → Giriş / çıkış | KBS açıksa misafir ve refakatçilerde cinsiyet, doğum tarihi, baba adı, anne adı, doğum yeri alanları (ayarın istediği zorunlu işaretli) |
+| Misafir kartı | `/misafirler/<kimlik>` | "Kartı düzenle"de aynı dört alan: cinsiyet, doğum yeri, baba adı, anne adı |
+| Rezervasyon ayrıntısı | `/rezervasyonlar/<kimlik>` | Küçük **KBS** kartı: bu konaklamanın bildirimleri, durum rozetleri, ayrıntıya bağlantı (KBS kapalıysa görünmez) |
+
+**Yetki:**
+
+| İzin | Ne açar | Varsayılan rol |
+| --- | --- | --- |
+| `kbs.view` | Bildirimleri, ayrıntıyı, mutabakatı ve ayarları **görmek**; rezervasyondaki KBS kartı | Müdür, ön büro |
+| `kbs.send` | Gönderilemeyen bildirimi **Tekrar gönder**, bildirimi **Elle bildirildi** işaretlemek; KBS zilleri ve KBS manuel görevleri bu izne gider | Müdür, ön büro |
+| `kbs.manage` | **Ayarları** kaydetmek, **Bağlantıyı dene** | Müdür |
+
+Ön büro ayarları görür ama salt okunur; kaydetmeye ya da bağlantıyı denemeye çalışırsa "Bu işlem için yetkiniz yok" alır. Kat hizmetleri, muhasebe ve F&B KBS ekranlarını görmez. Yönetici her zaman her şeyi yapar.
+
+### İlk kurulum (Ayarlar)
+
+Ayar hiç kaydedilmemişse KBS **kapalıdır** ve hiçbir bildirim açılmaz. Kurulumu `kbs.manage` izni olan kişi (müdür) yapar.
+
+1. **KBS → Ayarlar** (`/kbs/ayarlar`) sekmesini açın.
+2. **KBS açık** kutusunu işaretleyin. Açık olduğu andan sonraki girişler bildirilir; açılmadan önce girmiş misafirler için bildirim kendiliğinden açılmaz. Mutabakat'ta "Bildirim açılmamış" diye görünürler; satırdaki **Bildirim aç** düğmesiyle sıraya alınırlar.
+3. **Sağlayıcı:** bugün yalnız **Test ortamı (dışarı göndermez)**. Diğer ikisi pasiftir (yukarıya bakın).
+4. **Tesis kodu:** emniyet / jandarmanın verdiği tesis kodu (en çok 40 karakter). KBS açıkken zorunludur: "Tesis kodunu yazın".
+5. **Kullanıcı adı:** KBS kullanıcınız (en çok 80 karakter). KBS açıkken zorunludur: "Kullanıcı adını yazın".
+6. **Parola:** yalnız **yazılır**, hiçbir ekranda geri gösterilmez. Kayıtlıysa alanın yanında "kayıtlı" rozeti çıkar. Alanı boş bırakıp kaydederseniz kayıtlı parola kalır; yeni parola yazarsanız değişir; **Parolayı sil** ile silinir. Parola sunucuda şifreli saklanır. Sunucuda şifreleme anahtarı tanımlı değilse ekranda uyarı çıkar ve parola kaydedilemez; teknik kişiye haber verin.
+7. **Gönderilecek bildirimler:** **Çıkış bildirimi** (varsayılan açık) ve **Oda değişikliği bildirimi** (varsayılan açık). Kapatılırsa o tür bildirim açılmaz.
+8. **Zorunlu alanlar** (girişte istenir, bildirimde gönderilir):
+
+   | Alan | Varsayılan |
+   | --- | --- |
+   | Cinsiyet | Açık |
+   | Doğum tarihi | Açık |
+   | Anne ve baba adı | Kapalı |
+   | Doğum yeri | Kapalı |
+   | **TC vatandaşına ek alan sorma** (TC kimlikle bildirilirken) | Açık |
+
+   Belge türü, belge numarası ve uyruk ayardan bağımsız **her zaman** zorunludur. Son kutu açıkken uyruğu **TR** olan ve **Kimlik kartı** (TC kimlik no) ile giren misafirden ek alan istenmez; bildirim yalnız TC kimlik no ve adla yapılır, gerisi nüfus kaydından gelir. Yabancı misafirden ve pasaportla giren TC vatandaşından ek alanlar istenir.
+9. **Test davranışı** (yalnız Test ortamında): **Kabul eder** (varsayılan; bildirim `TKBS-…` referansıyla "Bildirildi" olur), **Reddeder (kalıcı hata)** (bildirim "Gönderilemedi" olur, yeniden denenmez), **Ulaşılamaz (geçici hata, yeniden denenir)** (servis kapalıymış gibi davranır). Ekibe hata akışını göstermek için kullanın, sonra Kabul eder'e alın.
+10. **Kaydet.** Başka biri bu arada ayarı değiştirdiyse "Ayar bu arada değişti; yenileyip tekrar deneyin" uyarısı çıkar. Kayıt denetim izine yazılır, `kbs.settings.changed` yayınlanır.
+11. **Bağlantıyı dene:** kayıtlı ayarla sağlayıcıya bağlanmayı dener, **bildirim göndermez**. Test ortamında sonuç "Bağlantı başarılı — tesis 06-0001 (test ortamı; dışarı bir şey gönderilmedi)" ya da (Ulaşılamaz seçiliyse) "Servise ulaşılamadı (test ortamı: ulaşılamaz davranışı seçili)" olur. Tesis kodu ya da kullanıcı yoksa "Tesis kodu ya da kullanıcı adı tanımlı değil (test ortamı)".
+
+**KBS kapatılırsa:** yeni bildirim açılmaz. Sıradaki bildirimler silinmez ama gönderilmez, KBS yeniden açılınca kaldığı yerden gider. **Tekrar gönder** "KBS kapalı; önce ayarlardan açın" der.
+
+### Girişte zorunlu alanlar
+
+KBS açıkken check-in penceresinde misafirin ve her refakatçinin altında KBS alanları görünür: **Cinsiyet** (Kadın / Erkek), **Doğum tarihi**, **Baba adı**, **Anne adı**, **Doğum yeri**. Ayarın istediği alanların yanında zorunlu işareti vardır. Karttaki değer forma dolu gelir; boş bırakılan alan karttaki kayıtlı değeri silmez. Girilen değerler girişle birlikte misafir kartına yazılır.
+
+**Kimden istenir:** rezervasyon sahibinden ve **belge numarası girilen her refakatçiden**. Belgesi girilmeyen refakatçi (ör. **çocuk** işaretli, belgesiz) denetlenmez ve **bildirilmez**.
+
+**KBS açıkken her yetişkin girilmeli:** otelin giriş politikası "yalnız rezervasyon sahibi" olsa da KBS açıksa rezervasyondaki **her yetişkin** refakatçi olarak belgesiyle girilmelidir. Örnek: 2 yetişkinlik rezervasyonda yalnız Anna girilirse giriş olmaz; Max de belgesiyle eklenince olur. Bildirilmeyen yetişkin KBS'de hiç görünmezdi.
+
+Eksik varsa giriş **olmaz**; sunucu kişi kişi söyler ve hatayı ilgili alanın altına "KBS bildirimi için zorunlu" diye yazar:
+
+> KBS bildirimi için eksik bilgi — Anna Schmidt: Cinsiyet, Doğum tarihi
+
+İki kişide eksik varsa ikisi de aynı mesajda, noktalı virgülle ayrılarak yazılır (ör. "… — Anna Schmidt: Cinsiyet; Max Schmidt: Doğum tarihi"). Belgenin kendisi eksikse (tür, numara, uyruk) önce o istenir.
+
+**Belgesiz çocuk:** refakatçide **çocuk** işaretlenip belge girilmezse giriş yapılır, çocuk için bildirim açılmaz. Aktörün iz satırında "1 belgesiz çocuk bildirilmedi" yazar; Mutabakat'ta çocuk "Belgesi yok (çocuk ise bildirilmez)" diye görünür. Otelinizin bağlı olduğu birim çocukların da bildirilmesini istiyorsa çocuğun belgesini (ör. kimlik kartı ya da pasaport) girin; o zaman çocuk da bildirilir ve zorunlu alanları istenir.
+
+### Hangi olay hangi bildirimi açar
+
+İşi **KBS aktörü** (`kbs-worker`) yapar; personel bir düğmeye basmaz. Bildirimi aktör açar, dışarı **KBS göndericisi** gönderir.
+
+| Ön büroda olan | Açılan bildirim | Kural |
+| --- | --- | --- |
+| **Giriş** | Belgesi girilen her kişi için bir **Giriş** bildirimi | Belgesiz çocuk atlanır. Zorunlu alan eksikse bildirim doğrudan "Gönderilemedi" (`MISSING_FIELDS`) açılır ve zil çalar |
+| **Çıkış** | İçeride bildirilmiş her kişi için bir **Çıkış** bildirimi | "Çıkış bildirimi" ayarı açıksa. Oda, kişinin **son bildirilen** odasıdır |
+| **Oda değişikliği** (içerideyken) | Son bildirilen odası yeni odadan farklı her kişi için bir **Oda değişikliği** bildirimi ("101 → 103") | "Oda değişikliği bildirimi" ayarı açıksa. Girişte oda verilmesi bildirim açmaz |
+| **Giriş geri alındı** | Henüz gönderilmemiş giriş bildirimi **iptal** ("Giriş geri alındı; bildirime gerek kalmadı"). Gönderilmişse **Çıkış** bildirimiyle kapatılır ("Giriş geri alındı (yanlış giriş): bildirilen giriş çıkışla kapatılıyor") | KBS'de "içeride" görünen kimse kalmasın |
+| **Çıkış geri alındı** | Henüz gönderilmemiş çıkış bildirimi **iptal** ("Çıkış geri alındı; bildirime gerek kalmadı"). Gönderilmişse yeniden **Giriş** bildirimi ("Çıkış geri alındı: misafir yine içeride") | Misafir yine içeride |
+
+**KBS sonradan kapatılırsa:** daha önce bildirim açılmış konaklamanın çıkışı ve geri almaları yine kuyruğa yazılır; KBS kapalıyken gönderilmez, açılınca sırayla gider. Böylece KBS'de "içeride" kalmış hayalet misafir olmaz. Gecikme zili KBS kapalıyken çalmaz.
+
+**Zincir ve bağımlılık:** Aynı konaklamada aynı kişinin bildirimleri bir zincirdir; her yeni bildirim bir öncekine bağlıdır. **Çıkış ve oda değişikliği, kişinin girişi bildirilmeden gönderilmez.** Ayrıntıda "Bağlı olduğu bildirim" satırı bunu gösterir. Giriş "Gönderilemedi"de kaldıysa çıkış "Sırada" bekler. Giriş **Bildirildi** ya da **Elle bildirildi** olunca çıkış kendiliğinden gider. Bağlı olduğu bildirim iptal edilirse bekleyen de iptal olur ("Bağlı olduğu bildirim iptal edildi").
+
+**Aynı olay iki kez gelirse** ikinci bildirim açılmaz. Her bildirimin kaynak anahtarı tekildir; aktör kapatılıp açılsa da sonuç aynıdır.
+
+### Durumlar
+
+| Durum | Anlamı | Sonra ne olur |
+| --- | --- | --- |
+| **Sırada** | Gönderilmeyi bekliyor: ya sırası henüz gelmedi (yeniden deneme zamanı ileride) ya da bağlı olduğu giriş henüz bildirilmedi | Gönderici sırası gelince gönderir. Personel isterse **Elle bildirildi** işaretler |
+| **Gönderiliyor** | Gönderici şu an gönderiyor (saniyeler sürer) | Sonuç yazılır. Süreç gönderim ortasında kapandıysa 5 dakika sonra kendiliğinden "Sırada"ya döner |
+| **Bildirildi** | Sağlayıcı kabul etti; referans numarası kaydedildi (test ortamında `TKBS-…`) | Son durum |
+| **Gönderilemedi** | Kalıcı hata, yeniden deneme hakkı bitti ya da zorunlu alan eksik. Zil çaldı | Personel düzeltip **Tekrar gönder** ya da resmî ekrandan bildirip **Elle bildirildi** |
+| **İptal (gerek kalmadı)** | Giriş / çıkış geri alındı ya da bağlı olduğu bildirim iptal edildi | Son durum; hiçbir şey gönderilmez |
+| **Elle bildirildi** | Personel resmî KBS ekranından elle bildirdi ve notuyla işaretledi | Son durum. Buna bağlı çıkış / oda değişikliği artık gidebilir |
+
+"Açık olanlar" süzgeci Sırada, Gönderiliyor ve Gönderilemedi'yi birlikte gösterir.
+
+### Gönderim, yeniden deneme ve hatalar
+
+**Gönderici** 30 saniyede bir ve yeni bildirim sıraya girer girmez çalışır. Sırası gelmiş, bağlı olduğu girişi bildirilmiş bildirimleri sırayla gönderir. İki sunucu süreci aynı bildirimi aynı anda üstlenemez.
+
+**Kimlik gönderim anında misafir kartından okunur.** Bildirim açıldıktan sonra kartı düzelttiyseniz düzeltilmiş hali gider. Gönderim anında giriş bildiriminin zorunlu alanları yeniden denetlenir. Kart bu arada bozulduysa (ör. cinsiyet silindi) bildirim "Gönderilemedi" olur: "Eksik bilgi: Cinsiyet. Misafir kartını tamamlayıp tekrar gönderin." (kod `MISSING_FIELDS`). Ayrıntıda **Misafir kartını aç** bağlantısı çıkar.
+
+**Geçici hata** (servise ulaşılamadı, ağ koptu; test ortamında `T-UNAVAILABLE`): bildirim "Sırada"ya döner ve artan aralıklarla yeniden denenir.
+
+| Başarısız deneme | Sıradaki deneme |
+| --- | --- |
+| 1. | 1 dakika sonra |
+| 2. | 5 dakika sonra |
+| 3. | 15 dakika sonra |
+| 4. | 60 dakika sonra |
+| 5. | 180 dakika (3 saat) sonra |
+| 6. | 360 dakika (6 saat) sonra |
+| 7. | Hak bitti → **Gönderilemedi** + zil |
+
+Yani ilk denemeden sonra 6 yeniden deneme vardır, toplam bekleme 10 saati geçer. Giriş bildirimi için bu kadar beklemeyin: 2 saat dolunca gecikme zili çalar (aşağıda). Ayrıntıda "Deneme" sayısı ve "Sıradaki deneme" zamanı görünür.
+
+**Kalıcı hata** (sağlayıcı bildirimi reddetti; test ortamında `T-REJECTED` "Kimlik bilgisi doğrulanamadı (test ortamı: ret davranışı seçili)"; tesis kodu / kullanıcı yoksa `T-AUTH`): yeniden **denenmez**, doğrudan "Gönderilemedi" olur ve zil çalar. Bilgiyi düzeltip **Tekrar gönder**'e basın ya da elle bildirin. Kayıtlı parola çözülemezse (sunucu anahtarı değişmiş olabilir) de kalıcı hatadır: "KBS parolası çözülemedi …; ayarlardan parolayı yeniden girin".
+
+**Zil:** Gönderilemeyen her bildirim için `kbs.send` sahiplerinin ziline **KBS** türünde uyarı düşer: "KBS giriş bildirimi gönderilemedi: Anna Schmidt". Gövdesinde hata, oda ve "KBS ekranından tekrar gönderin ya da elle bildirip işaretleyin" yazar. Eksik bilgiyle açılan bildirimde başlık "KBS bildirimi eksik bilgi: …" olur. Uyarı bildirimin ayrıntısını açar. Aynı bildirim için aynı uyarı bir kez çalar.
+
+**Gecikme zili:** Bir **giriş** bildirimi açıldıktan 2 saat sonra hâlâ bildirilmemişse (Sırada, Gönderiliyor ya da Gönderilemedi), saatlik iş **kritik** bir zil çalar: "KBS giriş bildirimi gecikti: Anna Schmidt" ve "Oda 101 misafirinin girişi 2 saattir bildirilemedi (…). Yasal süre geçmeden KBS ekranından elle bildirin." Her bildirim için bir kez çalar.
+
+### Bildirimler ekranı ve ayrıntı
+
+**Bildirimler** (`/kbs/bildirimler`):
+
+- **Özet kutuları:** Sırada (sırada + gönderiliyor), Gönderilemedi, Bugün bildirilen (bugün bildirilen ve elle bildirilen).
+- **Süzgeçler:** Açık olanlar, Durum, Tür (Giriş / Çıkış / Oda değişikliği), tarih aralığı, arama (misafir adı, oda numarası, rezervasyon kodu).
+- **Tablo:** Zaman · Tür · Misafir (maskeli belge numarası ve uyrukla) · Oda (oda değişikliğinde "101 → 103") · Rezervasyon kodu (rezervasyona bağlantı) · Durum rozeti · Deneme · Son mesaj. Satıra tıklayınca ayrıntı açılır.
+
+**Ayrıntı** (`/kbs/bildirimler/:notificationId`):
+
+- **Kart:** tür, durum, misafir (misafir kartına bağlantı), oda, sağlayıcı referansı, deneme sayısı ve sıradaki deneme, son kod ve mesaj, bağlı olduğu bildirim (türü ve durumu), elle bildirildiyse kim ve not.
+- **Tekrar gönder** (yalnız "Gönderilemedi"de; `kbs.send`): bildirim deneme sayısı sıfırlanarak "Sırada"ya döner ve hemen gönderilir. Kimlik kartın güncel halinden okunur; eksik alanı önce misafir kartında tamamlayın. İzde "Personel tekrar gönderdi" yazar.
+- **Elle bildirildi** (Sırada ya da Gönderilemedi'de; `kbs.send`): resmî KBS ekranından elle bildirdiyseniz işaretleyin. **Not zorunludur**, en az 3, en çok 300 karakter; kısa not "Nasıl bildirildiğini yazın (ör. KBS ekranından elle girildi)" uyarısıyla reddedilir. Bildirim "Elle bildirildi" olur, kim ve not kaydedilir. Buna bağlı çıkış / oda değişikliği artık gönderilebilir. Elle bildirilen bildirim tekrar gönderilemez. **Sıra atlanamaz:** bağlı olduğu bildirim (ör. giriş) bildirilmeden ya da elle işaretlenmeden oda değişikliği / çıkış elle kapatılamaz ("Önce bağlı olduğu bildirim … bildirilmeli", 409); önce girişi işaretleyin.
+- **İz tablosu:** her adım ayrı satırda. Sıraya alındı, her deneme (kod, mesaj, sıradaki deneme zamanı), bildirildi (referans), iptal, tekrar gönder, elle bildirildi. Satırda kimin yaptığı yazar (`kbs-worker`, `system` ya da personelin adı).
+
+Ekranlar `kbs.changed` kanalıyla canlı tazelenir.
+
+### Mutabakat
+
+**Mutabakat** (`/kbs/mutabakat`) tek soruyu cevaplar: **şu an içeride olan herkes bildirildi mi?**
+
+- **İçerideki kişi:** giriş yapmış konaklamalardaki **belgeli** kişiler (rezervasyon sahibi ve belgesi girilen refakatçiler). Belgesiz çocuklar bildirilmediği için sayıya girmez; kutunun altında "N belgesiz çocuk bildirilmez" diye ayrıca yazar.
+- **Bildirilmiş:** girişi **Bildirildi** ya da **Elle bildirildi** olan kişiler.
+- **Eksikler tablosu:** Oda · Misafir · Rezervasyon · Durum · **Neden** · bildirime git. Neden şunlardan biridir:
+
+| Neden | Ne demek | Ne yapılır |
+| --- | --- | --- |
+| Bildirim açılmamış | Bu kişi için bildirim yok (ör. KBS açılmadan önce girmiş ya da aktör o sırada kapalıydı) | Satırdaki **Bildirim aç** düğmesi (`kbs.send`) konaklamanın eksik giriş bildirimlerini sıraya alır; açık olanı yeniden açmaz. Sonra bildirim normal yoldan gider |
+| KBS kapalı | KBS ayarı kapalı | Ayarları açın |
+| Bildirimin son mesajı (ör. "Eksik bilgi: Cinsiyet …", "KBS servisine ulaşılamadı …") ya da "Gönderilmeyi bekliyor" | Bildirim açık ama henüz bildirilmedi | Bildirime gidin: Tekrar gönder ya da Elle bildirildi |
+
+Vardiya devrinde ve gün kapanışından önce Mutabakat'a bakmak iyi bir alışkanlıktır: eksik sayısı 0 değilse birisi bir şey yapmalıdır.
+
+### Rezervasyon ayrıntısındaki KBS kartı
+
+Rezervasyon ayrıntısında `kbs.view` sahibine küçük bir **KBS** kartı görünür (KBS kapalıysa görünmez). Kartta bu konaklamanın bütün bildirimleri listelenir: tür, kişi, durum rozeti ve ayrıntıya bağlantı. Giriş sonrası resepsiyonist kartta "Sırada → Bildirildi" geçişini görür; "Gönderilemedi" varsa oradan ayrıntıya gidip çözer.
+
+### Misafir kartındaki yeni alanlar
+
+Misafir kartında "Kartı düzenle" penceresine dört alan eklendi: **Cinsiyet** (Kadın / Erkek), **Doğum yeri**, **Baba adı**, **Anne adı**. Hepsi isteğe bağlıdır; KBS ayarı açıkken girişte zorunlu olanlar istenir. "Gönderilemedi — Eksik bilgi" alan bildirimde eksik alanı burada tamamlayıp **Tekrar gönder**'e basın.
+
+### Örnekler (Test ortamı, varsayılan zorunlu alanlar: cinsiyet ve doğum tarihi, TC vatandaşına ek alan sorulmaz)
+
+| # | Durum | Sonuç |
+| --- | --- | --- |
+| 1 | KBS **kapalıyken** Ali Kaya (TC, kimlik kartı) 102'ye girdi | Bildirim **açılmaz**. KBS sonra açılınca Mutabakat'ta "Bildirim açılmamış" diye görünür |
+| 2 | KBS açık. Anna Schmidt (pasaport C01X00T47, uyruk DE) cinsiyet ve doğum tarihi girilmeden 101'e giriş | Giriş **olmaz**: "KBS bildirimi için eksik bilgi — Anna Schmidt: Cinsiyet, Doğum tarihi". Cinsiyet ve doğum tarihi alanlarının altında "KBS bildirimi için zorunlu" |
+| 3 | Anna (Kadın, 12.04.1990), refakatçi Max Schmidt (pasaport C01X00T55, Erkek, 01.02.1988) ve belgesiz çocuk Mia ile giriş | **2 giriş bildirimi** (Anna, Max), oda 101, "Sırada". Mia için bildirim yok. Listede belge "C01••••47" diye maskeli. Anna'nın cinsiyeti ve doğum tarihi misafir kartına yazıldı |
+| 4 | Gönderici çalıştı (test davranışı Kabul eder) | İkisi de **Bildirildi**, referans `TKBS-…`. Mutabakat: içeride 4 kişi (Ali, Anna, Max, Mia), bildirilmiş 2; eksikler: Ali "Bildirim açılmamış", Mia "Belgesi yok (çocuk ise bildirilmez)" |
+| 5 | Klima arızası yüzünden oda 101 → 103 değişti | Anna ve Max için **2 oda değişikliği** bildirimi ("101 → 103"); girişlerine bağlı, gönderilince Bildirildi |
+| 6 | Schmidt ailesi çıkış yaptı | **2 çıkış bildirimi**, oda 103 (son bildirilen oda), girişe (son halkaya) bağlı; Bildirildi |
+| 7 | Test davranışı **Ulaşılamaz**; yeni giriş | 1. deneme başarısız: "Sırada", deneme 1, kod `T-UNAVAILABLE`, **sıradaki deneme 1 dakika sonra**. Zamanı gelmeden denenmez |
+| 8 | Aynı bildirim 7. denemede de ulaşamadı (hak bitti) | **Gönderilemedi** + zil "KBS giriş bildirimi gönderilemedi: Anna Schmidt". Servis düzelince ön büro **Tekrar gönder** → Bildirildi |
+| 9 | Test davranışı **Reddeder**; Lena Weber (pasaport C01X00T63) 102'ye girdi | 1 denemede **Gönderilemedi**, kod `T-REJECTED`; yeniden denenmez. Lena çıkış yapınca çıkış bildirimi "Sırada" bekler, gönderilmez (girişi bildirilmedi) |
+| 10 | Resepsiyon Lena'yı resmî KBS ekranından elle bildirdi; not "x" yazdı, sonra "KBS ekranından elle girildi, ref 778812" | "x" reddedilir (en az 3 karakter). İkinci not ile **Elle bildirildi**. Bekleyen çıkış bildirimi **hemen gider**. Elle bildirilene **Tekrar gönder** denirse "bu işlem yapılamaz" (409) |
+| 11 | Yanlış misafire giriş yapıldı, bildirim gönderilmeden 30 dk sonra **geri alındı** | Giriş bildirimi **İptal (gerek kalmadı)**: "Giriş geri alındı; bildirime gerek kalmadı". KBS'ye hiçbir şey gitmez |
+| 12 | Aynı misafir yeniden girdi, bildirim **gönderildi**, sonra giriş yine geri alındı | Giriş bildirimi Bildirildi kalır; yeni bir **çıkış bildirimi** "Sırada": "Giriş geri alındı (yanlış giriş): bildirilen giriş çıkışla kapatılıyor" |
+| 13 | Misafir yeniden girdi; bildirim gönderilmeden önce kartındaki cinsiyet silindi | Gönderimde **Gönderilemedi**, kod `MISSING_FIELDS`: "Eksik bilgi: Cinsiyet. Misafir kartını tamamlayıp tekrar gönderin." Kartı tamamlayıp **Tekrar gönder** |
+| 14 | Bu giriş bildirimi **2 saati geçti** ve hâlâ bildirilmedi | Kritik zil "KBS giriş bildirimi gecikti: Anna Schmidt"; **bir kez** çalar |
+| 15 | Müdür Ayarlar'da sağlayıcıyı "Emniyet Genel Müdürlüğü KBS" yapıp kaydetmeye çalıştı | Reddedilir: "… bağlantısı henüz kurulmadı (tesis yetkisi ve servis dokümanı gerekiyor); şimdilik Test ortamını seçin" |
+| 16 | Test ortamı, tesis 06-0001, **Bağlantıyı dene** | "Bağlantı başarılı — tesis 06-0001 (test ortamı; dışarı bir şey gönderilmedi)". Ayar ekranından parola hiçbir yanıtta dönmez, yalnız "kayıtlı" rozeti |
+| 17 | Kat görevlisi KBS adresini yazdı; resepsiyonist ayarı kaydetmeye çalıştı | İkisi de "Bu işlem için yetkiniz yok". Resepsiyonist bildirimleri görür ve tekrar gönderebilir |
+| 18 | TC vatandaşı Ali Kaya, KBS açıkken kimlik kartıyla girdi (cinsiyet ve doğum tarihi boş) | Giriş olur; ek alan istenmez (TC vatandaşına ek alan sorma açık). Bildirim TC kimlik no ve adla gider |
+
+### Dikkat edilecekler
+
+- **Test ortamı resmî bildirim değildir.** Gerçek bağlantı gelene kadar her misafiri resmî KBS ekranından elle bildirin ve sistemde **Elle bildirildi** işaretleyin. Ekip "Bildirildi" yazısını resmî bildirim sanmasın; test ortamı uyarısı ekranın üstünde bu yüzden durur.
+- **KVKK:** belge numarası listelerde, ayrıntıda, zil metninde ve izde **maskelidir**; tam numara yalnız misafir kartında yetkiye göre görünür ve gönderim anında karttan okunur. **Parola hiçbir ekranda ve hiçbir yanıtta görünmez**; yalnız "kayıtlı" bilgisi döner. Notlara kimlik numarası, parola yazmayın.
+- **Eksik bilgiyi kartta düzeltin, bildirimi değil.** Bildirim kimliği gönderim anında karttan okur. Kartı tamamlayıp **Tekrar gönder** yeterlidir.
+- **Elle bildirildi yalnız gerçekten bildirdiyseniz.** İşaret, mutabakatta kişiyi "bildirilmiş" sayar ve bağlı çıkışı serbest bırakır.
+- **Yanlış girişi ön bürodan geri alın.** KBS kaydı kendiliğinden düzelir (iptal ya da çıkışla kapatma). Resmî ekranda elle bildirdiyseniz, o kaydı resmî ekranda da düzeltin.
+- **Çocukların bildirimi** otelinizin bağlı olduğu birimin kuralına göredir. Belgesiz çocuk bildirilmez; bildirilmesi gerekiyorsa belgesini girin.
+- **KBS aktörü kapatılırsa** iş **KBS** manuel görevine düşer (`kbs.send` sahibi görür): "Giren misafirin KBS giriş bildirimi elle yapılacak" gibi. Görev, resmî ekrandan elle bildirip notla tamamlanır. Aktör yeniden açılınca aradaki olaylar için bildirim açılmaz; o kişiler Mutabakat'ta "Bildirim açılmamış" görünür.
+- **Gecikme zilini susturmayın.** 2 saatlik zil, yasal süreyi kaçırmamak için vardır.
+
 ## Sık sorulanlar
 
 **"Yer yok" diyor ama oda planında boş oda görüyorum.**
@@ -970,6 +1187,9 @@ Evet; pencere "oda kirli" uyarısı verir, onaylayarak devam edersiniz. Arızal�
 **Yanlış misafire giriş yaptım.**
 Aynı gün içinde Gelecekler → "Bugün girenler" görünümünden sebep yazarak geri alın. Folyoda resepsiyonda alınan ödeme varsa önce o iptal edilmelidir (onaylı). Gün kapandıysa geri alma yoktur; rezervasyon düzenlemesiyle düzeltin.
 
+**Giriş "KBS bildirimi için eksik bilgi" diyor.**
+KBS açık ve ayar bu kişi için cinsiyet / doğum tarihi gibi alanları istiyor. Mesajda adı geçen kişinin KBS alanlarını doldurun (alanların altında "KBS bildirimi için zorunlu" yazar) ve yeniden **Giriş yap**'a basın. Belgesiz çocuk için alan istenmez. Ayrıntı: "KBS kimlik bildirimi" bölümü.
+
 **Online check-in onaylandı; misafir yine resepsiyona gelecek mi?**
 Evet. Onay "bilgiler ve belge görüldü" demektir; fiziksel giriş (anahtar, teminat) resepsiyonda yapılır — ama form dolu açılır, saniyeler sürer.
 
@@ -989,6 +1209,7 @@ Karttaki telefon ülke kodsuz ve otelin kodu farklı ülkeye işaret ediyorsa e�
 - **Gün kapanmadan "yarın" diye düşünmek.** Gece 01:00'de iş günü hâlâ "bugün"dür; gelecekler listesi gün kapanışından sonra değişir.
 - **Teminat referansına kart numarası yazmak.** Reddedilir (PCI). Slip / provizyon numarası yazın.
 - **Kirli odaya misafir vermeyi engel sanmak.** Uyarıdır, engel değildir; onaylayıp girebilirsiniz. Engel olan: arızalı oda ve içinde misafir olan oda.
+- **Test ortamındaki "Bildirildi"yi resmî KBS bildirimi sanmak.** Gerçek KBS bağlantısı henüz yoktur; misafiri resmî KBS ekranından elle bildirip **Elle bildirildi** işaretleyin.
 - **Online check-in'i onaylamayı giriş sanmak.** Onay belge kontrolüdür; girişi Gelecekler'den ya da pencerenin "Girişi yap" düğmesiyle yapın.
 - **Mükerrer misafir kartlarını bırakmak.** WhatsApp eşleşmesi ve toplam harcama bozulur. Aynı kişinin iki kartını birleştirin (geri alınamaz; önce kalacak kartı doğru seçin).
 - **Grup rooming list'inde oda tipi kodunu yanlış yazmak.** Hatalı satırlar yüklenmez, numarasıyla listelenir; şablondaki kodları Ayarlar → Oda tipleri'nden alın.

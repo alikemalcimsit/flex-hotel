@@ -41,10 +41,10 @@ describe('manuel görev kimi ilgilendirir', () => {
     assert.equal(scope.others, false);
     // Kanaldan gelip işlenemeyen rezervasyon (modül 33) da resepsiyonun işi.
     // Teknik servis (modül 14'ün "Sorun var" çıkışı) arıza kaydını açabilen
-    // `rooms.operate` yetkisine bağlı; o yetki resepsiyonda da var.
+    // `rooms.operate` yetkisine bağlı; o yetki resepsiyonda da var. KBS bildirimi (modül 58) de resepsiyonun.
     assert.deepEqual(
       [...scope.modules].sort(),
-      ['Folyo', 'Kanal rezervasyonu', 'Misafir mesajları', 'Oda atama', 'Rezervasyon', 'Teknik servis'],
+      ['Folyo', 'KBS', 'Kanal rezervasyonu', 'Misafir mesajları', 'Oda atama', 'Rezervasyon', 'Teknik servis'],
     );
   });
 

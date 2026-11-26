@@ -43,9 +43,11 @@ export function identityBody(form) {
  *   prefix: string,
  *   disabled?: boolean,
  *   optional?: boolean,
- * }} props `errors` anahtarları `${prefix}.idNumber` biçiminde (şema yolları)
+ *   birthDateRequired?: boolean,
+ * }} props `errors` anahtarları `${prefix}.idNumber` biçiminde (şema yolları); `birthDateRequired`: KBS ayarı doğum
+ *   tarihini zorunlu kılıyor (modül 58)
  */
-export function IdentityFields({ value, onChange, errors = {}, prefix, disabled = false, optional = false }) {
+export function IdentityFields({ value, onChange, errors = {}, prefix, disabled = false, optional = false, birthDateRequired = false }) {
   const set = (field) => (event) => {
     const next = { ...value, [field]: event.target.value };
     // Uyruk seçilince belge türü boşsa tahmin edilir (değiştirilebilir).
@@ -87,7 +89,7 @@ export function IdentityFields({ value, onChange, errors = {}, prefix, disabled 
         disabled={disabled}
       />
       <Input
-        label="Doğum tarihi (isteğe bağlı)"
+        label={birthDateRequired ? 'Doğum tarihi *' : 'Doğum tarihi (isteğe bağlı)'}
         type="date"
         value={value.birthDate}
         onChange={set('birthDate')}

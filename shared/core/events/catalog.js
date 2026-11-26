@@ -545,6 +545,7 @@ export const EVENT_CATALOG = Object.freeze({
       'STOCK',
       'HR',
       'LOYALTY',
+      'KBS',
     ]),
     userId: z.string().uuid().nullable(),
     permission: z.string().nullable(),
@@ -1069,6 +1070,16 @@ export const EVENT_CATALOG = Object.freeze({
   'loyalty.tier.changed': hotelScoped.extend({ accountId: z.string().uuid(), guestId: z.string().uuid(), from: z.string().nullable(), to: z.string() }),
   /** Ekran olayı: üyelik açıldı / kapandı ya da program ayarı değişti. */
   'loyalty.changed': hotelScoped.extend({ area: z.enum(['ACCOUNT', 'SETTINGS']) }),
+
+  /* ── KBS kimlik bildirimi (modül 58) ──
+     Kuyruğa giren, gönderilen, hata alan, tekrar gönderilen ya da elle bildirildi işaretlenen her bildirim. Kimlik verisi taşımaz. */
+  'kbs.notification.changed': hotelScoped.extend({
+    notificationId: z.string().uuid(),
+    reservationId: z.string().uuid(),
+    kind: z.enum(['CHECK_IN', 'CHECK_OUT', 'ROOM_CHANGE']),
+    state: z.enum(['PENDING', 'SENDING', 'SENT', 'FAILED', 'CANCELLED', 'MANUAL']),
+  }),
+  'kbs.settings.changed': hotelScoped.extend({ isEnabled: z.boolean(), provider: z.string() }),
 
   /* ── Temassız uygulamalar (modül 53) ── */
   /** Online check-in gönderildi / onaylandı / düzeltme istendi / giriş yapıldı / belgeleri silindi. Kişisel veri taşımaz. */
@@ -1645,6 +1656,8 @@ export const HR_EVENTS = Object.freeze(['hr.leave.changed', 'hr.changed', 'emplo
 
 /** Sadakat (modül 56): üyeler, puan, seviye, ayar ekranları (`loyalty.changed` kanalı). */
 export const LOYALTY_EVENTS = Object.freeze(['loyalty.points.changed', 'loyalty.tier.changed', 'loyalty.changed']);
+/** KBS (modül 58): bildirim listesi, mutabakat, ayar (`kbs.changed` kanalı). */
+export const KBS_EVENTS = Object.freeze(['kbs.notification.changed', 'kbs.settings.changed']);
 
 /** Misafir portalı ve online check-in (modül 53): ekranlar bunlarla tazelenir (`guest-portal.changed` kanalı). */
 export const GUEST_PORTAL_EVENTS = Object.freeze(['online_checkin.changed', 'guest_portal.link.changed', 'guest_portal.settings.changed']);

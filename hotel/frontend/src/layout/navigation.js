@@ -73,6 +73,8 @@ export const NAV_SECTIONS = Object.freeze([
       { label: 'Misafirler', to: '/misafirler', icon: 'users', permission: PERMISSIONS.GUESTS_VIEW },
       // Sadakat programı (modül 56): üyeler, puan, seviye, ayarlar.
       { label: 'Sadakat', to: '/sadakat', icon: 'star', permission: PERMISSIONS.LOYALTY_VIEW },
+      // KBS kimlik bildirimi (modül 58): Emniyet / Jandarma bildirim kuyruğu, mutabakat, ayarlar.
+      { label: 'KBS', to: '/kbs', icon: 'send', permission: PERMISSIONS.KBS_VIEW },
       // Satış CRM (modül 36): fırsat panosu, arama günlüğü, teklifler.
       { label: 'Satış CRM', to: '/satis', icon: 'phone', permission: PERMISSIONS.SALES_VIEW },
       // Konaklamaların hesabı (modül 15): kat hizmetleri görmez.

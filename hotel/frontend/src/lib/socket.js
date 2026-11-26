@@ -97,6 +97,8 @@ export const PAYROLL_CHANNEL = 'payroll.changed';
 export const HR_CHANNEL = 'hr.changed';
 /** Sadakat (modül 56): puan hareketi, seviye, üyelik, ayar. */
 export const LOYALTY_CHANNEL = 'loyalty.changed';
+/** KBS (modül 58): kimlik bildirimi kuyruğu, mutabakat, ayar. */
+export const KBS_CHANNEL = 'kbs.changed';
 /** Misafir portalı ve online check-in (modül 53): gönderim, onay, düzeltme, giriş, bağlantı, ayar. */
 export const GUEST_PORTAL_CHANNEL = 'guest-portal.changed';
 /** Anket ve memnuniyet (modül 55): cevap, takip, AI etiketi / özeti, tasarım, ayar. */

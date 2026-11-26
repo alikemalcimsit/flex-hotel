@@ -34,6 +34,7 @@ Okumaya başlamadan iki hatırlatma:
 | O — Personel izin istiyor | Personel, İK, müdür | İzinlerim (`/ik/benim`), İK → İzinler, İzin bakiyeleri, Vardiya, Puantaj (Bordroya aktar), Onaylar, Personel kartı, Bordro → Puantaj ve kalemler | Aktör yok (İK servisi ve onay kararı dinleyicisi) |
 | P — Gece vardiyası ve mesai | İK, departman şefi | İK → Vardiya (çakışma, dinlenme ve haftalık saat uyarıları), Puantaj (gece çıkışı, mesai, Bordroya aktar), İzinlerim, Bordro | Aktör yok |
 | Q — Sadık misafir puanını kullanıyor | Resepsiyon, müdür | Sadakat (Ayarlar, Üyeler, hesap sayfası), Misafir kartı (sadakat kutusu), Rezervasyon ayrıntısı (Sadakat kartı → Puan kullan), Folyolar (indirim, kalem iptali), Onaylar, Gün kapanış, Genel muhasebe, Misafir portalı | Sadakat aktörü, muhasebe aktörü |
+| R — KBS hatası | Resepsiyon, müdür | KBS (Ayarlar, Bildirimler, bildirim ayrıntısı, Mutabakat), Check-in penceresi (KBS alanları), Misafir kartı, Rezervasyon ayrıntısı (KBS kartı), zil, Görevler | KBS aktörü, KBS göndericisi (zamanlanmış iş) |
 
 ## Senaryo A — Bir misafirin yolculuğu
 
@@ -670,6 +671,39 @@ Telefonla gelen rezervasyonda 1–3. adımların yerine resepsiyon **Rezervasyon
 | Kalem yazılırken folyo başka bir pencerede kapandı | Puan düşüldü ama kalem yazılamadı → puan kendiliğinden iade ("Folyoya yazılamadı: …") | Bir şey yapmaya gerek yok; açık folyo varsa yeniden deneyin |
 | İki resepsiyonist aynı anda puan kullandırdı | Hesap kilitlenir; ikincisi güncel bakiyeyle denetlenir, yetmezse "Bakiye yetersiz" | İkinci isteği bakiyeye göre düzeltin |
 
+## Senaryo R — KBS hatası: servis ulaşılamaz, bildirim gönderilemedi
+
+**Hikâye:** Deniz Otel'de müdür Zeynep (`kbs.manage`) KBS'yi açtı. Gerçek Emniyet KBS'si henüz bağlı olmadığı için sağlayıcı **Test ortamı (dışarı göndermez)**. Tesis kodu 06-0001, zorunlu alanlar varsayılan (cinsiyet, doğum tarihi; TC vatandaşına ek alan sorulmaz). Ekip hata akışını görsün diye Zeynep test davranışını bir günlüğüne **Ulaşılamaz** yapıyor. Resepsiyonda Elif (`kbs.view` + `kbs.send`) çalışıyor. Senaryo **giriş → bildirim sıraya girer → servis ulaşılamaz → yeniden denemeler → gecikme zili → elle bildirme ve tekrar gönderme → çıkışın girişi beklemesi** zincirini anlatır. Unutmayın: test ortamında "Bildirildi" resmî bildirim değildir; gerçek bağlantı gelene kadar her misafir resmî KBS ekranından elle de bildirilir.
+
+| Adım | Ekranda ne yapılır | Arka planda ne olur | Nerede görünür |
+| --- | --- | --- | --- |
+| 1 | (Bir kez) Zeynep **KBS → Ayarlar** (`/kbs/ayarlar`): **KBS açık**, sağlayıcı Test ortamı, tesis kodu, kullanıcı, parola; **Kaydet**. **Bağlantıyı dene**. | Ayar kaydedilir, parola şifreli saklanır, `kbs.settings.changed` yayınlanır. Deneme bildirim göndermez. | "Bağlantı başarılı — tesis 06-0001 (test ortamı; dışarı bir şey gönderilmedi)"; parola alanında yalnız "kayıtlı" rozeti. |
+| 2 | Zeynep test davranışını **Ulaşılamaz (geçici hata, yeniden denenir)** yapıp kaydeder. **Bağlantıyı dene**. | — | "Servise ulaşılamadı (test ortamı: ulaşılamaz davranışı seçili)". |
+| 3 | 15:00 Anna Schmidt (pasaport, DE) 101'e geliyor. Elif check-in penceresinde cinsiyeti boş bırakıp **Giriş yap**'a basar. | Sunucu girişi yapmaz. | "KBS bildirimi için eksik bilgi — Anna Schmidt: Cinsiyet"; alanın altında "KBS bildirimi için zorunlu". |
+| 4 | Elif cinsiyeti (Kadın) seçer, **Giriş yap**. | `guest.checked_in` → **KBS aktörü** Anna için **Giriş** bildirimi açar ("Sırada"). Cinsiyet misafir kartına yazılır. Gönderici hemen dener: test ortamı `T-UNAVAILABLE` döner → bildirim "Sırada", deneme 1, **sıradaki deneme 1 dakika sonra**. | Rezervasyon ayrıntısında **KBS** kartı: Giriş · Sırada. **KBS → Bildirimler** (`/kbs/bildirimler`): son mesaj "KBS servisine ulaşılamadı (test ortamı: geçici hata)". |
+| 5 | Elif hiçbir şey yapmaz. | Gönderici 15:01, 15:06, 15:21, 16:21… artan aralıklarla (1, 5, 15, 60 dk) yeniden dener; her deneme izde ayrı satır. | Bildirim ayrıntısı (`/kbs/bildirimler/:notificationId`): deneme sayısı her turda artar, sıradaki deneme saati yazar; iz tablosunda her başarısız deneme ayrı satır. |
+| 6 | 17:00'yi geçer, bildirim hâlâ bildirilmedi. | Saatlik **KBS gecikme zili** işi, 2 saati geçen giriş bildirimi için **kritik** zil çalar (bir kez). | Elif'in ve müdürün zilinde: "KBS giriş bildirimi gecikti: Anna Schmidt — Oda 101 misafirinin girişi 2 saattir bildirilemedi (…). Yasal süre geçmeden KBS ekranından elle bildirin." |
+| 7 | Elif zile tıklar, ayrıntı açılır. Anna'yı resmî KBS ekranından elle bildirir. FlexHotel'de **Elle bildirildi**'ye basar, not: "KBS ekranından elle girildi, ref 778812". | Bildirim **Elle bildirildi** olur; kim ve not kaydedilir, izde "Elle bildirildi: …". `kbs.notification.changed` yayınlanır. | Bildirimler listesinde durum rozeti "Elle bildirildi"; **Mutabakat** (`/kbs/mutabakat`): Anna artık "bildirilmiş". |
+| 8 | Aynı akşam 20:00'de 102'ye Lena Weber giriyor (bilgileri tam). | Giriş bildirimi açılır; servis hâlâ ulaşılamaz → yeniden denemeler başlar (1, 5, 15, 60, 180, 360 dk). 22:00'den sonra gecikme zili çalar. (Gerçekte gece görevlisi bu zilde elle bildirirdi; burada hak bitince ne olduğunu göstermek için beklendi.) | Sabaha karşı 7. deneme de olmayınca durum **Gönderilemedi**; zilde "KBS giriş bildirimi gönderilemedi: Lena Weber … KBS ekranından tekrar gönderin ya da elle bildirip işaretleyin." |
+| 9 | Sabah Zeynep test davranışını **Kabul eder**'e geri alır (servis "düzeldi"). Elif Lena'nın bildiriminde **Tekrar gönder**'e basar. | Bildirim deneme sayısı sıfırlanarak "Sırada"ya döner, gönderici hemen gönderir. Kimlik misafir kartının güncel halinden okunur. | Durum **Bildirildi**, referans `TKBS-…`; izde "Personel tekrar gönderdi" ve kabul satırı. |
+| 10 | Öğlen Anna çıkış yapar. | KBS aktörü Anna için **Çıkış** bildirimi açar; girişine bağlıdır. Giriş "Elle bildirildi" olduğu için çıkış gönderilebilir; gönderici gönderir. | Bildirimler: Çıkış · Bildirildi. Rezervasyon ayrıntısındaki KBS kartında iki satır. |
+| 11 | Vardiya devrinde Elif **Mutabakat**'a bakar. | Özet: içerideki kişi = bildirilmiş. | Eksikler tablosu boş. |
+
+### Ters giderse (Senaryo R)
+
+| Durum | Ne olur | Ne yapılır |
+| --- | --- | --- |
+| Test davranışı **Reddeder** iken giriş yapıldı | Tek denemede **Gönderilemedi**, kod `T-REJECTED` "Kimlik bilgisi doğrulanamadı …"; yeniden denenmez | Bilgiyi kontrol edip **Tekrar gönder** ya da resmî ekrandan elle bildirip **Elle bildirildi** |
+| Giriş "Gönderilemedi"de dururken misafir çıktı | Çıkış bildirimi "Sırada" bekler; girişi bildirilmeden gönderilmez | Önce girişi çözün (tekrar gönder ya da elle bildirildi); çıkış kendiliğinden gider |
+| **Elle bildirildi** notuna "x" yazıldı | "Nasıl bildirildiğini yazın (ör. KBS ekranından elle girildi)" — en az 3 karakter | Nasıl bildirdiğinizi yazın |
+| Elle bildirilen bildirimde **Tekrar gönder** denendi | Reddedilir: bu durumda bu işlem yapılamaz | Gerek yok; bildirim tamamlanmıştır |
+| Gönderilmeden önce misafir kartındaki cinsiyet silindi | Gönderimde **Gönderilemedi**, `MISSING_FIELDS`: "Eksik bilgi: Cinsiyet. Misafir kartını tamamlayıp tekrar gönderin." | Ayrıntıdaki **Misafir kartını aç** → alanı doldurun → **Tekrar gönder** |
+| Yanlış misafire giriş yapıldı, bildirim henüz gitmedi | Giriş geri alınınca bildirim **İptal (gerek kalmadı)** | Bir şey yapmaya gerek yok |
+| Bildirim gittikten sonra giriş geri alındı | Giriş çıkış bildirimiyle kapatılır: "Giriş geri alındı (yanlış giriş): bildirilen giriş çıkışla kapatılıyor" | Resmî ekranda elle bildirdiyseniz orada da düzeltin |
+| KBS aktörü kapalıyken giriş yapıldı | Bildirim açılmaz; Görevler'de "Giren misafirin KBS giriş bildirimi elle yapılacak" (`KBS` modülü) | Resmî ekrandan elle bildirin, görevi notla tamamlayın. Mutabakat'ta kişi "Bildirim açılmamış" görünür |
+| Sunucu gönderim ortasında yeniden başladı | Bildirim "Gönderiliyor"da kalır | 5 dakika içinde "Sırada"ya kendiliğinden döner (KBS takılı kurtarma) |
+| KBS ayarı kapatıldı | Tekrar gönder "KBS kapalı; önce ayarlardan açın"; yeni bildirim açılmaz | Ayarı açın; sıradakiler kaldığı yerden gider |
+
 ## Senaryolarda geçen olaylar, aktörler, onaylar ve görevler
 
 Bu bölüm senaryoları başkasına anlatırken "bunu kim yapıyor?" sorusuna hızlı cevap için bir başvuru tablosudur. Olay adları Aktivite → Olaylar ekranında Türkçe karşılıklarıyla görünür; buradaki teknik adlar yalnız eşleştirmek içindir.
@@ -680,9 +714,10 @@ Bu bölüm senaryoları başkasına anlatırken "bunu kim yapıyor?" sorusuna h�
 | --- | --- | --- | --- |
 | `reservation.created` | Rezervasyon servisi (widget, resepsiyon, kanal aktörü, concierge) | Oda aktörü → oda atar; bildirim aktörü → onay bildirimi (bekleyende onaylanınca); kanal aktörü → envanter farkı | A, D, K |
 | `reservation.confirmed` / `cancelled` / `no_show` / `reinstated` | Rezervasyon servisi, gün kapanışı | Folyo aktörü → iptal / gelmedi ücreti (geri alınırsa düşer); kanal aktörü → envanter; bekleme listesi taraması | A, C, D |
-| `guest.checked_in` | Giriş servisi | Oda aktörü → dolu; folyo aktörü → folyo + erken giriş ücreti + teminat ödemesi; bildirim → hoş geldiniz; online check-in → "giriş yapıldı" | A, G, K |
-| `guest.checked_out` | Çıkış servisi | Oda aktörü → boş + kirli; kat hizmetleri aktörü → çıkış temizliği; folyo aktörü → kalan gece / geç çıkış, kapanış; bildirim → teşekkür; anket işi → çıkış sonrası anket | A, I, K |
-| `guest.check_in_reverted` / `check_out_reverted` | Geri alma | Oda aktörü doluluğu düzeltir; folyo aktörü ücreti / teminatı ters kayıtla düşer, folyoyu yeniden açar | A |
+| `guest.checked_in` | Giriş servisi | Oda aktörü → dolu; folyo aktörü → folyo + erken giriş ücreti + teminat ödemesi; bildirim → hoş geldiniz; online check-in → "giriş yapıldı"; **KBS aktörü → kişi başına giriş bildirimi** (KBS açıksa) | A, G, K, R |
+| `guest.checked_out` | Çıkış servisi | Oda aktörü → boş + kirli; kat hizmetleri aktörü → çıkış temizliği; folyo aktörü → kalan gece / geç çıkış, kapanış; bildirim → teşekkür; anket işi → çıkış sonrası anket; KBS aktörü → çıkış bildirimi | A, I, K, R |
+| `guest.check_in_reverted` / `check_out_reverted` | Geri alma | Oda aktörü doluluğu düzeltir; folyo aktörü ücreti / teminatı ters kayıtla düşer, folyoyu yeniden açar; KBS aktörü → gönderilmemiş bildirimi iptal eder, gönderilmişi çıkışla kapatır / yeniden giriş bildirir | A, R |
+| `kbs.notification.changed` / `kbs.settings.changed` | KBS aktörü, KBS göndericisi, KBS ekranları (tekrar gönder, elle bildirildi, ayar) | KBS ekranları, mutabakat ve rezervasyondaki KBS kartı tazelenir (`kbs.changed` kanalı); gönderilemeyince ve gecikince zil (`KBS`) | R |
 | `folio.room_charges.due` | Gün dönüşü zamanlayıcısı | Folyo aktörü → eksik geceler (100'lük parçalar) | A, C |
 | `night.audit.started` / `night.audit.closed` | Gün kapanışı | Folyo aktörü → ön basım; **muhasebe aktörü → günlük gelir fişi** (`businessDay` günü; genel muhasebe); (2.0: gece müdürü, kârlılık, dış muhasebe) | C, M |
 | `fnb.order.placed` | POS (adisyon turu, oda servisi, paket) | Mutfak ekranı panosu | B |
@@ -710,7 +745,7 @@ Bu bölüm senaryoları başkasına anlatırken "bunu kim yapıyor?" sorusuna h�
 | `rate.changed` | Fiyat planı, sezon, onaylı fiyat önerisi, Excel fiyat yüklemesi | Kanal aktörü → fiyat farkı; fiyat önbelleği tazelenir | F |
 | `agency.allotment.changed` | Kota tanımı | Kanal aktörü → OTA'ya giden boş sayıdan kota düşülür; bekleme listesi taraması | K |
 | `channel.booking.received` | Channex revizyonu / iCal | Kanal aktörü → rezervasyon açar / günceller / iptal eder | D |
-| `room.assigned` / `room.blocked` / `room.unblocked` | Oda aktörü, blok servisi | Bildirim (oda bilgisi, giriş günü); kat hizmetleri aktörü (blok bitince derin temizlik); kanal aktörü (envanter) | A, E |
+| `room.assigned` / `room.blocked` / `room.unblocked` | Oda aktörü, blok servisi | Bildirim (oda bilgisi, giriş günü); kat hizmetleri aktörü (blok bitince derin temizlik); kanal aktörü (envanter); KBS aktörü (içerideki misafirin odası değişince oda değişikliği bildirimi) | A, E, R |
 | `housekeeping.issue.reported` | Kat görevlisi "Sorun var" | Teknik servis dinleyicisi → arıza bileti | E |
 | `housekeeping.task.completed` / `room.inspected` | Kat görevi | Kat hizmetleri aktörü → oda temiz / kontrol edildi; isteğe bağlı görev isteği kapatır | A, I |
 | `maintenance.ticket.created` / `assigned` / `resolved` | Teknik servis | Zil (atanan); isteğe bağlı bilet isteği işlemde / tamamlandı | E |
@@ -753,6 +788,7 @@ Bu bölüm senaryoları başkasına anlatırken "bunu kim yapıyor?" sorusuna h�
 | Mesajlar | Cevapsız konuşma (AI kapalı / bütçe) | Mesaj yazma yetkisi | Konuşmayı personel yürütür |
 | Rapor talebi | "Rapor talebi: geçen ayın haftalık doluluğu" | `reports.view` | Raporu elle hazırlayıp kişiye iletme |
 | Sadakat | "Kapanan folyonun sadakat puanı yazılacak"; "Yeniden açılan folyonun sadakat puanı geri alınacak"; "İptal edilen kalem puan indirimiyse puan iade edilecek"; "Spa randevusunun sadakat puanı yazılacak" | `loyalty.manage` | Sadakat → Üyeler → hesap → **Düzeltme** (gerekçeli ± puan) |
+| KBS | "Giren misafirin KBS giriş bildirimi elle yapılacak"; "Çıkan misafirin KBS çıkış bildirimi elle yapılacak"; "Geri alınan girişin KBS kaydı elle düzeltilecek"; "Geri alınan çıkışın KBS kaydı elle düzeltilecek (yeniden giriş)"; "Oda değiştiren misafirin KBS oda değişikliği elle bildirilecek" | `kbs.send` | Resmî KBS ekranından elle bildir, görevi notla tamamla |
 | Onay kuyruğu | Aktörü kayıttan kalkmış onaylanan iş | Ayar yöneticisi | İşi elle yap |
 
 ## Senaryoların ortak dersleri
@@ -763,4 +799,4 @@ Bu bölüm senaryoları başkasına anlatırken "bunu kim yapıyor?" sorusuna h�
 4. **Aktör kapalıysa iş personele düşer.** Görevler ekranı boş değilse birisi bir şeyi elle yapmalı demektir; aktörü açmak eski görevleri kendiliğinden kapatmaz.
 5. **Sürüm damgası veriyi korur.** İki kişi aynı kaydı değiştirirse ikincisi "başkası değiştirdi, yenileyin" görür. Hata değil, güvenlik.
 6. **İş günü ≠ takvim günü.** Oda ücreti, kasa ve raporlar iş gününe; fatura tarihi ve anket saati takvime bağlıdır.
-7. **Dürüst sınırlar:** e-posta geçidi gerçek gönderici değil (SMS kurulabilir), e-belge gerçek entegratöre bağlı değil, e-Defter dosyası ve dış muhasebe aktarımı yok (yevmiye ve mizan ekranda var), online kart ödemesi yok, KBS bildirimi yok. Bunlar yol haritasındadır ve ekranlar bunu söyler; sahte "gönderildi" yazan hiçbir şey yoktur.
+7. **Dürüst sınırlar:** e-posta geçidi gerçek gönderici değil (SMS kurulabilir), e-belge gerçek entegratöre bağlı değil, e-Defter dosyası ve dış muhasebe aktarımı yok (yevmiye ve mizan ekranda var), online kart ödemesi yok, KBS bildirimi gerçek Emniyet / Jandarma servisine bağlı değil (kuyruk, mutabakat ve iz çalışır; yalnız test ortamı, otel resmî ekrandan elle bildirip işaretler). Bunlar yol haritasındadır ve ekranlar bunu söyler; sahte "gönderildi" yazan hiçbir şey yoktur.

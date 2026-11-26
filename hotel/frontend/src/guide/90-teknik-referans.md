@@ -11,7 +11,7 @@ Sol menüdeki her sayfa, yolu ve görmek için gereken izin. Bir sayfa menüde y
 | Sayfa | Yol | Kim görür |
 | --- | --- | --- |
 | **Panel** | `/` | herkes (giriş yapmış) |
-| **Görevler** | `/gorevler` | şunlardan biri: Oda işlemleri (atama, durum); Bildirim ayarlarını yönet; Rezervasyonları yönet; Onayla / reddet; Mesaj yaz / yönet; Folyoya harcama işle, aktar, böl, birleştir; Tahsilat / ödeme / virman fişi gir, çek / senet işlemleri, cari kartı aç ve düzenle; Temizlik görevini başlat / bitir, sorun bildir; Gelir raporlarını görüntüle (doluluk, ADR, RevPAR); Depo tanımları, minimum stok seviyesi, elle hareket (çıkış / fire / transfer), sayım, satış noktası → depo eşlemesi; Sadakat programı ayarları ve seviyeler, elle puan düzeltmesi; Ayarları yönet |
+| **Görevler** | `/gorevler` | şunlardan biri: Oda işlemleri (atama, durum); Bildirim ayarlarını yönet; Rezervasyonları yönet; Onayla / reddet; Mesaj yaz / yönet; Folyoya harcama işle, aktar, böl, birleştir; Tahsilat / ödeme / virman fişi gir, çek / senet işlemleri, cari kartı aç ve düzenle; Temizlik görevini başlat / bitir, sorun bildir; Gelir raporlarını görüntüle (doluluk, ADR, RevPAR); Depo tanımları, minimum stok seviyesi, elle hareket (çıkış / fire / transfer), sayım, satış noktası → depo eşlemesi; Sadakat programı ayarları ve seviyeler, elle puan düzeltmesi; Hatalı KBS bildirimini tekrar gönder, elle bildirildi olarak işaretle; Ayarları yönet |
 | **Kılavuz** | `/kilavuz` | herkes (giriş yapmış) |
 
 ### Ön büro
@@ -31,6 +31,7 @@ Sol menüdeki her sayfa, yolu ve görmek için gereken izin. Bir sayfa menüde y
 | **Oda planı** | `/oda-plani` | herkes (giriş yapmış) |
 | **Misafirler** | `/misafirler` | Misafir kartlarını görüntüle (CRM) |
 | **Sadakat** | `/sadakat` | Sadakat üyelerini, puan bakiyesini ve hareketlerini görüntüle |
+| **KBS** | `/kbs` | KBS kimlik bildirimlerini ve mutabakatı görüntüle |
 | **Satış CRM** | `/satis` | Satış fırsatlarını, arama kayıtlarını ve teklifleri görüntüle |
 | **Folyolar** | `/folyolar` | Folyoları görüntüle |
 | **Kasa** | `/kasa` | şunlardan biri: Kasayı görüntüle; Günlük döviz kurunu gir |
@@ -165,7 +166,7 @@ Sol menüdeki her sayfa, yolu ve görmek için gereken izin. Bir sayfa menüde y
 
 ## İzinler ve roller
 
-Sistemde 124 izin var; roller bu izinlerin varsayılan paketleridir. Yönetici (Ayarlar → Kullanıcılar / roller) bir kullanıcıya izin ekleyip çıkarabilir. Aşağıdaki tablo **varsayılan** dağılımdır.
+Sistemde 127 izin var; roller bu izinlerin varsayılan paketleridir. Yönetici (Ayarlar → Kullanıcılar / roller) bir kullanıcıya izin ekleyip çıkarabilir. Aşağıdaki tablo **varsayılan** dağılımdır.
 
 ### Ayarlar
 
@@ -446,6 +447,14 @@ Sistemde 124 izin var; roller bu izinlerin varsayılan paketleridir. Yönetici (
 | `loyalty.redeem` | Folyoda puan kullan (indirim), misafiri sadakat programına üye yap | ✓ | ✓ | ✓ |  |  |  |
 | `loyalty.manage` | Sadakat programı ayarları ve seviyeler, elle puan düzeltmesi | ✓ | ✓ |  |  |  |  |
 
+### KBS kimlik bildirimi
+
+| İzin | Ne yaptırır | Yönetici | Müdür | Ön büro | Kat hizmetleri | Muhasebe | Yiyecek & İçecek |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `kbs.view` | KBS kimlik bildirimlerini ve mutabakatı görüntüle | ✓ | ✓ | ✓ |  |  |  |
+| `kbs.send` | Hatalı KBS bildirimini tekrar gönder, elle bildirildi olarak işaretle | ✓ | ✓ | ✓ |  |  |  |
+| `kbs.manage` | KBS ayarları (tesis kodu, kullanıcı, parola, zorunlu alanlar) ve bağlantı denemesi | ✓ | ✓ |  |  |  |  |
+
 ### Misafir portalı ve online check-in
 
 | İzin | Ne yaptırır | Yönetici | Müdür | Ön büro | Kat hizmetleri | Muhasebe | Yiyecek & İçecek |
@@ -554,6 +563,16 @@ Kapanan adisyonun ürünlerini (satılan, ikram, hazırlanıp iptal edilen) reç
 | Dinlediği olaylar | Yayınladığı olaylar | Onaya götürdüğü işler |
 | --- | --- | --- |
 | `fnb.order.paid`, `stock.changed` | `stock.changed`, `purchase.request.changed`, `staff.alert.raised` | — |
+
+### KBS aktörü (`kbs-worker`)
+
+**Tür:** worker · **Paket:** `@hotelos/kbs-worker` · **Kapalıyken iş düşer:** KBS · **Tekrar deneme:** 3 kez (400 ms artan bekleme)
+
+Misafir girince belgesi girilmiş her kişi (rezervasyon sahibi ve refakatçiler) için KBS giriş bildirimini sıraya alır; çıkışta çıkış, içerideyken oda değişince oda değişikliği bildirimi açar. Giriş geri alınırsa gönderilmemiş bildirimi iptal eder, gönderilmişse çıkışla kapatır; çıkış geri alınırsa yeniden giriş bildirir. Zorunlu bilgisi eksik kişide ön büroya zil çalar. Kapalıyken iş KBS yetkilisine manuel görev olarak düşer.
+
+| Dinlediği olaylar | Yayınladığı olaylar | Onaya götürdüğü işler |
+| --- | --- | --- |
+| `guest.checked_in`, `guest.checked_out`, `guest.check_in_reverted`, `guest.check_out_reverted`, `room.assigned` | `kbs.notification.changed`, `staff.alert.raised` | — |
 
 ### Sadakat aktörü (`loyalty-worker`)
 
@@ -677,7 +696,7 @@ Misafire yazılan cevapları WhatsApp Cloud API ile gönderir, teslim durumunu m
 
 ## Olay kataloğu
 
-Sistem 206 tür olay yayınlar. Olay = "şu oldu" kaydı; aktörler ve ekranlar bunları dinler. Açıklamalar kataloğun kendi yorumlarından alınmıştır (boşsa olayın adı yeterince anlatıyor demektir).
+Sistem 208 tür olay yayınlar. Olay = "şu oldu" kaydı; aktörler ve ekranlar bunları dinler. Açıklamalar kataloğun kendi yorumlarından alınmıştır (boşsa olayın adı yeterince anlatıyor demektir).
 
 ### accounting.*
 
@@ -887,6 +906,13 @@ Sistem 206 tür olay yayınlar. Olay = "şu oldu" kaydı; aktörler ve ekranlar 
 | `invoice.cancelled` | İş olayı: fatura iptal edildi (onaydan sonra). Ön muhasebe bağı çözer, serbest faturanın alacağını ters kayıtla düşer. |
 | `invoice.changed` | Ekran olayı: fatura listesi / ekranı tazelenir (taslak, kesim, iptal isteği, e-belge durumu). |
 | `invoice.settings.changed` |  |
+
+### kbs.*
+
+| Olay | Açıklama |
+| --- | --- |
+| `kbs.notification.changed` |  |
+| `kbs.settings.changed` |  |
 
 ### laundry.*
 
@@ -1430,7 +1456,7 @@ Anketin zamanlanmış işi (yalnızca sunucu sürecinde, modül 55).
 
 ## Veri modeli
 
-Veritabanında 242 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan sayısı ilişkiler hariç yaklaşık değerdir.
+Veritabanında 245 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan sayısı ilişkiler hariç yaklaşık değerdir.
 
 | Tablo | Alan | Açıklama |
 | --- | --- | --- |
@@ -1457,7 +1483,7 @@ Veritabanında 242 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan
 | `RoomType` | 12 |  |
 | `Room` | 11 | Oda durumu üç bağımsız bilgidir: `occupancy` (boş/dolu), `housekeepingStatus` (kirli/temiz...) ve tarihli arıza kaydı (`RoomBlock`). "Arızalı" bir kolon değildir; o günü kapsayan bloktan okunur — böylece ileri tarihli arıza kaydı günü gelince zamanlayıcı gerekmeden etkin olur ve bitince kendiliğinden kalkar. |
 | `RoomBlock` | 11 | Tarihli arıza kaydı: odanın belirli günlerde arızalı ya da hizmet dışı olması. Tarihler UTC gün başıdır (veritabanı kısıtıyla zorunlu). `endDate` boşsa blok süresizdir. Geçmiş kayıt değiştirilmez: süren blok "bitirilir" (bitişi bugüne çekilir), başlamamış blok iptal edilir (soft-delete). Rezervasyonla çakışması veritabanı tetikleyicisiyle engellenir (`Reservation_room_blocked`, `RoomBlock_has_reservations`). |
-| `Guest` | 19 |  |
+| `Guest` | 23 |  |
 | `GuestPreference` | 12 | Misafir tercihi (modül 22): kategori + değer + kaynak + güven + son teyit. Serbest metin değil yapılandırılmış; birleştirmede (`mergeGuests`) hedef misafire taşınır. VIP / sorunlu gibi işaretler `Guest.tags` üzerinde. |
 | `GuestNote` | 9 | Misafir notu (modül 22): tarihli, yazarlı; sabitlenen not kartın üstünde. |
 | `Reservation` | 53 |  |
@@ -1676,6 +1702,9 @@ Veritabanında 242 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan
 | `SavedReport` | 11 | Kayıtlı rapor: tanım + grafik. Sahibi düzenler / siler; paylaşılan rapor rapor yetkisi olan herkese görünür. |
 | `ReportDefinition` | 10 | Tasarımcıda kurulan rapor: kaynak + sütunlar + filtreler + gruplama + sıralama (`reportDesignSchema`). Sahibi düzenler / siler; paylaşılan rapor rapor yetkisi olan herkese görünür (kaynağın yetkisi de gerekir). |
 | `DataImport` | 10 | Excel'den toplu yükleme (misafir listesi / fiyat planı). Kimlik sihirbazın ürettiği yükleme kimliğidir: aynı yükleme ikinci kez gönderilirse yazılmaz, bu kayıt döner. |
+| `KbsSettings` | 17 | Otelin KBS ayarı. Parola secret-box ile mühürlü saklanır, hiçbir cevapta dönmez. |
+| `KbsNotification` | 26 | Bir kişinin bir bildirimi (giriş / çıkış / oda değişikliği). Kimlik gönderim anında kartın güncel halinden kurulur; burada yalnız ekran için maskeli özet tutulur. |
+| `KbsLog` | 8 | Her deneme ve personel işlemi (iz). |
 
 ## Modül durumu
 
@@ -1740,7 +1769,7 @@ Geliştirme listesinden (GOREVLER.md) türetilir: işaretli maddeler ve "tamamla
 | 55 | Anket & memnuniyet | arkadaşın | tamamlandı |
 | 56 | Sadakat programı | Ali Kemal | tamamlandı |
 | 57 | SPA & spor salonu randevu | arkadaşın | tamamlandı |
-| 58 | Emniyet kimlik bildirimi (KBS) | Ali Kemal | planlı |
+| 58 | Emniyet kimlik bildirimi (KBS) | Ali Kemal | tamamlandı |
 | 59 | Kimlik / pasaport okuma (OCR) | arkadaşın | tamamlandı |
 | 60 | Çoklu dil & çoklu para birimi | Ali Kemal | planlı |
 | 61 | Webhook & açık API | arkadaşın | planlı |

@@ -8,6 +8,7 @@ import { formatDate, formatMoney } from '../../lib/format.js';
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 import { GuestPortalCard } from '../guest-portal/GuestPortalCard.jsx';
 import { LoyaltyReservationCard } from '../loyalty/LoyaltyReservationCard.jsx';
+import { KbsReservationCard } from '../kbs/KbsReservationCard.jsx';
 import { reservationKeys } from '../../lib/reservations.js';
 import { RESERVATIONS_CHANNEL } from '../../lib/socket.js';
 import { formatDateTime } from '../../lib/timeFormat.js';
@@ -289,6 +290,8 @@ export function ReservationDetailPage() {
           {can(PERMISSIONS.GUEST_PORTAL_VIEW) && <GuestPortalCard reservationId={detail.id} />}
 
           {can(PERMISSIONS.LOYALTY_VIEW) && <LoyaltyReservationCard reservationId={detail.id} />}
+
+          {can(PERMISSIONS.KBS_VIEW) && <KbsReservationCard reservationId={detail.id} />}
 
           {detail.groupMembers.length > 0 && (
             <Card
