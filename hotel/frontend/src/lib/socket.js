@@ -85,12 +85,20 @@ export const ASSETS_CHANNEL = 'assets.changed';
 export const REPORT_CHAT_CHANNEL = 'report-chat.changed';
 /** Ön muhasebe (modül 47): cari, kasa / banka, çek / senet, fiş ekranları. */
 export const ACCOUNTING_CHANNEL = 'accounting.changed';
+/** Genel muhasebe (modül 48): yevmiye fişleri, hesap planı, kurallar, mizan. */
+export const LEDGER_CHANNEL = 'ledger.changed';
 /** Fatura ve e-belge (modül 16 / 49): faturalanacaklar, faturalar, e-belge durumu, fatura ayarı. */
 export const INVOICES_CHANNEL = 'invoices.changed';
 /** Kanal yönetimi (modül 33): kanal ayarı, eşleştirme, stop-sale, senkron logu, kanal rezervasyonları. */
 export const CHANNEL_MANAGER_CHANNEL = 'channel-manager.changed';
 /** Personel ve bordro (modül 51): personel kartı, puantaj, kalemler, bordro hesabı / onayı / ödemesi, ayarlar. */
 export const PAYROLL_CHANNEL = 'payroll.changed';
+/** İK (modül 52): izin talebi / kararı, vardiya çizelgesi, puantaj, özlük belgeleri, ayar. */
+export const HR_CHANNEL = 'hr.changed';
+/** Sadakat (modül 56): puan hareketi, seviye, üyelik, ayar. */
+export const LOYALTY_CHANNEL = 'loyalty.changed';
+/** KBS (modül 58): kimlik bildirimi kuyruğu, mutabakat, ayar. */
+export const KBS_CHANNEL = 'kbs.changed';
 /** Misafir portalı ve online check-in (modül 53): gönderim, onay, düzeltme, giriş, bağlantı, ayar. */
 export const GUEST_PORTAL_CHANNEL = 'guest-portal.changed';
 /** Anket ve memnuniyet (modül 55): cevap, takip, AI etiketi / özeti, tasarım, ayar. */

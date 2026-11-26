@@ -11,15 +11,18 @@ import { formatDate, formatMoney } from '../../lib/format.js';
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 import { contactText, useCardActions, useGuestCard } from '../../lib/crm.js';
 import { stillFromDocument } from '../../lib/idScan.js';
+import { kbsExtrasBody, kbsExtrasForm } from '../../lib/kbsFormat.js';
 import { useHotelToday } from '../../lib/useHotel.js';
 import { validateWith } from '../../lib/validate.js';
 import { toastSuccess } from '../../store/toast.js';
 import { IdentityFields, identityBody, toIdentityForm } from '../front-desk/IdentityFields.jsx';
+import { KbsIdentityFields } from '../front-desk/KbsIdentityFields.jsx';
 import { PreferencesTab } from './PreferencesTab.jsx';
 import { NotesTab } from './NotesTab.jsx';
 import { StaysTab } from './StaysTab.jsx';
 import { SpendTab } from './SpendTab.jsx';
 import { MergeDialog } from './MergeDialog.jsx';
+import { LoyaltyGuestBox } from '../loyalty/LoyaltyGuestBox.jsx';
 
 const TABS = [
   { key: 'prefs', label: 'Tercihler' },
@@ -89,6 +92,9 @@ export function GuestCardPage() {
         <SummaryTile label="Son konaklama" value={guest.summary.lastStay ? formatDate(guest.summary.lastStay.checkIn) : '—'} hint={guest.summary.lastStay?.confirmationCode ?? ''} icon="calendar" />
       </div>
 
+      {/* Sadakat (modül 56) */}
+      {can(PERMISSIONS.LOYALTY_VIEW) && <LoyaltyGuestBox guestId={guest.id} />}
+
       {/* Sekmeler */}
       <div className="inline-flex gap-1 rounded-control border border-line bg-surface p-1 shadow-soft">
         {TABS.map((t) => (
@@ -120,6 +126,8 @@ function EditCardModal({ guest, actions, onClose }) {
   const [form, setForm] = useState({ firstName: guest.firstName, lastName: guest.lastName, phone: guest.phone ?? '', email: guest.email ?? '' });
   const initialIdentity = toIdentityForm({ idType: guest.idType, idNumber: guest.idNumber, nationality: guest.nationality, birthDate: guest.birthDate });
   const [identity, setIdentity] = useState(initialIdentity);
+  // KBS ek alanları (modül 58): boş bırakılan karttan silinir.
+  const [extras, setExtras] = useState(() => kbsExtrasForm(guest));
   const [read, setRead] = useState(null);
   const [scanning, setScanning] = useState(false);
   const [errors, setErrors] = useState({});
@@ -134,6 +142,7 @@ function EditCardModal({ guest, actions, onClose }) {
       phone: form.phone,
       email: form.email,
       ...(identityChanged || documentRead ? identityBody(identity) : {}),
+      ...kbsExtrasBody(extras),
       documentRead,
     };
     const result = validateWith(guestCardUpdateSchema, body);
@@ -177,6 +186,7 @@ function EditCardModal({ guest, actions, onClose }) {
           </div>
           {error('documentRead') && <p className="text-xs font-semibold text-sec-strong">{error('documentRead')}</p>}
           <IdentityFields value={identity} onChange={setIdentity} errors={errors} prefix="card" optional disabled={busy} />
+          <KbsIdentityFields value={extras} onChange={setExtras} errors={errors} prefix="card" disabled={busy} />
         </section>
       </div>
       {scanning && (

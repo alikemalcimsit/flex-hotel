@@ -198,7 +198,7 @@ async function postAccrual(hotelId, run, accrualDay) {
         hotelId,
         todo.map(({ entry, amount }) => ({ accountId: accounts.get(entry.employeeId), date: accrualDay, ...sided(amount), description: `${label}: net ücret`, reference: run.number, sourceType: 'PAYROLL', sourceId: run.id, sourceKey: `PAYROLL:${run.id}:${entry.employeeId}` })),
       );
-      if (result.created > 0) await stage('accounting.posted', { hotelId, source: 'PAYROLL', ledgerAccountIds: [...accounts.values()].slice(0, 50), treasuryAccountIds: [] });
+      if (result.created > 0) await stage('accounting.posted', { hotelId, source: 'PAYROLL', sourceId: run.id, ledgerAccountIds: [...accounts.values()].slice(0, 50), treasuryAccountIds: [] });
       return result.created;
     });
     posted = posted || created > 0;
@@ -233,7 +233,7 @@ async function postAccrual(hotelId, run, accrualDay) {
       const result = await postLedger(tx, { hotelId, accountId: row.accountId, date: accrualDay, ...sided(money(row.amount)), description: `${label}: ${row.text}`, reference: run.number, sourceType: 'PAYROLL', sourceId: run.id, sourceKey: `PAYROLL:${run.id}:${row.key}` });
       created = created || result.created;
     }
-    if (created) await stage('accounting.posted', { hotelId, source: 'PAYROLL', ledgerAccountIds: rows.map((row) => row.accountId).slice(0, 50), treasuryAccountIds: [] });
+    if (created) await stage('accounting.posted', { hotelId, source: 'PAYROLL', sourceId: run.id, ledgerAccountIds: rows.map((row) => row.accountId).slice(0, 50), treasuryAccountIds: [] });
     return created;
   });
   return posted || wrote;
@@ -269,7 +269,7 @@ async function postPayment(hotelId, paymentId, startDate) {
         hotelId,
         chunk.map((entry) => ({ accountId: accounts.get(entry.employeeId), date, debit: money(String(entry.payable)), description: label, reference: payment.run.number, sourceType: 'PAYROLL_PAYMENT', sourceId: payment.id, sourceKey: `PAYROLL_PAYMENT:${payment.id}:${entry.employeeId}` })),
       );
-      await stage('accounting.posted', { hotelId, source: 'PAYROLL_PAYMENT', ledgerAccountIds: [...accounts.values()].slice(0, 50), treasuryAccountIds: [payment.treasuryAccountId] });
+      await stage('accounting.posted', { hotelId, source: 'PAYROLL_PAYMENT', sourceId: payment.id, ledgerAccountIds: [...accounts.values()].slice(0, 50), treasuryAccountIds: [payment.treasuryAccountId] });
     });
   }
   return true;
@@ -290,6 +290,6 @@ export async function postAdvance(tx, stage, input) {
   const text = `Maaş avansı: ${input.employeeName}`;
   const movement = await postTreasury(tx, { hotelId: input.hotelId, treasuryAccountId: input.treasuryAccountId, date: input.paidOn, amount: money(toDecimal(input.amount).negated().toString()), description: text, ledgerAccountId: account.id, sourceType: 'EMPLOYEE_ADVANCE', sourceId: input.advanceId, sourceKey: `EMPLOYEE_ADVANCE:${input.advanceId}` });
   const entry = await postLedger(tx, { hotelId: input.hotelId, accountId: account.id, date: input.paidOn, debit: input.amount, description: text, sourceType: 'EMPLOYEE_ADVANCE', sourceId: input.advanceId, sourceKey: `EMPLOYEE_ADVANCE:${input.advanceId}` });
-  await stage('accounting.posted', { hotelId: input.hotelId, source: 'EMPLOYEE_ADVANCE', ledgerAccountIds: [account.id], treasuryAccountIds: [input.treasuryAccountId] });
+  await stage('accounting.posted', { hotelId: input.hotelId, source: 'EMPLOYEE_ADVANCE', sourceId: input.advanceId, ledgerAccountIds: [account.id], treasuryAccountIds: [input.treasuryAccountId] });
   return { posted: true, ledgerEntryId: entry.id, treasuryMovementId: movement.id };
 }

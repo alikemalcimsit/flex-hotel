@@ -34,6 +34,8 @@
     "@hotelos/core": "*",
     "@hotelos/hotel-contracts": "*",
     "@hotelos/inventory-worker": "*",
+    "@hotelos/loyalty-worker": "*",
+    "@hotelos/kbs-worker": "*",
     "@hotelos/llm": "*",
     "@hotelos/mcp-server": "*",
     "@hotelos/notification-worker": "*",

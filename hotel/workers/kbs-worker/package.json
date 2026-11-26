@@ -1,0 +1,14 @@
+{
+  "name": "@hotelos/kbs-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "description": "KBS aktörü: giriş, çıkış, oda değişikliği ve geri almadan Emniyet / Jandarma kimlik bildirimi kuyruğunu doldurur",
+  "scripts": {
+    "test": "node --test \"*.test.js\""
+  },
+  "dependencies": {
+    "@hotelos/actor-kit": "*"
+  }
+}

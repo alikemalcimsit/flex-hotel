@@ -66,6 +66,8 @@ export function HomePage() {
 
       {features.checkin && <CheckinCard checkin={checkin} token={token} />}
 
+      {overview.loyalty && <LoyaltyCard loyalty={overview.loyalty} currency={hotel.currency} />}
+
       <section className="grid grid-cols-2 gap-3">
         {features.folio && <Tile to={`/p/${token}/folyo`} icon="wallet" title={t('tile.folio')} hint={t('tile.folioHint')} />}
         {features.requests && <Tile to={`/p/${token}/istek`} icon="bell" title={t('tile.requests')} hint={t('tile.requestsHint')} />}
@@ -134,6 +136,35 @@ function CheckinCard({ checkin, token }) {
           {action.label} <Icon name="arrowRight" className="size-4" />
         </Link>
       )}
+    </section>
+  );
+}
+
+/** Sadakat programı (modül 56): seviye, puan bakiyesi ve karşılığı, sonraki seviyeye kalan, avantajlar. */
+function LoyaltyCard({ loyalty, currency }) {
+  const { t, fmt } = useI18n();
+  return (
+    <section className="rounded-card border border-line bg-surface p-5 shadow-soft">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Icon name="star" className="size-5" />
+          <div>
+            <h2 className="font-bold text-ink">{loyalty.programName}</h2>
+            <p className="text-xs text-ink-muted">{t('loyalty.member', { number: loyalty.number })}</p>
+          </div>
+        </div>
+        <Badge tone="info">{loyalty.tier.name}</Badge>
+      </div>
+      <p className="mt-4 text-xs text-ink-muted">{t('loyalty.balance')}</p>
+      <p className="text-2xl font-bold tabular-nums text-ink">{t('loyalty.points', { count: fmt.number(loyalty.balance) })}</p>
+      <p className="text-sm text-ink-soft">{t('loyalty.worth', { amount: fmt.money(loyalty.balanceValue, currency) })}</p>
+      <p className="mt-3 text-sm text-ink-soft">{loyalty.nextTier ? t('loyalty.toNext', { tier: loyalty.nextTier.name, count: fmt.number(loyalty.nextTier.toNext) }) : t('loyalty.top')}</p>
+      {loyalty.tier.perks && (
+        <p className="mt-3 rounded-item bg-surface-muted px-3 py-2 text-sm text-ink-soft">
+          <span className="font-semibold text-ink">{t('loyalty.perks')}:</span> {loyalty.tier.perks}
+        </p>
+      )}
+      <p className="mt-3 text-xs text-ink-muted">{t('loyalty.hint')}</p>
     </section>
   );
 }

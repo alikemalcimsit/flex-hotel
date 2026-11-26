@@ -27,6 +27,7 @@ function initialValues(employee) {
     disabilityDegree: employee?.disabilityDegree ? String(employee.disabilityDegree) : '',
     serviceChargePoints: employee?.serviceChargePoints ?? '0',
     notes: employee?.notes ?? '',
+    userId: employee?.userId ?? '',
     payBasis: employee?.payBasis ?? 'GROSS',
     salary: employee?.salary ?? '',
     paymentMethod: employee?.paymentMethod ?? 'BANK',
@@ -48,6 +49,8 @@ export function EmployeeFormDialog({ employee = null, onClose, onSaved }) {
   const withPay = can(PERMISSIONS.PAYROLL_MANAGE);
   const queryClient = useQueryClient();
   const [values, setValues] = useState(() => initialValues(employee));
+  // Kart ↔ kullanıcı bağı: personel kendi izin / vardiya sayfasını bu bağla görür (modül 52).
+  const userOptions = useQuery({ queryKey: ['payroll', 'user-options'], queryFn: () => api('/hr/user-options') });
   const [errors, setErrors] = useState({});
   const [serverError, setServerError] = useState(null);
   const departments = useQuery({ queryKey: payrollKeys.departments, queryFn: () => api('/payroll/departments') });
@@ -76,6 +79,7 @@ export function EmployeeFormDialog({ employee = null, onClose, onSaved }) {
       email: values.email || null,
       address: values.address || null,
       notes: values.notes || null,
+      userId: values.userId || null,
       disabilityDegree: values.disabilityDegree ? Number(values.disabilityDegree) : null,
       ...(withPay ? { iban: values.iban || null, besRate: values.besRate || null, besOptOutOn: values.besOptOutOn || null } : {}),
     };
@@ -132,6 +136,13 @@ export function EmployeeFormDialog({ employee = null, onClose, onSaved }) {
           <legend className="mb-2 text-sm font-bold text-ink">İş</legend>
           <Select label="Departman" options={departmentOptions} value={values.departmentId} onChange={set('departmentId')} error={errors.departmentId} />
           <Input label="Görev" value={values.position} onChange={set('position')} error={errors.position} />
+          <Select
+            label="Kullanıcı hesabı (İzinlerim sayfası için)"
+            options={[{ value: '', label: 'Bağlı değil' }, ...(userOptions.data?.items ?? []).filter((user) => !user.employeeId || user.employeeId === employee?.id || user.id === values.userId).map((user) => ({ value: user.id, label: `${user.name} · ${user.email}` }))]}
+            value={values.userId}
+            onChange={set('userId')}
+            error={errors.userId}
+          />
           <Input label="İşe giriş" type="date" value={values.hireDate} onChange={set('hireDate')} error={errors.hireDate} />
           <Select label="Sigorta" options={INSURANCE_TYPES.map((value) => ({ value, label: INSURANCE_TYPE_LABELS[value] }))} value={values.insuranceType} onChange={set('insuranceType')} error={errors.insuranceType} />
           <Select label="Engellilik derecesi" options={[{ value: '', label: 'Yok' }, ...DISABILITY_DEGREES.map((value) => ({ value: String(value), label: `${value}. derece` }))]} value={values.disabilityDegree} onChange={set('disabilityDegree')} error={errors.disabilityDegree} />

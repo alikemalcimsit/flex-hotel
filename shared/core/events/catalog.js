@@ -543,6 +543,9 @@ export const EVENT_CATALOG = Object.freeze({
       'SALES_FOLLOW_UP',
       'ASSET',
       'STOCK',
+      'HR',
+      'LOYALTY',
+      'KBS',
       'INTEGRATION',
     ]),
     userId: z.string().uuid().nullable(),
@@ -962,6 +965,8 @@ export const EVENT_CATALOG = Object.freeze({
   /** Cari ve / veya kasa-banka hareketi yazıldı (otomatik kayıt, fiş, çek / senet işlemi): ekstre ve bakiyeler tazelenir. */
   'accounting.posted': hotelScoped.extend({
     source: z.string().min(1).max(40),
+    // Kaynak belgenin kimliği (ödeme, fiş, mal kabul, bordro, çek…): genel muhasebe (48) bu belgenin hareketlerini yevmiye fişine çevirir.
+    sourceId: z.string().min(1).max(80).nullable().default(null),
     ledgerAccountIds: z.array(z.string().uuid()).max(50).default([]),
     treasuryAccountIds: z.array(z.string().uuid()).max(50).default([]),
   }),
@@ -971,6 +976,14 @@ export const EVENT_CATALOG = Object.freeze({
   }),
   'accounting.instrument.changed': hotelScoped.extend({ instrumentId: z.string().uuid(), action: z.string().min(1).max(20) }),
   'accounting.settings.changed': hotelScoped,
+  /**
+   * Genel muhasebe (modül 48): yevmiye fişi yazıldı / iptal edildi, hesap planı, kural ya da dönem kilidi değişti.
+   * Ekranlar (mizan, fiş listesi, hesap planı) bununla tazelenir.
+   */
+  'ledger.changed': hotelScoped.extend({
+    change: z.enum(['JOURNAL', 'CHART', 'RULES', 'SETTINGS']),
+    journalIds: z.array(z.string().uuid()).max(50).default([]),
+  }),
   /**
    * İş olayı (modül 16 / 49): fatura kesildi. Ön muhasebe folyo ve etkinlik faturasını **ikinci alacak
    * olarak yazmaz** — alacak operasyondan doğmuştur (folyo cariye aktarıldığında, etkinlik gerçekleştiğinde);
@@ -1029,6 +1042,45 @@ export const EVENT_CATALOG = Object.freeze({
   }),
   /** Ekran olayı: bordro ayarı, parametre seti, kalem, departman, servis payı, avans, icra / nafaka, teşvik ya da puantaj değişti. */
   'payroll.settings.changed': hotelScoped.extend({ area: z.string().min(1).max(40) }),
+
+  /* ── İK (modül 52) ── */
+
+  /** İş olayı: izin talebi açıldı / onaylandı / reddedildi / iptal edildi (88 işgücü planlama ve 76 mobil dinler). */
+  'hr.leave.changed': hotelScoped.extend({
+    leaveId: z.string().uuid(),
+    employeeId: z.string().uuid(),
+    type: z.string().min(1).max(20),
+    change: z.enum(['REQUESTED', 'APPROVED', 'REJECTED', 'CANCELLED']),
+    startDate: isoDay,
+    endDate: isoDay,
+  }),
+  /** Ekran olayı: vardiya çizelgesi, günlük puantaj, bordroya aktarım, özlük belgesi ya da İK ayarı değişti. */
+  'hr.changed': hotelScoped.extend({ area: z.enum(['SHIFTS', 'TIMESHEETS', 'ATTENDANCE_EXPORT', 'DOCUMENTS', 'SETTINGS', 'LEAVE_BALANCE']) }),
+
+  /* ── Sadakat (modül 56) ── */
+
+  /** İş olayı: puan hareketi yazıldı (kazanma, harcama, iade, süre dolumu, düzeltme); 80 / 82 / 102 dinler. */
+  'loyalty.points.changed': hotelScoped.extend({
+    accountId: z.string().uuid(),
+    guestId: z.string().uuid(),
+    kind: z.enum(['EARN', 'EARN_REVERSAL', 'REDEEM', 'REDEEM_REVERSAL', 'EXPIRE', 'ADJUST']),
+    points: z.number().int(),
+    balance: z.number().int(),
+  }),
+  /** İş olayı: misafirin seviyesi değişti (80 misafir tanıma, 75 patron uygulaması). */
+  'loyalty.tier.changed': hotelScoped.extend({ accountId: z.string().uuid(), guestId: z.string().uuid(), from: z.string().nullable(), to: z.string() }),
+  /** Ekran olayı: üyelik açıldı / kapandı ya da program ayarı değişti. */
+  'loyalty.changed': hotelScoped.extend({ area: z.enum(['ACCOUNT', 'SETTINGS']) }),
+
+  /* ── KBS kimlik bildirimi (modül 58) ──
+     Kuyruğa giren, gönderilen, hata alan, tekrar gönderilen ya da elle bildirildi işaretlenen her bildirim. Kimlik verisi taşımaz. */
+  'kbs.notification.changed': hotelScoped.extend({
+    notificationId: z.string().uuid(),
+    reservationId: z.string().uuid(),
+    kind: z.enum(['CHECK_IN', 'CHECK_OUT', 'ROOM_CHANGE']),
+    state: z.enum(['PENDING', 'SENDING', 'SENT', 'FAILED', 'CANCELLED', 'MANUAL']),
+  }),
+  'kbs.settings.changed': hotelScoped.extend({ isEnabled: z.boolean(), provider: z.string() }),
 
   /* ── Temassız uygulamalar (modül 53) ── */
   /** Online check-in gönderildi / onaylandı / düzeltme istendi / giriş yapıldı / belgeleri silindi. Kişisel veri taşımaz. */
@@ -1591,11 +1643,22 @@ export const ASSET_EVENTS = Object.freeze(['asset.changed', 'asset.count.changed
 /** Ön muhasebe (modül 47): cari, kasa / banka, çek / senet ve fiş ekranları (`accounting.changed` kanalı). */
 export const ACCOUNTING_EVENTS = Object.freeze(['accounting.account.changed', 'accounting.treasury.changed', 'accounting.posted', 'accounting.voucher.changed', 'accounting.instrument.changed', 'accounting.settings.changed']);
 
+/** Genel muhasebe (modül 48): hesap planı, yevmiye, mizan ekranları (`ledger.changed` kanalı). */
+export const LEDGER_EVENTS = Object.freeze(['ledger.changed']);
+
 /** Fatura ve e-belge (modül 16 / 49): ekranlar bunlarla tazelenir (`invoices.changed` kanalı). */
 export const INVOICE_EVENTS = Object.freeze(['invoice.changed', 'invoice.settings.changed']);
 
 /** Personel ve bordro (modül 51): ekranlar bunlarla tazelenir (`payroll.changed` kanalı). */
 export const PAYROLL_EVENTS = Object.freeze(['employee.changed', 'payroll.run.changed', 'payroll.settings.changed']);
+
+/** İK (modül 52): izin, vardiya, puantaj, belge ekranları (`hr.changed` kanalı). */
+export const HR_EVENTS = Object.freeze(['hr.leave.changed', 'hr.changed', 'employee.changed']);
+
+/** Sadakat (modül 56): üyeler, puan, seviye, ayar ekranları (`loyalty.changed` kanalı). */
+export const LOYALTY_EVENTS = Object.freeze(['loyalty.points.changed', 'loyalty.tier.changed', 'loyalty.changed']);
+/** KBS (modül 58): bildirim listesi, mutabakat, ayar (`kbs.changed` kanalı). */
+export const KBS_EVENTS = Object.freeze(['kbs.notification.changed', 'kbs.settings.changed']);
 
 /** Misafir portalı ve online check-in (modül 53): ekranlar bunlarla tazelenir (`guest-portal.changed` kanalı). */
 export const GUEST_PORTAL_EVENTS = Object.freeze(['online_checkin.changed', 'guest_portal.link.changed', 'guest_portal.settings.changed']);

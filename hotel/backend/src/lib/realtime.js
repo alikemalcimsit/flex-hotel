@@ -13,8 +13,12 @@ import {
   ASSET_EVENTS,
   REPORT_CHAT_EVENTS,
   ACCOUNTING_EVENTS,
+  LEDGER_EVENTS,
   INVOICE_EVENTS,
   PAYROLL_EVENTS,
+  HR_EVENTS,
+  LOYALTY_EVENTS,
+  KBS_EVENTS,
   GUEST_PORTAL_EVENTS,
   SURVEY_EVENTS,
   SPA_EVENTS,
@@ -147,12 +151,20 @@ export const REPORT_CHAT_CHANNEL = 'report-chat.changed';
 
 /** Ön muhasebe (modül 47): cariler ve ekstre, kasa / banka hareketleri, çek / senet, fişler, ayar ve eşleme. */
 export const ACCOUNTING_CHANNEL = 'accounting.changed';
+/** Genel muhasebe (modül 48): yevmiye, hesap planı, kurallar, mizan. */
+export const LEDGER_CHANNEL = 'ledger.changed';
 
 /** Fatura ve e-belge (modül 16 / 49): faturalanacaklar, faturalar, e-belge durumu. */
 export const INVOICES_CHANNEL = 'invoices.changed';
 
 /** Personel ve bordro (modül 51). */
 export const PAYROLL_CHANNEL = 'payroll.changed';
+/** İK (modül 52): izinler, vardiya, puantaj, belgeler. */
+export const HR_CHANNEL = 'hr.changed';
+/** Sadakat (modül 56): üyeler, puan hareketleri, seviye, ayar. */
+export const LOYALTY_CHANNEL = 'loyalty.changed';
+/** KBS (modül 58): kimlik bildirimleri, mutabakat, ayar. */
+export const KBS_CHANNEL = 'kbs.changed';
 
 /** Misafir portalı ve online check-in (modül 53). */
 export const GUEST_PORTAL_CHANNEL = 'guest-portal.changed';
@@ -207,8 +219,12 @@ const CHANNEL_EVENTS = Object.freeze({
   [ASSETS_CHANNEL]: ASSET_EVENTS,
   [REPORT_CHAT_CHANNEL]: REPORT_CHAT_EVENTS,
   [ACCOUNTING_CHANNEL]: ACCOUNTING_EVENTS,
+  [LEDGER_CHANNEL]: LEDGER_EVENTS,
   [INVOICES_CHANNEL]: INVOICE_EVENTS,
   [PAYROLL_CHANNEL]: PAYROLL_EVENTS,
+  [HR_CHANNEL]: HR_EVENTS,
+  [LOYALTY_CHANNEL]: LOYALTY_EVENTS,
+  [KBS_CHANNEL]: KBS_EVENTS,
   [GUEST_PORTAL_CHANNEL]: GUEST_PORTAL_EVENTS,
   [SURVEY_CHANNEL]: SURVEY_EVENTS,
   [SPA_CHANNEL]: SPA_EVENTS,

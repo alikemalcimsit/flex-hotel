@@ -29,6 +29,12 @@ Okumaya başlamadan iki hatırlatma:
 | J — Stok sayımı ve maliyet | Depo, F&B, muhasebe | Stok → Sayım, Hareketler, Maliyet raporu, Bütçe | Stok aktörü |
 | K — Acente grubu toplu giriş | Resepsiyon şefi, muhasebe | Acenteler (kontrat, kota), Yeni rezervasyon (grup, rooming list), Gruplar, Folyolar, Faturalar, Ön muhasebe, Acente primleri | Oda, folyo, muhasebe, kanal aktörleri |
 | L — Bordro onayı ve ödemesi | İK, müdür, muhasebe | Bordro (puantaj, servis payı, bordro ekranı, ayarlar), Personel, Onaylar, Ön muhasebe, Demirbaş | Muhasebe aktörü |
+| M — Ay sonu mizan ve dönem kapanışı | Muhasebe, müdür | Genel muhasebe (Ayarlar → Eşitle, Mizan, hesap ekstresi, Yevmiye, Kurallar, Dönem kilidi), Görevler | Muhasebe aktörü (yevmiye ve günlük gelir fişleri) |
+| N — Yanlış kasa çıkışı fişinin düzeltilmesi | Muhasebe | Ön muhasebe (Kasa / banka → Çıkış, Fişler), Genel muhasebe (Yevmiye, fiş iptali, Fiş gir, Hesap planı) | Muhasebe aktörü |
+| O — Personel izin istiyor | Personel, İK, müdür | İzinlerim (`/ik/benim`), İK → İzinler, İzin bakiyeleri, Vardiya, Puantaj (Bordroya aktar), Onaylar, Personel kartı, Bordro → Puantaj ve kalemler | Aktör yok (İK servisi ve onay kararı dinleyicisi) |
+| P — Gece vardiyası ve mesai | İK, departman şefi | İK → Vardiya (çakışma, dinlenme ve haftalık saat uyarıları), Puantaj (gece çıkışı, mesai, Bordroya aktar), İzinlerim, Bordro | Aktör yok |
+| Q — Sadık misafir puanını kullanıyor | Resepsiyon, müdür | Sadakat (Ayarlar, Üyeler, hesap sayfası), Misafir kartı (sadakat kutusu), Rezervasyon ayrıntısı (Sadakat kartı → Puan kullan), Folyolar (indirim, kalem iptali), Onaylar, Gün kapanış, Genel muhasebe, Misafir portalı | Sadakat aktörü, muhasebe aktörü |
+| R — KBS hatası | Resepsiyon, müdür | KBS (Ayarlar, Bildirimler, bildirim ayrıntısı, Mutabakat), Check-in penceresi (KBS alanları), Misafir kartı, Rezervasyon ayrıntısı (KBS kartı), zil, Görevler | KBS aktörü, KBS göndericisi (zamanlanmış iş) |
 
 ## Senaryo A — Bir misafirin yolculuğu
 
@@ -498,7 +504,7 @@ Telefonla gelen rezervasyonda 1–3. adımların yerine resepsiyon **Rezervasyon
 | 9 | Merve **Çıktılar**: bordro listesi PDF, pusulalar PDF (departman departman), departman icmali, **banka dosyası** (Excel; IBAN + ödenecek), müşavir tablosu. Onaylı olduğu için "TASLAK" damgası yok. | PDF'ler sunucuda; 2.500 kişilik bordro ~5 sn. | Bordro ekranı → Çıktılar. |
 | 10 | Hande 5 Mayıs: Bordro ekranı → **Öde** → yöntem banka, hesap "İş Bankası TRY", tarih 5 Mayıs (bugünü geçemez). Bankaya dosyayı yükler. | Ödeme kaydı; `payroll.run.changed PAID` → **muhasebe aktörü**: İş Bankası hesabından **tek çıkış** (banka ödemelilerin toplamı), her personelin carisine **borç** → cariler sıfırlanır. | Kasa / banka → İş Bankası (kaynak "Bordro"); personel ekstreleri 0. |
 | 11 | İki personel elden alıyor: **Öde → elden → Resepsiyon kasası**. | Elden ödeme **yalnız kasadan**; kasa yetersizse reddedilir ("kasa eksiye düşmez"). Kasadan çıkış + iki personel carisi kapanır. | Kasa hareketleri. |
-| 12 | Ay sonu Hande, Ön muhasebe → Cariler → **SGK** → **Ödeme fişi** → banka (tutar carinin bakiyesi); aynı şekilde **vergi dairesi**. | Fişler eşik üstüyse dört göz onayı. Cari borçlar kapanır. **Gider tarafı** (personel gideri, SGK işveren payı hesapları) bu sürümde yok — genel muhasebe (48) ile. | Fişler; cari ekstreleri. |
+| 12 | Ay sonu Hande, Ön muhasebe → Cariler → **SGK** → **Ödeme fişi** → banka (tutar carinin bakiyesi); aynı şekilde **vergi dairesi**. | Fişler eşik üstüyse dört göz onayı. Cari borçlar kapanır. **Gider tarafı** genel muhasebede: 8. adımdaki tahakkuk aynı anda yevmiye fişi olur — `770` (işveren maliyeti; departman kuralı varsa departman hesaplarına) borç / `335` net ücret, `361` SGK, `360` vergi, `369` BES, `336` icra alacak. Bu ödeme fişleri de `361` / `360` borç, `102.01` alacak fişi olur. | Fişler; cari ekstreleri; Genel muhasebe → Yevmiye (kaynak "Bordro tahakkuku", "Ön muhasebe fişi"). |
 | 13 | 12 Mayıs: Mehmet'in Nisan fazla mesaisi 12 değil 20 saatmiş. Merve Nisan → **Fark bordrosu aç** → kalem: fazla çalışma +8 saat → Hesapla → Onaya gönder → Burak onaylar → öde. | Fark bordrosu: ay onaylı girdi + yeni kalemlerle baştan hesaplanır, önceki onaylı tutarlar çıkarılır (fark eksi olabilir). BES / avans / icra kesintisi yapılmaz. Tahakkuk ve ödeme aynı yolla (eksi tutarda ters taraf). | Bordrolar listesi: Nisan aylık (onaylı, ödendi) + Nisan fark. |
 | 14 | 31 Mayıs: komi Ahmet Çelik işten çıkıyor. Personel → Ahmet → **İşten çıkış** → tarih, sebep → **önizleme**: kıdem (yalnız DV, tavanlı; tavan çıkış gününde yürürlükteki setten), ihbar (GV + DV, SGK yok), kullanılmayan izin 6 gün (tam tabi) → **Kaydet**. Pencerede **zimmetli demirbaş uyarısı**: "DM-000087 El terminali — iade alınmadı" (engellemez). | Kalemler Mayıs bordrosuna düşer; çıkış geri alınabilir. Demirbaş → kart → **İade al** ayrıca yapılır. | Mayıs bordrosu satırı; Demirbaş kartı. |
 
@@ -519,6 +525,185 @@ Telefonla gelen rezervasyonda 1–3. adımların yerine resepsiyon **Rezervasyon
 | Hesap 2.500 kişide uzun sürüyor | ~3,6 sn normal; aynı anda ikinci hesap bekler | Bekleyin |
 | İşten çıkışta zimmet uyarısı | Engellemez; demirbaş iadesi ayrı işlem | Demirbaş → kart → İade al |
 
+## Senaryo M — Ay sonu mizan ve dönem kapanışı (genel muhasebe)
+
+**Hikâye:** Kasım 2026 kapanıyor. Muhasebe Hande ayın mizanını müşavire verecek ve ayı kilitleyecek. Ay boyunca ön büro tahsilatları, restoran adisyonları, mal kabuller, acente aktarımları ve bordro **kendiliğinden** yevmiye fişi oldu; her gün kapanışında günlük gelir fişi yazıldı. Hande'nin işi: eksik kalanı tamamlamak, mizanı denetlemek, bir düzeltme fişi girmek, dönemi kilitlemek. Örnek sayılar: ay içinde 120.01'e 2.200,00 + 1.100,00 TL gelir borcu yazıldı, 1.000,00 TL nakit tahsilat alacaklandı; kasadan 750,00 TL elektrik çıkışı yanlışlıkla `770` yerine `760`'a gitmiş.
+
+| Adım | Ekranda ne yapılır | Arka planda ne olur | Nerede görünür |
+| --- | --- | --- | --- |
+| 1 | 1 Aralık sabahı Hande, Genel muhasebe → **Ayarlar**: "Fişlenmemiş cari hareketi 3", "Fişlenmemiş kasa / banka hareketi 1". Görevler'de iki "Ön muhasebe kaydı (FOLIO_PAYMENT) yevmiye fişine çevrilecek" görevi; açıklamada "100.03 Döviz kasası (USD) hareketi için 28.11.2026 kuru yok". | Ay içinde bir USD nakit tahsilat fişlenemedi (ön muhasebeye yazıldı, kuru yok). Mizan bu kaydı içermiyor; Mizan sekmesinde "Fişlenmemiş hareket var" uyarısı. | Ayarlar sayaçları; Mizan uyarısı; Görevler. |
+| 2 | Kasa → Döviz kurları → 28 Kasım USD kurunu girer. Genel muhasebe → Ayarlar → **Eşitle**: 1–30 Kasım → **Eşitle**. | Dönemdeki fişlenmemiş belgeler fişlenir (USD hareketi günün kuruyla `100.03` borç / `120.01` alacak); Kasım'ın 30 kapanmış günü için gelir fişi hedefi yeniden hesaplanır — değişmeyen günler "Atlandı", geç kalem işlenmiş 2 gün "(düzeltme)" fişi alır. Sonuç: İşlendi 4, Atlandı 28, Hata 0, Kalan 0. | Eşitle sonuç kutusu; Yevmiye'de yeni fişler; Ayarlar sayaçları 0. Görevler kapatılır. |
+| 3 | Genel muhasebe → **Mizan**: 01.11–30.11, "Yalnız hareketliler" açık. Rozet **Mizan dengeli**, uyarı yok. | Her fiş dengeli yazıldığı için dip toplam borç = alacak. Üst hesaplar alt hesapların toplamı: `120` = 120.01 + 120.02 + …; `6` = bütün gelir tablosu. | Mizan tablosu; dip toplam. |
+| 4 | Hande `120.01` satırına tıklar → **ekstre** aynı dönemle açılır: her gün "Günlük gelir fişi" borç satırları, tahsilat fişleri alacak satırları, yürüyen bakiye. Kapanış 2.300,00 (B) = 2.200,00 + 1.100,00 − 1.000,00: ay sonunda tahsil edilmemiş folyo alacağı. Folyolar → açık folyolar toplamıyla karşılaştırır: tutar. | Ekstre satırları fiş sayfasına, fiş sayfası kaynak belgeye (folyo ödemesi, gün) bağlanır. | `/genel-muhasebe/hesaplar/:id` |
+| 5 | Mizanda `760 Pazarlama Satış ve Dağıtım Giderleri` 750,00 borç kalanı görür; beklemiyordu. Yevmiye → Hesap süzgeci 760 → fiş `YEV-2026-00231` "Ön muhasebe fişi · Elektrik faturası": `760` 750,00 / `100.01` 750,00. Sebep: carisiz çıkış fişinde karşı hesap seçilmemiş ve "Carisiz çıkışın karşı hesabı" kuralı birisi tarafından 760'a çevrilmiş. | Otomatik fiş kuralı o anki hâliyle uygulamıştır; fiş doğru yazılmış, kural yanlıştı. | Yevmiye liste ve fiş sayfası (kaynak bağlantısı ön muhasebe fişine gider). |
+| 6 | Kurallar → "Carisiz kasa / banka çıkışının karşı hesabı" satırını `770`'e geri alır (sil → varsayılan) → **Kaydet**. Sonra fiş `YEV-2026-00231` → **İptal et**: ters kaydın günü 30 Kasım, sebep "Yanlış gider hesabı (760 → 770)". Ardından Yevmiye → **Fiş gir**: gün 30 Kasım, "Elektrik faturası — düzeltme", satır 1 `770` borç 750,00, satır 2 `100.01` alacak 750,00 → Dengeli → **Kaydet**. | Kural yalnız yeni fişleri etkiler. İptal: asıl fiş "İptal edildi", ters fiş `YEV-2026-00298` (`100.01` 750,00 borç / `760` 750,00 alacak). Elle fiş `YEV-2026-00299`. Ön muhasebedeki kasa hareketi fişli kalır, yeniden fişlenmez. Mizan: `760` kalan 0 (borç 750 / alacak 750), `770` +750,00; `100.01` kalanı değişmedi (−750 +750 −750). | Fiş sayfaları birbirine bağlı; mizan güncel (canlı kanal). |
+| 7 | Mizan yeniden: dengeli, `760` "yalnız hareketliler" açıkken hâlâ görünür (dönemde hareketi var, kalanı 0). Hande dönemi Excel'e alır / ekran görüntüsünü müşavire gönderir. | — | Mizan. |
+| 8 | Ayarlar → **Dönem kilidi**: Kilit günü **30.11.2026** → Kaydet: "Dönem 30.11.2026 gününe kadar kilitlendi". | 30 Kasım'a kadar (dahil) elle fiş girilemez, fiş iptal edilemez. Aralık'ta gelen ama Kasım'a ait bir belge (ör. geç işlenen 29 Kasım tarihli ödeme) kilit sonrasındaki ilk güne, 1 Aralık'a yazılır; açıklamasında "(kilitli dönem 29.11.2026, 01.12.2026 gününe yazıldı)" notu. | Ayarlar "Kilitli dönem"; Yevmiye'de kilit notlu fişler. |
+| 9 | 3 Aralık: Hande Kasım'a ait bir elle düzeltme daha gerektiğini görür. Fiş gir → gün 30 Kasım → "Dönem 30.11.2026 gününe kadar kilitli". Fişi **3 Aralık** tarihiyle "Kasım düzeltmesi: …" açıklamasıyla girer (cari ayda düzeltme). | Kilit korur; kapanan ayın rakamı değişmez. Gerçekten Kasım'a yazılması gerekiyorsa yetkili kilidi geçici olarak 31 Ekim'e çeker, fişi girer, kilidi geri koyar (denetim izinde görünür). | Yevmiye. |
+
+### Ters giderse (Senaryo M)
+
+| Durum | Ne olur | Ne yapılır |
+| --- | --- | --- |
+| Eşitle "Hata 2": "… için … kuru yok" | Döviz kasası hareketi fişlenemedi | Kasa → Döviz kurları → o günün kuru → Eşitle |
+| Eşitle "Hata": "600.03 … satır alamaz (pasif …)" | Kuraldaki hesap pasif ya da alt hesabı açılmış ana hesap | Hesap planı → hesabı etkinleştir ya da Kurallar → yaprak hesap seç → Eşitle |
+| Eşitle "Kalan 120" | 20 saniyelik süre doldu | Yeniden Eşitle; kaldığı yerden sürer |
+| "Mizan dengesiz" rozeti | Normal işletimde görülmez; veri sorunu | Yevmiye'de o günün fişlerini inceleyin; teknik ekibe bildirin |
+| Fişlenmemiş hareket uyarısı sayıları Eşitle'den sonra da sıfırlanmıyor | O belgeler hata listesinde | Hata mesajını okuyup kuralı / hesabı / kuru düzeltin |
+| Kilit günü bugünden sonra | Reddedilir | En çok bugün |
+| Otomatik fişi iptal etti, Eşitle yeniden yazmadı | Beklenen: kaynak kayıt fişli kalır | Doğru satırlarla elle fiş |
+| Ters kayıt fişini iptal etmeye çalıştı | "Ters kayıt fişi iptal edilemez" | Yeni elle fiş |
+| Muhasebe aktörü kapalı | Fiş yok, Görevler'de "yevmiye fişine çevrilecek" / "gelir fişi yazılacak" | Genel muhasebe → Ayarlar → Eşitle; görevleri kapat |
+| Müşavir "120'de misafir alacağı çok yüksek" dedi | 120.01 kalanı tahsil edilmemiş açık folyoları gösterir (gelir gün gün yazılır, tahsilat çıkışta) | Folyolar → açık folyolarla karşılaştırın; normaldir |
+
+## Senaryo N — Yanlış kasa çıkışı fişinin düzeltilmesi
+
+**Hikâye:** Resepsiyon kasasından 1.250,00 TL temizlik malzemesi ödendi. Muhasebe Hande ön muhasebede **Çıkış** fişi kesti ama "Karşı hesap" alanına yanlışlıkla `760` (pazarlama) seçti ve tutarı 1.520,00 yazdı. Senaryo iki düzeltme yolunu gösterir: tutar yanlışsa **ön muhasebe fişi** iptal edilir (kasa da düzelir); yalnız gider hesabı yanlışsa **yevmiye fişi** iptal edilip elle fiş girilir (kasaya dokunulmaz).
+
+| Adım | Ekranda ne yapılır | Arka planda ne olur | Nerede görünür |
+| --- | --- | --- | --- |
+| 1 | Ön muhasebe → Kasa / banka → **Çıkış**: hesap Resepsiyon kasası, tutar **1.520,00**, açıklama "Temizlik malzemesi", **Karşı hesap** `760`. Kaydet. | Fiş `CKS-2026-0042`; kasadan 1.520,00 çıkış; `accounting.posted` → muhasebe aktörü yevmiye fişi `YEV-2026-00310`: `760` 1.520,00 borç / `100.01` 1.520,00 alacak (fişte seçilen hesap kuralın önüne geçer). | Fişler; Kasa / banka hareketleri; Yevmiye (kaynak "Ön muhasebe fişi", bağlantı `CKS-2026-0042`). |
+| 2 | Hande hatayı görür: tutar 1.250,00 olmalıydı. Ön muhasebe → Fişler → `CKS-2026-0042` → **İptal** (gerekçe "Tutar hatalı"). | Ön muhasebe ters kaydı: kasaya 1.520,00 geri (kasa yeterli). `accounting.posted` (ters kayıt) → yevmiyede **ayrı** fiş `YEV-2026-00311` "Ön muhasebe fişi — ters kayıt": `100.01` 1.520,00 borç / `760` 1.520,00 alacak. `YEV-2026-00310` "İşlendi" olarak **kalır**; net sıfır. | Fişler (iptal); Yevmiye'de iki fiş; `760` ekstresinde +1.520 / −1.520. |
+| 3 | Yeni **Çıkış** fişi: 1.250,00, Karşı hesap bu kez `770`. | Kasadan 1.250,00; yevmiye `YEV-2026-00312`: `770` 1.250,00 / `100.01` 1.250,00. | Kasa bakiyesi doğru; mizanda `770` +1.250,00. |
+| 4 | **Varyant:** tutar doğru, yalnız hesap yanlış olsaydı (1.250,00 ama `760`). Ön muhasebe fişine dokunulmaz (kasa doğru). Genel muhasebe → Yevmiye → `YEV-2026-00310` → **İptal et** (ters kaydın günü = bugün, sebep "Gider hesabı 760 yerine 770"). | Asıl fiş "İptal edildi", ters fiş `100.01` 1.250,00 borç / `760` 1.250,00 alacak. Ön muhasebedeki kasa hareketi **fişli kalır** (Eşitle yeniden yazmaz). | Fiş sayfası: "İptal edildi" kutusu, ters fişe bağlantı. |
+| 5 | Yevmiye → **Fiş gir**: gün bugün, açıklama "Temizlik malzemesi — gider hesabı düzeltmesi (CKS-2026-0042)", satır 1 `770` borç 1.250,00, satır 2 `100.01` alacak 1.250,00 → Dengeli → Kaydet. | Elle fiş `YEV-2026-00313`. `100.01` net etkisi: −1.250 (otomatik) +1.250 (ters) −1.250 (elle) = −1.250 → kasa hesabı doğru; `760` 0; `770` +1.250. Kasa bakiyesi ön muhasebede zaten doğruydu. | Mizan; `770` ve `760` ekstreleri. |
+| 6 | Hande bir dahaki sefere kuralı düzeltir: Kurallar → "Carisiz kasa / banka çıkışının karşı hesabı" `770` (varsayılan) kalsın; sık kullanılan masraflar için `770.01 Elektrik`, `770.02 Temizlik malzemesi` alt hesapları açar ve resepsiyona "Çıkış fişinde karşı hesabı seçin" der. | `770` alt hesabı açıldığı için artık satır almaz; eski `770` satırları yerinde kalır. | Hesap planı. |
+
+### Ters giderse (Senaryo N)
+
+| Durum | Ne olur | Ne yapılır |
+| --- | --- | --- |
+| Ön muhasebe fişi iptal edilemiyor ("kasa eksiye düşer") | Çıkış iptali kasaya para geri getirir, bu durumda sorun olmaz; **giriş** fişi iptalinde kasa yetersiz olabilir | Virmanla kasaya para aktarın |
+| Yevmiye fişini iptal etti, kasa bakiyesi değişmedi | Doğru: yevmiye iptali ön muhasebeye dokunmaz | Tutar yanlışsa ön muhasebe fişini iptal edin |
+| Hem ön muhasebe fişini hem yevmiye fişini iptal etti | Çift ters kayıt: `100.01` ve `760` fazladan 1.520 ters döner, mizan hesapları kayar (yine dengeli) | Elle fiş ile düzeltin (`760` borç / `100.01` alacak); bir daha yalnız birini iptal edin |
+| Elle fişte `770` seçilemiyor | `770`'in alt hesabı açılmış, ana hesap satır almaz | `770.xx` alt hesabını seçin |
+| Ters kaydın günü kilitli dönemde | "Dönem … gününe kadar kilitli" | Ters kaydın gününü bugüne alın ya da kilidi geçici açın |
+| Fiş "başkası değiştirdi" | Aynı fişi iki kişi aynı anda iptal etmeye çalıştı | Yenileyin; fiş zaten iptal edilmişse ikinci iptal 409 |
+
+## Senaryo O — Personel izin istiyor
+
+**Hikâye:** Resepsiyonist Ayşe Demir 15.01.2024'te işe girdi, 1995 doğumlu; Ocak 2026'da ikinci yılını doldurdu. 8–10 Aralık 2026 (Salı–Perşembe) için yıllık izin istiyor. Kullanıcı hesabı `ayse@otelim.com` (Ön büro rolü). İK işlerini muhasebeci Merve (`hr.view`, `hr.manage`) yürütür, izni genel müdür Burak onaylar. Ay sonunda Aralık puantajı bordroya aktarılır. Senaryo **talep → onay kuyruğu (dört göz) → bakiye → çizelge ve puantaj → bordroya aktarım** zincirini anlatır.
+
+| Adım | Ekranda ne yapılır | Arka planda ne olur | Nerede görünür |
+| --- | --- | --- | --- |
+| 1 | (Bir kez) Merve, Personel → Ayşe Demir kartında **Kullanıcı hesabı** alanına `ayse@otelim.com`'u bağlar; doğum tarihini kontrol eder. İK → **Ayarlar**'da hafta tatili Pazar, izin onayı açık, resmî tatiller tamam. | Bağ, `/ik/benim` sayfasının "bu kullanıcı hangi personel" sorusunun cevabıdır. Bağ yoksa sayfa "Kullanıcı hesabınız bir personel kartına bağlı değil" der. | Personel kartı → Kullanıcı hesabı: "Ayşe Demir (ayse@otelim.com)". |
+| 2 | Ayşe sol menüden **İzinlerim** (`/ik/benim`) açar. | Bakiye bugün itibarıyla hesaplanır: 2025 ve 2026 yıl dönümlerinde 14'er gün → hak **28**, kullanılan 0. | Kutular: Hak 28 · Kullanılan 0 · Kalan 28 · Bekleyen 0. Bu ve gelecek haftanın vardiyaları. |
+| 3 | **İzin talebi** → Yıllık ücretli izin, 08.12.2026 – 10.12.2026, "Aile ziyareti" → Kaydet. Pencere "3 iş günü" önizler. | Sunucu: çakışan izin yok, yasal süre sınırı yok (yıllık), kullanılabilir 28 ≥ 3. İzin **Onay bekliyor** açılır; onay kuyruğuna `LEAVE` ("İzin talebi") işi: "Ayşe Demir · Yıllık ücretli izin · 08.12.2026 – 10.12.2026 (3 gün)", ayrıntıda "Kalan yıllık izin (talep sonrası): 25"; süresiz bekler. `hr.leave.changed` (REQUESTED). `hr.manage` sahiplerine zil (`HR`): "İzin talebi: Ayşe Demir". | İzinlerim listesi: "Onay bekliyor"; "Bekleyen 3". İK → İzinler (`/ik/izinler`): satır + "Onay kuyruğu" bağlantısı. Onaylar → Bekleyen. |
+| 4 | Ayşe aynı hafta için bir de 10–12 Aralık raporu girmeye çalışır. | Reddedilir: "08.12.2026 – 10.12.2026 arasında yıllık ücretli izin kaydı var (onay bekliyor)" (`LEAVE_OVERLAP`). Rapor zaten İK'nın işidir. | Pencerede hata. |
+| 5 | Burak, Onaylar → Bekleyen → "İzin talebi" → ayrıntı (personel, departman, tarih, gün, kalan) → **Onayla** ("İyi tatiller"). | Dört göz: talebi giren Ayşe onaylayamazdı. `approval.granted` → İK dinleyicisi bakiyeyi **yeniden denetler** (onay anında 25 ≥ 0), izni **Onaylandı** yapar, karar notunu yazar, `hr.leave.changed` (APPROVED); Ayşe'nin ziline "İzniniz onaylandı". | İzinlerim: "Onaylandı · Burak · İyi tatiller"; Hak 28 · Kullanılan 3 · Kalan **25**. İK → İzin bakiyeleri (`/ik/izin-bakiyeleri`): Ayşe 28 / 3 / 25. |
+| 6 | Merve, İK → **Vardiya** (`/ik/vardiya`) → 7 Aralık haftası. | Çizelge onaylı izinleri okur: 8–10 Aralık Ayşe'nin hücreleri gri **"İzinli"**. "Geçen haftayı kopyala" Ayşe'nin bu günlerine de vardiya kopyalar (izin vardiyayı engellemez) → Merve bu üç vardiyayı siler, yerine başka resepsiyonist yazar. | Vardiya ızgarası. |
+| 7 | Aralık boyunca Merve her gün İK → **Puantaj** (`/ik/puantaj`) girer. 8–10 Aralık hücreleri kilitli "İzinli (Yıllık ücretli izin)". | İzinli güne "Gelmedi" yazılmaya çalışılırsa `TIMESHEET_ON_LEAVE`. İleri tarihe giriş yapılmaz. | Puantaj ızgarası; satır sonunda saat ve mesai. |
+| 8 | 31 Aralık: Merve Puantaj → **Bordroya aktar** → Aralık 2026. | Her personel için aylık özet: Ayşe'nin yıllık izni **eksik gün sayılmaz** (ücretli izin), çalışılan gün "Geldi" günleri, fazla çalışma saati. Satırlar Bordro → Puantaj ve kalemler'e kaynak **TIMESHEET** ile yazılır; Aralık bordrosu hesaplanmışsa **"yeniden hesaplanmalı"**. | Sonuç penceresi (aktarılan / atlanan, ilk satırlar); Bordro → Puantaj ve kalemler: Ayşe eksik gün 0, kaynak "İK puantajından". |
+| 9 | Merve Bordro → Aralık → **Hesapla** → Onaya gönder (Senaryo L). | Bordro onaylanınca Aralık **kilitlenir**: puantaj, aktarım ve Aralık'a dokunan onaylı izin iptali reddedilir (`PAYROLL_MONTH_LOCKED`). | Bordro ekranı. |
+
+### Ters giderse (Senaryo O)
+
+| Durum | Ne olur | Ne yapılır |
+| --- | --- | --- |
+| Ayşe İzinlerim'de "personel kartına bağlı değil" görüyor | Kullanıcı → kart bağı yok | Personel kartı → Kullanıcı hesabı |
+| 30 gün istedi | "Yıllık izin bakiyesi yetersiz: kullanılabilir 25 gün, istenen 30 gün" | Bakiyeye uygun aralık, kalanı ücretsiz izin; ya da İK önceki dönemden devir varsa **düzeltme** girer |
+| 4 günlük evlilik izni istedi | "Evlilik izni en fazla 3 iş günü" | 3 gün evlilik + ayrı yıllık izin |
+| Burak reddetti ("Yoğun dönem") | İzin **Reddedildi**, not "Reddedildi: Yoğun dönem"; bakiye değişmez; Ayşe'ye zil | Başka tarih için yeni talep |
+| Ayşe vazgeçti, talep henüz bekliyor | İzinlerim → **İptal et** (sebep); onay işi "süresi doldu" olur | — |
+| İzin onaylandıktan sonra Ayşe vazgeçti | Personel onaylı izni iptal edemez | İK → İzinler → İptal et; o günlerin puantajını gerçek duruma göre düzeltin |
+| Onay beklerken Merve Ayşe'ye −30 düzeltme girdi | Onay verilse bile izin "Onay anında yıllık izin bakiyesi yetersiz" ile Reddedildi olur | Düzeltmeyi kontrol edin, yeni talep |
+| Aralık bordrosu onaylandıktan sonra izin iptali | `PAYROLL_MONTH_LOCKED` | Fark bordrosu (Senaryo L adım 13) |
+| Aktarımdan sonra puantaj değişti | Bordro satırı eski kalır | Yeniden **Bordroya aktar**, bordroyu yeniden hesapla |
+
+## Senaryo P — Gece vardiyası ve mesai
+
+**Hikâye:** Mutfakta aşçı Mehmet Kaya (7 yıl kıdem) bu hafta gece vardiyasında. Günlük norm 7,5 saat (450 dk), haftalık norm 45 saat (2.700 dk). İK sorumlusu Merve çizelgeyi yazar, uyarıları okur, gerçek saatleri puantaja girer ve ay sonunda mesaiyi bordroya aktarır.
+
+| Adım | Ekranda ne yapılır | Arka planda ne olur | Nerede görünür |
+| --- | --- | --- | --- |
+| 1 | İK → **Vardiya** → 23 Kasım haftası → Mehmet'in Pazartesi hücresinde **+** → Departman Mutfak, 22:00 – 06:00, mola 0 → Kaydet. | Bitiş başlangıçtan küçük → vardiya **ertesi güne taşar**: 480 dk (8 saat). Pazartesi hücresinde durur. `hr.changed`. | Çip "22:00–06:00"; satır sonu 8 sa. |
+| 2 | Merve yanlışlıkla Salı 05:00 – 13:00 yazar. | Pazartesi gecesinin 06:00 bitişiyle üst üste biner → **reddedilir**: "Mehmet Kaya: 2026-11-23 22:00–06:00 vardiyasıyla çakışıyor" (`SHIFT_OVERLAP`). | Pencerede hata; kayıt yok. |
+| 3 | Salı'yı 14:00 – 22:00 yapar. | 06:00 → 14:00 arası 8 saat dinlenme: **11 saatten az** → kayıt yazılır ama **uyarı** döner. | Sarı çip; üstte "Çizelgede uyarı var: 1 kısa dinlenme (11 saatten az)". |
+| 4 | Salı'yı 22:00 – 06:00 olarak düzeltir; Çarşamba–Cumartesi de 22:00 – 06:00 ekler (6 gece × 8 saat). | Dinlenme 16 saat, uyarı kalkar. Haftalık toplam 6 × 480 = **2.880 dk > 2.700** → **haftalık norm aşımı** uyarısı (kaydı engellemez). Pazar hafta tatili. | Satır sonu sarı "48 sa"; uyarı kutusunda "1 personelde haftalık norm aşımı (45 sa üstü)". Merve bir geceyi yardımcı aşçıya kaydırır → 2.400 dk, uyarı kalkar. |
+| 5 | Mehmet **İzinlerim**'de bu ve gelecek haftanın vardiyalarını görür. | — | `/ik/benim` → Vardiyalarım. |
+| 6 | Salı sabahı Merve İK → **Puantaj** → Mehmet, Pazartesi: **Geldi**, giriş 22:00, çıkış 06:00, mola 0 → Kaydet. | Çıkış girişten küçük → ertesi güne taşar: **480 dk** çalışma, norm 450 → **30 dk** fazla çalışma. Saat Pazartesi gününe yazılır. | Hücre "22:00–06:00 · 8 sa"; satır sonu mesai 30 dk. |
+| 7 | Perşembe gecesi Mehmet 22:00'de girip 07:30'da çıktı (mola 30). | 570 − 30 = 540 dk; mesai **90 dk**. | Hücre; satır toplamı. |
+| 8 | Ay sonu: Merve **Bordroya aktar** → Kasım. | Mehmet'in ayın fazla dakikaları toplanır ve saate çevrilir (ör. 30 + 90 + … = 240 dk → **4,00** saat); "Geldi" günleri çalışılan gün; Pazar (hafta tatili) çalıştığı gün olsaydı hafta tatili çalışması, resmî tatilde çalıştığı gün bayram çalışması olurdu. Kaynak TIMESHEET; hesaplanmış Kasım bordrosu bayatlar. | Bordro → Puantaj ve kalemler: Mehmet fazla çalışma 4,00. |
+| 9 | Merve Kasım bordrosunu **Hesapla**. | Bordro fazla çalışmayı saat ücreti × 1,5 ile hesaplar (Senaryo L adım 5). | Bordro ekranı → Mehmet satırı → hesap izi. |
+
+### Ters giderse (Senaryo P)
+
+| Durum | Ne olur | Ne yapılır |
+| --- | --- | --- |
+| Vardiya 08:00 – 08:30, mola 30 | "Vardiya süresi sıfır olamaz (mola süreden uzun)" | Molayı ya da saati düzeltin |
+| 06:00 – 23:30 (17,5 saat) | "Vardiya en fazla 16 saat" | İkiye bölün |
+| Saat "8:00" yazıldı | "Başlangıç 'SS:DD' biçiminde olmalı" | 08:00 |
+| Puantajda yalnız giriş girildi | "Giriş ve çıkış birlikte girilir" | İkisini birlikte girin ya da ikisini de boş bırakın |
+| Yarının puantajı bugünden girilmek istendi | "İleri tarihe puantaj girilmez" | Gün bitince girin; plan vardiyadadır |
+| Vardiya yazıldı ama puantaj girilmedi | Vardiya plan olduğu için bordroya **hiçbir şey gitmez** | Puantajı girin |
+| Gece vardiyası ayın son gecesi (30 Kasım 22:00 – 1 Aralık 06:00) | Tamamı başladığı güne, yani **Kasım**'a yazılır | Normal |
+| Kasım bordrosu onaylandıktan sonra Perşembe saati düzeltilmek istendi | "Ay kilitli" | Fark bordrosu, fazla çalışmayı kalem olarak ekleyin |
+| Mesai görünmüyor | Günlük norm yüksek girilmiş olabilir (ör. 9 saat) | İK → Ayarlar → günlük norm |
+
+## Senaryo Q — Sadık misafir puanını kullanıyor
+
+**Hikâye:** Kerem Aydın otelin düzenli misafiri. Mart 2026'da bir haftalık iş konaklamasının folyosu 30.000 TL ile kapandı. Kasım'da 2 gece için yeniden geliyor ve çıkışta biriken puanını kullanmak istiyor. Resepsiyonda Elif (Ön büro rolü, `loyalty.view` + `loyalty.redeem`) çalışıyor. Müdür Zeynep (`loyalty.manage`) programı kurdu. Program varsayılanlarla çalışıyor: adı "FlexClub", 10 TL = 1 puan, 1 puan = 0,50 TL, en az 100 puan, folyonun en çok %50'si, 24 ay süre, Klasik 0 / Gümüş 1.000 ×1,25 / Altın 3.000 ×1,5. Senaryo **kazanma → seviye → harcama (folyoda indirim) → yanlış kalemin iptali ve iade → indirimli tutardan yeniden kazanma** zincirini anlatır. Sayıları sade tutmak için Kerem'in folyolarında ayrı vergi satırı olmadığı varsayılmıştır (vergi kalemleri zaten puana sayılmaz).
+
+| Adım | Ekranda ne yapılır | Arka planda ne olur | Nerede görünür |
+| --- | --- | --- | --- |
+| 1 | (Bir kez) Zeynep **Sadakat → Ayarlar** (`/sadakat/ayarlar`) sayfasında **Program açık** kutusunu işaretler, adı "FlexClub" yazar, diğer alanları varsayılanda bırakır ve **Kaydet**'e basar. | Ayar kaydedilir ve denetim izine yazılır. `loyalty.changed` (SETTINGS) yayınlanır. Örnek kutusu "2.480,00 ₺ harcama → 248 puan (Klasik), 124,00 ₺ değerinde" der. | Ayarlar sekmesi; Aktivite → Denetim kaydı. |
+| 2 | Mart: Kerem'in 30.000 TL'lik folyosu çıkışta kapanır. Personel ek bir şey yapmaz. | `folio.closed` → **sadakat aktörü** uygun harcamayı (vergi kalemleri hariç) hesaplar: 30.000 ÷ 10 × 1 = **3.000**. Kerem'in hesabı yoktu; otomatik üyelik açık olduğu için `SDK-000001` açılır. "Kazanıldı +3.000" paketi 24 ay süreyle yazılır, `loyalty.points.changed` yayınlanır. Son 12 ayda 3.000 puan olduğu için Kerem doğrudan **Altın** olur. İlk seviye ataması olduğundan zil çalmaz. | Sadakat → **Üyeler** (`/sadakat/uyeler`): SDK-000001, Altın, 3.000 puan (1.500 TL). |
+| 3 | Kasım: Elif girişte Kerem'in misafir kartını açar. | Sadakat kutusu `GET /loyalty/guests/…` ile okunur. | Kutuda Altın rozeti, 3.000 puan = 1.500 TL ve avantaj "Oda yükseltme (müsaitliğe göre), geç çıkış 16:00, hoş geldin ikramı" yazar. Elif odayı müsaitliğe göre yükseltir ve hoş geldin ikramını kat hizmetlerine iletir. Avantajları sistem uygulamaz, resepsiyon uygular. |
+| 4 | Çıkış sabahı folyoda 2.000 TL harcama var. Kerem "puanımı kullanayım" der. Elif rezervasyon ayrıntısını açar. | `GET /loyalty/reservations/…`: açık folyo 2.000 TL, sınır %50 = 1.000 TL ÷ 0,50 = **2.000 puan**. Bakiye 3.000 olduğu için sınır yüzdedir. | **Sadakat** kartı: açık folyo satırında "en çok 2.000 puan (1.000 TL)" ve **Puan kullan** düğmesi. |
+| 5 | Kerem 2.500 puan ister. Elif **Puan kullan** penceresine 2.500 yazar. | Sunucu reddeder: "Bu folyoda en çok 2000 puan kullanılır (harcamanın %50'i)" (`LOYALTY_LIMIT`). Hiçbir şey yazılmaz. | Pencerede hata. |
+| 6 | Kerem 400 puanda karar kılar. Elif 400 yazar, ama gelir türünü yanlışlıkla **Diğer** seçip onaylar. Wi-Fi takıldığı için düğmeye iki kez basar. | Hesap kilitlenir. 400 puan en eski paketten (FIFO) düşülür: "Harcandı −400", kalan paket 3.000 → 2.600. Folyoya "FlexClub puan indirimi (400 puan)" açıklamalı **−200 TL** indirim kalemi (gelir türü Diğer) yazılır. İkinci basış **aynı istek kimliğiyle** gelir: ikinci kalem açılmaz, ilk sonuç döner. | Folyo: tek indirim satırı. Sadakat kartı: bakiye 2.600 (1.300 TL); son hareketlerde "Harcandı −400". |
+| 7 | Elif gelir türünün **Oda** olması gerektiğini fark eder. Folyodan indirim kalemine **iptal** ister ("Yanlış gelir türü"). Zeynep Onaylar → Bekleyen'den onaylar. | Dört göz: iptali isteyen Elif kendisi onaylayamaz. Kalem iptal edilince `folio.item.voided` yayınlanır. Sadakat aktörü kalemin bir puan harcaması olduğunu görür ve 400 puanı düşüldüğü pakete geri yazar ("Harcama iade edildi +400"). Bakiye 3.000 olur. | Folyo: indirim satırı üstü çizili. Hesap sayfası: "Harcama iade edildi +400". |
+| 8 | Elif yeniden **Puan kullan** penceresini açar, 400 puan yazar, gelir türü **Oda** seçer ve onaylar. | Yeni istek kimliği açılır. "Harcandı −400" yazılır, folyoya Oda gelir türünde −200 TL indirim kalemi düşer. Folyo harcaması 2.000 − 200 = 1.800 TL olur. | Folyo bakiyesi 1.800 TL; Sadakat kartı: bakiye 2.600. |
+| 9 | Kerem kalan 1.800 TL'yi kartla öder. Elif çıkışı yapar ve folyo kapanır. | `folio.closed` → sadakat aktörü indirimli harcamadan Altın çarpanıyla hesaplar: 1.800 ÷ 10 × 1,5 = **+270**. Bakiye 2.600 + 270 = **2.870** olur. Seviye Altın kalır, zil çalmaz. | Hesap sayfası (`/sadakat/uyeler/:accountId`) hareketler: Kazanıldı +3.000 · Harcandı −400 · Harcama iade edildi +400 · Harcandı −400 · Kazanıldı +270. |
+| 10 | Gece gün kapanışı yapılır. | Muhasebe aktörü günlük gelir fişini yazar. Geçerli indirim kalemi (−200 TL, Oda) **611 Satış İskontoları** hesabına gider. İptal edilen ilk kalem gelire sayılmaz. Fatura 1.800 TL'den kesilir. | Genel muhasebe → Yevmiye: günlük gelir fişinde 611 satırı. |
+| 11 | Ertesi gün Kerem misafir portalı bağlantısını yeniden açar. | Portal ana sayfası sadakat kutusunu okur. | "FlexClub · Altın · 2.870 puan (1.435 TL)" kutusu, avantajlar ile birlikte. |
+
+### Ters giderse (Senaryo Q)
+
+| Durum | Ne olur | Ne yapılır |
+| --- | --- | --- |
+| Kerem çıkıştan **sonra** puan kullanmak istedi | Folyo kapalı: "Konaklamanın açık folyosu yok; puan girişten sonra (folyo açıkken) kullanılır" (`LOYALTY_NO_OPEN_FOLIO`) | Puan bir sonraki konaklamada kullanılır. Folyoyu sırf bunun için yeniden açmak, o folyonun kazandırdığı puanı da geri alır |
+| 50 puan kullanmak istedi | "En az 100 puan kullanılır" | En az 100 puan |
+| Kartta sadakat kutusu "Üye değil" diyor | Otomatik üyelik kapalı ya da misafir hiç puan kazanmamış | **Üye yap** (açık rıza işaretiyle); puanı olmadığı için o konaklamada kullanamaz |
+| Mart konaklaması acente ödemeliydi | Puan 0, açıklamada "acente / cari ödemeli folyo puan kazanmaz" | Ayardaki kutu kapatılırsa sonraki folyolar kazanır; geçmiş için müdür gerekçeli elle düzeltme girebilir |
+| Kerem'in iki misafir kartı vardı (puan bölünmüş) | Sadakat kartı yalnız rezervasyon sahibinin hesabını gösterir | Misafir kartında **Birleştir**: hesaplar birleşir, puanlar toplanır |
+| Sadakat aktörü kapalıyken kalem iptal edildi | İade yazılmaz; Görevler'de "İptal edilen kalem puan indirimiyse puan iade edilecek" görevi çıkar | Zeynep hesap sayfasında **Düzeltme** +400 ("İptal edilen puan indirimi iadesi") girer ve görevi tamamlar |
+| Kalem yazılırken folyo başka bir pencerede kapandı | Puan düşüldü ama kalem yazılamadı → puan kendiliğinden iade ("Folyoya yazılamadı: …") | Bir şey yapmaya gerek yok; açık folyo varsa yeniden deneyin |
+| İki resepsiyonist aynı anda puan kullandırdı | Hesap kilitlenir; ikincisi güncel bakiyeyle denetlenir, yetmezse "Bakiye yetersiz" | İkinci isteği bakiyeye göre düzeltin |
+
+## Senaryo R — KBS hatası: servis ulaşılamaz, bildirim gönderilemedi
+
+**Hikâye:** Deniz Otel'de müdür Zeynep (`kbs.manage`) KBS'yi açtı. Gerçek Emniyet KBS'si henüz bağlı olmadığı için sağlayıcı **Test ortamı (dışarı göndermez)**. Tesis kodu 06-0001, zorunlu alanlar varsayılan (cinsiyet, doğum tarihi; TC vatandaşına ek alan sorulmaz). Ekip hata akışını görsün diye Zeynep test davranışını bir günlüğüne **Ulaşılamaz** yapıyor. Resepsiyonda Elif (`kbs.view` + `kbs.send`) çalışıyor. Senaryo **giriş → bildirim sıraya girer → servis ulaşılamaz → yeniden denemeler → gecikme zili → elle bildirme ve tekrar gönderme → çıkışın girişi beklemesi** zincirini anlatır. Unutmayın: test ortamında "Bildirildi" resmî bildirim değildir; gerçek bağlantı gelene kadar her misafir resmî KBS ekranından elle de bildirilir.
+
+| Adım | Ekranda ne yapılır | Arka planda ne olur | Nerede görünür |
+| --- | --- | --- | --- |
+| 1 | (Bir kez) Zeynep **KBS → Ayarlar** (`/kbs/ayarlar`): **KBS açık**, sağlayıcı Test ortamı, tesis kodu, kullanıcı, parola; **Kaydet**. **Bağlantıyı dene**. | Ayar kaydedilir, parola şifreli saklanır, `kbs.settings.changed` yayınlanır. Deneme bildirim göndermez. | "Bağlantı başarılı — tesis 06-0001 (test ortamı; dışarı bir şey gönderilmedi)"; parola alanında yalnız "kayıtlı" rozeti. |
+| 2 | Zeynep test davranışını **Ulaşılamaz (geçici hata, yeniden denenir)** yapıp kaydeder. **Bağlantıyı dene**. | — | "Servise ulaşılamadı (test ortamı: ulaşılamaz davranışı seçili)". |
+| 3 | 15:00 Anna Schmidt (pasaport, DE) 101'e geliyor. Elif check-in penceresinde cinsiyeti boş bırakıp **Giriş yap**'a basar. | Sunucu girişi yapmaz. | "KBS bildirimi için eksik bilgi — Anna Schmidt: Cinsiyet"; alanın altında "KBS bildirimi için zorunlu". |
+| 4 | Elif cinsiyeti (Kadın) seçer, **Giriş yap**. | `guest.checked_in` → **KBS aktörü** Anna için **Giriş** bildirimi açar ("Sırada"). Cinsiyet misafir kartına yazılır. Gönderici hemen dener: test ortamı `T-UNAVAILABLE` döner → bildirim "Sırada", deneme 1, **sıradaki deneme 1 dakika sonra**. | Rezervasyon ayrıntısında **KBS** kartı: Giriş · Sırada. **KBS → Bildirimler** (`/kbs/bildirimler`): son mesaj "KBS servisine ulaşılamadı (test ortamı: geçici hata)". |
+| 5 | Elif hiçbir şey yapmaz. | Gönderici 15:01, 15:06, 15:21, 16:21… artan aralıklarla (1, 5, 15, 60 dk) yeniden dener; her deneme izde ayrı satır. | Bildirim ayrıntısı (`/kbs/bildirimler/:notificationId`): deneme sayısı her turda artar, sıradaki deneme saati yazar; iz tablosunda her başarısız deneme ayrı satır. |
+| 6 | 17:00'yi geçer, bildirim hâlâ bildirilmedi. | Saatlik **KBS gecikme zili** işi, 2 saati geçen giriş bildirimi için **kritik** zil çalar (bir kez). | Elif'in ve müdürün zilinde: "KBS giriş bildirimi gecikti: Anna Schmidt — Oda 101 misafirinin girişi 2 saattir bildirilemedi (…). Yasal süre geçmeden KBS ekranından elle bildirin." |
+| 7 | Elif zile tıklar, ayrıntı açılır. Anna'yı resmî KBS ekranından elle bildirir. FlexHotel'de **Elle bildirildi**'ye basar, not: "KBS ekranından elle girildi, ref 778812". | Bildirim **Elle bildirildi** olur; kim ve not kaydedilir, izde "Elle bildirildi: …". `kbs.notification.changed` yayınlanır. | Bildirimler listesinde durum rozeti "Elle bildirildi"; **Mutabakat** (`/kbs/mutabakat`): Anna artık "bildirilmiş". |
+| 8 | Aynı akşam 20:00'de 102'ye Lena Weber giriyor (bilgileri tam). | Giriş bildirimi açılır; servis hâlâ ulaşılamaz → yeniden denemeler başlar (1, 5, 15, 60, 180, 360 dk). 22:00'den sonra gecikme zili çalar. (Gerçekte gece görevlisi bu zilde elle bildirirdi; burada hak bitince ne olduğunu göstermek için beklendi.) | Sabaha karşı 7. deneme de olmayınca durum **Gönderilemedi**; zilde "KBS giriş bildirimi gönderilemedi: Lena Weber … KBS ekranından tekrar gönderin ya da elle bildirip işaretleyin." |
+| 9 | Sabah Zeynep test davranışını **Kabul eder**'e geri alır (servis "düzeldi"). Elif Lena'nın bildiriminde **Tekrar gönder**'e basar. | Bildirim deneme sayısı sıfırlanarak "Sırada"ya döner, gönderici hemen gönderir. Kimlik misafir kartının güncel halinden okunur. | Durum **Bildirildi**, referans `TKBS-…`; izde "Personel tekrar gönderdi" ve kabul satırı. |
+| 10 | Öğlen Anna çıkış yapar. | KBS aktörü Anna için **Çıkış** bildirimi açar; girişine bağlıdır. Giriş "Elle bildirildi" olduğu için çıkış gönderilebilir; gönderici gönderir. | Bildirimler: Çıkış · Bildirildi. Rezervasyon ayrıntısındaki KBS kartında iki satır. |
+| 11 | Vardiya devrinde Elif **Mutabakat**'a bakar. | Özet: içerideki kişi = bildirilmiş. | Eksikler tablosu boş. |
+
+### Ters giderse (Senaryo R)
+
+| Durum | Ne olur | Ne yapılır |
+| --- | --- | --- |
+| Test davranışı **Reddeder** iken giriş yapıldı | Tek denemede **Gönderilemedi**, kod `T-REJECTED` "Kimlik bilgisi doğrulanamadı …"; yeniden denenmez | Bilgiyi kontrol edip **Tekrar gönder** ya da resmî ekrandan elle bildirip **Elle bildirildi** |
+| Giriş "Gönderilemedi"de dururken misafir çıktı | Çıkış bildirimi "Sırada" bekler; girişi bildirilmeden gönderilmez | Önce girişi çözün (tekrar gönder ya da elle bildirildi); çıkış kendiliğinden gider |
+| **Elle bildirildi** notuna "x" yazıldı | "Nasıl bildirildiğini yazın (ör. KBS ekranından elle girildi)" — en az 3 karakter | Nasıl bildirdiğinizi yazın |
+| Elle bildirilen bildirimde **Tekrar gönder** denendi | Reddedilir: bu durumda bu işlem yapılamaz | Gerek yok; bildirim tamamlanmıştır |
+| Gönderilmeden önce misafir kartındaki cinsiyet silindi | Gönderimde **Gönderilemedi**, `MISSING_FIELDS`: "Eksik bilgi: Cinsiyet. Misafir kartını tamamlayıp tekrar gönderin." | Ayrıntıdaki **Misafir kartını aç** → alanı doldurun → **Tekrar gönder** |
+| Yanlış misafire giriş yapıldı, bildirim henüz gitmedi | Giriş geri alınınca bildirim **İptal (gerek kalmadı)** | Bir şey yapmaya gerek yok |
+| Bildirim gittikten sonra giriş geri alındı | Giriş çıkış bildirimiyle kapatılır: "Giriş geri alındı (yanlış giriş): bildirilen giriş çıkışla kapatılıyor" | Resmî ekranda elle bildirdiyseniz orada da düzeltin |
+| KBS aktörü kapalıyken giriş yapıldı | Bildirim açılmaz; Görevler'de "Giren misafirin KBS giriş bildirimi elle yapılacak" (`KBS` modülü) | Resmî ekrandan elle bildirin, görevi notla tamamlayın. Mutabakat'ta kişi "Bildirim açılmamış" görünür |
+| Sunucu gönderim ortasında yeniden başladı | Bildirim "Gönderiliyor"da kalır | 5 dakika içinde "Sırada"ya kendiliğinden döner (KBS takılı kurtarma) |
+| KBS ayarı kapatıldı | Tekrar gönder "KBS kapalı; önce ayarlardan açın"; yeni bildirim açılmaz | Ayarı açın; sıradakiler kaldığı yerden gider |
+
 ## Senaryolarda geçen olaylar, aktörler, onaylar ve görevler
 
 Bu bölüm senaryoları başkasına anlatırken "bunu kim yapıyor?" sorusuna hızlı cevap için bir başvuru tablosudur. Olay adları Aktivite → Olaylar ekranında Türkçe karşılıklarıyla görünür; buradaki teknik adlar yalnız eşleştirmek içindir.
@@ -529,11 +714,12 @@ Bu bölüm senaryoları başkasına anlatırken "bunu kim yapıyor?" sorusuna h�
 | --- | --- | --- | --- |
 | `reservation.created` | Rezervasyon servisi (widget, resepsiyon, kanal aktörü, concierge) | Oda aktörü → oda atar; bildirim aktörü → onay bildirimi (bekleyende onaylanınca); kanal aktörü → envanter farkı | A, D, K |
 | `reservation.confirmed` / `cancelled` / `no_show` / `reinstated` | Rezervasyon servisi, gün kapanışı | Folyo aktörü → iptal / gelmedi ücreti (geri alınırsa düşer); kanal aktörü → envanter; bekleme listesi taraması | A, C, D |
-| `guest.checked_in` | Giriş servisi | Oda aktörü → dolu; folyo aktörü → folyo + erken giriş ücreti + teminat ödemesi; bildirim → hoş geldiniz; online check-in → "giriş yapıldı" | A, G, K |
-| `guest.checked_out` | Çıkış servisi | Oda aktörü → boş + kirli; kat hizmetleri aktörü → çıkış temizliği; folyo aktörü → kalan gece / geç çıkış, kapanış; bildirim → teşekkür; anket işi → çıkış sonrası anket | A, I, K |
-| `guest.check_in_reverted` / `check_out_reverted` | Geri alma | Oda aktörü doluluğu düzeltir; folyo aktörü ücreti / teminatı ters kayıtla düşer, folyoyu yeniden açar | A |
+| `guest.checked_in` | Giriş servisi | Oda aktörü → dolu; folyo aktörü → folyo + erken giriş ücreti + teminat ödemesi; bildirim → hoş geldiniz; online check-in → "giriş yapıldı"; **KBS aktörü → kişi başına giriş bildirimi** (KBS açıksa) | A, G, K, R |
+| `guest.checked_out` | Çıkış servisi | Oda aktörü → boş + kirli; kat hizmetleri aktörü → çıkış temizliği; folyo aktörü → kalan gece / geç çıkış, kapanış; bildirim → teşekkür; anket işi → çıkış sonrası anket; KBS aktörü → çıkış bildirimi | A, I, K, R |
+| `guest.check_in_reverted` / `check_out_reverted` | Geri alma | Oda aktörü doluluğu düzeltir; folyo aktörü ücreti / teminatı ters kayıtla düşer, folyoyu yeniden açar; KBS aktörü → gönderilmemiş bildirimi iptal eder, gönderilmişi çıkışla kapatır / yeniden giriş bildirir | A, R |
+| `kbs.notification.changed` / `kbs.settings.changed` | KBS aktörü, KBS göndericisi, KBS ekranları (tekrar gönder, elle bildirildi, ayar) | KBS ekranları, mutabakat ve rezervasyondaki KBS kartı tazelenir (`kbs.changed` kanalı); gönderilemeyince ve gecikince zil (`KBS`) | R |
 | `folio.room_charges.due` | Gün dönüşü zamanlayıcısı | Folyo aktörü → eksik geceler (100'lük parçalar) | A, C |
-| `night.audit.started` / `night.audit.closed` | Gün kapanışı | Folyo aktörü → ön basım; (2.0: gece müdürü, kârlılık, dış muhasebe) | C |
+| `night.audit.started` / `night.audit.closed` | Gün kapanışı | Folyo aktörü → ön basım; **muhasebe aktörü → günlük gelir fişi** (`businessDay` günü; genel muhasebe); (2.0: gece müdürü, kârlılık, dış muhasebe) | C, M |
 | `fnb.order.placed` | POS (adisyon turu, oda servisi, paket) | Mutfak ekranı panosu | B |
 | `fnb.order.status_changed` | Mutfak ekranı | POS adisyon ekranı rozeti; garson zili ("hazır") | B |
 | `fnb.order.charged` | POS "odaya yaz", oda servisi teslimi | Folyo aktörü → folyo kalemi (vergi kategorisiyle) | A, G |
@@ -541,7 +727,10 @@ Bu bölüm senaryoları başkasına anlatırken "bunu kim yapıyor?" sorusuna h�
 | `pos.payment.changed` / `banquet.payment.changed` / `spa.payment.changed` | POS, banket, spa ödemeleri | Muhasebe aktörü → kasa / banka (+ etkinlikte müşteri carisi); yalnız işlenmiş / iptal | B, H |
 | `minibar.consumed` / `laundry.charged` / `spa.charged` | Minibar fişi, çamaşır teslimi, spa randevusu | Folyo aktörü → kalem (çıkmış misafirde açık folyoya geç kalem) | A |
 | `payment.received` / `refunded` / `voided` | Ödeme servisi | Muhasebe aktörü → kasa / banka ya da cari; folyo aktörü → bitmiş konaklamanın sıfırlanan folyosunu kapatır | A, K |
-| `folio.closed` | Folyo aktörü / kapatma | Folyo aktörü → fatura taslağı | A, K |
+| `folio.closed` | Folyo aktörü / kapatma | Folyo aktörü → fatura taslağı; **sadakat aktörü → misafire puan** (vergi kalemleri hariç, seviye çarpanıyla) | A, K, Q |
+| `folio.reopened` | Folyo yeniden açma | Sadakat aktörü → o folyodan kazanılan puanı geri alır (yeniden kapanınca fark yazılır) | Q |
+| `folio.item.voided` | Folyo kalemi iptali (onaylı) | Sadakat aktörü → kalem puan indirimiyse puanı iade eder | Q |
+| `loyalty.points.changed` / `loyalty.tier.changed` / `loyalty.changed` | Sadakat aktörü, puan kullanma, üyelik, elle düzeltme, süre işi, ayar | Sadakat ekranları, misafir kartı ve rezervasyon kartı tazelenir (`loyalty.changed` kanalı); seviye yükselişinde zil (`LOYALTY`) | Q |
 | `invoice.issued` / `invoice.cancelled` | Fatura kesimi / iptali | Muhasebe aktörü → numara cari harekete / serbest fatura alacağı / ters kayıt | A, H, K |
 | `stock.changed` | Stok hareketleri (mal kabul, satış, sayım, elle) | Stok aktörü (yalnız SALE / MOVEMENT / COUNT) → minimum altı talebi + zil | B, J |
 | `purchase.goods.received` | Mal kabul | Muhasebe aktörü → tedarikçi carisine KDV dahil borç, vade | B |
@@ -549,17 +738,21 @@ Bu bölüm senaryoları başkasına anlatırken "bunu kim yapıyor?" sorusuna h�
 | `agency.bonus.changed` | Prim hak edişi | Muhasebe aktörü → acente carisine alacak (fark kaydı) | K |
 | `banquet.event.changed` | Etkinlik durumu | Muhasebe aktörü → müşteri carisine bedel / iptal bedeli / geri alma | H |
 | `payroll.run.approved` / `payroll.run.changed PAID` | Bordro onayı / ödemesi | Muhasebe aktörü → tahakkuk / ödeme kayıtları | L |
+| `hr.leave.changed` | İK servisi (talep, iptal), İK onay dinleyicisi (karar) | İK ekranları ve İzinlerim tazelenir; zil (`HR`) talepte İK'ya, kararda personele | O |
+| `hr.changed` | Vardiya, puantaj, bordroya aktarım, belge, ayar, bakiye düzeltmesi | Açık İK ekranları (`hr.changed` kanalı); aktarımda ayrıca bordro ekranları (`payroll.settings.changed`) | O, P |
+| `accounting.posted` (`sourceId` ile) | Muhasebe aktörü (ön muhasebe kaydı yazıldığında), Ön muhasebe → Eşitle | Muhasebe aktörü → belgenin fişlenmemiş kayıtlarını **yevmiye fişine** çevirir (genel muhasebe) | A, B, H, K, L, M, N |
+| `ledger.changed` | Yevmiye fişi, hesap planı, kural, ayar değişikliği | Genel muhasebe ekranları (Mizan, Yevmiye, Hesap planı) tazelenir | M, N |
 | `rate.changed` | Fiyat planı, sezon, onaylı fiyat önerisi, Excel fiyat yüklemesi | Kanal aktörü → fiyat farkı; fiyat önbelleği tazelenir | F |
 | `agency.allotment.changed` | Kota tanımı | Kanal aktörü → OTA'ya giden boş sayıdan kota düşülür; bekleme listesi taraması | K |
 | `channel.booking.received` | Channex revizyonu / iCal | Kanal aktörü → rezervasyon açar / günceller / iptal eder | D |
-| `room.assigned` / `room.blocked` / `room.unblocked` | Oda aktörü, blok servisi | Bildirim (oda bilgisi, giriş günü); kat hizmetleri aktörü (blok bitince derin temizlik); kanal aktörü (envanter) | A, E |
+| `room.assigned` / `room.blocked` / `room.unblocked` | Oda aktörü, blok servisi | Bildirim (oda bilgisi, giriş günü); kat hizmetleri aktörü (blok bitince derin temizlik); kanal aktörü (envanter); KBS aktörü (içerideki misafirin odası değişince oda değişikliği bildirimi) | A, E, R |
 | `housekeeping.issue.reported` | Kat görevlisi "Sorun var" | Teknik servis dinleyicisi → arıza bileti | E |
 | `housekeeping.task.completed` / `room.inspected` | Kat görevi | Kat hizmetleri aktörü → oda temiz / kontrol edildi; isteğe bağlı görev isteği kapatır | A, I |
 | `maintenance.ticket.created` / `assigned` / `resolved` | Teknik servis | Zil (atanan); isteğe bağlı bilet isteği işlemde / tamamlandı | E |
 | `guest.message.received` / `guest.intent.detected` / `guest.message.reply` | Mesaj geçitleri, router ajanı, personel / AI | Router ajanı → niyet; concierge → cevap ya da devir; geçit → gönderim | I |
 | `guest.request.created` / `updated` | İstek servisi, AI, oda servisi | Kat hizmetleri (görev), teknik servis (bilet), oda servisi (sipariş) | E, I |
 | `pricing.review.requested` | Günlük iş | AI fiyat ajanı → öneri | F |
-| `approval.requested` / `granted` / `denied` / `expired` | Onay kuyruğu | İsteyen aktör / modül dinleyicisi → işi bitirir ya da vazgeçer | A, F, H, L |
+| `approval.requested` / `granted` / `denied` / `expired` | Onay kuyruğu | İsteyen aktör / modül dinleyicisi → işi bitirir ya da vazgeçer (İK: izni onaylar / reddeder) | A, F, H, L, O |
 | `manual_task.created` | Aktör taban sınıfı (kapalı / yapamadı) | Görevler ekranı, zil | G |
 | `survey.*` | Anket | Takip kaydı, zil (düşük puan), içgörü ajanı | I |
 
@@ -567,7 +760,7 @@ Bu bölüm senaryoları başkasına anlatırken "bunu kim yapıyor?" sorusuna h�
 
 | Onay türü | Kim ister | Ne zaman | Senaryo |
 | --- | --- | --- | --- |
-| Folyo kalemi iptali | Folyo yetkilisi | Her elle kalem iptali | A |
+| Folyo kalemi iptali | Folyo yetkilisi | Her elle kalem iptali (puan indirimi kalemi dahil; iptal olunca puan iade edilir) | A, Q |
 | İade | Ödeme alan | Her iade | A, H |
 | Büyük ödeme | Ödeme servisi | Folyo ödemesi eşiğe eşit / üstü (Ayarlar → Genel parametreler) | A |
 | Ödeme iptali | Ödeme alan | Hatalı giriş | A, B |
@@ -579,6 +772,7 @@ Bu bölüm senaryoları başkasına anlatırken "bunu kim yapıyor?" sorusuna h�
 | Toplu fiyat değişikliği | Kural işi / AI fiyat ajanı | Her fiyat önerisi | F |
 | Bordro | Bordroyu hazırlayan | Her bordro ve fark bordrosu | L |
 | Acente primi | Prim hesaplayan | Her hak ediş | K |
+| İzin talebi (`LEAVE`) | Talebi giren (personel ya da İK) | Her izin talebi (İK girişi, ayarda onay kapalıysa onaysız); süresiz | O |
 | Kapasite aşımı (overbooking) | Rezervasyon açan | Politika "onaya gönder" ise yer yokken | A |
 
 ### Senaryolarda geçen manuel görev başlıkları (aktör kapalıysa)
@@ -586,21 +780,23 @@ Bu bölüm senaryoları başkasına anlatırken "bunu kim yapıyor?" sorusuna h�
 | Modül (görev sütunu) | Örnek başlık | Kim görür | Nasıl tamamlanır |
 | --- | --- | --- | --- |
 | Folyo | "Misafir girişi: folyo açılacak, teminat işlenecek"; "Restoran adisyonu folyoya yazılacak"; "Kapanan folyonun fatura taslağı açılacak" | `folio.post` | Folyo ekranından aynı iş; Faturalanacaklar'dan taslak |
-| Ön muhasebe | "Folyo tahsilatı muhasebeye işlenecek (kasa / banka ya da cari)"; "Mal kabul tedarikçi carisine işlenecek"; "Onaylanan bordro carilere tahakkuk ettirilecek" | `accounting.manage` | Eşleme / cari düzelt → Ayarlar → Eşitle |
+| Ön muhasebe | "Folyo tahsilatı muhasebeye işlenecek (kasa / banka ya da cari)"; "Mal kabul tedarikçi carisine işlenecek"; "Onaylanan bordro carilere tahakkuk ettirilecek"; **genel muhasebe:** "Ön muhasebe kaydı (FOLIO_PAYMENT) yevmiye fişine çevrilecek: kuralı / hesabı düzeltip Genel muhasebe → Ayarlar → Eşitle", "2026-11-25 gününün gelir fişi yazılacak (Genel muhasebe → Ayarlar → Eşitle)" | `accounting.manage` | Eşleme / cari düzelt → Ön muhasebe → Ayarlar → Eşitle; kural / hesap düzelt → Genel muhasebe → Ayarlar → Eşitle |
 | Oda işlemleri | "Rezervasyona oda atanacak"; "Oda dolu olarak işaretlenecek" | `rooms.operate` | Oda atama / oda planı |
 | Kat hizmetleri | Oda durumu güncellemesi | Kat yetkisi | Kat haritasından |
 | Stok | "Adisyon ADS-… için satış düşümü yapılacak" | `stock.manage` | Hareket gir (çıkış) |
 | Kanal rezervasyonu | "Elle işlenmeli: eşleşmeyen fiyat planı" | `reservations.manage` | Rezervasyonu elle aç / düzenle; kaydı notla kapat |
 | Mesajlar | Cevapsız konuşma (AI kapalı / bütçe) | Mesaj yazma yetkisi | Konuşmayı personel yürütür |
 | Rapor talebi | "Rapor talebi: geçen ayın haftalık doluluğu" | `reports.view` | Raporu elle hazırlayıp kişiye iletme |
+| Sadakat | "Kapanan folyonun sadakat puanı yazılacak"; "Yeniden açılan folyonun sadakat puanı geri alınacak"; "İptal edilen kalem puan indirimiyse puan iade edilecek"; "Spa randevusunun sadakat puanı yazılacak" | `loyalty.manage` | Sadakat → Üyeler → hesap → **Düzeltme** (gerekçeli ± puan) |
+| KBS | "Giren misafirin KBS giriş bildirimi elle yapılacak"; "Çıkan misafirin KBS çıkış bildirimi elle yapılacak"; "Geri alınan girişin KBS kaydı elle düzeltilecek"; "Geri alınan çıkışın KBS kaydı elle düzeltilecek (yeniden giriş)"; "Oda değiştiren misafirin KBS oda değişikliği elle bildirilecek" | `kbs.send` | Resmî KBS ekranından elle bildir, görevi notla tamamla |
 | Onay kuyruğu | Aktörü kayıttan kalkmış onaylanan iş | Ayar yöneticisi | İşi elle yap |
 
 ## Senaryoların ortak dersleri
 
 1. **Her para hareketi tek kez yazılır.** Folyo kalemi, ödeme, stok hareketi, muhasebe kaydı — hepsinin bir **kaynak anahtarı** vardır; aynı olay iki kez gelse, aktör kapanıp açılsa, personel aynı işi elle yapsa ikinci kayıt oluşmaz.
 2. **Silme yok, ters kayıt var.** Folyo kalemi, ödeme, fiş, fatura, adisyon ödemesi silinmez; iptal ters tutarlı kayıttır ve iptal günü tarihlidir. Geçmiş rapor geriye dönük değişmez.
-3. **Riskli iş dört göz ister.** Kalem iptali, iade, büyük ödeme, fatura iptali, eşik üstü ödeme fişi, bordro, sipariş, fiyat değişikliği, acente primi, kapasite aşımı: isteyen onaylayamaz.
+3. **Riskli iş dört göz ister.** Kalem iptali, iade, büyük ödeme, fatura iptali, eşik üstü ödeme fişi, bordro, izin talebi, sipariş, fiyat değişikliği, acente primi, kapasite aşımı: isteyen onaylayamaz.
 4. **Aktör kapalıysa iş personele düşer.** Görevler ekranı boş değilse birisi bir şeyi elle yapmalı demektir; aktörü açmak eski görevleri kendiliğinden kapatmaz.
 5. **Sürüm damgası veriyi korur.** İki kişi aynı kaydı değiştirirse ikincisi "başkası değiştirdi, yenileyin" görür. Hata değil, güvenlik.
 6. **İş günü ≠ takvim günü.** Oda ücreti, kasa ve raporlar iş gününe; fatura tarihi ve anket saati takvime bağlıdır.
-7. **Dürüst sınırlar:** e-posta geçidi gerçek gönderici değil (SMS kurulabilir), e-belge gerçek entegratöre bağlı değil, genel muhasebe yok, online kart ödemesi yok, KBS bildirimi yok. Bunlar yol haritasındadır ve ekranlar bunu söyler; sahte "gönderildi" yazan hiçbir şey yoktur.
+7. **Dürüst sınırlar:** e-posta geçidi gerçek gönderici değil (SMS kurulabilir), e-belge gerçek entegratöre bağlı değil, e-Defter dosyası ve dış muhasebe aktarımı yok (yevmiye ve mizan ekranda var), online kart ödemesi yok, KBS bildirimi gerçek Emniyet / Jandarma servisine bağlı değil (kuyruk, mutabakat ve iz çalışır; yalnız test ortamı, otel resmî ekrandan elle bildirip işaretler). Bunlar yol haritasındadır ve ekranlar bunu söyler; sahte "gönderildi" yazan hiçbir şey yoktur.

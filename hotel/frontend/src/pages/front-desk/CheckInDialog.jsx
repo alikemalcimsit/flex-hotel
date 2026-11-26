@@ -8,6 +8,7 @@ import { api, apiPost } from '../../lib/api.js';
 import { DEPOSIT_OPTIONS, READINESS, frontDeskKeys } from '../../lib/front-desk.js';
 import { documentPath, guestPortalKeys } from '../../lib/guestPortal.js';
 import { isMinor, stillFromDocument } from '../../lib/idScan.js';
+import { EMPTY_KBS_EXTRAS, kbsExtrasBody, kbsExtrasForm, kbsRequiredExtras } from '../../lib/kbsFormat.js';
 import { formatDate, formatMoney } from '../../lib/format.js';
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 import { reservationKeys } from '../../lib/reservations.js';
@@ -15,13 +16,14 @@ import { validateWith } from '../../lib/validate.js';
 import { toastSuccess } from '../../store/toast.js';
 import { partyLabel } from '../reservations/reservationTheme.js';
 import { EMPTY_IDENTITY, IdentityFields, identityBody, toIdentityForm } from './IdentityFields.jsx';
+import { KbsIdentityFields } from './KbsIdentityFields.jsx';
 import { RoomChoice } from './RoomChoice.jsx';
 
 const NOT_READY = new Set(['DIRTY', 'CLEANING']);
 /** Formda kalan (yeniden gönderilebilir) hatalar; diğerleri de form içinde gösterilir. */
 const REFRESH_CODES = new Set(['STALE_WRITE', 'INVALID_STATUS', 'FEE_CHANGED', 'ROOM_OCCUPIED', 'ROOM_NOT_FREE']);
 
-const emptyCompanion = () => ({ key: globalThis.crypto.randomUUID(), firstName: '', lastName: '', isChild: false, identity: { ...EMPTY_IDENTITY }, read: null, savedRead: null });
+const emptyCompanion = () => ({ key: globalThis.crypto.randomUUID(), firstName: '', lastName: '', isChild: false, identity: { ...EMPTY_IDENTITY }, extras: { ...EMPTY_KBS_EXTRAS }, read: null, savedRead: null });
 
 /** Okumanın formdaki kimlikle hâlâ geçerli olan kısmı (personel sonradan elle değiştirdiyse düşer). */
 const liveRead = (identity, read) => (read && stillFromDocument(identityBody(identity), read.snapshot) ? read.documentRead : null);
@@ -59,6 +61,8 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
   const data = preview.data;
 
   const [guest, setGuest] = useState(EMPTY_IDENTITY);
+  // KBS ek alanları (modül 58): cinsiyet, anne / baba adı, doğum yeri; boş bırakılan kayıtlı değeri değiştirmez.
+  const [guestExtras, setGuestExtras] = useState(EMPTY_KBS_EXTRAS);
   const [companions, setCompanions] = useState([]);
   const [plate, setPlate] = useState('');
   const [deposit, setDeposit] = useState({ method: 'NONE', amount: '', reference: '' });
@@ -82,11 +86,12 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
     initialized.current = true;
     const fromOnline = onlineCheckin?.checkInValues ?? null;
     setGuest(toIdentityForm(fromOnline ? { ...data.guest, ...fromOnline.guest } : data.guest, data.guest.nationality));
+    setGuestExtras(kbsExtrasForm(data.guest));
     // Refakatçide yaş tutulmaz; belgesiz kaydedilebilen yalnızca çocuktur (online check-in'de misafir işaretler).
     setCompanions(
       fromOnline
-        ? fromOnline.companions.map((companion) => ({ ...emptyCompanion(), firstName: companion.firstName, lastName: companion.lastName, isChild: companion.isChild, identity: toIdentityForm(companion) }))
-        : data.companions.map((companion) => ({ ...emptyCompanion(), ...companion, isChild: !companion.idNumber, identity: toIdentityForm(companion), savedRead: companion.idRead ?? null })),
+        ? fromOnline.companions.map((companion) => ({ ...emptyCompanion(), firstName: companion.firstName, lastName: companion.lastName, isChild: companion.isChild, identity: toIdentityForm(companion), extras: kbsExtrasForm(companion) }))
+        : data.companions.map((companion) => ({ ...emptyCompanion(), ...companion, isChild: !companion.idNumber, identity: toIdentityForm(companion), extras: kbsExtrasForm(companion), savedRead: companion.idRead ?? null })),
     );
     setPlate(fromOnline?.vehiclePlate ?? data.reservation.vehiclePlate ?? '');
     setChoosingRoom(!data.room && canAssignRoom);
@@ -161,13 +166,14 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
       expectedUpdatedAt: reservation.updatedAt,
       roomId: pickedRoom?.id ?? null,
       acceptRoomNotReady: roomNotReady && acceptNotReady,
-      guest: { ...identityBody(guest), documentRead: liveRead(guest, guestRead) },
+      guest: { ...identityBody(guest), ...kbsExtrasBody(guestExtras), documentRead: liveRead(guest, guestRead) },
       guestName,
       companions: companions.map((companion) => ({
         firstName: companion.firstName,
         lastName: companion.lastName,
         isChild: companion.isChild,
         ...identityBody(companion.identity),
+        ...kbsExtrasBody(companion.extras),
         documentRead: liveRead(companion.identity, companion.read),
       })),
       vehiclePlate: plate.trim() || null,
@@ -200,6 +206,11 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
   const scanCompanion = scanFor && scanFor !== 'guest' && scanFor !== 'new' ? companions.find((companion) => companion.key === scanFor) : null;
   const guestCardName = { firstName: data.guest.firstName, lastName: data.guest.lastName };
   const guestReadLive = liveRead(guest, guestRead);
+  // KBS (modül 58): açıksa ayarın istediği ek alanlar yıldızlı; kapalıyken alanlar katlanır bölümde isteğe bağlı.
+  const kbs = data.kbs ?? null;
+  const kbsCollapsed = !kbs?.isEnabled;
+  const guestKbsRequired = kbsRequiredExtras(guest, kbs);
+  const companionKbsRequired = (companion) => (companion.isChild && !companion.identity.idNumber.trim() ? [] : kbsRequiredExtras(companion.identity, kbs));
   const guestSavedRead = !guestRead && data.guest.idRead && stillFromDocument(identityBody(guest), toIdentityForm(data.guest)) ? data.guest.idRead : null;
 
   /** Taramanın sonucu → forma. @param {'guest' | string} target @param {ReturnType<typeof import('../../lib/idScan.js').applyScan>} result */
@@ -345,7 +356,8 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
             </Alert>
           )}
           {errors['guest.documentRead'] && <p className="text-xs font-semibold text-sec-strong">{errors['guest.documentRead']}</p>}
-          <IdentityFields value={guest} onChange={setGuest} errors={errors} prefix="guest" disabled={busy} />
+          <IdentityFields value={guest} onChange={setGuest} errors={errors} prefix="guest" birthDateRequired={guestKbsRequired.includes('birthDate')} disabled={busy} />
+          <KbsIdentityFields value={guestExtras} onChange={setGuestExtras} errors={errors} prefix="guest" required={guestKbsRequired} collapsed={kbsCollapsed} disabled={busy} />
         </section>
 
         <section className="flex flex-col gap-3" aria-labelledby="check-in-companions">
@@ -398,6 +410,16 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
                 errors={errors}
                 prefix={`companions.${index}`}
                 optional={companion.isChild}
+                birthDateRequired={companionKbsRequired(companion).includes('birthDate')}
+                disabled={busy}
+              />
+              <KbsIdentityFields
+                value={companion.extras}
+                onChange={(extras) => updateCompanion(companion.key, { extras })}
+                errors={errors}
+                prefix={`companions.${index}`}
+                required={companionKbsRequired(companion)}
+                collapsed={kbsCollapsed}
                 disabled={busy}
               />
               <div className="flex justify-end">

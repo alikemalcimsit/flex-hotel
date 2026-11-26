@@ -29,6 +29,7 @@ import { stayPaymentStatus } from '../payments/service.js';
 import { openLaundryForStay } from '../extras/laundry.js';
 import { lostItemsForCheckOut } from '../lost-items/service.js';
 import { getHotelSettings } from '../settings/service.js';
+import { assertKbsFields, loadKbsSettings } from '../kbs/shared.js';
 import { hasFolioActivity, lockStayFolios, stayBalances } from './folio.js';
 import {
   amountDue,
@@ -162,6 +163,10 @@ const STAY_SELECT = Object.freeze({
       birthDate: true,
       idReadAt: true,
       idReadVia: true,
+      gender: true,
+      birthPlace: true,
+      fatherName: true,
+      motherName: true,
     },
   },
   roomType: { select: { id: true, code: true, name: true } },
@@ -395,7 +400,7 @@ async function assertRoomForCheckIn(tx, hotelId, stay, { businessDate, acceptRoo
  * @param {Array<object>} companions
  * @param {{ today: string, actor: string, now: Date }} read
  */
-async function saveCompanions(tx, hotelId, stay, companions, read) {
+async function saveCompanions(tx, hotelId, stay, companions, read, kbs = null) {
   await tx.reservationGuest.deleteMany({ where: { hotelId, reservationId: stay.id } });
   await tx.reservationGuest.create({ data: { hotelId, reservationId: stay.id, guestId: stay.guestId, isPrimary: true } });
   if (companions.length === 0) return;
@@ -408,19 +413,22 @@ async function saveCompanions(tx, hotelId, stay, companions, read) {
   const known = numbers.length
     ? await tx.guest.findMany({
         where: { hotelId, idNumber: { in: numbers }, deletedAt: null },
-        select: { id: true, firstName: true, lastName: true, idType: true, idNumber: true, nationality: true, birthDate: true },
+        select: { id: true, firstName: true, lastName: true, idType: true, idNumber: true, nationality: true, birthDate: true, gender: true, birthPlace: true, fatherName: true, motherName: true },
         orderBy: { createdAt: 'asc' },
       })
     : [];
 
   const guestIds = [];
+  /** KBS'ye gidecek refakatçiler (belgeli yetişkinler ve belgesi girilmiş çocuklar). */
+  const reported = [];
   for (const [index, companion] of companions.entries()) {
     const identity = {
       idType: companion.idType ?? null,
       idNumber: companion.idNumber ?? null,
       nationality: companion.nationality ?? null,
-      // Boş bırakılan doğum tarihi kayıtlı olanı silmez.
+      // Boş bırakılan doğum tarihi ve KBS ek alanları kayıtlı olanı silmez.
       ...(companion.birthDate ? { birthDate: companion.birthDate } : {}),
+      ...stripNulls(kbsInput(companion)),
     };
     const match = companion.idNumber
       ? known.find((guest) => guest.idNumber === companion.idNumber && (!guest.nationality || guest.nationality === companion.nationality))
@@ -447,21 +455,32 @@ async function saveCompanions(tx, hotelId, stay, companions, read) {
       }
       await tx.guest.update({ where: { id: match.id }, data: identity });
       guestIds.push(match.id);
+      if (companion.idNumber) reported.push({ path: `companions.${index}`, name: guestFullName(companion), person: { ...match, ...identity } });
     } else {
       const created = await tx.guest.create({
         data: { hotelId, firstName: companion.firstName, lastName: companion.lastName, ...identity },
         select: { id: true },
       });
       guestIds.push(created.id);
+      if (companion.idNumber) reported.push({ path: `companions.${index}`, name: guestFullName(companion), person: identity });
     }
   }
+  if (kbs) assertKbsFields(kbs, reported);
   await tx.reservationGuest.createMany({
     data: guestIds.map((guestId) => ({ hotelId, reservationId: stay.id, guestId, isPrimary: false })),
     skipDuplicates: true,
   });
 }
 
+/** Formdan gelen KBS ek alanları. @param {any} person */
+const kbsInput = (person) => ({ gender: person.gender ?? null, birthPlace: person.birthPlace ?? null, fatherName: person.fatherName ?? null, motherName: person.motherName ?? null });
+/** Boş bırakılan alan kayıtlı olanı silmez. @param {Record<string, unknown>} value */
+const stripNulls = (value) => Object.fromEntries(Object.entries(value).filter(([, item]) => item !== null && item !== undefined));
+
 /* ══════════════════ Giriş ══════════════════ */
+
+/** KBS ek alanları (modül 58). @param {{ gender?: string | null, birthPlace?: string | null, fatherName?: string | null, motherName?: string | null }} guest */
+const kbsExtras = (guest) => ({ gender: guest.gender ?? null, birthPlace: guest.birthPlace ?? null, fatherName: guest.fatherName ?? null, motherName: guest.motherName ?? null });
 
 /** Kartın "kimlikten okundu" bilgisi (modül 59). @param {{ idReadAt?: Date | null, idReadVia?: string | null }} guest */
 const idReadOf = (guest) => (guest?.idReadAt ? { at: guest.idReadAt.toISOString(), via: guest.idReadVia } : null);
@@ -486,7 +505,7 @@ export async function getCheckInPreview(hotelId, reservationId, { now = new Date
         orderBy: { createdAt: 'asc' },
         select: {
           guest: {
-            select: { id: true, firstName: true, lastName: true, idType: true, idNumber: true, nationality: true, birthDate: true, idReadAt: true, idReadVia: true },
+            select: { id: true, firstName: true, lastName: true, idType: true, idNumber: true, nationality: true, birthDate: true, idReadAt: true, idReadVia: true, gender: true, birthPlace: true, fatherName: true, motherName: true },
           },
         },
       },
@@ -494,7 +513,7 @@ export async function getCheckInPreview(hotelId, reservationId, { now = new Date
   });
   if (!stay) throw new NotFoundError('Rezervasyon bulunamadı');
 
-  const [roomState] = stay.room ? await roomStates(hotelId, [stay], businessDate) : [null];
+  const [[roomState], kbs] = await Promise.all([stay.room ? roomStates(hotelId, [stay], businessDate) : [null], loadKbsSettings(prisma, hotelId)]);
   const early = earlyCheckInCharge({
     policy: earlyPolicy(hotel),
     checkInTime: hotel.checkInTime,
@@ -516,6 +535,7 @@ export async function getCheckInPreview(hotelId, reservationId, { now = new Date
       idNumber: stay.guest.idNumber,
       nationality: stay.guest.nationality,
       birthDate: stay.guest.birthDate ? toIsoDay(stay.guest.birthDate) : null,
+      ...kbsExtras(stay.guest),
       idRead: idReadOf(stay.guest),
     },
     companions: stay.reservationGuests.map(({ guest }) => ({
@@ -525,10 +545,13 @@ export async function getCheckInPreview(hotelId, reservationId, { now = new Date
       idNumber: guest.idNumber,
       nationality: guest.nationality,
       birthDate: guest.birthDate ? toIsoDay(guest.birthDate) : null,
+      ...kbsExtras(guest),
       idRead: idReadOf(guest),
     })),
     room: roomState,
     identityPolicy: hotel.checkInIdentityPolicy,
+    /** KBS açıksa form ek alanları ister (modül 58). */
+    kbs: { isEnabled: kbs.isEnabled, requireGender: kbs.requireGender, requireBirthDate: kbs.requireBirthDate, requireParentNames: kbs.requireParentNames, requireBirthPlace: kbs.requireBirthPlace, citizenIdOnly: kbs.citizenIdOnly },
     earlyCheckIn: { ...early, mode: hotel.earlyCheckInFeeMode, checkInTime: hotel.checkInTime },
     currency: stay.currency,
     businessDate: toIsoDay(businessDate),
@@ -544,7 +567,7 @@ export async function getCheckInPreview(hotelId, reservationId, { now = new Date
  * @param {{ now?: Date }} [options] `now`: test ve yeniden oynatma için
  */
 export async function checkIn(hotelId, reservationId, input, { now = new Date() } = {}) {
-  const { hotel, businessDate, clock } = await loadClock(hotelId, now);
+  const [{ hotel, businessDate, clock }, kbs] = await Promise.all([loadClock(hotelId, now), loadKbsSettings(prisma, hotelId)]);
   const actor = currentActor();
   try {
     await writeWithEvents(async (tx, stage) => {
@@ -552,7 +575,8 @@ export async function checkIn(hotelId, reservationId, input, { now = new Date() 
       assertStayAction('checkIn', stay, businessDate);
 
       const shortfall = identityShortfall({
-        policy: hotel.checkInIdentityPolicy,
+        // KBS açıkken her yetişkin bildirilir (modül 58): otelin politikası "yalnız sahibi" olsa da refakatçi yetişkinler istenir.
+        policy: kbs.isEnabled ? 'ALL_ADULTS' : hotel.checkInIdentityPolicy,
         adults: stay.adults,
         children: stay.children,
         companions: input.companions,
@@ -588,8 +612,10 @@ export async function checkIn(hotelId, reservationId, input, { now = new Date() 
       const today = toIsoDay(businessDate);
       const card = await tx.guest.findFirst({
         where: { id: stay.guestId, hotelId },
-        select: { firstName: true, lastName: true, idType: true, idNumber: true, nationality: true, birthDate: true },
+        select: { firstName: true, lastName: true, idType: true, idNumber: true, nationality: true, birthDate: true, gender: true, birthPlace: true, fatherName: true, motherName: true },
       });
+      const extras = kbsInput(guest);
+      assertKbsFields(kbs, [{ path: 'guest', name: input.guestName ? `${input.guestName.firstName} ${input.guestName.lastName}` : `${card.firstName} ${card.lastName}`, person: { ...kbsExtras(card), birthDate: card.birthDate, ...stripNulls(extras), idType: guest.idType, idNumber: guest.idNumber, nationality: guest.nationality, ...(guest.birthDate ? { birthDate: guest.birthDate } : {}) } }]);
       const readFields = identityReadFields({
         current: card,
         next: { idType: guest.idType, idNumber: guest.idNumber, nationality: guest.nationality, birthDate: guest.birthDate ?? card?.birthDate ?? null },
@@ -608,6 +634,7 @@ export async function checkIn(hotelId, reservationId, input, { now = new Date() 
           idNumber: guest.idNumber,
           nationality: guest.nationality,
           birthDate: guest.birthDate ?? undefined,
+          ...stripNulls(extras),
           ...readFields,
           ...(rename ? { firstName: rename.firstName, lastName: rename.lastName } : {}),
         },
@@ -622,7 +649,7 @@ export async function checkIn(hotelId, reservationId, input, { now = new Date() 
           after: { firstName: rename.firstName, lastName: rename.lastName, reason: 'Girişte belgedeki ada göre düzeltildi' },
         });
       }
-      await saveCompanions(tx, hotelId, stay, input.companions, { today, actor, now });
+      await saveCompanions(tx, hotelId, stay, input.companions, { today, actor, now }, kbs);
 
       const deposit = input.deposit.method === 'NONE' ? null : input.deposit;
       const updated = await tx.reservation.update({
@@ -792,10 +819,10 @@ export async function checkInBatch(hotelId, items, { now = new Date() } = {}) {
       const stay = await prisma.reservation.findFirst({
         where: { id: item.id, hotelId, deletedAt: null },
         select: {
-          guest: { select: { idType: true, idNumber: true, nationality: true, birthDate: true } },
+          guest: { select: { idType: true, idNumber: true, nationality: true, birthDate: true, gender: true, birthPlace: true, fatherName: true, motherName: true } },
           reservationGuests: {
             where: { isPrimary: false, deletedAt: null },
-            select: { guest: { select: { firstName: true, lastName: true, idType: true, idNumber: true, nationality: true, birthDate: true } } },
+            select: { guest: { select: { firstName: true, lastName: true, idType: true, idNumber: true, nationality: true, birthDate: true, gender: true, birthPlace: true, fatherName: true, motherName: true } } },
           },
         },
       });
@@ -809,6 +836,7 @@ export async function checkInBatch(hotelId, items, { now = new Date() } = {}) {
           idNumber: stay.guest.idNumber,
           nationality: stay.guest.nationality,
           birthDate: stay.guest.birthDate,
+          ...kbsExtras(stay.guest),
         },
         companions: stay.reservationGuests.map(({ guest }) => ({
           firstName: guest.firstName,
@@ -821,6 +849,7 @@ export async function checkInBatch(hotelId, items, { now = new Date() } = {}) {
           idNumber: guest.idNumber,
           nationality: guest.nationality,
           birthDate: guest.birthDate,
+          ...kbsExtras(guest),
         })),
         vehiclePlate: null,
         deposit: { method: 'NONE' },

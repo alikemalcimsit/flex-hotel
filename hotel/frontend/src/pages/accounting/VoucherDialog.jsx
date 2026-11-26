@@ -18,13 +18,17 @@ import { Modal } from '../../components/Modal.jsx';
 import { accountingKeys } from '../../lib/accounting.js';
 import { api, apiPost, withQuery } from '../../lib/api.js';
 import { formatDate, formatMoney } from '../../lib/format.js';
+import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 import { newRequestId } from '../../lib/reservations.js';
 import { useHotelToday } from '../../lib/useHotel.js';
 import { validateWith } from '../../lib/validate.js';
 import { toastSuccess } from '../../store/toast.js';
+import { GlAccountField } from '../ledger/GlAccountField.jsx';
 import { LedgerAccountField } from './LedgerAccountField.jsx';
 
 const CARI_TYPES = Object.freeze(['COLLECTION', 'PAYMENT']);
+/** Carisiz giriş / çıkış: karşı hesap (masraf / gelir) genel muhasebeden seçilebilir (modül 48). */
+const TREASURY_ONLY_TYPES = Object.freeze(['TREASURY_IN', 'TREASURY_OUT']);
 const TYPE_HINTS = Object.freeze({
   COLLECTION: 'Cari alacaklanır (borcu düşer); para kasaya / bankaya girer ya da alınan çek / senet portföye girer.',
   PAYMENT: 'Cari borçlanır (borcumuz düşer); para kasadan / bankadan çıkar, verilen çek "ödenecek" olur ya da portföydeki çek ciro edilir.',
@@ -65,6 +69,7 @@ export function VoucherDialog({ type: initialType, account = null, treasuryAccou
   const [type, setType] = useState(initialType);
   const [date, setDate] = useState(today);
   const [ledgerAccount, setLedgerAccount] = useState(account);
+  const [glAccount, setGlAccount] = useState(null);
   const [lines, setLines] = useState(() => (CARI_TYPES.includes(initialType) ? [{ ...emptyLine('TREASURY'), treasuryAccountId: treasuryAccountId ?? '' }] : []));
   const [header, setHeader] = useState({ treasuryAccountId: treasuryAccountId ?? '', targetTreasuryAccountId: '', amount: '' });
   const [description, setDescription] = useState('');
@@ -146,6 +151,7 @@ export function VoucherDialog({ type: initialType, account = null, treasuryAccou
             treasuryAccountId: header.treasuryAccountId || null,
             targetTreasuryAccountId: type === 'TRANSFER' ? header.targetTreasuryAccountId || null : null,
             amount: String(header.amount).trim().replace(',', '.'),
+            ...(TREASURY_ONLY_TYPES.includes(type) && glAccount ? { glAccountId: glAccount.id } : {}),
           }),
     };
     const checked = validateWith(voucherCreateSchema, body);
@@ -331,6 +337,18 @@ export function VoucherDialog({ type: initialType, account = null, treasuryAccou
               />
             )}
             <Input label="Tutar" inputMode="decimal" value={header.amount} onChange={(event) => setHeader((current) => ({ ...current, amount: event.target.value }))} error={errors.amount} disabled={busy} />
+            {TREASURY_ONLY_TYPES.includes(type) && (
+              <div className="sm:col-span-3">
+                <GlAccountField
+                  label="Karşı hesap (masraf / gelir, isteğe bağlı)"
+                  value={glAccount}
+                  onChange={setGlAccount}
+                  hint="Boş bırakılırsa genel muhasebe kuralındaki hesap kullanılır."
+                  error={errors.glAccountId}
+                  disabled={busy}
+                />
+              </div>
+            )}
           </div>
         )}
       </form>

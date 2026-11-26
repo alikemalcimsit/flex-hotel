@@ -63,6 +63,7 @@ const VOUCHER_SELECT = Object.freeze({
   voidedBy: true,
   voidReason: true,
   ledgerAccount: { select: { id: true, code: true, name: true } },
+  glAccount: { select: { id: true, code: true, name: true } },
   treasuryAccount: { select: { id: true, code: true, name: true, kind: true, currency: true } },
   targetTreasury: { select: { id: true, code: true, name: true, kind: true, currency: true } },
 });
@@ -92,6 +93,7 @@ const voucherView = (row) => ({
   status: row.status,
   date: day(row.date),
   ledgerAccount: row.ledgerAccount,
+  glAccount: row.glAccount ?? null,
   treasuryAccount: row.treasuryAccount,
   targetTreasury: row.targetTreasury,
   amount: money(row.amount),
@@ -371,7 +373,7 @@ async function postVoucher(tx, stage, { hotelId, voucher, lines, actor }) {
       treasuryIds.add(voucher.targetTreasuryAccountId);
     }
   }
-  await stage('accounting.posted', { hotelId, source: 'VOUCHER', ledgerAccountIds: [...ledgerIds], treasuryAccountIds: [...treasuryIds] });
+  await stage('accounting.posted', { hotelId, source: 'VOUCHER', sourceId: voucher.id, ledgerAccountIds: [...ledgerIds], treasuryAccountIds: [...treasuryIds] });
 }
 
 /**
@@ -403,7 +405,14 @@ export async function createVoucher(hotelId, input) {
         treasuryAccountId: input.type === 'COLLECTION' || input.type === 'PAYMENT' ? null : input.treasuryAccountId,
         targetTreasuryAccountId: input.type === 'TRANSFER' ? input.targetTreasuryAccountId : null,
         amount: effect.total,
+        // Genel muhasebe (48): kasa / banka giriş-çıkış fişinin yevmiyedeki karşı hesabı (masraf / gelir).
+        glAccountId: input.type === 'TREASURY_IN' || input.type === 'TREASURY_OUT' ? (input.glAccountId ?? null) : null,
       };
+      if (header.glAccountId) {
+        const glAccount = await tx.glAccount.findFirst({ where: { id: header.glAccountId, hotelId }, select: { code: true, name: true, isPostable: true, isActive: true } });
+        if (!glAccount) throw new ValidationError('Karşı hesap bulunamadı', { fields: { glAccountId: 'Geçersiz hesap' } });
+        if (!glAccount.isActive || !glAccount.isPostable) throw new ValidationError(`${glAccount.code} ${glAccount.name} satır alamaz (pasif ya da ana hesap)`, { fields: { glAccountId: 'Alt hesap seçin' } });
+      }
       if (header.ledgerAccountId) await lockLedgerAccounts(tx, hotelId, [header.ledgerAccountId]);
       await lockTreasuryAccounts(tx, hotelId, [header.treasuryAccountId, header.targetTreasuryAccountId, ...lines.map((line) => line.treasuryAccountId)].filter(Boolean));
       await lockInstruments(tx, hotelId, lines.filter((line) => line.kind === 'ENDORSE').map((line) => line.instrumentId));
@@ -586,7 +595,7 @@ export async function createOpening(hotelId, input) {
         });
       }
       await recordAudit(tx, { hotelId, entity: 'AccountingVoucher', entityId: created.id, action: 'CREATE', after: { number, type: 'OPENING', date, amount: input.amount, side: input.side, target: target.name } });
-      await stage('accounting.posted', { hotelId, source: 'OPENING', ledgerAccountIds: input.ledgerAccountId ? [input.ledgerAccountId] : [], treasuryAccountIds: input.treasuryAccountId ? [input.treasuryAccountId] : [] });
+      await stage('accounting.posted', { hotelId, source: 'OPENING', sourceId: created.id, ledgerAccountIds: input.ledgerAccountId ? [input.ledgerAccountId] : [], treasuryAccountIds: input.treasuryAccountId ? [input.treasuryAccountId] : [] });
       await stage('accounting.voucher.changed', { hotelId, voucherId: created.id, change: 'POSTED' });
       return created.id;
     });
@@ -650,7 +659,7 @@ export async function voidVoucher(hotelId, voucherId, { reason }) {
     }
     await tx.accountingVoucher.update({ where: { id: voucherId }, data: { status: 'VOIDED', voidedAt: new Date(), voidedBy: actor, voidReason: reason } });
     await recordAudit(tx, { hotelId, entity: 'AccountingVoucher', entityId: voucherId, action: 'UPDATE', before: { status: 'POSTED' }, after: { status: 'VOIDED', reason, number: voucher.number, reversed: reversed.ledger + reversed.treasury } });
-    await stage('accounting.posted', { hotelId, source: 'VOID', ledgerAccountIds: reversed.ledgerAccountIds, treasuryAccountIds: reversed.treasuryAccountIds });
+    await stage('accounting.posted', { hotelId, source: 'VOID', sourceId: voucherId, ledgerAccountIds: reversed.ledgerAccountIds, treasuryAccountIds: reversed.treasuryAccountIds });
     await stage('accounting.voucher.changed', { hotelId, voucherId, change: 'VOIDED' });
   });
   return getVoucher(hotelId, voucherId);

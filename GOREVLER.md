@@ -3617,14 +3617,50 @@ olay kataloğu, zamanlanmış işler, tablolar, modül durumu; elle düzenlenmez
 
 ### 48. Genel muhasebe — Ali Kemal
 **Gün sonu:** Tek Düzen Hesap Planı yüklü; her satış / tahsilat otomatik yevmiye fişi oluyor; mizan çıkıyor.
-- [ ] Backend: ChartOfAccounts (ağaç), Journal, JournalLine tabloları + API; Tek Düzen seed
-- [ ] Backend: otomatik fiş kuralları tablosu (event tipi → borç hesap / alacak hesap)
-- [ ] Backend: mizan sorgusu (tarih aralığı, hesap bazlı borç / alacak / bakiye)
-- [ ] Ekran: Hesap planı ağacı + hesap ekle
-- [ ] Ekran: Fiş listesi + manuel fiş girişi (borç = alacak kontrolü)
-- [ ] Ekran: Mizan
-- [ ] Ekran: Otomatik fiş kuralları ayarı
-- [ ] Aktör: accounting-worker'a fiş üretim kuralları
+- [x] Backend: `GlAccount` (ağaç), `JournalEntry`, `JournalLine` + API (`/ledger`); Tek Düzen seed (ilk kullanımda, `ensureChart`)
+- [x] Backend: otomatik fiş kuralları (`JournalRule`: kaynak × anahtar → hesap; varsayılanlar koddan `DEFAULT_JOURNAL_RULES`)
+- [x] Backend: mizan (devir / dönem borç-alacak / kapanış, ağaçta üst toplamı) + hesap ekstresi (kebir, imleçli)
+- [x] Ekran: Hesap planı ağacı + hesap ekle / düzenle (`/genel-muhasebe/hesap-plani`)
+- [x] Ekran: Yevmiye listesi + fiş sayfası + elle fiş (borç = alacak) + iptal (`/genel-muhasebe/yevmiye`)
+- [x] Ekran: Mizan (`/genel-muhasebe/mizan`) + hesap ekstresi (`/genel-muhasebe/hesaplar/:id`)
+- [x] Ekran: Kurallar (`/genel-muhasebe/kurallar`) + Ayarlar (dönem kilidi, eşitle; `/genel-muhasebe/ayarlar`)
+- [x] Aktör: accounting-worker `accounting.posted` → yevmiye fişi, `night.audit.closed` → günlük gelir fişi
+
+> **📌 Modül 48 tamamlandı (25 Kasım 2026 — Ali Kemal).** Kararlar: **her ön muhasebe hareketi fiş olur** — 47'nin cari ve
+> kasa / banka kayıtları belge bazında (`sourceId`; `accounting.posted` yüküne eklendi) yevmiye fişine çevrilir: kasa / banka hareketi
+> kasanın hesabına (100.xx / 102.xx, hesap açılırken kendiliğinden açılır), cari hareketi türünün kontrol hesabına (acente 120.02,
+> şirket 120.03, şahıs 120.04, diğer 136, tedarikçi 320, personel 335; bordro yükümlülükleri SGK 361 / vergi 360 / BES 369 / icra 336),
+> kalan fark kaynağa göre **tamamlayıcı ağırlıklarla** bölünür (`completers.js`: mal kabul → 150 + oran bazında 191; etkinlik bedeli /
+> serbest fatura → gelir + oran bazında 391; fiş çek satırları → 101 / 103 / 121 / 321; carisiz giriş / çıkış → fişte seçilen
+> `glAccountId` ya da kural 649 / 770; bordro → departman ağırlığıyla 770; açılış → 500; kalan kuruş / kur farkı → 646 / 656).
+> Tahsilatlar ve folyonun cariye aktarımı **120.01 misafir ve adisyon hesabını** alacaklandırır; **gelir gün kapanışında** yazılır
+> (`journalizeDay`: folyo kalemleri hizmet gününe göre tür → 600.01–600.09 / 611 / 360, `taxLines` oran bazında 391; kapanan
+> adisyonların odaya yazılmayan payı; spa randevularının spa kasasında ödenen payı; borç 120.01) ve yeniden çalıştırmada yalnız
+> **fark** yazılır. Fişlenen 47 kaydının `journalEntryId`'si dolar (ikinci kez fişlenmez; kayıt kilidi FOR UPDATE ile eşzamanlı çağrı
+> sıralanır). Kural / hesap sorunu (kural yok, hesap pasif, ana hesap) → iş "Ön muhasebe" manuel görevine, düzeltilince
+> **Eşitle** (`syncJournals`: fişlenmemiş kayıtların kaynakları + kapanmış günler, 20 sn süre sınırı). Döviz kasası hareketi ön büro
+> ödemesinin folyo karşılığıyla, yoksa günün kuruyla çevrilir (kur yoksa iş hatası). **Düzeltme ters kayıtla:** fiş silinmez, iptal
+> edilen fiş VOIDED + ters fiş; ön muhasebe fişinin iptali yevmiyede ayrı ters fiş yazar. **Dönem kilidi** (`glLockedThrough`):
+> kilitli güne elle fiş / iptal yok; otomatik fiş kilit sonrası ilk güne, açıklamada notla. Yalnız yaprak hesap satır alır;
+> satırı olan hesaba alt hesap açılamaz. Hesabın `department` alanı (oda / F&B / diğer / dağıtılmamış) 93 USALI için hazır.
+> Varsayılan kurallar tabloya yazılmaz (koddan okunur; otel yazdığı kuralla ezer, silince varsayılana döner).
+>
+> **API** `/ledger`: `chart` (+ `picker`, `seed`, `:id`, `:id/lines`), `journals` (+ `:id`, `:id/void`), `trial-balance`, `rules`,
+> `settings`, `sync`. İzinler yeni: `ledger.view` / `ledger.manage` / `ledger.setup` (müdür ve muhasebe üçüne de sahip). Olay
+> `ledger.changed` (kanal `ledger.changed`). 47'ye eklenen: `AccountingVoucher.glAccountId` (kasa / banka giriş-çıkış fişinde karşı
+> hesap, VoucherDialog alanı), `LedgerEntry.journalEntryId`, `TreasuryMovement.journalEntryId`, `AccountingSettings.glLockedThrough /
+> glChartSeededAt`. Migration `20261125090000_general_ledger` (CHECK: satırın tek tarafı, iptal izi).
+>
+> **Test:** saf kurallar 8 (gruplama, ağırlıkla bölme, toplama, kur, kilit, fark), sözleşme (ledger.js index'te), aktör +2,
+> entegrasyon 10 (Tek Düzen yüklemesi ve sıra, hesap açma / üst yok / satırlı üst, aktör zinciriyle nakit / acente / döviz fişleri,
+> tahsilat fişi + çek + tahsil + carisiz çıkış + fiş iptali, mal kabul KDV oran ayrımı kuralla, günlük gelir fişi ve fark düzeltmesi
+> ve mizan ağaç toplamı, pasif hesap → manuel görev → eşitleme (kapanmış günün gelir fişi dahil), elle fiş API (201 / 200 / 400 /
+> 409) + iptal + ekstre imleci, dönem kilidi, izinler). Ön muhasebe ve bordro entegrasyon setleri yeniden koşturuldu.
+>
+> **Bilinçli devir / sınırlar:** e-Defter (49'un kalanı) bu fişlerden üretilecek; USALI eşlemesi (93) `department` alanını kullanır;
+> dış muhasebe aktarımı (96) `GlAccount.code` eşlemesi. Restoran gelirinin KDV'si adisyon toplamından (oran bazında ayrılmaz; kural
+> `VAT_OUTPUT` boş anahtar); spa KDV'si randevunun net / toplam farkından. Demirbaş amortismanı (46) yevmiyeye henüz yazılmaz
+> (elle fiş). Kılavuz: Arka ofis → Genel muhasebe bölümü + arka planda / senaryolar / SSS.
 
 > **FlexAI 2.0'dan not (3 Kasım 2026 — Ahmet):** 93 (USALI) her hesabı bir USALI satırına / departmana, 96 (dış muhasebe
 > aktarımı) hedef programın hesap koduna eşleyecek. Hesabın departmanını (oda, F&B, diğer, dağıtılmamış) tutabilecek
@@ -3812,12 +3848,46 @@ olay kataloğu, zamanlanmış işler, tablolar, modül durumu; elle düzenlenmez
 
 ### 52. İK — Ali Kemal
 **Gün sonu:** İzin talepleri onaylanıyor, vardiya çizelgesi yapılıyor, puantaj tutuluyor, özlük belgeleri saklanıyor.
-- [ ] Backend: Leave, Shift, Timesheet, EmployeeDocument tabloları + API; izin bakiye hesabı
-- [ ] Ekran: İzin talebi (personel) + onay (yönetici) → onay kuyruğu
-- [ ] Ekran: İzin bakiyeleri
-- [ ] Ekran: Haftalık vardiya çizelgesi (departman × gün)
-- [ ] Ekran: Puantaj (giriş / çıkış, mesai)
-- [ ] Ekran: Özlük belgeleri (yükle, süre takibi)
+- [x] Backend: `Leave` (+ `LeaveAdjustment`), `Shift`, `Timesheet`, `EmployeeDocument`, `HrSettings` + API (`/hr`); izin bakiyesi (4857 md. 53)
+- [x] Ekran: İzin talebi (personel `/ik/benim`, İK personel adına) + onay kuyruğu (`LEAVE`, dört göz)
+- [x] Ekran: İzin bakiyeleri (`/ik/izin-bakiyeleri`, elle düzeltme)
+- [x] Ekran: Haftalık vardiya çizelgesi (`/ik/vardiya`, departman × gün, hafta kopyalama)
+- [x] Ekran: Günlük puantaj (`/ik/puantaj`, giriş / çıkış / mola / mesai) + "Bordroya aktar"
+- [x] Ekran: Özlük belgeleri (`/ik/belgeler`, yükle, süre takibi, hatırlatma)
+
+> **📌 Modül 52 tamamlandı (25 Kasım 2026 — Ali Kemal).** Kararlar: **personel kaydı ortak** (51'in `Employee` / `Department`),
+> personel kendi talebini kullanıcı hesabına bağlı kartla girer (`hr.self`); **yıllık izin hakkı 4857 md. 53** — tamamlanan yılda
+> 14 / 20 / 26, 18 yaş altı ve 50 yaş üstü en az 20; hak yıl dönümünde doğar; bakiye = hak (`asOf`'a kadar) + elle düzeltme − onaylı
+> yıllık izinlerin tamamı (ileri tarihli olsa da); **iş günü sayımı** hafta tatili ve resmî tatil düşülerek (md. 56), rapor / ücretsiz /
+> doğum izni takvim günüyle; evlilik 3, vefat 3, babalık 5 gün sınırı. **Onay:** `LEAVE` onay türü (isteyen onaylayamaz, süresiz bekler);
+> İK ayarı onayı kapatırsa İK girişi doğrudan onaylı; karar personele ve İK'ya `HR` zili; bekleyen talebin iptali onay isteğini
+> konusuz (EXPIRED) bırakır; onaylı iznin iptali yalnız İK ve kilitli bordro ayına giremez. **Vardiya** personel × gün × saat
+> (gece vardiyası ertesi güne taşar); çakışma hata, 11 saatten az dinlenme ve 45 saat/hafta üstü **uyarı**; hafta kopyalama çakışanı
+> atlar. **Puantaj günlük** (geldi / gelmedi / hafta tatili / resmî tatil; izinli gün onaylı izinden, elle yazılamaz; ileri tarih yok;
+> mesai = norm üstü); **Bordroya aktar** ayın özetini 51'in `PayrollAttendance` satırına kaynak `TIMESHEET` ile yazar (eksik gün =
+> gelmedi + rapor / ücretsiz / doğum, tek tür ise kodu 01 / 21 / 15, karışıksa 12; çalışılan gün; bayram ve hafta tatili çalışması;
+> mesai saati), 51'in ay kilidi ve bayat bordro kuralıyla. **Belgeler** diskte (`hr/<otel>/<personel>/<belge>.<uzantı>`), PDF / JPEG /
+> PNG / WebP ≤ 5 MB, imza doğrulamalı; yumuşak silme; süresi `documentReminderDays` içinde dolacaklar 12 saatte bir İK'ya zil
+> (belge başına 7 günde bir). **Ayarlar:** hafta tatili günü, günlük 450 / haftalık 2.700 dk norm, resmî tatiller (sabitler
+> varsayılan, dinî bayramlar elle), izin onayı, hatırlatma günü.
+>
+> **API** `/hr`: `me` (+ `me/leaves`), `leaves` (+ `:id`, `:id/cancel`), `leave-balances`, `employees/:id/leave-balance`,
+> `leave-adjustments`, `shifts` (+ `copy-week`), `timesheets` (+ `export-payroll`), `documents` (+ `:id/file`, `employees/:id/documents`),
+> `settings`. İzinler yeni: `hr.view` / `hr.manage` / `hr.self` (müdür ve muhasebe üçü; ön büro, kat hizmetleri, F&B yalnız `hr.self`).
+> Onay türü `LEAVE`; zil `HR`; olaylar `hr.leave.changed`, `hr.changed`; kanal `hr.changed`. Migration `20261125150000_hr`
+> (CHECK: izin aralığı ve durum izi, vardiya saat biçimi, puantaj dakikaları, ayar aralıkları).
+>
+> **Ekran:** `/ik` sekmeli — İzinler, İzin bakiyeleri, Vardiya, Puantaj, Belgeler, Ayarlar; `/ik/benim` personelin kendi sayfası
+> (bakiye, izinlerim, bu / gelecek hafta vardiyam, bu ayın puantaj özeti). Personel kartında İK kutusu.
+>
+> **Test:** sözleşme 9 (hak / yıl dönümü / 29 Şubat / iş günü / vardiya / puantaj / aylık özet / şemalar), entegrasyon 7 (talep →
+> onay → bakiye → ziller, çakışma / bakiye / yasal süre, kendi iptali; ret, onaysız giriş, kilitli ay; bakiye listesi ve düzeltme,
+> 50 yaş üstü; çizelge çakışma / dinlenme / kopyalama; puantaj izinli gün / ileri tarih / aktarım değerleri / kilitli ay; belge
+> PDF / tür uyuşmazlığı / indirme / hatırlatma / silme; izinler ve kullanıcı bağı). Bordro, onay ve bildirim entegrasyon setleri
+> yeniden koşturuldu.
+>
+> **Bilinçli devir:** 88 (işgücü planlama) `Shift.source = PLANNER` ile öneri yazacak; 76 (personel mobil) puantajı `Timesheet.source
+> = MOBILE` ile; 78 stajyer hesapları. Yarım gün izin yok (tam gün); puantaj cihaz entegrasyonu (kart okuyucu) 62'de.
 
 > **Modül 51'den not (3 Kasım 2026 — Ahmet):** `Employee`, `Department` ve `PayrollAttendance` 51'de kuruldu; İK aynı personel kaydını
 > kullanır (ikinci personel tablosu açılmaz). Puantaj ekranı 51'in `PayrollAttendance` satırına kaynak `TIMESHEET` ile yazmalı; onaylı
@@ -3987,11 +4057,39 @@ olay kataloğu, zamanlanmış işler, tablolar, modül durumu; elle düzenlenmez
 
 ### 56. Sadakat programı — Ali Kemal
 **Gün sonu:** Misafir her konaklamada puan kazanıyor, seviyesi yükseliyor, puanla indirim alıyor.
-- [ ] Backend: LoyaltyProgram, LoyaltyAccount, LoyaltyTransaction tabloları; puan kazanma kuralı (`folio.closed` → harcama × oran)
-- [ ] Ekran: Program kuralları (puan oranı, seviyeler, seviye avantajları)
-- [ ] Ekran: Misafir kartına "puan / seviye" kutusu (22)
-- [ ] Ekran: Puan harcama (rezervasyonda indirim olarak kullan)
-- [ ] Portala (53) puan görünümü
+- [x] Backend: `LoyaltySettings`, `LoyaltyAccount`, `LoyaltyTransaction` (lot / FIFO); kazanma kuralı (`folio.closed` → harcama ÷ birim × seviye çarpanı) — aktör `loyalty-worker`
+- [x] Ekran: Program kuralları (`/sadakat/ayarlar`: oranlar, sınırlar, süre, seviyeler ve avantajlar)
+- [x] Ekran: Misafir kartına "puan / seviye" kutusu (22) + üye yap (açık rıza)
+- [x] Ekran: Puan harcama (rezervasyon ayrıntısında "Puan kullan" → açık folyoya indirim kalemi)
+- [x] Portala (53) puan görünümü
+
+> **📌 Modül 56 tamamlandı (26 Kasım 2026 — Ali Kemal).** Kararlar: **kazanma folyo kapanınca** — rezervasyon sahibi misafir, uygun
+> harcamadan (folyo kalemleri, vergi kalemleri hariç, indirimler düşülmüş) `floor(harcama / spendPerPoint × seviye çarpanı)` kazanır;
+> acente / voucher ödemeli folyo ayara göre kazanmaz; spa kasasında ödenen tamamlanmış randevu ayara göre kazanır. Kaynak başına
+> **hedefe eşitleme** (hedef − yazılmış): folyo yeniden açılınca geri alınır, yeniden kapanınca fark; aynı olay iki kez gelse de tek
+> yazım. **Harcama açık folyoda indirimdir** — puan × puan değeri tutarında `DISCOUNT` kalemi (gelir türü seçilir), en az
+> `minRedeemPoints`, folyo harcamasının en çok `maxRedeemPct`'i; önce puan FIFO düşülür (lot kaydı `consumed`), sonra kalem
+> `postCharge` ile aynı istek kimliğiyle (çift gönderim tek kalem), kalem yazılamazsa puan iade; kalem iptal edilince
+> (`folio.item.voided`) puan lotlarına iade. Muhasebe ayrıca bir şey yazmaz: indirim kalemi genel muhasebede 611'e gider (48).
+> **Seviye** son 12 ayda kazanılan puanla (yükselişte `LOYALTY` zili, düşebilir); **süre** `expiryMonths` (0 = süresiz), 12 saatlik iş
+> kullanılmamış lotları düşer ve seviye penceresini kaydırır. **Üyelik** otomatik (ilk kazanmada) ya da elle (KVKK açık rıza işareti);
+> numara `SDK-000001`. Elle düzeltme gerekçeli (`loyalty.manage`; bakiyeden fazla düşülemez). Misafir kartları birleşince hesaplar
+> birleşir (hedefte yoksa taşınır, varsa hareketler ve bakiye aktarılır, kaynak kapanır).
+>
+> **API** `/loyalty`: `settings`, `accounts` (+ `:id`, `:id/transactions`, `:id/adjust`), `guests/:id` (+ `enroll`),
+> `reservations/:id` (+ `redeem`). İzinler yeni: `loyalty.view` (müdür, ön büro, muhasebe), `loyalty.redeem` (müdür, ön büro),
+> `loyalty.manage` (müdür). Olaylar `loyalty.points.changed`, `loyalty.tier.changed`, `loyalty.changed`; zil `LOYALTY`; kanal
+> `loyalty.changed`; manuel görev modülü "Sadakat". Portal özetine `loyalty` alanı. Migration `20261126090000_loyalty` (CHECK: lot
+> kalanı, sıfır hareket, ayar aralıkları).
+>
+> **Test:** sözleşme 6 (puan hesabı, değer, en çok kullanım, FIFO, seviye, ayar şeması), aktör 3, entegrasyon 4 (aktör zinciriyle
+> kazanma, yeniden açma / fark, acente ödemeli 0; kullanma, sınırlar, çift gönderim, iptalde iade, indirimli tutardan kazanma, Altın
+> çarpanı; seviye zili, süre dolumu, elle düzeltme, birleştirme, portal; izinler ve elle üyelik). Misafir, folyo, portal, spa ve ödeme
+> entegrasyon setleri yeniden koşturuldu.
+>
+> **Devir:** 80 (misafir tanıma) seviye ve `loyalty.tier.changed`'i VIP kuralında kullanır; 84 (hediye çeki / üyelik) ayrı ödeme
+> aracıdır, puanla karışmaz; 102 kalite raporu `loyalty.points.changed`. Bilinçli sınır: rezervasyon fiyatına (giriş öncesi) puan
+> uygulanmaz — kullanım folyo açıkken; puan kuponu (M31) üretilmez.
 
 > **📌 Ali'ye not (modül 57, 19 Kasım 2026 — Ahmet):** spa ücreti iki yoldan kapanır: odaya yazılan `spa.charged` olayıyla folyoya düşer
 > (`folio.closed` kuralınız onu kendiliğinden sayar); **spa kasasında** ödenen ise folyoya girmez (`SpaPayment`, olay
@@ -4084,11 +4182,39 @@ olay kataloğu, zamanlanmış işler, tablolar, modül durumu; elle düzenlenmez
 
 ### 58. Emniyet kimlik bildirimi (KBS) — Ali Kemal
 **Gün sonu:** Her check-in sonrası misafir bilgisi KBS'ye otomatik gidiyor; hata olursa listede görünüp tekrar gönderiliyor.
-- [ ] Backend: KbsConfig, KbsLog tabloları; KBS web servis adaptörü
-- [ ] Backend: `guest.checked_in` → bildirim gönder (worker kuralı); `guest.checked_out` → çıkış bildirimi
-- [ ] Ekran: KBS ayarları (tesis kodu, kullanıcı)
-- [ ] Ekran: Bildirim logu (başarılı / hatalı, tekrar gönder)
-- [ ] Check-in formunda KBS için zorunlu alan kontrolü
+- [x] Backend: `KbsSettings`, `KbsNotification`, `KbsLog` tabloları; sağlayıcı arayüzü (Test ortamı hazır; Emniyet KBS / Jandarma JKBS iskeleti)
+- [x] Backend: `guest.checked_in` → kişi başına giriş bildirimi (aktör `kbs-worker`); `guest.checked_out` → çıkış; oda değişikliği; giriş / çıkış geri alma
+- [x] Ekran: KBS ayarları (tesis kodu, kullanıcı, parola, zorunlu alanlar, bağlantıyı dene)
+- [x] Ekran: Bildirim logu (durum, tekrar gönder, elle bildirildi) + mutabakat
+- [x] Check-in formunda KBS için zorunlu alan kontrolü (cinsiyet, doğum tarihi, anne / baba adı, doğum yeri — ayara göre)
+
+> **📌 Modül 58 tamamlandı (26 Kasım 2026 — Ali Kemal). Gerçek servis bağlantısı BEKLİYOR.** Emniyet KBS'si ve Jandarma JKBS'si
+> herkese açık değil: otelin il emniyet müdürlüğünden / jandarmadan aldığı tesis kodu, kullanıcı, parola ve yazılım firmasına verilen
+> servis dokümanı (adres, SOAP / XML şeması, hata kodları) gerekir. O güne kadar yalnız **Test ortamı** seçilebilir (dışarı göndermez;
+> kabul / ret / ulaşılamaz davranışı ayardan); hazır olmayan sağlayıcı açık ayarda seçilemez. Doküman gelince yalnız
+> `hotel/backend/src/modules/kbs/providers/official.js` yazılır ve sözleşmedeki `KBS_PROVIDER_READY` açılır — kuyruk, ekranlar aynı kalır.
+>
+> Kararlar: **bildirim kişi başına** (rezervasyon sahibi + belgesi girilen refakatçiler; belgesiz çocuk bildirilmez). Kişinin
+> **zinciri**: aynı konaklamada iptal edilmemiş bildirimleri; yeni bildirim son halkaya bağlanır (`dependsOnId`) — çıkış / oda
+> değişikliği, giriş bildirilmeden (ya da elle bildirildi işaretlenmeden) gönderilmez. Giriş geri alınınca gönderilmemiş bildirim
+> iptal, gönderilmişse çıkışla kapatılır; çıkış geri alınınca yeniden giriş. Girişte oda verilmesi sahte oda değişikliği üretmez
+> (bildirilen oda aynı). **Kimlik gönderim anında** kartın güncel halinden kurulur; listede yalnız maskeli belge. **Girişte zorunlu
+> alan**: KBS açıkken belge + ayarın istediği ek alanlar (TC vatandaşı TC kimlikle ise ek alan istenmez); eksikse giriş olmaz, alan
+> alan hata. Gönderici 30 sn'de bir (ve sıraya girince) `FOR UPDATE SKIP LOCKED` ile üstlenir; geçici hata 1 / 5 / 15 / 60 / 180 /
+> 360 dk, hak bitince ve kalıcı hatada "gönderilemedi" + `KBS` zili; 2 saattir bildirilemeyen girişte kritik zil; takılı kurtarma 5 dk.
+> Parola secret-box ile mühürlü, hiçbir cevapta dönmez.
+>
+> **API** `/kbs`: `settings` (+ `test`), `summary` (mutabakat), `notifications` (+ `:id`, `:id/retry`, `:id/manual`). Giriş önizlemesine
+> `kbs` bloğu; misafir kartına ve giriş gövdesine `gender`, `birthPlace`, `fatherName`, `motherName`. İzinler `kbs.view` / `kbs.send`
+> (müdür, ön büro), `kbs.manage` (müdür). Olaylar `kbs.notification.changed`, `kbs.settings.changed`; kanal `kbs.changed`; manuel
+> görev modülü "KBS". Migration `20261126120000_kbs`, `20261126120100_kbs_reservation`.
+>
+> **Test:** sözleşme 9, aktör 3, entegrasyon 4 (zorunlu alan, kişi başına giriş + belgesiz çocuk, gönderim + referans, mutabakat, oda
+> değişikliği, çıkış; geçici hata → hak bitince gönderilemedi + zil → tekrar gönder; kalıcı hata → elle bildirildi → bağlı çıkış;
+> giriş geri alma; gönderimde eksik alan; gecikme zili; ayar / parola / izinler).
+>
+> **Devir:** 96 (yasal takvim) bekleyen / hatalı bildirimi ve mutabakatı buradan okur. Online check-in (53) cinsiyet / anne-baba adı
+> toplamıyor; KBS açıkken yabancı misafirde girişte personel tamamlar.
 
 > **Modül 53'ten not (4 Kasım 2026 — Ahmet):** online check-in her yetişkinin belge türü / numarası / uyruğu / doğum tarihini toplar;
 > giriş penceresi bunlarla dolar, KBS bildirimi girişin kaydından gider (online check-in'in kendisi bildirilmez). Belge fotoğrafları

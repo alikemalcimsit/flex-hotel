@@ -11,7 +11,7 @@ Sol menüdeki her sayfa, yolu ve görmek için gereken izin. Bir sayfa menüde y
 | Sayfa | Yol | Kim görür |
 | --- | --- | --- |
 | **Panel** | `/` | herkes (giriş yapmış) |
-| **Görevler** | `/gorevler` | şunlardan biri: Oda işlemleri (atama, durum); Bildirim ayarlarını yönet; Rezervasyonları yönet; Onayla / reddet; Mesaj yaz / yönet; Folyoya harcama işle, aktar, böl, birleştir; Tahsilat / ödeme / virman fişi gir, çek / senet işlemleri, cari kartı aç ve düzenle; Temizlik görevini başlat / bitir, sorun bildir; Gelir raporlarını görüntüle (doluluk, ADR, RevPAR); Depo tanımları, minimum stok seviyesi, elle hareket (çıkış / fire / transfer), sayım, satış noktası → depo eşlemesi; Ayarları yönet |
+| **Görevler** | `/gorevler` | şunlardan biri: Oda işlemleri (atama, durum); Bildirim ayarlarını yönet; Rezervasyonları yönet; Onayla / reddet; Mesaj yaz / yönet; Folyoya harcama işle, aktar, böl, birleştir; Tahsilat / ödeme / virman fişi gir, çek / senet işlemleri, cari kartı aç ve düzenle; Temizlik görevini başlat / bitir, sorun bildir; Gelir raporlarını görüntüle (doluluk, ADR, RevPAR); Depo tanımları, minimum stok seviyesi, elle hareket (çıkış / fire / transfer), sayım, satış noktası → depo eşlemesi; Sadakat programı ayarları ve seviyeler, elle puan düzeltmesi; Hatalı KBS bildirimini tekrar gönder, elle bildirildi olarak işaretle; Ayarları yönet |
 | **Kılavuz** | `/kilavuz` | herkes (giriş yapmış) |
 
 ### Ön büro
@@ -30,6 +30,8 @@ Sol menüdeki her sayfa, yolu ve görmek için gereken izin. Bir sayfa menüde y
 | ↳ Gruplar | `/gruplar` | üst menüyle aynı |
 | **Oda planı** | `/oda-plani` | herkes (giriş yapmış) |
 | **Misafirler** | `/misafirler` | Misafir kartlarını görüntüle (CRM) |
+| **Sadakat** | `/sadakat` | Sadakat üyelerini, puan bakiyesini ve hareketlerini görüntüle |
+| **KBS** | `/kbs` | KBS kimlik bildirimlerini ve mutabakatı görüntüle |
 | **Satış CRM** | `/satis` | Satış fırsatlarını, arama kayıtlarını ve teklifleri görüntüle |
 | **Folyolar** | `/folyolar` | Folyoları görüntüle |
 | **Kasa** | `/kasa` | şunlardan biri: Kasayı görüntüle; Günlük döviz kurunu gir |
@@ -109,11 +111,21 @@ Sol menüdeki her sayfa, yolu ve görmek için gereken izin. Bir sayfa menüde y
 | ↳ Puantaj ve kalemler | `/bordro/puantaj` | üst menüyle aynı |
 | ↳ Servis payı | `/bordro/servis-payi` | üst menüyle aynı |
 | ↳ Ayarlar | `/bordro/ayarlar` | üst menüyle aynı |
+| **İK** | `/ik` | İzinler ve bakiyeler, vardiya çizelgesi, günlük puantaj ve özlük belgelerini görüntüle |
+| ↳ İzinler | `/ik/izinler` | üst menüyle aynı |
+| ↳ Vardiya | `/ik/vardiya` | üst menüyle aynı |
+| ↳ Puantaj | `/ik/puantaj` | üst menüyle aynı |
+| ↳ Belgeler | `/ik/belgeler` | üst menüyle aynı |
+| **İzinlerim** | `/ik/benim` | Kendi izin talebini gir; kendi izinlerini, bakiyesini ve vardiyalarını gör |
 | **Ön muhasebe** | `/muhasebe` | Cariler ve ekstre, kasa / banka hareketleri, çek / senet portföyü ve fişleri görüntüle |
 | ↳ Cariler | `/muhasebe/cariler` | üst menüyle aynı |
 | ↳ Kasa / banka | `/muhasebe/kasa-banka` | üst menüyle aynı |
 | ↳ Çek / senet | `/muhasebe/cek-senet` | üst menüyle aynı |
 | ↳ Fişler | `/muhasebe/fisler` | üst menüyle aynı |
+| **Genel muhasebe** | `/genel-muhasebe` | Hesap planı, yevmiye fişleri, mizan ve hesap ekstresini görüntüle |
+| ↳ Mizan | `/genel-muhasebe/mizan` | üst menüyle aynı |
+| ↳ Yevmiye | `/genel-muhasebe/yevmiye` | üst menüyle aynı |
+| ↳ Hesap planı | `/genel-muhasebe/hesap-plani` | üst menüyle aynı |
 | **Toplanacak tepsiler** | `/oda-servisi/tepsiler` | şunlardan biri: POS: vardiya aç / kapat, adisyon aç, sipariş gönder, ödeme al, odaya yaz; İstekleri yönet |
 | **Odalar** | `/odalar` | herkes (giriş yapmış) |
 | ↳ Oda listesi | `/odalar/liste` | üst menüyle aynı |
@@ -157,7 +169,7 @@ Sol menüdeki her sayfa, yolu ve görmek için gereken izin. Bir sayfa menüde y
 
 ## İzinler ve roller
 
-Sistemde 117 izin var; roller bu izinlerin varsayılan paketleridir. Yönetici (Ayarlar → Kullanıcılar / roller) bir kullanıcıya izin ekleyip çıkarabilir. Aşağıdaki tablo **varsayılan** dağılımdır.
+Sistemde 129 izin var; roller bu izinlerin varsayılan paketleridir. Yönetici (Ayarlar → Kullanıcılar / roller) bir kullanıcıya izin ekleyip çıkarabilir. Aşağıdaki tablo **varsayılan** dağılımdır.
 
 ### Ayarlar
 
@@ -389,6 +401,14 @@ Sistemde 117 izin var; roller bu izinlerin varsayılan paketleridir. Yönetici (
 | `accounting.manage` | Tahsilat / ödeme / virman fişi gir, çek / senet işlemleri, cari kartı aç ve düzenle | ✓ | ✓ |  |  | ✓ |  |
 | `accounting.setup` | Kasa / banka tanımları, yöntem eşlemesi, başlangıç günü ve onay eşiği, açılış bakiyesi, fiş iptali | ✓ | ✓ |  |  |  |  |
 
+### Genel muhasebe
+
+| İzin | Ne yaptırır | Yönetici | Müdür | Ön büro | Kat hizmetleri | Muhasebe | Yiyecek & İçecek |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `ledger.view` | Hesap planı, yevmiye fişleri, mizan ve hesap ekstresini görüntüle | ✓ | ✓ |  |  | ✓ |  |
+| `ledger.manage` | Elle yevmiye fişi gir, fişlenmemiş hareketleri eşitle | ✓ | ✓ |  |  | ✓ |  |
+| `ledger.setup` | Hesap planı ve otomatik fiş kuralları, dönem kilidi, yevmiye fişi iptali | ✓ | ✓ |  |  | ✓ |  |
+
 ### Fatura ve e-belge
 
 | İzin | Ne yaptırır | Yönetici | Müdür | Ön büro | Kat hizmetleri | Muhasebe | Yiyecek & İçecek |
@@ -413,6 +433,30 @@ Sistemde 117 izin var; roller bu izinlerin varsayılan paketleridir. Yönetici (
 | `payroll.manage` | Ücret, puantaj, ek ödeme / kesinti, avans, icra, teşvik, servis payı; bordro hesapla ve onaya gönder | ✓ |  |  |  | ✓ |  |
 | `payroll.pay` | Maaş ve avans öde (kasa / banka) | ✓ |  |  |  | ✓ |  |
 | `payroll.setup` | Bordro ayarları: yasal parametreler ve teyidi, kalem türleri, departmanlar, işyeri bilgileri | ✓ |  |  |  |  |  |
+
+### İK
+
+| İzin | Ne yaptırır | Yönetici | Müdür | Ön büro | Kat hizmetleri | Muhasebe | Yiyecek & İçecek |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `hr.view` | İzinler ve bakiyeler, vardiya çizelgesi, günlük puantaj ve özlük belgelerini görüntüle | ✓ | ✓ |  |  | ✓ |  |
+| `hr.manage` | İzin onayla / iptal et, çizelge ve puantaj yaz, bordroya aktar, belge yükle, İK ayarları | ✓ | ✓ |  |  | ✓ |  |
+| `hr.self` | Kendi izin talebini gir; kendi izinlerini, bakiyesini ve vardiyalarını gör | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+
+### Sadakat programı
+
+| İzin | Ne yaptırır | Yönetici | Müdür | Ön büro | Kat hizmetleri | Muhasebe | Yiyecek & İçecek |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `loyalty.view` | Sadakat üyelerini, puan bakiyesini ve hareketlerini görüntüle | ✓ | ✓ | ✓ |  | ✓ |  |
+| `loyalty.redeem` | Folyoda puan kullan (indirim), misafiri sadakat programına üye yap | ✓ | ✓ | ✓ |  |  |  |
+| `loyalty.manage` | Sadakat programı ayarları ve seviyeler, elle puan düzeltmesi | ✓ | ✓ |  |  |  |  |
+
+### KBS kimlik bildirimi
+
+| İzin | Ne yaptırır | Yönetici | Müdür | Ön büro | Kat hizmetleri | Muhasebe | Yiyecek & İçecek |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `kbs.view` | KBS kimlik bildirimlerini ve mutabakatı görüntüle | ✓ | ✓ | ✓ |  |  |  |
+| `kbs.send` | Hatalı KBS bildirimini tekrar gönder, elle bildirildi olarak işaretle | ✓ | ✓ | ✓ |  |  |  |
+| `kbs.manage` | KBS ayarları (tesis kodu, kullanıcı, parola, zorunlu alanlar) ve bağlantı denemesi | ✓ | ✓ |  |  |  |  |
 
 ### Misafir portalı ve online check-in
 
@@ -484,11 +528,11 @@ Her aktör bir bildirgeyle tanımlıdır: hangi olayları dinler, hangilerini ya
 
 **Tür:** worker · **Paket:** `@hotelos/accounting-worker` · **Kapalıyken iş düşer:** Ön muhasebe · **Tekrar deneme:** 3 kez (400 ms artan bekleme)
 
-Ön büro, etkinlik, restoran ve spa tahsilatlarını yöntem eşlemesine göre kasaya / bankaya işler; "Acente / cari" ve voucher'la kapatılan folyoyu seçilen cariye borç yazar. Etkinlik tahsilatını müşteri carisinden düşer, gerçekleşen etkinliğin bedelini (iptalde iptal bedelini) müşteri carisine borç yazar. Mal kabulü tedarikçi carisine vadeli borcumuz olarak, onaylanan acente primini acente carisine alacak olarak işler. Ödeme iptalini ters kayıtla düşer. Kesilen faturanın numarasını alacağı doğuran cari harekete bağlar; serbest faturayı cariye borç yazar, iptalinde bağı çözer ve serbest faturanın borcunu ters kayıtla düşer. Onaylanan bordroyu personel (net ücret), SGK, vergi dairesi, BES ve icra / nafaka carilerine tahakkuk ettirir; maaş ödemesini kasadan / bankadan çıkış ve personel carisine borç olarak işler. Kapalıyken ya da işleyemediğinde iş manuel görev olarak düşer.
+Ön büro, etkinlik, restoran ve spa tahsilatlarını yöntem eşlemesine göre kasaya / bankaya işler; "Acente / cari" ve voucher'la kapatılan folyoyu seçilen cariye borç yazar. Etkinlik tahsilatını müşteri carisinden düşer, gerçekleşen etkinliğin bedelini (iptalde iptal bedelini) müşteri carisine borç yazar. Mal kabulü tedarikçi carisine vadeli borcumuz olarak, onaylanan acente primini acente carisine alacak olarak işler. Ödeme iptalini ters kayıtla düşer. Kesilen faturanın numarasını alacağı doğuran cari harekete bağlar; serbest faturayı cariye borç yazar, iptalinde bağı çözer ve serbest faturanın borcunu ters kayıtla düşer. Onaylanan bordroyu personel (net ücret), SGK, vergi dairesi, BES ve icra / nafaka carilerine tahakkuk ettirir; maaş ödemesini kasadan / bankadan çıkış ve personel carisine borç olarak işler. Genel muhasebe (48): yazdığı her cari / kasa-banka hareketini belgenin yevmiye fişine çevirir (kasa hesabı, cari kontrol hesabı, gelir / KDV / stok / gider karşı hesapları kurallardan); gün kapanışında günün gelir fişini yazar (folyo kalemleri, adisyonlar, spa). Kapalıyken ya da işleyemediğinde iş manuel görev olarak düşer.
 
 | Dinlediği olaylar | Yayınladığı olaylar | Onaya götürdüğü işler |
 | --- | --- | --- |
-| `payment.received`, `payment.refunded`, `payment.voided`, `banquet.payment.changed`, `pos.payment.changed`, `spa.payment.changed`, `purchase.goods.received`, `agency.bonus.changed`, `banquet.event.changed`, `invoice.issued`, `invoice.cancelled`, `payroll.run.approved`, `payroll.run.changed` | `accounting.posted` | — |
+| `payment.received`, `payment.refunded`, `payment.voided`, `banquet.payment.changed`, `pos.payment.changed`, `spa.payment.changed`, `purchase.goods.received`, `agency.bonus.changed`, `banquet.event.changed`, `invoice.issued`, `invoice.cancelled`, `payroll.run.approved`, `payroll.run.changed`, `accounting.posted`, `night.audit.closed` | `accounting.posted`, `ledger.changed` | — |
 
 ### Folyo aktörü (`billing-worker`)
 
@@ -529,6 +573,26 @@ Kapanan adisyonun ürünlerini (satılan, ikram, hazırlanıp iptal edilen) reç
 | Dinlediği olaylar | Yayınladığı olaylar | Onaya götürdüğü işler |
 | --- | --- | --- |
 | `fnb.order.paid`, `stock.changed` | `stock.changed`, `purchase.request.changed`, `staff.alert.raised` | — |
+
+### KBS aktörü (`kbs-worker`)
+
+**Tür:** worker · **Paket:** `@hotelos/kbs-worker` · **Kapalıyken iş düşer:** KBS · **Tekrar deneme:** 3 kez (400 ms artan bekleme)
+
+Misafir girince belgesi girilmiş her kişi (rezervasyon sahibi ve refakatçiler) için KBS giriş bildirimini sıraya alır; çıkışta çıkış, içerideyken oda değişince oda değişikliği bildirimi açar. Giriş geri alınırsa gönderilmemiş bildirimi iptal eder, gönderilmişse çıkışla kapatır; çıkış geri alınırsa yeniden giriş bildirir. Zorunlu bilgisi eksik kişide ön büroya zil çalar. Kapalıyken iş KBS yetkilisine manuel görev olarak düşer.
+
+| Dinlediği olaylar | Yayınladığı olaylar | Onaya götürdüğü işler |
+| --- | --- | --- |
+| `guest.checked_in`, `guest.checked_out`, `guest.check_in_reverted`, `guest.check_out_reverted`, `room.assigned` | `kbs.notification.changed`, `staff.alert.raised` | — |
+
+### Sadakat aktörü (`loyalty-worker`)
+
+**Tür:** worker · **Paket:** `@hotelos/loyalty-worker` · **Kapalıyken iş düşer:** Sadakat · **Tekrar deneme:** 3 kez (400 ms artan bekleme)
+
+Folyo kapanınca konaklamanın misafirine uygun harcamadan (vergi kalemleri hariç) seviyesinin çarpanıyla puan kazandırır; folyo yeniden açılınca kazanılanı geri alır, yeniden kapanınca farkı yazar. Spa kasasında ödenen tamamlanmış randevuya (ayarda açıksa) puan verir. Puanla yapılan folyo indirimi iptal edilince puanı iade eder. Seviye yükselince ön büroya haber verir. Kapalıyken iş sadakat yetkilisine manuel görev olarak düşer.
+
+| Dinlediği olaylar | Yayınladığı olaylar | Onaya götürdüğü işler |
+| --- | --- | --- |
+| `folio.closed`, `folio.reopened`, `folio.item.voided`, `spa.appointment.changed` | `loyalty.points.changed`, `loyalty.tier.changed`, `staff.alert.raised` | — |
 
 ### Rezervasyon aktörü (`reservation-worker`)
 
@@ -642,7 +706,7 @@ Misafire yazılan cevapları WhatsApp Cloud API ile gönderir, teslim durumunu m
 
 ## Olay kataloğu
 
-Sistem 200 tür olay yayınlar. Olay = "şu oldu" kaydı; aktörler ve ekranlar bunları dinler. Açıklamalar kataloğun kendi yorumlarından alınmıştır (boşsa olayın adı yeterince anlatıyor demektir).
+Sistem 208 tür olay yayınlar. Olay = "şu oldu" kaydı; aktörler ve ekranlar bunları dinler. Açıklamalar kataloğun kendi yorumlarından alınmıştır (boşsa olayın adı yeterince anlatıyor demektir).
 
 ### accounting.*
 
@@ -829,6 +893,13 @@ Sistem 200 tür olay yayınlar. Olay = "şu oldu" kaydı; aktörler ve ekranlar 
 | `housekeeping.room.inspected` | Kat şefi kontrolü: geçtiyse oda `INSPECTED`, kaldıysa yeniden `DIRTY`. |
 | `housekeeping.issue.reported` | Görevli "Sorun var" dedi: iş teknik servise (modül 20 gelene dek manuel görev) taşınır. |
 
+### hr.*
+
+| Olay | Açıklama |
+| --- | --- |
+| `hr.leave.changed` | İş olayı: izin talebi açıldı / onaylandı / reddedildi / iptal edildi (88 işgücü planlama ve 76 mobil dinler). |
+| `hr.changed` | Ekran olayı: vardiya çizelgesi, günlük puantaj, bordroya aktarım, özlük belgesi ya da İK ayarı değişti. |
+
 ### inventory.*
 
 | Olay | Açıklama |
@@ -846,12 +917,25 @@ Sistem 200 tür olay yayınlar. Olay = "şu oldu" kaydı; aktörler ve ekranlar 
 | `invoice.changed` | Ekran olayı: fatura listesi / ekranı tazelenir (taslak, kesim, iptal isteği, e-belge durumu). |
 | `invoice.settings.changed` |  |
 
+### kbs.*
+
+| Olay | Açıklama |
+| --- | --- |
+| `kbs.notification.changed` |  |
+| `kbs.settings.changed` |  |
+
 ### laundry.*
 
 | Olay | Açıklama |
 | --- | --- |
 | `laundry.charged` |  |
 | `laundry.order.changed` | Çamaşır siparişi açıldı, sayımı düzeldi ya da durumu değişti. |
+
+### ledger.*
+
+| Olay | Açıklama |
+| --- | --- |
+| `ledger.changed` | Genel muhasebe (modül 48): yevmiye fişi yazıldı / iptal edildi, hesap planı, kural ya da dönem kilidi değişti. Ekranlar (mizan, fiş listesi, hesap planı) bununla tazelenir. |
 
 ### lost_item.*
 
@@ -865,6 +949,14 @@ Sistem 200 tür olay yayınlar. Olay = "şu oldu" kaydı; aktörler ve ekranlar 
 | Olay | Açıklama |
 | --- | --- |
 | `lost_items.settings.changed` | Saklama süreleri değişti ("süresi dolan" listesi yeniden hesaplanır). |
+
+### loyalty.*
+
+| Olay | Açıklama |
+| --- | --- |
+| `loyalty.points.changed` | İş olayı: puan hareketi yazıldı (kazanma, harcama, iade, süre dolumu, düzeltme); 80 / 82 / 102 dinler. |
+| `loyalty.tier.changed` | İş olayı: misafirin seviyesi değişti (80 misafir tanıma, 75 patron uygulaması). |
+| `loyalty.changed` | Ekran olayı: üyelik açıldı / kapandı ya da program ayarı değişti. |
 
 ### maintenance.*
 
@@ -1226,6 +1318,16 @@ Kat hizmetlerinin zamanlanmış işi (yalnızca sunucu sürecinde).
 üretmez. Sunucu kapalıyken geçen sabah sonraki açılışta telafi edilir —
 iş "saat 06:00'da üret" değil "bugünün görevleri eksikse tamamla"dır.
 
+### hr
+
+Aralık sabitleri: `DOCUMENT_REMINDER_INTERVAL_MS` = 12 * 60 * 60_000
+
+İK'nın zamanlanmış işi (yalnızca sunucu sürecinde).
+
+| İş                          | Sıklık  | Neden |
+|-----------------------------|---------|-------|
+| Özlük belgesi hatırlatması  | 12 saat | Süresi ayardaki gün içinde dolacak / dolmuş belgeler İK'ya zil (belge başına 7 günde bir) |
+
 ### integrations
 
 Aralık sabitleri: `SEND_INTERVAL_MS` = 15_000 · `PURGE_INTERVAL_MS` = 60 * 60_000
@@ -1246,6 +1348,16 @@ Kayıp eşya modülünün zamanlanmış işi (yalnızca sunucu sürecinde).
 | İş                              | Sıklık | Neden |
 |---------------------------------|--------|-------|
 | Kapanan eşyaların fotoğrafları  | 1 sa   | Teslim edilen / kapatılan eşyanın fotoğrafı bir ay sonra gereksiz kişisel veri; disk de dolmasın |
+
+### loyalty
+
+Aralık sabitleri: `INTERVAL_MS` = 12 * 60 * 60_000
+
+Sadakatin zamanlanmış işi (yalnızca sunucu sürecinde).
+
+| İş                              | Sıklık  | Neden |
+|---------------------------------|---------|-------|
+| Puan süresi ve seviye tazeleme  | 12 saat | Süresi dolan kullanılmamış puan düşer; 12 aylık seviye penceresi kayar |
 
 ### maintenance
 
@@ -1365,7 +1477,7 @@ Anketin zamanlanmış işi (yalnızca sunucu sürecinde, modül 55).
 
 ## Veri modeli
 
-Veritabanında 233 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan sayısı ilişkiler hariç yaklaşık değerdir.
+Veritabanında 249 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan sayısı ilişkiler hariç yaklaşık değerdir.
 
 | Tablo | Alan | Açıklama |
 | --- | --- | --- |
@@ -1392,7 +1504,7 @@ Veritabanında 233 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan
 | `RoomType` | 12 |  |
 | `Room` | 11 | Oda durumu üç bağımsız bilgidir: `occupancy` (boş/dolu), `housekeepingStatus` (kirli/temiz...) ve tarihli arıza kaydı (`RoomBlock`). "Arızalı" bir kolon değildir; o günü kapsayan bloktan okunur — böylece ileri tarihli arıza kaydı günü gelince zamanlayıcı gerekmeden etkin olur ve bitince kendiliğinden kalkar. |
 | `RoomBlock` | 11 | Tarihli arıza kaydı: odanın belirli günlerde arızalı ya da hizmet dışı olması. Tarihler UTC gün başıdır (veritabanı kısıtıyla zorunlu). `endDate` boşsa blok süresizdir. Geçmiş kayıt değiştirilmez: süren blok "bitirilir" (bitişi bugüne çekilir), başlamamış blok iptal edilir (soft-delete). Rezervasyonla çakışması veritabanı tetikleyicisiyle engellenir (`Reservation_room_blocked`, `RoomBlock_has_reservations`). |
-| `Guest` | 19 |  |
+| `Guest` | 23 |  |
 | `GuestPreference` | 12 | Misafir tercihi (modül 22): kategori + değer + kaynak + güven + son teyit. Serbest metin değil yapılandırılmış; birleştirmede (`mergeGuests`) hedef misafire taşınır. VIP / sorunlu gibi işaretler `Guest.tags` üzerinde. |
 | `GuestNote` | 9 | Misafir notu (modül 22): tarihli, yazarlı; sabitlenen not kartın üstünde. |
 | `Reservation` | 54 |  |
@@ -1519,17 +1631,21 @@ Veritabanında 233 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan
 | `StockMovement` | 17 | Stok hareketi (değişmez kayıt): işaretli miktar, birim maliyet, hareket sonrası kartın mevcudu ve ortalama maliyeti, kaynağı. |
 | `StockCount` | 17 | Stok sayımı (modül 44): depo başına; açılışta deponun mevcutları "beklenen" olarak dondurulur, sayılan miktarlar girilir, onayda fark (sayılan − o anki mevcut) `COUNT_ADJUST` hareketi olur. Depoda aynı anda tek açık sayım (kısmi tekil indeks, migration'da). |
 | `StockCountLine` | 10 | Sayım satırı: beklenen (açılıştaki mevcut), sayılan (boş = sayılmadı), onayda yazılan fark ve o anki birim maliyet. |
-| `AccountingSettings` | 6 | Ön muhasebe ayarı: otomatik kayıtların başlangıç günü (öncesi açılış bakiyesiyle) ve ödeme fişi onay eşiği. |
+| `AccountingSettings` | 8 | Ön muhasebe ayarı: otomatik kayıtların başlangıç günü (öncesi açılış bakiyesiyle) ve ödeme fişi onay eşiği. |
 | `AccountingSequence` | 4 | Belge numarası ve cari / kasa kodu sırası (otel × önek × yıl; kodlarda yıl 0). |
 | `LedgerAccount` | 25 | Cari hesap: acente, tedarikçi, etkinlik müşterisi (bire bir bağlı) ya da elle açılan şirket / şahıs. Bakiye = borç − alacak. |
-| `LedgerEntry` | 18 | Cari hareket (ekstre satırı): borç ya da alacak; kaynağı tekil — aynı belge iki kez yazılmaz. Düzeltme ters kayıtla. |
+| `LedgerEntry` | 19 | Cari hareket (ekstre satırı): borç ya da alacak; kaynağı tekil — aynı belge iki kez yazılmaz. Düzeltme ters kayıtla. |
 | `TreasuryAccount` | 17 | Kasa ya da banka hesabı (kendi para biriminde). Bakiye hareketlerle aynı işlemde güncellenir. |
-| `TreasuryMovement` | 19 | Kasa / banka hareketi: + giriş, − çıkış (hesabın para biriminde). Kaynağı tekil; düzeltme ters kayıtla. |
+| `TreasuryMovement` | 20 | Kasa / banka hareketi: + giriş, − çıkış (hesabın para biriminde). Kaynağı tekil; düzeltme ters kayıtla. |
 | `TreasuryMapping` | 9 | Yöntem → kasa / banka eşlemesi: ön büro, etkinlik ve restoran tahsilatı hangi hesaba girer (para birimi boş = hepsi). |
-| `AccountingVoucher` | 25 | Fiş: tahsilat, ödeme (eşik üstü dört göz), virman, kasa / banka giriş-çıkış, açılış bakiyesi. İptal ters kayıtla. |
+| `AccountingVoucher` | 26 | Fiş: tahsilat, ödeme (eşik üstü dört göz), virman, kasa / banka giriş-çıkış, açılış bakiyesi. İptal ters kayıtla. |
 | `AccountingVoucherLine` | 14 | Fişin para satırı: kasa / banka, alınan ya da verilen çek-senet (bilgisi satırda, işlenince kartı açılır), portföyden ciro. |
 | `Instrument` | 20 | Çek / senet: alınan (müşteriden, portföy) ya da verilen (bizim). Durum makinesi ve geçmişi; tutar otelin para biriminde. |
 | `InstrumentMovement` | 13 | Çek / senet durum geçmişi: kim, ne zaman, hangi işlemle, hangi hesaba. |
+| `GlAccount` | 14 | Hesap planı (Tek Düzen): ağaç. Yalnız yaprak (`isPostable`) hesaba satır yazılır; satırı olan hesaba alt hesap açılamaz. Seed hesapları (`isSystem`) silinmez, kodu değişmez; adı ve departmanı düzenlenebilir. |
+| `JournalEntry` | 21 | Yevmiye fişi: borç toplamı = alacak toplamı. Otomatik fiş kaynak belgeden (kaynak anahtarı tekil: ikinci kez yazılmaz); elle fiş `requestId` ile çift gönderime kapalı. Düzeltme ters kayıtla (iptal edilen fiş VOIDED, ters fiş `reversalOfId`). |
+| `JournalLine` | 11 | Fiş satırı: tek taraf dolu (borç ya da alacak). `date` fişin günüdür (mizan / ekstre taraması fişe dönmeden). |
+| `JournalRule` | 8 | Otomatik fiş kuralı: (kaynak, anahtar) → hesap. Anahtar boş = kaynağın varsayılanı (ör. bütün KDV oranları 391). |
 | `Invoice` | 54 | Fatura (modül 16 çekirdeği + 49). Taslak düzenlenir; kesimde numara (seri + yıl + 9 hane), belge türü (e-Fatura / e-Arşiv), alıcı ve UBL belgesi donar — kesilmiş fatura değişmez, iptal onay kuyruğundan. Folyo ve etkinlik başına en fazla bir geçerli (iptal edilmemiş) fatura: kısmi tekil index'ler migration'da. Alıcının bütün bilgisi `buyer`da (JSON); liste ve arama için ad ve vergi no ayrıca. |
 | `InvoiceLine` | 18 | Fatura satırı: folyo faturasında gelir grubu, etkinlikte kalem, serbest faturada girilen satır. Eksi satır yoktur (ters kayıt grubun içinde, indirim satır iskontosu). |
 | `InvoiceDocument` | 5 | Kesimde donan UBL-TR belgesi (gönderim ve tekrar gönderim bunu kullanır). |
@@ -1548,6 +1664,15 @@ Veritabanında 233 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan
 | `PayrollParameterSet` | 12 | Yürürlük tarihli yasal parametre seti. Ay, ayın son günü yürürlükte olan setle hesaplanır. |
 | `PayElement` | 13 | Ödeme / kesinti kalemi. Sistem kalemleri kanunun davranışıyla gelir ve değişmez; otel kendi kalemini ekler. |
 | `PayrollAttendance` | 16 | Aylık puantaj: eksik gün (SGK nedeni), fazla çalışma, bayram ve hafta tatili çalışması. Modül 52 gelince puantajdan dolar (source TIMESHEET). |
+| `Leave` | 20 | İzin: talep → onay (LEAVE onay türü, dört göz) → onaylı; iptal edilebilir. `days` iş günü (hafta tatili ve resmî tatil sayılmaz). |
+| `LeaveAdjustment` | 8 | Elle izin bakiyesi düzeltmesi: devir izin, ek izin, kesinti (artı / eksi gün). |
+| `Shift` | 13 | Vardiya: personel × gün × saat aralığı (gece vardiyası ertesi güne taşar: bitiş < başlangıç). |
+| `Timesheet` | 16 | Günlük puantaj: giriş / çıkış, mola, çalışılan ve norm üstü dakika; izinli / tatil günleri durumla. |
+| `EmployeeDocument` | 17 | Özlük belgesi: dosya diskte (`fileKey`), kayıt burada; süresi dolacak belgeler İK'ya hatırlatılır. Yumuşak silme. |
+| `HrSettings` | 10 | İK ayarları: hafta tatili günü, günlük / haftalık çalışma normu, resmî tatiller, izin onayı, belge hatırlatma süresi. |
+| `LoyaltySettings` | 15 | Otelin sadakat programı: kazanma ve harcama oranları, sınırlar, süre, seviyeler (JSON). |
+| `LoyaltyAccount` | 15 | Misafirin sadakat hesabı (misafir kartı başına bir tane). Bakiye hareketlerle aynı işlemde güncellenir. |
+| `LoyaltyTransaction` | 18 | Puan hareketi (işaretli). Artı lotlar (`remaining`) FIFO harcanır; `consumed` harcamanın hangi lotlardan düştüğünü tutar (iade için). |
 | `PayrollItem` | 15 | Bir aya girilen ek ödeme / kesinti. `runId` boşsa ayın aylık bordrosuna, doluysa o fark bordrosuna aittir. |
 | `EmployeeTermination` | 21 | İşten çıkış ve hesaplanan hakları (kıdem, ihbar, kullanılmayan izin). Tutarlar çıkış ayının kalemlerine yazılır. |
 | `PayrollRun` | 35 | Bordro (ay × tür). Aylık bordro ayda bir tanedir (sequence 1); fark bordroları sırayla numaralanır. |
@@ -1598,6 +1723,9 @@ Veritabanında 233 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan
 | `SavedReport` | 11 | Kayıtlı rapor: tanım + grafik. Sahibi düzenler / siler; paylaşılan rapor rapor yetkisi olan herkese görünür. |
 | `ReportDefinition` | 10 | Tasarımcıda kurulan rapor: kaynak + sütunlar + filtreler + gruplama + sıralama (`reportDesignSchema`). Sahibi düzenler / siler; paylaşılan rapor rapor yetkisi olan herkese görünür (kaynağın yetkisi de gerekir). |
 | `DataImport` | 10 | Excel'den toplu yükleme (misafir listesi / fiyat planı). Kimlik sihirbazın ürettiği yükleme kimliğidir: aynı yükleme ikinci kez gönderilirse yazılmaz, bu kayıt döner. |
+| `KbsSettings` | 17 | Otelin KBS ayarı. Parola secret-box ile mühürlü saklanır, hiçbir cevapta dönmez. |
+| `KbsNotification` | 26 | Bir kişinin bir bildirimi (giriş / çıkış / oda değişikliği). Kimlik gönderim anında kartın güncel halinden kurulur; burada yalnız ekran için maskeli özet tutulur. |
+| `KbsLog` | 8 | Her deneme ve personel işlemi (iz). |
 | `ApiClient` | 12 | Açık API uygulaması (modül 61): otele bağlanan dış sistem (CRM, kurumsal seyahat aracı, acente yazılımı). Anahtarlar ve webhook abonelikleri uygulamaya bağlıdır; uygulama kapatılınca hepsi durur. Silme yumuşaktır (geçmiş teslimat ve rezervasyon bağı kalsın). Ad otelde tekildir (silinmemişler arasında; kısmi tekil indeks migration'da). |
 | `ApiKey` | 14 | API anahtarı: `fhk_<önek>_<sır>`. Yalnız SHA-256 özeti saklanır; anahtar bir kez, oluşturulunca gösterilir. Önek tekildir ve anahtarı bulmak içindir (ekranda da görünür). İptal geri alınmaz; yerine yeni anahtar açılır. |
 | `WebhookSubscription` | 19 | Webhook aboneliği: seçilen olaylar uygulamanın adresine imzalı gider. İmza sırrı şifreli saklanır (imzalamak için açılması gerekir; `SETTINGS_SECRET_KEY`). Sır yenilenince eskisi kısa süre ikinci imza olarak gönderilir (geçiş). Art arda başarısız teslimatlar sınırı aşarsa abonelik kendiliğinden kapanır (`DISABLED`, sebebiyle). |
@@ -1656,20 +1784,20 @@ Geliştirme listesinden (GOREVLER.md) türetilir: işaretli maddeler ve "tamamla
 | 45 | Satın alma | arkadaşın | tamamlandı |
 | 46 | Demirbaş & amortisman | Ali Kemal | tamamlandı |
 | 47 | Ön muhasebe | arkadaşın | tamamlandı |
-| 48 | Genel muhasebe | Ali Kemal | planlı |
+| 48 | Genel muhasebe | Ali Kemal | tamamlandı |
 | 49 | e-Fatura / e-Arşiv / e-Defter | arkadaşın | kısmi (4/6) |
 | 50 | Sanal POS / ödeme geçidi | Ali Kemal | planlı |
 | 51 | Personel & bordro | arkadaşın | tamamlandı |
-| 52 | İK | Ali Kemal | planlı |
+| 52 | İK | Ali Kemal | tamamlandı |
 | 53 | Temassız uygulamalar | arkadaşın | tamamlandı |
 | 54 | Misafir yorum entegrasyonu + duygu analizi | Ali Kemal | planlı |
 | 55 | Anket & memnuniyet | arkadaşın | tamamlandı |
-| 56 | Sadakat programı | Ali Kemal | planlı |
+| 56 | Sadakat programı | Ali Kemal | tamamlandı |
 | 57 | SPA & spor salonu randevu | arkadaşın | tamamlandı |
-| 58 | Emniyet kimlik bildirimi (KBS) | Ali Kemal | planlı |
+| 58 | Emniyet kimlik bildirimi (KBS) | Ali Kemal | tamamlandı |
 | 59 | Kimlik / pasaport okuma (OCR) | arkadaşın | tamamlandı |
 | 60 | Çoklu dil & çoklu para birimi | Ali Kemal | planlı |
-| 61 | Webhook & açık API | arkadaşın | planlı |
+| 61 | Webhook & açık API | arkadaşın | tamamlandı |
 | 62 | Donanım entegrasyonları | Ali Kemal | planlı |
 | 63 | Multi-tenant zincir konsolu | arkadaşın | planlı |
 | 64 | Apart / rezidans | Ali Kemal | planlı |

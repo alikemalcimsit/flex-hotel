@@ -251,6 +251,11 @@ enum StaffAlertKind {
   ASSET
   /// Modül 44: minimum altına düşen malzeme için stok talebi açıldı (satın alma yetkilisine).
   STOCK
+  /// Modül 52: izin talebi / kararı, süresi dolacak özlük belgesi.
+  HR
+  /// Modül 56: sadakat seviyesi yükseldi, puanın süresi doluyor.
+  LOYALTY
+  KBS
   /// Modül 61: webhook aboneliği art arda başarısız teslimat yüzünden kendiliğinden kapandı (entegrasyon yetkilisine).
   INTEGRATION
 }
@@ -294,6 +299,12 @@ enum IdDocumentType {
 enum IdReadVia {
   STAFF_SCAN
   ONLINE_PHOTO
+}
+
+/// Kişinin cinsiyeti (KBS bildirimi; modül 58).
+enum PersonGender {
+  FEMALE
+  MALE
 }
 
 /// Online check-in belge fotoğrafının okunma sonucu (modül 59): misafirin yazdıklarıyla karşılaştırma.
@@ -916,6 +927,21 @@ model Hotel {
   treasuryMappings       TreasuryMapping[]
   accountingVouchers     AccountingVoucher[]
   instruments            Instrument[]
+  glAccounts             GlAccount[]
+  journalEntries         JournalEntry[]
+  journalRules           JournalRule[]
+  leaves                 Leave[]
+  leaveAdjustments       LeaveAdjustment[]
+  shifts                 Shift[]
+  timesheets             Timesheet[]
+  employeeDocuments      EmployeeDocument[]
+  hrSettings             HrSettings?
+  loyaltySettings        LoyaltySettings?
+  loyaltyAccounts        LoyaltyAccount[]
+  loyaltyTransactions    LoyaltyTransaction[]
+  kbsSettings            KbsSettings?
+  kbsNotifications       KbsNotification[]
+  kbsLogs                KbsLog[]
   assetCategories        AssetCategory[]
   assetAreas             AssetArea[]
   assets                 Asset[]
@@ -1148,6 +1174,7 @@ model Approval {
   spaPayments        SpaPayment[]
   posAdjustments     PosAdjustment[]
   accountingVouchers AccountingVoucher[]
+  leaves             Leave[]
 
   // Bekleyenler (eskiden yeniye) ve geçmiş (yeni karar önce), imleçli.
   @@index([hotelId, status, createdAt, id])
@@ -1594,6 +1621,11 @@ model Guest {
   idReadAt    DateTime?
   idReadBy    String?
   idReadVia   IdReadVia?
+  /// KBS ek alanları (modül 58): ayara göre girişte zorunlu.
+  gender      PersonGender?
+  birthPlace  String?
+  fatherName  String?
+  motherName  String?
   notes       String?
   preferences Json            @default("{}")
   tags        String[]        @default([])
@@ -1617,6 +1649,8 @@ model Guest {
   preferenceEntries GuestPreference[]
   noteEntries       GuestNote[]
   leads             Lead[]
+  loyaltyAccount    LoyaltyAccount?
+  kbsNotifications  KbsNotification[]
 
   @@index([phone])
   @@index([email])
@@ -1788,6 +1822,7 @@ model Reservation {
   spaRoomCharges         SpaRoomCharge[]
   leads                  Lead[]
   quote                  Quote?
+  kbsNotifications       KbsNotification[]
 
   // Müsaitlik sorgusunun sıcak yolu: "şu otelde, şu oda tipinde, şu tarihlerde
   // envanteri tüketen rezervasyonlar". Dolu bir otelde saniyede onlarca kez çalışır.
@@ -5972,14 +6007,18 @@ enum InstrumentAction {
 
 /// Ön muhasebe ayarı: otomatik kayıtların başlangıç günü (öncesi açılış bakiyesiyle) ve ödeme fişi onay eşiği.
 model AccountingSettings {
-  hotelId               String   @id
+  hotelId               String    @id
   /// Bu günden (dahil) sonraki belgeler cari / kasaya otomatik işlenir.
-  startDate             DateTime @db.Date
+  startDate             DateTime  @db.Date
   /// Bu tutar ve üstündeki ödeme fişi dört göz onayına gider (0 = onay yok).
-  paymentApprovalAmount Decimal  @default(50000) @db.Decimal(14, 2)
+  paymentApprovalAmount Decimal   @default(50000) @db.Decimal(14, 2)
+  /// Genel muhasebe (modül 48): bu güne (dahil) kadar yevmiye fişi girilemez / iptal edilemez; otomatik fiş kilit sonrasına düşer.
+  glLockedThrough       DateTime? @db.Date
+  /// Tek Düzen Hesap Planı bu otele yüklendi (ilk genel muhasebe kullanımında).
+  glChartSeededAt       DateTime?
   updatedBy             String?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   hotel Hotel @relation(fields: [hotelId], references: [id])
 }
@@ -6037,6 +6076,7 @@ model LedgerAccount {
   endorsements      Instrument[]        @relation("InstrumentEndorsee")
   treasuryMovements TreasuryMovement[]
   payments          Payment[]
+  journalLines      JournalLine[]
 
   @@unique([hotelId, code])
   // Cari listesi: türe ve duruma göre ada göre; bakiyeye göre sıralı (en borçlu).
@@ -6047,34 +6087,37 @@ model LedgerAccount {
 
 /// Cari hareket (ekstre satırı): borç ya da alacak; kaynağı tekil — aynı belge iki kez yazılmaz. Düzeltme ters kayıtla.
 model LedgerEntry {
-  id            String       @id @default(uuid())
-  hotelId       String
-  accountId     String
+  id             String       @id @default(uuid())
+  hotelId        String
+  accountId      String
   /// Belge günü (ekstre sırası) ve vade (yaşlandırma).
-  date          DateTime     @db.Date
-  dueDate       DateTime?    @db.Date
-  debit         Decimal      @default(0) @db.Decimal(14, 2)
-  credit        Decimal      @default(0) @db.Decimal(14, 2)
-  description   String
-  reference     String?
+  date           DateTime     @db.Date
+  dueDate        DateTime?    @db.Date
+  debit          Decimal      @default(0) @db.Decimal(14, 2)
+  credit         Decimal      @default(0) @db.Decimal(14, 2)
+  description    String
+  reference      String?
   /// Bağlı faturanın numarası (modül 16 / 49): folyo aktarımı ve etkinlik bedeli alacağına fatura kesilince yazılır, iptalde silinir.
-  invoiceNumber String?
-  sourceType    LedgerSource
-  sourceId      String
+  invoiceNumber  String?
+  sourceType     LedgerSource
+  sourceId       String
   /// Tekrar işleme anahtarı (otel başına tekil): "PAYMENT:<id>", "GOODS_RECEIPT:<id>", "EVENT:<id>:<n>"…
-  sourceKey     String
-  voucherId     String?
-  instrumentId  String?
-  reversalOfId  String?      @unique
-  createdBy     String
-  createdAt     DateTime     @default(now())
+  sourceKey      String
+  voucherId      String?
+  instrumentId   String?
+  reversalOfId   String?      @unique
+  /// Girdiği yevmiye fişi (modül 48); boşsa henüz fişlenmedi.
+  journalEntryId String?
+  createdBy      String
+  createdAt      DateTime     @default(now())
 
-  hotel      Hotel              @relation(fields: [hotelId], references: [id])
-  account    LedgerAccount      @relation(fields: [accountId], references: [id], onDelete: Restrict)
-  voucher    AccountingVoucher? @relation(fields: [voucherId], references: [id], onDelete: Restrict)
-  instrument Instrument?        @relation(fields: [instrumentId], references: [id], onDelete: Restrict)
-  reversalOf LedgerEntry?       @relation("LedgerEntryReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
-  reversal   LedgerEntry?       @relation("LedgerEntryReversal")
+  hotel        Hotel              @relation(fields: [hotelId], references: [id])
+  account      LedgerAccount      @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  journalEntry JournalEntry?      @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
+  voucher      AccountingVoucher? @relation(fields: [voucherId], references: [id], onDelete: Restrict)
+  instrument   Instrument?        @relation(fields: [instrumentId], references: [id], onDelete: Restrict)
+  reversalOf   LedgerEntry?       @relation("LedgerEntryReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversal     LedgerEntry?       @relation("LedgerEntryReversal")
 
   @@unique([hotelId, sourceKey])
   // Ekstre (belge günü + kayıt anı + kimlik, imleçli) ve devir toplamı.
@@ -6084,6 +6127,8 @@ model LedgerEntry {
   @@index([hotelId, date, id])
   @@index([voucherId])
   @@index([instrumentId])
+  // Fişlenmemiş kayıtlar (genel muhasebe eşitlemesi).
+  @@index([hotelId, journalEntryId, date])
 }
 
 /// Kasa ya da banka hesabı (kendi para biriminde). Bakiye hareketlerle aynı işlemde güncellenir.
@@ -6106,13 +6151,14 @@ model TreasuryAccount {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  hotel       Hotel                   @relation(fields: [hotelId], references: [id])
-  movements   TreasuryMovement[]
-  mappings    TreasuryMapping[]
-  vouchers    AccountingVoucher[]     @relation("VoucherTreasury")
-  transfersIn AccountingVoucher[]     @relation("VoucherTargetTreasury")
-  lines       AccountingVoucherLine[]
-  instruments Instrument[]
+  hotel        Hotel                   @relation(fields: [hotelId], references: [id])
+  movements    TreasuryMovement[]
+  mappings     TreasuryMapping[]
+  vouchers     AccountingVoucher[]     @relation("VoucherTreasury")
+  transfersIn  AccountingVoucher[]     @relation("VoucherTargetTreasury")
+  lines        AccountingVoucherLine[]
+  instruments  Instrument[]
+  journalLines JournalLine[]
 
   @@unique([hotelId, code])
   @@index([hotelId, kind, isActive, name])
@@ -6139,11 +6185,14 @@ model TreasuryMovement {
   voucherId         String?
   instrumentId      String?
   reversalOfId      String?        @unique
+  /// Girdiği yevmiye fişi (modül 48); boşsa henüz fişlenmedi.
+  journalEntryId    String?
   createdBy         String
   createdAt         DateTime       @default(now())
 
   hotel         Hotel              @relation(fields: [hotelId], references: [id])
   account       TreasuryAccount    @relation(fields: [treasuryAccountId], references: [id], onDelete: Restrict)
+  journalEntry  JournalEntry?      @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
   ledgerAccount LedgerAccount?     @relation(fields: [ledgerAccountId], references: [id], onDelete: Restrict)
   voucher       AccountingVoucher? @relation(fields: [voucherId], references: [id], onDelete: Restrict)
   instrument    Instrument?        @relation(fields: [instrumentId], references: [id], onDelete: Restrict)
@@ -6158,6 +6207,7 @@ model TreasuryMovement {
   @@index([voucherId])
   @@index([instrumentId])
   @@index([ledgerAccountId])
+  @@index([hotelId, journalEntryId, date])
 }
 
 /// Yöntem → kasa / banka eşlemesi: ön büro, etkinlik ve restoran tahsilatı hangi hesaba girer (para birimi boş = hepsi).
@@ -6199,6 +6249,8 @@ model AccountingVoucher {
   /// Çift gönderim anahtarı (otel başına tekil).
   requestId               String
   approvalId              String?
+  /// Kasa / banka giriş-çıkış fişinde yevmiyenin karşı hesabı (masraf / gelir; modül 48). Boşsa kural hesabı.
+  glAccountId             String?
   createdBy               String
   createdAt               DateTime                @default(now())
   updatedAt               DateTime                @updatedAt
@@ -6214,6 +6266,7 @@ model AccountingVoucher {
   treasuryAccount   TreasuryAccount?        @relation("VoucherTreasury", fields: [treasuryAccountId], references: [id], onDelete: Restrict)
   targetTreasury    TreasuryAccount?        @relation("VoucherTargetTreasury", fields: [targetTreasuryAccountId], references: [id], onDelete: Restrict)
   approval          Approval?               @relation(fields: [approvalId], references: [id], onDelete: Restrict)
+  glAccount         GlAccount?              @relation(fields: [glAccountId], references: [id], onDelete: Restrict)
   lines             AccountingVoucherLine[]
   ledgerEntries     LedgerEntry[]
   treasuryMovements TreasuryMovement[]
@@ -6317,6 +6370,202 @@ model InstrumentMovement {
   instrument Instrument @relation(fields: [instrumentId], references: [id], onDelete: Restrict)
 
   @@index([instrumentId, createdAt])
+}
+
+// ═══════════════════════ Genel muhasebe (modül 48) ═══════════════════════
+
+/// Hesap sınıfı — Tek Düzen'de kodun ilk hanesi: 1–2 varlık, 3–4 borç, 5 öz kaynak, 6 gelir, 7 maliyet, 8 serbest (gider), 9 nazım.
+enum GlAccountClass {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  COST
+  EXPENSE
+  OFF_BALANCE
+}
+
+/// Hesabın departmanı (USALI / sahip raporu 93 ve dış muhasebe aktarımı 96 için yer): oda, yiyecek-içecek, diğer işletme, dağıtılmamış.
+enum GlDepartment {
+  ROOMS
+  FNB
+  OTHER
+  UNDISTRIBUTED
+}
+
+enum JournalEntryType {
+  AUTO
+  MANUAL
+}
+
+enum JournalEntryStatus {
+  POSTED
+  VOIDED
+}
+
+/// Yevmiye fişinin kaynağı: ön muhasebe kaynakları (47) + gün kapanışı gelir fişi + elle fiş + ters kayıt.
+enum JournalSource {
+  FOLIO_PAYMENT
+  FOLIO_TRANSFER
+  EVENT_PAYMENT
+  EVENT_CHARGE
+  POS_PAYMENT
+  SPA_PAYMENT
+  GOODS_RECEIPT
+  AGENCY_BONUS
+  INVOICE
+  VOUCHER
+  OPENING
+  INSTRUMENT
+  PAYROLL
+  PAYROLL_PAYMENT
+  EMPLOYEE_ADVANCE
+  DAILY_REVENUE
+  MANUAL
+  REVERSAL
+}
+
+/// Otomatik fiş kuralı: hangi kaynak (ve anahtar) hangi hesaba gider. Anahtar boşsa kaynağın varsayılanı.
+enum JournalRuleSource {
+  TREASURY
+  LEDGER_TYPE
+  LEDGER_ACCOUNT
+  GUEST_LEDGER
+  REVENUE
+  VAT_OUTPUT
+  VAT_INPUT
+  PURCHASE
+  AGENCY_BONUS
+  PAYROLL_EXPENSE
+  PAYROLL_LIABILITY
+  INSTRUMENT
+  TREASURY_IN
+  TREASURY_OUT
+  OPENING
+  FX_GAIN
+  FX_LOSS
+}
+
+/// Hesap planı (Tek Düzen): ağaç. Yalnız yaprak (`isPostable`) hesaba satır yazılır; satırı olan hesaba alt hesap açılamaz.
+/// Seed hesapları (`isSystem`) silinmez, kodu değişmez; adı ve departmanı düzenlenebilir.
+model GlAccount {
+  id         String         @id @default(uuid())
+  hotelId    String
+  /// "100", "100.01", "600.02" — noktalı alt kod; sıralama ve ağaç bu koddan.
+  code       String
+  name       String
+  parentId   String?
+  depth      Int            @default(0)
+  class      GlAccountClass
+  department GlDepartment?
+  isPostable Boolean        @default(true)
+  isSystem   Boolean        @default(false)
+  isActive   Boolean        @default(true)
+  createdBy  String
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  hotel    Hotel               @relation(fields: [hotelId], references: [id])
+  parent   GlAccount?          @relation("GlAccountTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children GlAccount[]         @relation("GlAccountTree")
+  lines    JournalLine[]
+  rules    JournalRule[]
+  vouchers AccountingVoucher[]
+
+  @@unique([hotelId, code])
+  @@index([hotelId, parentId, code])
+  @@index([hotelId, isActive, code])
+}
+
+/// Yevmiye fişi: borç toplamı = alacak toplamı. Otomatik fiş kaynak belgeden (kaynak anahtarı tekil: ikinci kez yazılmaz);
+/// elle fiş `requestId` ile çift gönderime kapalı. Düzeltme ters kayıtla (iptal edilen fiş VOIDED, ters fiş `reversalOfId`).
+model JournalEntry {
+  id           String             @id @default(uuid())
+  hotelId      String
+  /// "YEV-2026-00001"
+  number       String
+  type         JournalEntryType
+  status       JournalEntryStatus @default(POSTED)
+  date         DateTime           @db.Date
+  description  String
+  reference    String?
+  source       JournalSource
+  /// Kaynak belgenin kimliği (ödeme, fiş, mal kabul, bordro, çek…); günlük gelirde gün.
+  sourceId     String?
+  /// Tekrar işleme anahtarı (otel başına tekil): "VOUCHER:<id>", "DAILY_REVENUE:2026-11-24#2"…
+  sourceKey    String?
+  /// Borç toplamı (= alacak toplamı).
+  total        Decimal            @db.Decimal(16, 2)
+  lineCount    Int                @default(0)
+  requestId    String?
+  reversalOfId String?            @unique
+  voidedAt     DateTime?
+  voidedBy     String?
+  voidReason   String?
+  createdBy    String
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  hotel             Hotel              @relation(fields: [hotelId], references: [id])
+  reversalOf        JournalEntry?      @relation("JournalEntryReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversal          JournalEntry?      @relation("JournalEntryReversal")
+  lines             JournalLine[]
+  ledgerEntries     LedgerEntry[]
+  treasuryMovements TreasuryMovement[]
+
+  @@unique([hotelId, number])
+  @@unique([hotelId, sourceKey])
+  @@unique([hotelId, requestId])
+  // Fiş listesi (gün + kimlik), kaynağın fişleri, durum süzgeci.
+  @@index([hotelId, date, id])
+  @@index([hotelId, source, sourceId])
+  @@index([hotelId, status, createdAt])
+}
+
+/// Fiş satırı: tek taraf dolu (borç ya da alacak). `date` fişin günüdür (mizan / ekstre taraması fişe dönmeden).
+model JournalLine {
+  id                String   @id @default(uuid())
+  hotelId           String
+  entryId           String
+  sortOrder         Int
+  accountId         String
+  date              DateTime @db.Date
+  debit             Decimal  @default(0) @db.Decimal(16, 2)
+  credit            Decimal  @default(0) @db.Decimal(16, 2)
+  description       String?
+  /// Satırı doğuran cari (muavin izi; birden çok cari toplanmışsa boş).
+  ledgerAccountId   String?
+  treasuryAccountId String?
+
+  entry           JournalEntry     @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  account         GlAccount        @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  ledgerAccount   LedgerAccount?   @relation(fields: [ledgerAccountId], references: [id], onDelete: Restrict)
+  treasuryAccount TreasuryAccount? @relation(fields: [treasuryAccountId], references: [id], onDelete: Restrict)
+
+  @@unique([entryId, sortOrder])
+  // Mizan (dönem toplamı) ve hesap ekstresi (gün + fiş sırası).
+  @@index([hotelId, accountId, date])
+  @@index([accountId, date, entryId])
+  @@index([ledgerAccountId])
+  @@index([treasuryAccountId])
+}
+
+/// Otomatik fiş kuralı: (kaynak, anahtar) → hesap. Anahtar boş = kaynağın varsayılanı (ör. bütün KDV oranları 391).
+model JournalRule {
+  id        String            @id @default(uuid())
+  hotelId   String
+  source    JournalRuleSource
+  key       String            @default("")
+  accountId String
+  updatedBy String
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  hotel   Hotel     @relation(fields: [hotelId], references: [id])
+  account GlAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@unique([hotelId, source, key])
+  @@index([accountId])
 }
 
 /**
@@ -6715,6 +6964,7 @@ model Department {
 
   hotel     Hotel      @relation(fields: [hotelId], references: [id])
   employees Employee[]
+  shifts    Shift[]
 
   @@unique([hotelId, code])
 }
@@ -6757,20 +7007,26 @@ model Employee {
   createdAt           DateTime              @default(now())
   updatedAt           DateTime              @updatedAt
 
-  hotel         Hotel                @relation(fields: [hotelId], references: [id])
-  department    Department           @relation(fields: [departmentId], references: [id], onDelete: Restrict)
-  user          User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
-  ledgerAccount LedgerAccount?
-  incentives    EmployeeIncentive[]
-  advances      EmployeeAdvance[]
-  garnishments  Garnishment[]
-  attendances   PayrollAttendance[]
-  items         PayrollItem[]
-  termination   EmployeeTermination?
-  entries       PayrollEntry[]
-  openings      PayrollOpening[]
+  hotel            Hotel                @relation(fields: [hotelId], references: [id])
+  department       Department           @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  user             User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
+  ledgerAccount    LedgerAccount?
+  incentives       EmployeeIncentive[]
+  advances         EmployeeAdvance[]
+  garnishments     Garnishment[]
+  attendances      PayrollAttendance[]
+  items            PayrollItem[]
+  termination      EmployeeTermination?
+  entries          PayrollEntry[]
+  openings         PayrollOpening[]
   /// Zimmetindeki demirbaşlar (modül 46).
-  assets        Asset[]
+  assets           Asset[]
+  /// İK (modül 52): izinler, bakiye düzeltmeleri, vardiyalar, günlük puantaj, özlük belgeleri.
+  leaves           Leave[]
+  leaveAdjustments LeaveAdjustment[]
+  shifts           Shift[]
+  timesheets       Timesheet[]
+  documents        EmployeeDocument[]
 
   @@unique([hotelId, code])
   @@index([hotelId, status, lastName, firstName])
@@ -6948,6 +7204,318 @@ model PayrollAttendance {
 
   @@unique([employeeId, year, month])
   @@index([hotelId, year, month])
+}
+
+// ═══════════════════════ İK (modül 52) ═══════════════════════
+
+enum LeaveType {
+  ANNUAL
+  SICK
+  UNPAID
+  MATERNITY
+  PATERNITY
+  MARRIAGE
+  BEREAVEMENT
+  ADMINISTRATIVE
+  OTHER
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+/// Vardiyanın kaynağı: elle çizelge ya da işgücü planlayıcısının (88) önerisi.
+enum ShiftSource {
+  MANUAL
+  PLANNER
+}
+
+/// Günlük puantaj durumu: geldi, gelmedi, izinli, hafta tatili, resmî tatil.
+enum TimesheetStatus {
+  PRESENT
+  ABSENT
+  LEAVE
+  REST
+  HOLIDAY
+}
+
+/// Puantaj kaydının kaynağı: elle, kart / cihaz, personel telefonu (76).
+enum TimesheetSource {
+  MANUAL
+  DEVICE
+  MOBILE
+}
+
+enum EmployeeDocumentType {
+  ID_COPY
+  CONTRACT
+  HEALTH_REPORT
+  HYGIENE_CERTIFICATE
+  CRIMINAL_RECORD
+  DIPLOMA
+  CERTIFICATE
+  RESIDENCE_PERMIT
+  WORK_PERMIT
+  SGK_ENTRY
+  OTHER
+}
+
+/// İzin: talep → onay (LEAVE onay türü, dört göz) → onaylı; iptal edilebilir. `days` iş günü (hafta tatili ve resmî tatil sayılmaz).
+model Leave {
+  id           String      @id @default(uuid())
+  hotelId      String
+  employeeId   String
+  type         LeaveType
+  status       LeaveStatus @default(PENDING)
+  startDate    DateTime    @db.Date
+  endDate      DateTime    @db.Date
+  days         Decimal     @db.Decimal(5, 1)
+  reason       String?
+  requestedBy  String
+  requestedAt  DateTime    @default(now())
+  approvalId   String?     @unique
+  decidedBy    String?
+  decidedAt    DateTime?
+  decisionNote String?
+  cancelledBy  String?
+  cancelledAt  DateTime?
+  cancelReason String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  hotel      Hotel       @relation(fields: [hotelId], references: [id])
+  employee   Employee    @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  approval   Approval?   @relation(fields: [approvalId], references: [id], onDelete: Restrict)
+  timesheets Timesheet[]
+
+  @@index([hotelId, employeeId, startDate])
+  @@index([hotelId, status, startDate])
+  @@index([hotelId, startDate, endDate])
+}
+
+/// Elle izin bakiyesi düzeltmesi: devir izin, ek izin, kesinti (artı / eksi gün).
+model LeaveAdjustment {
+  id          String   @id @default(uuid())
+  hotelId     String
+  employeeId  String
+  days        Decimal  @db.Decimal(5, 1)
+  effectiveOn DateTime @db.Date
+  reason      String
+  createdBy   String
+  createdAt   DateTime @default(now())
+
+  hotel    Hotel    @relation(fields: [hotelId], references: [id])
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([hotelId, employeeId, effectiveOn])
+}
+
+/// Vardiya: personel × gün × saat aralığı (gece vardiyası ertesi güne taşar: bitiş < başlangıç).
+model Shift {
+  id           String      @id @default(uuid())
+  hotelId      String
+  employeeId   String
+  departmentId String
+  date         DateTime    @db.Date
+  startTime    String
+  endTime      String
+  breakMinutes Int         @default(0)
+  note         String?
+  source       ShiftSource @default(MANUAL)
+  createdBy    String
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  hotel      Hotel      @relation(fields: [hotelId], references: [id])
+  employee   Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+
+  @@unique([employeeId, date, startTime])
+  @@index([hotelId, date, departmentId])
+  @@index([hotelId, employeeId, date])
+}
+
+/// Günlük puantaj: giriş / çıkış, mola, çalışılan ve norm üstü dakika; izinli / tatil günleri durumla.
+model Timesheet {
+  id              String          @id @default(uuid())
+  hotelId         String
+  employeeId      String
+  date            DateTime        @db.Date
+  status          TimesheetStatus @default(PRESENT)
+  clockIn         DateTime?
+  clockOut        DateTime?
+  breakMinutes    Int             @default(0)
+  workedMinutes   Int             @default(0)
+  overtimeMinutes Int             @default(0)
+  leaveId         String?
+  source          TimesheetSource @default(MANUAL)
+  note            String?
+  updatedBy       String
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  hotel    Hotel    @relation(fields: [hotelId], references: [id])
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leave    Leave?   @relation(fields: [leaveId], references: [id], onDelete: SetNull)
+
+  @@unique([employeeId, date])
+  @@index([hotelId, date])
+  @@index([hotelId, employeeId, date])
+  @@index([leaveId])
+}
+
+/// Özlük belgesi: dosya diskte (`fileKey`), kayıt burada; süresi dolacak belgeler İK'ya hatırlatılır. Yumuşak silme.
+model EmployeeDocument {
+  id          String               @id @default(uuid())
+  hotelId     String
+  employeeId  String
+  type        EmployeeDocumentType
+  title       String
+  fileKey     String?
+  fileName    String?
+  contentType String?
+  size        Int?
+  issuedOn    DateTime?            @db.Date
+  expiresOn   DateTime?            @db.Date
+  note        String?
+  remindedAt  DateTime?
+  uploadedBy  String
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  deletedAt   DateTime?
+
+  hotel    Hotel    @relation(fields: [hotelId], references: [id])
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([hotelId, employeeId, deletedAt])
+  @@index([hotelId, expiresOn])
+}
+
+/// İK ayarları: hafta tatili günü, günlük / haftalık çalışma normu, resmî tatiller, izin onayı, belge hatırlatma süresi.
+model HrSettings {
+  hotelId               String   @id
+  /// 0 Pazar … 6 Cumartesi.
+  weeklyRestDay         Int      @default(0)
+  dailyWorkMinutes      Int      @default(450)
+  weeklyWorkMinutes     Int      @default(2700)
+  /// [{ date: "YYYY-AA-GG", name }]
+  publicHolidays        Json     @default("[]")
+  leaveApprovalRequired Boolean  @default(true)
+  documentReminderDays  Int      @default(30)
+  updatedBy             String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+}
+
+// ═══════════════════════ Sadakat programı (modül 56) ═══════════════════════
+
+enum LoyaltyAccountStatus {
+  ACTIVE
+  CLOSED
+}
+
+/// Puan hareketi: kazanma, harcama, geri almaları, süre dolumu, elle düzeltme.
+enum LoyaltyTransactionKind {
+  EARN
+  EARN_REVERSAL
+  REDEEM
+  REDEEM_REVERSAL
+  EXPIRE
+  ADJUST
+}
+
+/// Otelin sadakat programı: kazanma ve harcama oranları, sınırlar, süre, seviyeler (JSON).
+model LoyaltySettings {
+  hotelId           String   @id
+  isEnabled         Boolean  @default(false)
+  programName       String   @default("Sadakat programı")
+  /// 1 puan için harcanacak tutar (otel para birimi).
+  spendPerPoint     Decimal  @default(10) @db.Decimal(12, 2)
+  /// 1 puanın harcamadaki değeri (otel para birimi).
+  pointValue        Decimal  @default(0.5) @db.Decimal(12, 4)
+  minRedeemPoints   Int      @default(100)
+  /// Folyo harcamasının en çok yüzde kaçı puanla ödenir.
+  maxRedeemPct      Int      @default(50)
+  /// Kazanılan puanın geçerlilik süresi (ay); 0 = süresiz.
+  expiryMonths      Int      @default(24)
+  autoEnroll        Boolean  @default(true)
+  excludeLedgerPaid Boolean  @default(true)
+  earnOnSpa         Boolean  @default(true)
+  /// [{ code, name, minPoints, multiplier, perks }]
+  tiers             Json     @default("[]")
+  updatedBy         String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+}
+
+/// Misafirin sadakat hesabı (misafir kartı başına bir tane). Bakiye hareketlerle aynı işlemde güncellenir.
+model LoyaltyAccount {
+  id               String               @id @default(uuid())
+  hotelId          String
+  guestId          String               @unique
+  /// "SDK-000001"
+  number           String
+  status           LoyaltyAccountStatus @default(ACTIVE)
+  tierCode         String?
+  balance          Int                  @default(0)
+  lifetimePoints   Int                  @default(0)
+  /// Son 12 ayda kazanılan puan (seviye eşiği bununla).
+  qualifyingPoints Int                  @default(0)
+  enrolledAt       DateTime             @default(now())
+  enrolledBy       String
+  /// KVKK açık rıza işareti (elle üyelikte).
+  consentAt        DateTime?
+  lastActivityAt   DateTime?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  hotel        Hotel                @relation(fields: [hotelId], references: [id])
+  guest        Guest                @relation(fields: [guestId], references: [id], onDelete: Restrict)
+  transactions LoyaltyTransaction[]
+
+  @@unique([hotelId, number])
+  @@index([hotelId, status, tierCode])
+  @@index([hotelId, balance])
+}
+
+/// Puan hareketi (işaretli). Artı lotlar (`remaining`) FIFO harcanır; `consumed` harcamanın hangi lotlardan düştüğünü tutar (iade için).
+model LoyaltyTransaction {
+  id            String                 @id @default(uuid())
+  hotelId       String
+  accountId     String
+  kind          LoyaltyTransactionKind
+  points        Int
+  remaining     Int                    @default(0)
+  expiresOn     DateTime?              @db.Date
+  sourceType    String
+  sourceId      String?
+  sourceKey     String
+  /// Puanın para karşılığı (harcamada indirim tutarı; kazanmada uygun harcama).
+  amount        Decimal                @default(0) @db.Decimal(14, 2)
+  consumed      Json                   @default("[]")
+  reservationId String?
+  folioId       String?
+  folioItemId   String?
+  description   String
+  createdBy     String
+  createdAt     DateTime               @default(now())
+
+  hotel   Hotel          @relation(fields: [hotelId], references: [id])
+  account LoyaltyAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@unique([hotelId, sourceKey])
+  @@index([accountId, createdAt])
+  // FIFO harcama ve süre dolumu: kalanı olan lotlar.
+  @@index([accountId, remaining, expiresOn])
+  @@index([hotelId, expiresOn])
+  @@index([hotelId, sourceType, sourceId])
 }
 
 /// Bir aya girilen ek ödeme / kesinti. `runId` boşsa ayın aylık bordrosuna, doluysa o fark bordrosuna aittir.
@@ -8495,6 +9063,122 @@ model DataImport {
   hotel Hotel @relation(fields: [hotelId], references: [id])
 
   @@index([hotelId, createdAt])
+}
+
+/**
+ * ══════════════════ KBS kimlik bildirimi (modül 58) ══════════════════
+ */
+
+enum KbsProvider {
+  TEST
+  EGM
+  JANDARMA
+}
+
+enum KbsKind {
+  CHECK_IN
+  CHECK_OUT
+  ROOM_CHANGE
+}
+
+enum KbsState {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+  CANCELLED
+  MANUAL
+}
+
+enum KbsTestBehavior {
+  ACCEPT
+  REJECT
+  UNAVAILABLE
+}
+
+/// Otelin KBS ayarı. Parola secret-box ile mühürlü saklanır, hiçbir cevapta dönmez.
+model KbsSettings {
+  hotelId            String          @id
+  isEnabled          Boolean         @default(false)
+  provider           KbsProvider     @default(TEST)
+  facilityCode       String?
+  username           String?
+  passwordSealed     String?
+  sendCheckOut       Boolean         @default(true)
+  sendRoomChange     Boolean         @default(true)
+  requireGender      Boolean         @default(true)
+  requireBirthDate   Boolean         @default(true)
+  requireParentNames Boolean         @default(false)
+  requireBirthPlace  Boolean         @default(false)
+  citizenIdOnly      Boolean         @default(true)
+  testBehavior       KbsTestBehavior @default(ACCEPT)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  updatedBy          String?
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+}
+
+/// Bir kişinin bir bildirimi (giriş / çıkış / oda değişikliği). Kimlik gönderim anında kartın güncel halinden kurulur;
+/// burada yalnız ekran için maskeli özet tutulur.
+model KbsNotification {
+  id                 String    @id @default(uuid())
+  hotelId            String
+  reservationId      String
+  guestId            String
+  kind               KbsKind
+  state              KbsState  @default(PENDING)
+  /// Tekrar gelen olay ikinci bildirim açmasın (otel içinde tekil).
+  sourceKey          String
+  /// Çıkış / oda değişikliği önce girişin bildirilmesini bekler.
+  dependsOnId        String?
+  roomNumber         String
+  previousRoomNumber String?
+  guestName          String
+  documentMasked     String?
+  nationality        String?
+  attempts           Int       @default(0)
+  nextAttemptAt      DateTime?
+  lockedAt           DateTime?
+  providerRef        String?
+  lastCode           String?
+  lastMessage        String?
+  sentAt             DateTime?
+  resolvedBy         String?
+  resolvedNote       String?
+  lateAlertedAt      DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  createdBy          String?
+
+  hotel       Hotel             @relation(fields: [hotelId], references: [id])
+  guest       Guest             @relation(fields: [guestId], references: [id])
+  reservation Reservation       @relation(fields: [reservationId], references: [id])
+  dependsOn   KbsNotification?  @relation("KbsDependency", fields: [dependsOnId], references: [id])
+  dependents  KbsNotification[] @relation("KbsDependency")
+  logs        KbsLog[]
+
+  @@unique([hotelId, sourceKey])
+  @@index([hotelId, reservationId])
+  @@index([hotelId, state, createdAt])
+  @@index([state, nextAttemptAt])
+}
+
+/// Her deneme ve personel işlemi (iz).
+model KbsLog {
+  id             String   @id @default(uuid())
+  hotelId        String
+  notificationId String
+  ok             Boolean
+  code           String?
+  message        String?
+  actor          String
+  createdAt      DateTime @default(now())
+
+  hotel        Hotel           @relation(fields: [hotelId], references: [id])
+  notification KbsNotification @relation(fields: [notificationId], references: [id])
+
+  @@index([notificationId, createdAt])
 }
 
 /// Açık API uygulaması (modül 61): otele bağlanan dış sistem (CRM, kurumsal seyahat aracı, acente yazılımı). Anahtarlar

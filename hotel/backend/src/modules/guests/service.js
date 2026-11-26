@@ -9,6 +9,7 @@ import { buildPage, toSkipTake } from '../../lib/pagination.js';
 import { writeWithEvents } from '../../lib/write.js';
 import { guestFullName, searchGuests, storablePhone, toGuestDto } from '../reservations/guests.js';
 import { getHotelSettings } from '../settings/service.js';
+import { mergeLoyaltyAccounts } from '../loyalty/accounts.js';
 import { GUEST_REASSIGN_MODELS, mergeTags } from './rules.js';
 
 /* ───────────────────────── Özet (konaklama / harcama) ───────────────────────── */
@@ -133,6 +134,11 @@ export async function getGuestCard(hotelId, guestId) {
     idType: guest.idType,
     idNumber: guest.idNumber,
     idRead: guest.idReadAt ? { at: guest.idReadAt.toISOString(), by: guest.idReadBy, via: guest.idReadVia } : null,
+    // KBS ek alanları (modül 58).
+    gender: guest.gender ?? null,
+    birthPlace: guest.birthPlace ?? null,
+    fatherName: guest.fatherName ?? null,
+    motherName: guest.motherName ?? null,
     tags: guest.tags,
     summary: summaryMap.get(guestId) ?? emptySummary(),
     preferences: prefs.map(toPreferenceDto),
@@ -190,6 +196,9 @@ export async function updateGuestCard(hotelId, guestId, input) {
     if (input.phone !== undefined) data.phone = input.phone ? storablePhone(input.phone, hotel.phoneCountryCode) : null;
     if (input.email !== undefined) data.email = input.email ? input.email.toLowerCase() : null;
     if (input.tags !== undefined) data.tags = [...new Set(input.tags)];
+    for (const field of ['gender', 'birthPlace', 'fatherName', 'motherName']) {
+      if (input[field] !== undefined) data[field] = input[field] ?? null;
+    }
     const identityTouched = ['idType', 'idNumber', 'nationality', 'birthDate'].some((field) => input[field] !== undefined);
     if (identityTouched || input.documentRead) {
       const next = {
@@ -335,6 +344,10 @@ export async function mergeGuests(hotelId, input) {
     for (const field of ['firstName', 'lastName', 'phone', 'email', 'nationality', 'idType', 'idNumber']) {
       if (keep[field] !== undefined) data[field] = keep[field];
     }
+    // KBS ek alanları (modül 58): hedefte boşsa kaynaktaki kalır (bekleyen bildirim eksik bilgiye düşmesin).
+    for (const field of ['gender', 'birthPlace', 'fatherName', 'motherName']) {
+      if (!target[field] && source[field]) data[field] = source[field];
+    }
     if (keep.birthDate !== undefined) data.birthDate = keep.birthDate ? new Date(`${keep.birthDate}T00:00:00.000Z`) : null;
     // "Kimlikten okundu" (modül 59) kalan kimlikle gider: kimlik hedefinki gibi kalırsa onun işareti, kaynağınki
     // seçildiyse kaynağın işareti; ikisine de uymayan karışık kimlik elle girilmiş sayılır.
@@ -344,6 +357,9 @@ export async function mergeGuests(hotelId, input) {
       Object.assign(data, sameIdentity(finalIdentity, source) ? readOf(source) : { idReadAt: null, idReadBy: null, idReadVia: null });
     }
     await tx.guest.update({ where: { id: targetId }, data });
+
+    // Sadakat hesabı (modül 56): hedefte yoksa taşınır, varsa hareketler ve bakiye aktarılır.
+    await mergeLoyaltyAccounts(tx, hotelId, sourceId, targetId);
 
     // Kaynağı sil.
     await tx.guest.update({ where: { id: sourceId }, data: { deletedAt: new Date() } });

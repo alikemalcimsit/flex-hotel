@@ -181,6 +181,13 @@ export const PERMISSIONS = Object.freeze({
   /** Kasa / banka tanımları, yöntem eşlemesi, başlangıç günü ve onay eşiği, açılış bakiyeleri, fiş iptali. */
   ACCOUNTING_SETUP: 'accounting.setup',
 
+  /** Genel muhasebe (modül 48): hesap planı, yevmiye fişleri, mizan ve hesap ekstresi. */
+  LEDGER_VIEW: 'ledger.view',
+  /** Elle yevmiye fişi girmek, fişlenmemiş hareketleri eşitlemek. */
+  LEDGER_MANAGE: 'ledger.manage',
+  /** Hesap planını düzenlemek, otomatik fiş kurallarını değiştirmek, dönem kilidi, fiş iptali. */
+  LEDGER_SETUP: 'ledger.setup',
+
   /** Fatura ve e-belge (modül 16 çekirdeği + 49): faturalanacaklar, faturalar, PDF, GİB durumu. */
   INVOICES_VIEW: 'invoices.view',
   /** Folyo / etkinlik faturası: taslak aç, alıcıyı düzenle, kes; e-belgeyi tekrar gönder. */
@@ -202,6 +209,27 @@ export const PERMISSIONS = Object.freeze({
   PAYROLL_PAY: 'payroll.pay',
   /** Yasal parametreler (teyit dahil), kalem türleri, departmanlar, işyeri ayarları. */
   PAYROLL_SETUP: 'payroll.setup',
+
+  /** İK (modül 52): bütün personelin izinleri, bakiyeleri, vardiya çizelgesi, günlük puantaj ve özlük belgeleri. */
+  HR_VIEW: 'hr.view',
+  /** İzin onayı / iptali ve personel adına talep, bakiye düzeltmesi, çizelge ve puantaj yazmak, bordroya aktarmak, belge yüklemek, İK ayarları. */
+  HR_MANAGE: 'hr.manage',
+  /** Kendi izin talebini girmek; kendi izinlerini, bakiyesini ve vardiyalarını görmek (kullanıcı hesabı personel kartına bağlıysa). */
+  HR_SELF: 'hr.self',
+
+  /** Sadakat (modül 56): üyeler, bakiye ve hareketler; misafir kartında ve rezervasyonda puan. */
+  LOYALTY_VIEW: 'loyalty.view',
+  /** Konaklamanın folyosunda puan kullanmak (indirim), misafiri üye yapmak. */
+  LOYALTY_REDEEM: 'loyalty.redeem',
+  /** Program ayarları (oranlar, seviyeler), elle puan düzeltmesi. */
+  LOYALTY_MANAGE: 'loyalty.manage',
+
+  /** KBS (modül 58): kimlik bildirimlerinin listesi, mutabakat. */
+  KBS_VIEW: 'kbs.view',
+  /** Hatalı bildirimi tekrar göndermek, elle bildirildi işaretlemek. */
+  KBS_SEND: 'kbs.send',
+  /** KBS ayarları (tesis kodu, kullanıcı, parola, zorunlu alanlar), bağlantı denemesi. */
+  KBS_MANAGE: 'kbs.manage',
   /** Online check-in listesi ve ayrıntısı (belge fotoğrafları dahil), misafir portalı bağlantıları (modül 53). */
   GUEST_PORTAL_VIEW: 'guest_portal.view',
   /** Online check-in onayı / düzeltme isteği; portal bağlantısı ver / iptal et, daveti gönder. */
@@ -352,6 +380,9 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.ACCOUNTING_VIEW]: 'Cariler ve ekstre, kasa / banka hareketleri, çek / senet portföyü ve fişleri görüntüle',
   [PERMISSIONS.ACCOUNTING_MANAGE]: 'Tahsilat / ödeme / virman fişi gir, çek / senet işlemleri, cari kartı aç ve düzenle',
   [PERMISSIONS.ACCOUNTING_SETUP]: 'Kasa / banka tanımları, yöntem eşlemesi, başlangıç günü ve onay eşiği, açılış bakiyesi, fiş iptali',
+  [PERMISSIONS.LEDGER_VIEW]: 'Hesap planı, yevmiye fişleri, mizan ve hesap ekstresini görüntüle',
+  [PERMISSIONS.LEDGER_MANAGE]: 'Elle yevmiye fişi gir, fişlenmemiş hareketleri eşitle',
+  [PERMISSIONS.LEDGER_SETUP]: 'Hesap planı ve otomatik fiş kuralları, dönem kilidi, yevmiye fişi iptali',
   [PERMISSIONS.INVOICES_VIEW]: "Faturalanacakları, faturaları, PDF'leri ve GİB durumunu görüntüle",
   [PERMISSIONS.INVOICES_ISSUE]: 'Folyo / etkinlik faturası kes (taslak, alıcı, kesim), e-belgeyi tekrar gönder',
   [PERMISSIONS.INVOICES_MANAGE]: 'Cariye serbest fatura kes, fatura iptali iste (onay kuyruğu)',
@@ -374,6 +405,15 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.PAYROLL_MANAGE]: 'Ücret, puantaj, ek ödeme / kesinti, avans, icra, teşvik, servis payı; bordro hesapla ve onaya gönder',
   [PERMISSIONS.PAYROLL_PAY]: 'Maaş ve avans öde (kasa / banka)',
   [PERMISSIONS.PAYROLL_SETUP]: 'Bordro ayarları: yasal parametreler ve teyidi, kalem türleri, departmanlar, işyeri bilgileri',
+  [PERMISSIONS.HR_VIEW]: 'İzinler ve bakiyeler, vardiya çizelgesi, günlük puantaj ve özlük belgelerini görüntüle',
+  [PERMISSIONS.HR_MANAGE]: 'İzin onayla / iptal et, çizelge ve puantaj yaz, bordroya aktar, belge yükle, İK ayarları',
+  [PERMISSIONS.HR_SELF]: 'Kendi izin talebini gir; kendi izinlerini, bakiyesini ve vardiyalarını gör',
+  [PERMISSIONS.LOYALTY_VIEW]: 'Sadakat üyelerini, puan bakiyesini ve hareketlerini görüntüle',
+  [PERMISSIONS.LOYALTY_REDEEM]: 'Folyoda puan kullan (indirim), misafiri sadakat programına üye yap',
+  [PERMISSIONS.LOYALTY_MANAGE]: 'Sadakat programı ayarları ve seviyeler, elle puan düzeltmesi',
+  [PERMISSIONS.KBS_VIEW]: 'KBS kimlik bildirimlerini ve mutabakatı görüntüle',
+  [PERMISSIONS.KBS_SEND]: 'Hatalı KBS bildirimini tekrar gönder, elle bildirildi olarak işaretle',
+  [PERMISSIONS.KBS_MANAGE]: 'KBS ayarları (tesis kodu, kullanıcı, parola, zorunlu alanlar) ve bağlantı denemesi',
   [PERMISSIONS.GUEST_PORTAL_VIEW]: 'Online check-in\'leri ve belge fotoğraflarını gör, misafir portalı bağlantısını gör',
   [PERMISSIONS.GUEST_PORTAL_MANAGE]: 'Online check-in onayla / düzeltme iste; portal bağlantısı ver, iptal et, davet gönder',
   [PERMISSIONS.GUEST_PORTAL_SETUP]: 'Misafir portalı ayarları: davet ve açılış günleri, belge saklama süresi, metinler',
@@ -493,9 +533,13 @@ export const PERMISSION_GROUPS = Object.freeze([
   { key: 'stock', label: 'Stok ve depo', permissions: [PERMISSIONS.STOCK_VIEW, PERMISSIONS.STOCK_MANAGE] },
   { key: 'assets', label: 'Demirbaş', permissions: [PERMISSIONS.ASSETS_VIEW, PERMISSIONS.ASSETS_COUNT, PERMISSIONS.ASSETS_MANAGE, PERMISSIONS.ASSETS_FINANCE] },
   { key: 'accounting', label: 'Ön muhasebe', permissions: [PERMISSIONS.ACCOUNTING_VIEW, PERMISSIONS.ACCOUNTING_MANAGE, PERMISSIONS.ACCOUNTING_SETUP] },
+  { key: 'ledger', label: 'Genel muhasebe', permissions: [PERMISSIONS.LEDGER_VIEW, PERMISSIONS.LEDGER_MANAGE, PERMISSIONS.LEDGER_SETUP] },
   { key: 'invoices', label: 'Fatura ve e-belge', permissions: [PERMISSIONS.INVOICES_VIEW, PERMISSIONS.INVOICES_ISSUE, PERMISSIONS.INVOICES_MANAGE, PERMISSIONS.INVOICES_SETUP] },
   { key: 'employees', label: 'Personel', permissions: [PERMISSIONS.EMPLOYEES_VIEW, PERMISSIONS.EMPLOYEES_MANAGE] },
   { key: 'payroll', label: 'Bordro', permissions: [PERMISSIONS.PAYROLL_VIEW, PERMISSIONS.PAYROLL_MANAGE, PERMISSIONS.PAYROLL_PAY, PERMISSIONS.PAYROLL_SETUP] },
+  { key: 'hr', label: 'İK', permissions: [PERMISSIONS.HR_VIEW, PERMISSIONS.HR_MANAGE, PERMISSIONS.HR_SELF] },
+  { key: 'loyalty', label: 'Sadakat programı', permissions: [PERMISSIONS.LOYALTY_VIEW, PERMISSIONS.LOYALTY_REDEEM, PERMISSIONS.LOYALTY_MANAGE] },
+  { key: 'kbs', label: 'KBS kimlik bildirimi', permissions: [PERMISSIONS.KBS_VIEW, PERMISSIONS.KBS_SEND, PERMISSIONS.KBS_MANAGE] },
   { key: 'guest_portal', label: 'Misafir portalı ve online check-in', permissions: [PERMISSIONS.GUEST_PORTAL_VIEW, PERMISSIONS.GUEST_PORTAL_MANAGE, PERMISSIONS.GUEST_PORTAL_SETUP] },
   { key: 'surveys', label: 'Anket ve memnuniyet', permissions: [PERMISSIONS.SURVEYS_VIEW, PERMISSIONS.SURVEYS_FOLLOW_UP, PERMISSIONS.SURVEYS_SETUP] },
   { key: 'spa', label: 'Spa ve spor salonu', permissions: [PERMISSIONS.SPA_VIEW, PERMISSIONS.SPA_BOOK, PERMISSIONS.SPA_PAYMENT, PERMISSIONS.SPA_SUPERVISE, PERMISSIONS.SPA_SETUP] },
@@ -537,6 +581,13 @@ export const ROLE_LABELS = Object.freeze({
 export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
   ADMIN: PERMISSION_VALUES,
   MANAGER: Object.freeze([
+    // Sadakat (modül 56): program ayarı, düzeltme ve puan kullanımı.
+    PERMISSIONS.LOYALTY_VIEW,
+    PERMISSIONS.LOYALTY_REDEEM,
+    PERMISSIONS.LOYALTY_MANAGE,
+    PERMISSIONS.KBS_VIEW,
+    PERMISSIONS.KBS_SEND,
+    PERMISSIONS.KBS_MANAGE,
     PERMISSIONS.SETTINGS_VIEW,
     PERMISSIONS.ROOMS_VIEW,
     PERMISSIONS.ROOMS_MANAGE,
@@ -646,6 +697,10 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.ACCOUNTING_VIEW,
     PERMISSIONS.ACCOUNTING_MANAGE,
     PERMISSIONS.ACCOUNTING_SETUP,
+    // Genel muhasebe (modül 48): müdür mizanı görür, elle fiş girebilir; hesap planı ve kurallar da onun (küçük otel).
+    PERMISSIONS.LEDGER_VIEW,
+    PERMISSIONS.LEDGER_MANAGE,
+    PERMISSIONS.LEDGER_SETUP,
     // Fatura müdürün: ayarlar ve serbest fatura dahil; iptali başka bir yetkili onaylar.
     PERMISSIONS.INVOICES_VIEW,
     PERMISSIONS.INVOICES_ISSUE,
@@ -653,6 +708,10 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.INVOICES_SETUP,
     // Personel listesini müdür görür; ücret ve bordro muhasebenin (bordronun onayı başka bir yetkilinin).
     PERMISSIONS.EMPLOYEES_VIEW,
+    // İK (modül 52): müdür izin onaylar, çizelge ve puantajı yönetir; kendi izni de olabilir.
+    PERMISSIONS.HR_VIEW,
+    PERMISSIONS.HR_MANAGE,
+    PERMISSIONS.HR_SELF,
     // Misafir portalı ve online check-in (modül 53): ayarlar dahil.
     PERMISSIONS.GUEST_PORTAL_VIEW,
     PERMISSIONS.GUEST_PORTAL_MANAGE,
@@ -669,6 +728,13 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.SPA_SETUP,
   ]),
   FRONT_DESK: Object.freeze([
+    // Sadakat (modül 56): misafirin puanını görür, folyoda kullanır, üye yapar.
+    PERMISSIONS.KBS_VIEW,
+    PERMISSIONS.KBS_SEND,
+    PERMISSIONS.LOYALTY_VIEW,
+    PERMISSIONS.LOYALTY_REDEEM,
+    // İK (modül 52): kendi izin talebi, bakiyesi ve vardiyası.
+    PERMISSIONS.HR_SELF,
     PERMISSIONS.ROOMS_VIEW,
     PERMISSIONS.ROOMS_OPERATE,
     PERMISSIONS.RESERVATIONS_VIEW,
@@ -726,6 +792,8 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.GUESTS_MERGE,
   ]),
   HOUSEKEEPING: Object.freeze([
+    // İK (modül 52): kendi izin talebi, bakiyesi ve vardiyası.
+    PERMISSIONS.HR_SELF,
     PERMISSIONS.ROOMS_VIEW,
     PERMISSIONS.ROOMS_OPERATE,
     // Gidecekler listesi: hangi oda bugün boşalacak (temizlik sırası).
@@ -752,6 +820,8 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.MAINTENANCE_OPERATE,
   ]),
   ACCOUNTING: Object.freeze([
+    // Sadakat (modül 56): puan yükümlülüğünü ve indirimleri izler.
+    PERMISSIONS.LOYALTY_VIEW,
     PERMISSIONS.SETTINGS_VIEW,
     PERMISSIONS.ROOMS_VIEW,
     PERMISSIONS.STAYS_VIEW,
@@ -799,6 +869,10 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     // Cari, kasa, banka, çek / senet ve fişler muhasebenin işi; kasa / banka tanımı, açılış bakiyesi ve fiş iptali müdürün.
     PERMISSIONS.ACCOUNTING_VIEW,
     PERMISSIONS.ACCOUNTING_MANAGE,
+    // Genel muhasebe muhasebecinin asıl işi: hesap planı, fiş kuralları, yevmiye, mizan, dönem kilidi.
+    PERMISSIONS.LEDGER_VIEW,
+    PERMISSIONS.LEDGER_MANAGE,
+    PERMISSIONS.LEDGER_SETUP,
     // Faturalar ve e-belge takibi muhasebenin işi; fatura ayarları müdürün.
     PERMISSIONS.INVOICES_VIEW,
     PERMISSIONS.INVOICES_ISSUE,
@@ -809,6 +883,10 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.PAYROLL_VIEW,
     PERMISSIONS.PAYROLL_MANAGE,
     PERMISSIONS.PAYROLL_PAY,
+    // İK (modül 52): küçük otelde izin, puantaj ve özlük muhasebenin işi; bordroya aktarımı da o yapar.
+    PERMISSIONS.HR_VIEW,
+    PERMISSIONS.HR_MANAGE,
+    PERMISSIONS.HR_SELF,
     // Demirbaş sicili ve amortisman muhasebenin işi (sabit kıymet defteri); sayımı da yürütür.
     PERMISSIONS.ASSETS_VIEW,
     PERMISSIONS.ASSETS_COUNT,
@@ -816,6 +894,8 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.ASSETS_FINANCE,
   ]),
   FNB: Object.freeze([
+    // İK (modül 52): kendi izin talebi, bakiyesi ve vardiyası.
+    PERMISSIONS.HR_SELF,
     PERMISSIONS.ROOMS_VIEW,
     // Mutfak ve servis etkinlik programını, kişi sayısını ve menü kalemlerini görür.
     PERMISSIONS.BANQUET_VIEW,

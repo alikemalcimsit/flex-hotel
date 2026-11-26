@@ -131,12 +131,39 @@ Sorun giderirken üç ekranı yanınızda tutun:
 ### Giriş yapılamıyor
 
 - **Belirti:** "oda arızalı", "odada önceki misafir içeride", "oda bu gecelerde başkasına", "kimlik sağlaması hatalı", "giriş günü gelmemiş".
-- **Sebep / çözüm:** arızalı odaya giriş olmaz → oda değiştirin (Oda planı'nda sürükle); önceki misafir çıkmamış → önce çıkış; kimlik → TC kimlik algoritması / pasaport biçimi; politika "bütün yetişkinler" ise refakatçi kimliği de zorunlu; kirli odaya giriş personel onayı ister (engel değil). Erken gelen misafir giriş gününden önce giremez; geç gelen ertesi gün girebilir.
+- **Sebep / çözüm:** arızalı odaya giriş olmaz → oda değiştirin (Oda planı'nda sürükle); önceki misafir çıkmamış → önce çıkış; kimlik → TC kimlik algoritması / pasaport biçimi; politika "bütün yetişkinler" ise refakatçi kimliği de zorunlu; KBS açıksa "KBS bildirimi için eksik bilgi — …" mesajındaki alanlar (cinsiyet, doğum tarihi …) doldurulmalı (aşağıdaki "KBS kimlik bildirimi"); kirli odaya giriş personel onayı ister (engel değil). Erken gelen misafir giriş gününden önce giremez; geç gelen ertesi gün girebilir.
 
 ### Fiş onay bekliyor / fiş iptal edilemiyor
 
 - **Sebep:** ödeme fişi toplamı Ön muhasebe → Ayarlar'daki eşiğe eşit / üstü → dört göz; onay anında kasa yeterliliği yeniden denetlenir. İptal: yalnız işlenmiş fişte, gerekçeyle, fiş tarihli ters kayıtla; fişin açtığı çek ilk durumunda olmalı (tahsile verilmiş / ciro edilmiş / tahsil edilmiş çekin fişi iptal edilemez); kasayı eksiye düşüren iptal reddedilir.
 - **Çözüm:** başka yetkili onaylar; çeki önce iade / geri alın.
+
+### Yevmiye fişini silebilir miyim?
+
+- **Cevap:** Hayır. Genel muhasebede fiş silinmez; **İptal et** (`ledger.setup`) fişi "İptal edildi" yapar ve seçilen günde bütün satırları ters çeviren bir **ters kayıt fişi** yazar. İki fiş birbirine bağlıdır, mizanda ikisi de sayılır (net sıfır). Ters kayıt fişi iptal edilemez; iptal edilmiş fiş ikinci kez iptal edilemez; kilitli dönemdeki fiş kilidi açmadan iptal edilemez.
+- **Dikkat:** otomatik fişi iptal ettiğinizde ön muhasebedeki kaynak kayıt **fişli kalır**; Eşitle onu yeniden yazmaz. Doğru satırları elle fişle girin. Tutar yanlışsa yevmiye fişini değil **ön muhasebe fişini** iptal edin (kasa da düzelir; yevmiyede ters fiş kendiliğinden oluşur).
+
+### Mizan neden dengesiz görünüyor / "fişlenmemiş hareket" ne demek?
+
+- **Belirti:** Genel muhasebe → Mizan'da "Fişlenmemiş hareket var" sarı uyarısı (sayı + Ayarlar → Eşitle bağlantısı); Ayarlar'da "Fişlenmemiş cari hareketi" / "Fişlenmemiş kasa / banka hareketi" sayaçları sıfır değil.
+- **Sebep:** ön muhasebeye yazılmış ama henüz **yevmiye fişine çevrilmemiş** kayıt var: muhasebe aktörü kapalıydı, kuralın hesabı yok / pasif / ana hesap, döviz kasası hareketi için kur yok, ya da fiş tek satıra iniyor. Görevler'de "Ön muhasebe kaydı (…) yevmiye fişine çevrilecek" görevi ve sebebi vardır. Bu kayıtlar mizanda **yoktur** — bu bir denge sorunu değil, eksiklik uyarısıdır; rozet yine "Mizan dengeli" der.
+- **Çözüm:** sebebi düzeltin (Kurallar → hesap; Hesap planı → etkinleştir; Kasa → Döviz kurları), Genel muhasebe → **Ayarlar → Eşitle** (dönem) çalıştırın; sonuç kutusunda Hata 0 ve Kalan 0 olunca uyarı kalkar. Rozet gerçekten "Mizan dengesiz" diyorsa (normal işletimde görülmez) o günün fişlerini Yevmiye'de inceleyip teknik ekibe bildirin.
+
+### KDV oranına göre ayrı hesap nasıl açarım?
+
+- **Cevap:** Hesap planı → **Hesap ekle**: `391.10 Hesaplanan KDV %10`, `391.20 Hesaplanan KDV %20` (üst hesap `391`; alt hesap açılınca `391` satır almaz olur — `391`'in geçmiş satırı varsa alt hesap açılamaz, o zaman `392` gibi boş bir ana hesabın altını kullanın ya da `192.10` / `192.20` örneğindeki gibi başka hesabı seçin). Sonra Kurallar → "Hesaplanan KDV" kartı → **Oran ekle** "10" → `391.10`, "20" → `391.20`; "Bütün oranlar" satırı listede olmayan oranlar için kalır. İndirilecek KDV için aynı yol ("İndirilecek KDV" kartı; ör. `192.10` / `192.20`). Kural **yalnız yeni fişleri** etkiler.
+
+### Kasa / banka hesabı açtım, hesap planında nereye düştü?
+
+- **Cevap:** Ön muhasebede kasa açılınca `100 Kasa` altında, banka açılınca `102 Bankalar` altında **ilk boş alt kod**la hesap kendiliğinden açılır (`100.01`, `100.02`, `102.01`…); adı ön muhasebedeki ad + para birimi ("Resepsiyon kasası (TRY)", "Döviz kasası (EUR)"). Kurallar → "Kasa / banka hesabı" kartında her kasa / bankanın hangi yevmiye hesabına bağlı olduğu görünür; başka bir yaprak hesaba bağlayabilirsiniz. Hesap planı henüz yüklenmemişken açılan kasalar ilk yüklemede toplu açılır. Adı Hesap planı'ndan düzenleyebilirsiniz; kodu değişmez.
+
+### Açılış bakiyeleri neden 500 Sermaye'ye gidiyor, nasıl değiştiririm?
+
+- **Cevap:** Ön muhasebedeki açılış fişleri (cari devri, kasa / banka devri) yevmiyede karşı hesap ister; bir bilanço olmadığı için varsayılan kural "Açılış bakiyesi karşı hesabı" = `500 Sermaye`'dir. Böylece açılışlar dengeli yazılır ve hangi hesaba gitmesi gerektiğine siz karar verirsiniz. Değiştirmek için Kurallar → "Açılış bakiyesi karşı hesabı" → başka bir yaprak hesap (ör. `570 Geçmiş Yıllar Kârları`, ya da geçiş döneminde bir `9xx` nazım hesabı) → Kaydet; bundan sonraki açılış fişleri oraya gider. Yazılmış açılış fişleri için: açılış bilançosunu elle fişle dağıtın (`500` borç / `570`, `102.xx`, `120.xx`… alacak gibi) ya da yevmiye fişini iptal edip doğru satırlarla elle girin.
+
+### Bordro gideri hangi hesaba gidiyor?
+
+- **Cevap:** Bordro onaylanınca tahakkuk fişinde **işveren maliyeti** "Personel gideri (departman)" kuralına göre borç yazılır: varsayılan `770 Genel Yönetim Giderleri`; Kurallar → "Personel gideri (departman)" kartında her bordro departmanı için ayrı hesap seçilebilir (ör. Mutfak → `740.01`, Kat hizmetleri → `740.02`, departmansız → "Diğer" satırı). Tutar personelin işveren maliyetiyle (brüt + SGK işveren payı − indirimler) departmanlara ağırlıklı bölünür. Alacak tarafı: `335` net ücret, `361` SGK, `360` gelir ve damga vergisi, `369` BES, `336` icra / nafaka ("Bordro yükümlülükleri" kuralı). Maaş ödemesi `335` borç / `102.xx` alacak. Kural değişikliği yalnız sonraki bordrolara uygulanır.
 
 ### Bordro onaya gidemiyor / hesaplanamıyor
 
@@ -148,6 +175,37 @@ Sorun giderirken üç ekranı yanınızda tutun:
 - **Belirti:** "finansal alanlar kilitli", "yıllar ardışık kaydedilir", "gelecek yıl kaydedilemez", "elden çıkarma tarihi kapanmış yıla düşüyor", "yalnız son yıl geri alınır".
 - **Sebep:** VUK kuralları: kaydedilmiş yıl kilitlidir; alış / tutar / ömür / açılış değişmez; elden çıkarma kaydedilen son yıldan sonra olmalı; yalnız son yıl geri alınır ve o yıldan sonra elden çıkarılan kart varsa alınamaz.
 - **Çözüm:** Demirbaş → Amortisman → son yılı **Geri al**, düzeltin, yeniden **Kaydet**.
+
+## İK (izin, vardiya, puantaj, özlük)
+
+### İzin bakiyem neden 28 gün? / Bakiyem yanlış görünüyor
+
+- **Cevap:** Yıllık izin hakkı 4857 sayılı İş Kanunu md. 53'e göre **her tamamlanan hizmet yılında**, işe giriş gününüzün yıl dönümünde doğar: 1–5 yıl için yılda 14 gün, 5'ten çok 15'ten az yıl için 20, 15 yıl ve üstü için 26; 18 yaşından küçük ve 50 yaşından büyük çalışana en az 20. 15.01.2024'te işe giren biri 15.01.2025'te 14, 15.01.2026'da 14 gün daha kazanır → **28**. Bakiye = hak + İK'nın elle düzeltmeleri − onaylı yıllık izinleriniz (ileri tarihli onaylı izinler de düşer); onay bekleyen talepler "kullanılabilir"den düşer. İlk yılınız dolmadan hak yoktur. Rakam beklediğinizden farklıysa İK'dan personel kartınızdaki **işe giriş** ve **doğum tarihini** kontrol etmesini, önceki sistemden devreden izni **düzeltme** olarak girmesini isteyin (İK → İzin bakiyeleri → satır → ayrıntı penceresinde hak kayıtları ve düzeltmeler yıl yıl görünür).
+
+### Yarım gün izin alabilir miyim?
+
+- **Cevap:** İzin talebi gün bazındadır; başlangıç ve bitiş günü seçilir, yarım gün seçeneği yoktur. Yarım gün için İK, İzin bakiyeleri → **Düzeltme ekle** ile `-0,5` gün ve gerekçe ("05.12 öğleden sonra izin") girer; puantajda o gün **Geldi** ve gerçek giriş / çıkış saatleriyle yazılır. Düzeltme bir ondalık kabul eder (`-1,5`, `2,5`).
+
+### Raporu (istirahat) kim girer?
+
+- **Cevap:** **İK** girer: İK → İzinler (`/ik/izinler`) → **İzin gir** → personel, tür "Rapor (istirahat)", rapordaki başlangıç ve bitiş. Rapor **takvim günüyle** sayılır (hafta tatili düşmez), yıllık izin bakiyesinden düşmez, bordroya **eksik gün** (SGK kodu 01) olarak gider. İK ayarında izin onayı açıksa rapor da onay kuyruğuna gider ve İK kendi girdiğini onaylayamaz; kapalıysa doğrudan onaylıdır. Raporun taranmış hâlini Belgeler'e yükleyebilirsiniz. Personel teknik olarak İzinlerim'den rapor talebi de açabilir, ama belge İK'ya gelmeden onaylanmamalıdır.
+
+### Vardiya uyarısı kaydı engeller mi?
+
+- **Cevap:** **Hayır**, iki vardiya arasında 11 saatten az dinlenme ve haftalık normun (varsayılan 45 saat) aşılması yalnız **uyarıdır**: kayıt yazılır, çip ve satır toplamı sarı olur, çizelgenin üstünde "Çizelgede uyarı var" kutusu çıkar. Otelcilikte denkleştirme yaygın olduğu için karar yöneticiye bırakılmıştır. **Engelleyen tek kural çakışmadır**: aynı personelin iki vardiyası üst üste binemez (`SHIFT_OVERLAP`, ör. 22:00–06:00 gece vardiyasından sonra ertesi gün 05:00'te başlayan vardiya). Vardiya ayrıca sıfır ya da 16 saatten uzun olamaz.
+
+### Puantaj bordroya nasıl gider? Onaylı ayda ne olur?
+
+- **Cevap:** Kendiliğinden gitmez. Ay sonunda İK → Puantaj (`/ik/puantaj`) → **Bordroya aktar** → ay seçilir. Her personel için eksik gün (gelmedi + rapor / ücretsiz / doğum izni), eksik gün nedeni (tek neden kodu ya da karışıksa 12), çalışılan gün, fazla çalışma saati, bayram ve hafta tatili çalışması hesaplanıp Bordro → Puantaj ve kalemler satırına **kaynak TIMESHEET** ile yazılır; o ayın elle girilmiş satırının yerine geçer. Hesaplanmış bordro varsa "yeniden hesaplanmalı" olur: **Hesapla**'ya yeniden basın. Ayın bordrosu **onayda ya da onaylıysa** ay kilitlidir: aktarım, o ayın puantaj yazımı ve o aya dokunan onaylı izin iptali "ay kilitli" (`PAYROLL_MONTH_LOCKED`) ile reddedilir. Düzeltme fark bordrosuyla yapılır (Bordro → fark bordrosu, kalem olarak).
+
+### Özlük belgesi yükleyemiyorum
+
+- **Belirti:** "Dosya çok büyük (en fazla 5 MB)", "Dosya PDF, JPEG, PNG ya da WebP olmalı", "Dosya türü bildirilenle uyuşmuyor".
+- **Sebep / çözüm:** Dosya en fazla **5 MB** ve yalnız **PDF, JPEG, PNG, WebP** olabilir. Sunucu türü dosyanın içinden okur; uzantısı değiştirilmiş dosya (ör. `.png` adı verilmiş PDF) reddedilir. iPhone'un HEIC fotoğrafını JPEG olarak paylaşın / kaydedin, Word belgesini PDF'e çevirin, büyük taramayı düşük çözünürlükte yeniden tarayın ya da sıkıştırın. Yükleme için `hr.manage` gerekir. Dosya hazır değilse belgeyi dosyasız kaydedip (tür, bitiş tarihi) süre takibini başlatabilirsiniz.
+
+### "Kullanıcı hesabınız bir personel kartına bağlı değil"
+
+- **Cevap:** İzinlerim sayfası oturumdaki kullanıcının personel kartını bulamadı. İK, Personel → kartınızda **Kullanıcı hesabı** alanına kullanıcınızı bağlamalı. Bağdan sonra sayfayı yenileyin.
 
 ## Stok ve satın alma
 
@@ -222,6 +280,77 @@ Sorun giderirken üç ekranı yanınızda tutun:
 - **Sebep:** gelir raporu, panel, bütçe ve gün kapanışı **aynı tanımları** kullanır (satılabilir = oda − arızalı; hizmet dışı paydada kalır; gelir vergiler hariç; gece fiyatları gece tablosundan). Bütçe gerçekleşeni **yalnız kapanmış günleri** sayar; içinde bulunulan ayın planı kapanmış gün oranında; tahsilat onay bekleyenleri saymaz; **gider gerçekleşeni elle** girilir (satın alma / ön muhasebeden otomatik beslenme yol haritasında). Rapor tasarımcısı kayıt anlarını otelin saat diliminde güne çevirir.
 - **Çözüm:** gün kapanışlarının güncel olduğundan emin olun; bütçede yılın onaylı bütçesi yoksa taslak kullanılır (işaretli).
 
+## Sadakat programı
+
+### Misafirin folyosu kapandı ama puan gelmedi
+
+- **Sebep / çözüm:** Hesap sayfasında (Sadakat → **Üyeler** → misafir) ya da misafir kartının sadakat kutusunda sırayla şunlara bakın:
+  1. **Program açık mı?** Sadakat → **Ayarlar** (`/sadakat/ayarlar`) sayfasında **Program açık** işaretli olmalı. "Program henüz kurulmadı" uyarısı varsa program hiç kaydedilmemiştir.
+  2. **Misafir üye mi?** Otomatik üyelik kapalıysa yalnız üye yapılan misafir kazanır. Misafir kartında "Üye değil" yazıyorsa önce **Üye yap** (açık rızayla). O folyonun puanı kendiliğinden gelmez; müdür gerekçeli **Düzeltme** ile ekleyebilir.
+  3. **Folyo acente / voucher ödemeli mi?** Ayar açıkken bu folyolar puan kazanmaz. Hareket açıklamasında "acente / cari ödemeli folyo puan kazanmaz" yazar.
+  4. **Doğru misafir mi?** Puanı rezervasyon sahibi kazanır. Refakatçi kazanmaz, mükerrer kart da ayrı hesap demektir.
+  5. **Aktör açık mı?** Görevler'de "Kapanan folyonun sadakat puanı yazılacak" görevi varsa sadakat aktörü kapalıdır (Yönetim → Aktörler). Görev hesap sayfasında elle düzeltmeyle tamamlanır.
+
+  Tutar beklediğinizden azsa unutmayın: vergi kalemleri sayılmaz, indirimler düşülür ve küsurat aşağı yuvarlanır (2.489,99 TL → 248 puan).
+
+### "Bu folyoda en çok N puan kullanılır" / "Puan kullan" düğmesi çalışmıyor
+
+- **Sebep / çözüm:** Bir folyoda en çok, folyo harcamasının ayardaki yüzdesi (varsayılan %50) kadar puan kullanılır. 2.000 TL'lik folyoda 1.000 TL, yani 0,50 TL'lik puanla **2.000 puan** kullanılabilir. Bakiye daha azsa sınır bakiyedir. Bu sınır en az kullanımın (varsayılan 100) altında kalıyorsa satırda 0 görünür. Folyoya harcama işlendikçe sınır büyür. Satır hiç yoksa konaklamanın **açık folyosu** yoktur: puan girişten sonra, çıkıştan önce kullanılır (`LOYALTY_NO_OPEN_FOLIO`). Düğme hiç görünmüyorsa `loyalty.redeem` izniniz yoktur (Muhasebe rolü yalnız görür).
+
+### Yanlış puan indirimi yaptım, nasıl geri alırım?
+
+- **Cevap:** Folyodan indirim kalemine **iptal** isteyin. İptal dört göz onayıyla kesinleşince sadakat aktörü puanı kendiliğinden iade eder ("Harcama iade edildi"). Puan düşüldüğü paketlere döner, son kullanma günleri değişmez. Ardından doğru tutar ve gelir türüyle yeniden **Puan kullan** penceresini açın. Hesaba ayrıca elle artı düzeltme girmeyin; yoksa puan iki kez döner. Çift tıklamadan korkmayın: aynı pencereden gelen ikinci gönderim ikinci kalem açmaz.
+
+### Misafirin seviyesi neden düştü? / Puanı neden azaldı?
+
+- **Cevap:** Seviye **son 12 ayda kazanılan** puana göre hesaplanır ve pencere her gün kayar. Misafir bir yıl gelmezse eski kazanmalar pencereden çıkar ve seviye düşer; bakiye bundan etkilenmez. Harcanan puan seviyeyi düşürmez, ama geri alınan kazanma (folyo yeniden açıldı) düşürür. Bakiyenin azalmasının sebebi hareketler tablosunda yazar: "Süresi doldu" (kullanılmayan puan ayardaki ay sonunda düşer, varsayılan 24 ay; **Sadakat puan süresi** işi 12 saatte bir çalışır), "Kazanma geri alındı" (folyo yeniden açıldı) ya da "Elle düzeltme" (gerekçesiyle). Süresi 30 gün içinde dolacak puan misafir kartında önceden uyarı olarak görünür.
+
+### Kazanma oranını ya da seviye eşiklerini değiştirirsem eski puanlar ne olur?
+
+- **Cevap:** Değişmez. Yeni oran, çarpan ve puan değeri bundan sonraki işlemlere uygulanır. Kazanılmış puan aynı sayıda kalır, ama kullanılırken **yeni puan değeriyle** TL'ye çevrilir; puan değerini düşürmek dolaşımdaki puanın karşılığını da düşürür (Üyeler → "Karşılığı" kutusu). Seviye eşiği değişince üyelerin seviyesi bir sonraki harekette ya da 12 saatlik işte yeniden hesaplanır; yükselenler için zil çalar. Ayarı kaydetmek için `loyalty.manage` gerekir; kayıt denetim izine düşer.
+
+## KBS kimlik bildirimi
+
+### KBS'ye gerçekten gidiyor mu?
+
+- **Hayır, henüz değil.** Emniyet KBS'si ve Jandarma JKBS'si herkese açık servisler değildir. Bağlanmak için otelin il emniyet müdürlüğünden / jandarmadan aldığı tesis kodu, kullanıcı ve parola, ayrıca yazılım firmasına verilen servis dokümanı gerekir. Bunlar gelene kadar **KBS → Ayarlar**'da (`/kbs/ayarlar`) yalnız **Test ortamı (dışarı göndermez)** seçilebilir. Diğer iki sağlayıcı pasiftir; seçip kaydetmeye çalışırsanız "… bağlantısı henüz kurulmadı (tesis yetkisi ve servis dokümanı gerekiyor); şimdilik Test ortamını seçin" uyarısı çıkar.
+- **Ne yapmalı:** misafiri resmî KBS ekranından elle bildirin. Sonra **KBS → Bildirimler**'de (`/kbs/bildirimler`) o bildirimi açıp **Elle bildirildi** ile notuyla işaretleyin. Test ortamındaki "Bildirildi" (`TKBS-…` referansı) resmî bildirim değildir.
+- **Sistem ne yapıyor:** kuyruk, yeniden deneme, zil, **Mutabakat** (`/kbs/mutabakat`) ve iz bugünden çalışır. Bağlantı gelince yalnız sağlayıcı adaptörü yazılır; ekranlar ve akış aynı kalır.
+
+### Giriş yapılamıyor: "KBS bildirimi için eksik bilgi"
+
+- **Belirti:** "KBS bildirimi için eksik bilgi — Anna Schmidt: Cinsiyet, Doğum tarihi"; alanların altında "KBS bildirimi için zorunlu".
+- **Sebep:** KBS açık ve ayar bu kişi için ek alan istiyor (varsayılan: cinsiyet ve doğum tarihi; ayara göre anne-baba adı, doğum yeri). Kural rezervasyon sahibine ve belge numarası girilen her refakatçiye uygulanır. Belge türü, numarası ve uyruk her zaman zorunludur. TC kimlik kartıyla giren TC vatandaşından (ayar açıksa) ek alan istenmez.
+- **Çözüm:** mesajda adı geçen kişinin alanlarını doldurup yeniden **Giriş yap**. Bilgiler misafir kartına da yazılır, sonraki girişte dolu gelir. Ayarı değiştirmek müdürün işidir (`kbs.manage`).
+
+### Bildirim "Gönderilemedi" — ne yapmalıyım?
+
+Bildirimin ayrıntısını açın (zildeki uyarıya tıklayın ya da Bildirimler → satır). Son kod ve mesaj sebebi söyler:
+
+| Kod | Anlamı | Ne yapılır |
+| --- | --- | --- |
+| `MISSING_FIELDS` | Misafir kartında zorunlu alan eksik ("Eksik bilgi: Cinsiyet …") | **Misafir kartını aç** → alanı tamamlayın → **Tekrar gönder** |
+| `T-UNAVAILABLE` (geçici) | Servise ulaşılamadı; 1, 5, 15, 60, 180, 360 dk aralıklarla denendi ve hak bitti | Servis düzeldiyse **Tekrar gönder**. Beklemeyin: resmî ekrandan elle bildirip **Elle bildirildi** |
+| `T-REJECTED` (kalıcı) | Sağlayıcı reddetti; yeniden denenmez | Belge bilgisini kontrol edin, düzeltip **Tekrar gönder** ya da elle bildirin |
+| `T-AUTH` | Tesis kodu ya da kullanıcı adı yok | Müdür **KBS → Ayarlar**'ı tamamlasın, sonra **Tekrar gönder** |
+| `KBS_SECRET` | Kayıtlı parola çözülemedi (sunucu anahtarı değişmiş olabilir) | Müdür parolayı yeniden girsin |
+
+- **Tekrar gönder** yalnız "Gönderilemedi"de, **Elle bildirildi** "Sırada" ve "Gönderilemedi"de çalışır (`kbs.send`: müdür, ön büro). Elle bildirildi notu en az 3 karakterdir.
+- Bu girişe bağlı çıkış / oda değişikliği, giriş çözülene kadar "Sırada" bekler; giriş Bildirildi ya da Elle bildirildi olunca kendiliğinden gider.
+- "KBS kapalı; önce ayarlardan açın" görüyorsanız KBS ayarı kapatılmıştır.
+
+### Çocuk neden bildirilmedi?
+
+- **Sebep:** refakatçide **çocuk** işaretlenip belge numarası girilmediyse bildirim açılmaz. Aktörün izinde "1 belgesiz çocuk bildirilmedi", Mutabakat'ta "Belgesi yok (çocuk ise bildirilmez)" yazar.
+- **Çözüm:** otelinizin bağlı olduğu birim çocukların da bildirilmesini istiyorsa çocuğun belgesini girin. O zaman çocuk da bildirilir ve zorunlu alanları istenir. Konaklama sürerken belge eklenirse otomatik bildirim açılmaz; resmî ekrandan elle bildirin.
+
+### Yanlış girişi geri aldım; KBS'de ne olur?
+
+- **Bildirim henüz gitmediyse:** giriş bildirimi **İptal (gerek kalmadı)** olur ("Giriş geri alındı; bildirime gerek kalmadı"). Dışarı hiçbir şey gitmez.
+- **Bildirim gittiyse:** giriş kaydı silinmez; kişi için bir **çıkış bildirimi** açılır ("Giriş geri alındı (yanlış giriş): bildirilen giriş çıkışla kapatılıyor"). KBS'de "içeride" görünen kimse kalmaz.
+- **Çıkışı geri aldıysanız:** gönderilmemiş çıkış iptal olur; gönderilmişse kişi için yeniden **giriş bildirimi** açılır.
+- **Resmî ekrandan elle bildirdiyseniz** o kaydı resmî ekranda da düzeltin; FlexHotel yalnız kendi kuyruğunu düzeltir.
+
 ## Genel kullanım soruları
 
 **Bir işi kimin yaptığını nasıl bulurum?** Aktivite → Canlı akış (zincir kimliği ile aktör işleri) ve Aktivite → Denetim kaydı (personel işlemleri; kimlik numaraları maskeli). Folyo kalemi, ödeme, fiş, fatura, demirbaş kartı kendi zaman çizelgesini / hareket geçmişini taşır.
@@ -238,7 +367,7 @@ Sorun giderirken üç ekranı yanınızda tutun:
 
 ## Modül durumu tablosu
 
-Durum sözlüğü: **Tamam** = görev listesindeki maddelerin tümü işaretli ve tamamlanma notu var; **Kısmi** = çekirdek çalışıyor, bazı maddeler bilinçli olarak sonraya bırakılmış (not sütununda); **Planlı** = yol haritasında, kod yok (ya da yalnız iskelet). Kaynak: MODUL-SIRASI.md ve GOREVLER.md'deki işaretler (24 Kasım 2026).
+Durum sözlüğü: **Tamam** = görev listesindeki maddelerin tümü işaretli ve tamamlanma notu var; **Kısmi** = çekirdek çalışıyor, bazı maddeler bilinçli olarak sonraya bırakılmış (not sütununda); **Planlı** = yol haritasında, kod yok (ya da yalnız iskelet). Kaynak: MODUL-SIRASI.md ve GOREVLER.md'deki işaretler (26 Kasım 2026).
 
 ### 1. Ön büro (temel)
 
@@ -314,18 +443,18 @@ Durum sözlüğü: **Tamam** = görev listesindeki maddelerin tümü işaretli v
 | --- | --- | --- | --- | --- |
 | 44 | Stok & maliyet analizi | inventory-worker | Tamam | |
 | 45 | Satın alma | inventory-worker | Tamam | Stok çekirdeği burada |
-| 46 | Demirbaş & amortisman | manuel | Tamam | Muhasebe fişi yok (48); zimmet tutanağı PDF'i sonra |
+| 46 | Demirbaş & amortisman | manuel | Tamam | Otomatik amortisman fişi yok (elle yevmiye fişi girilir); zimmet tutanağı PDF'i sonra |
 
 ### 7. Muhasebe / ERP
 
 | No | Modül | Aktör | Durum | Not |
 | --- | --- | --- | --- | --- |
 | 47 | Ön muhasebe | accounting-worker | Tamam | |
-| 48 | Genel muhasebe | accounting-worker | **Planlı** | Hesap planı, yevmiye, mizan yok |
-| 49 | e-Fatura / e-Arşiv / e-Defter | entegrasyon | Kısmi | Fatura + e-belge akışı tamam; **gerçek entegratör adaptörü yok (test entegratörü)**; **e-Defter 48'den sonra** |
+| 48 | Genel muhasebe | accounting-worker | Tamam | Tek Düzen hesap planı, otomatik yevmiye fişleri, günlük gelir fişi, mizan, ekstre, kurallar, dönem kilidi; e-Defter dosyası 49'da |
+| 49 | e-Fatura / e-Arşiv / e-Defter | entegrasyon | Kısmi | Fatura + e-belge akışı tamam; **gerçek entegratör adaptörü yok (test entegratörü)**; **e-Defter dosyası (yevmiye / kebir XML) yok** — veri 48'de hazır |
 | 50 | Sanal POS / ödeme geçidi | entegrasyon | **Planlı** | Portalda "kartla ödeme" pasif bekliyor |
-| 51 | Personel & bordro | manuel | Tamam | Gider tarafı 48'de |
-| 52 | İK (izin, mesai, özlük) | manuel | **Planlı** | Personel tablosu 51'de ortak |
+| 51 | Personel & bordro | manuel | Tamam | Gider tarafı 48'de yazılır (tahakkuk fişi) |
+| 52 | İK (izin, mesai, özlük) | manuel | Tamam | İzin talebi → onay (`LEAVE`) → bakiye (4857 md. 53), vardiya çizelgesi, günlük puantaj ve bordroya aktarım (TIMESHEET), özlük belgeleri ve hatırlatma; personel tablosu 51'de ortak. Puantaj cihazı / mobil giriş (76) ve otomatik vardiya planlama (88) yok |
 
 ### 8. Misafir deneyimi
 
@@ -334,15 +463,15 @@ Durum sözlüğü: **Tamam** = görev listesindeki maddelerin tümü işaretli v
 | 53 | Temassız (online check-in, portal) | concierge-agent | Kısmi | Portal, online check-in, folyo, QR menü tamam; **kart adımı 50'ye, dijital anahtar 62'ye bağlı (pasif)** |
 | 54 | Misafir yorum entegrasyonu + duygu analizi | insight-agent | **Planlı** | |
 | 55 | Anket & memnuniyet | notification-worker + insight-agent | Tamam | |
-| 56 | Sadakat programı | manuel | **Planlı** | |
+| 56 | Sadakat programı | loyalty-worker | Tamam | Folyo kapanınca puan (vergi hariç, indirim düşülmüş, seviye çarpanı; acente ödemeli hariç; spa kasası), yeniden açılınca geri alma; açık folyoda puanla indirim (611), iptalde iade; son 12 aya göre seviye ve yükseliş zili (`LOYALTY`); süre dolumu (12 saatlik iş, FIFO); elle düzeltme; misafir birleştirmede hesap birleşir; portal kutusu. Kampanya / bonus puan kuralları, puanla oda satışı ve zincir genelinde ortak hesap yok |
 | 57 | SPA & spor salonu | manuel | Tamam | |
 
 ### 9. Yasal & entegrasyon, 10. Dikey paketler
 
 | No | Modül | Durum | Not |
 | --- | --- | --- | --- |
-| 58 | Emniyet kimlik bildirimi (KBS) | **Planlı** | Check-in'de kimlik alanları KBS'ye uygun toplanır, bildirim gönderilmez |
-| 59 | Kimlik / pasaport okuma (OCR) | **Planlı** | |
+| 58 | Emniyet kimlik bildirimi (KBS) | Tamam | kbs-worker. Girişte zorunlu alanlar (cinsiyet, doğum tarihi, anne-baba adı, doğum yeri; ayara göre), kişi başına giriş / çıkış / oda değişikliği bildirimi, geri almada iptal ya da kapatma, zincir (çıkış girişi bekler), yeniden deneme ve zil, gecikme zili, elle bildirildi, mutabakat. **Gerçek servis bağlantısı bekliyor:** Emniyet KBS ve Jandarma JKBS adaptörü tesis yetkisi ve servis dokümanıyla yazılacak; bugün yalnız test ortamı (dışarı göndermez) |
+| 59 | Kimlik / pasaport okuma (OCR) | **Tamam** | |
 | 60 | Çoklu dil & çoklu para birimi | **Planlı** | Misafir portalı ve widget metinleri çok dilli hazır; panel Türkçe; döviz yalnız ödemede |
 | 61 | Webhook & açık API | **Planlı** | |
 | 62 | Donanım entegrasyonları | **Planlı** | |
@@ -355,6 +484,6 @@ Tamamı **planlı**dır; kod yok. Başlıklar: 69–74 sağlam zemin (göç sihi
 
 ### Özet sayılar
 
-- 1–68 arası: **49 tamam**, **6 kısmi** (9, 38, 42, 49, 53 ve e-posta bağımlılığıyla 32'nin bildirim adımı), **13 planlı** (48, 50, 52, 54, 56, 58–63, 64–68 dikey paketler tek satırda sayılırsa).
+- 1–68 arası: **53 tamam**, **6 kısmi** (9, 38, 42, 49, 53 ve e-posta bağımlılığıyla 32'nin bildirim adımı), **9 planlı** (50, 54, 60–63, 64–68 dikey paketler tek satırda sayılırsa). 58 (KBS) tamam sayılır ama gerçek Emniyet / Jandarma servis bağlantısını bekler.
 - Otelin **günlük operasyonu** (rezervasyon → giriş → folyo → ödeme → çıkış → fatura → muhasebe; restoran → stok → satın alma; kat hizmetleri, teknik servis, anket, spa) uçtan uca çalışır.
-- **Dış dünyaya bağlanan** parçaların bir kısmı taslaktır: e-posta gönderimi, e-belge entegratörü, online kart ödemesi, KBS. Ekranlar bunu açıkça söyler; "gönderildi" gibi görünen ama gitmeyen hiçbir şey yoktur.
+- **Dış dünyaya bağlanan** parçaların bir kısmı taslaktır: e-posta gönderimi, e-belge entegratörü, online kart ödemesi, KBS (gerçek servis bağlantısı; bugün test ortamı, otel resmî ekrandan elle bildirip işaretler). Ekranlar bunu açıkça söyler; "gönderildi" gibi görünen ama gitmeyen hiçbir şey yoktur.

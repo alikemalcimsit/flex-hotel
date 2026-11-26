@@ -40,6 +40,9 @@ Olay adları aile aile gruplanır; birkaç örnek:
 | Rapor | soru soruldu / cevaplandı, kayıtlı rapor değişti, rapor tanımı değişti, veri yüklemesi tamamlandı | Rapor asistanı, tasarımcı, Excel yükleme |
 | Kanal | kanal rezervasyonu alındı / değişti, fiyat değişti | Kanal yönetimi |
 | Muhasebe, fatura, bordro | muhasebe kaydı işlendi, fatura kesildi / iptal edildi, bordro onaylandı / değişti | Muhasebe aktörü, fatura, bordro |
+| İK | izin talebi açıldı / onaylandı / reddedildi / iptal edildi (`hr.leave.changed`); İK değişti — vardiya, puantaj, bordroya aktarım, belge, ayar, bakiye düzeltmesi (`hr.changed`) | İK servisi ve onay kararı dinleyicisi |
+| Sadakat | sadakat puanı hareketi — kazanma, geri alma, harcama, iade, süre dolumu, düzeltme (`loyalty.points.changed`); sadakat seviyesi değişti (`loyalty.tier.changed`); üyelik / program ayarı değişti (`loyalty.changed`) | Sadakat aktörü, puan kullanma ve üyelik ekranları, süre işi |
+| KBS | KBS kimlik bildirimi değişti — sıraya girdi, gönderiliyor, bildirildi, gönderilemedi, iptal, elle bildirildi, tekrar gönderildi (`kbs.notification.changed`); KBS ayarı değişti (`kbs.settings.changed`) | KBS aktörü, KBS göndericisi, KBS ekranları (tekrar gönder, elle bildirildi, ayar) |
 
 ### Outbox: olay kaybolmaz
 
@@ -163,7 +166,7 @@ Aktör **göndermez**, kuyruğa yazar. Gönderimi ayrı bir gönderici yapar (15
 
 #### Muhasebe aktörü (accounting-worker)
 
-Kural tabanlı. Kapalıyken **"Ön muhasebe"** modülüne düşer; muhasebeci eşleme / cari sorununu düzeltip **Ön muhasebe → Eşitle** ile dönemi tamamlar (aynı kaynak anahtarı: olay sonradan yeniden gelse kayıt iki kez yazılmaz). 3 deneme, 400 ms.
+Kural tabanlı. Hem **ön muhasebeyi** (47: cari ve kasa / banka hareketleri) hem **genel muhasebeyi** (48: yevmiye fişleri) besler. Kapalıyken **"Ön muhasebe"** modülüne düşer; muhasebeci eşleme / cari / kural sorununu düzeltip **Ön muhasebe → Eşitle** (kayıtlar) ve **Genel muhasebe → Ayarlar → Eşitle** (fişler) ile dönemi tamamlar (aynı kaynak anahtarı: olay sonradan yeniden gelse kayıt ve fiş iki kez yazılmaz). 3 deneme, 400 ms.
 
 | Tetikleyen olay | Yaptığı iş |
 | --- | --- |
@@ -175,8 +178,10 @@ Kural tabanlı. Kapalıyken **"Ön muhasebe"** modülüne düşer; muhasebeci e�
 | Etkinlik değişti (gerçekleşti / iptal) | Etkinlik bedelini (iptalde iptal bedelini) müşteri carisine borç |
 | Fatura kesildi / iptal edildi | Fatura numarasını cari harekete bağlar; serbest faturayı borç yazar, iptalde ters kayıt |
 | Bordro onaylandı / değişti | Personel (net), SGK, vergi dairesi, BES, icra carilerine tahakkuk; maaş ödemesini kasa / bankadan çıkış |
+| **Ön muhasebe kaydı işlendi** (`accounting.posted`, kaynak belge `sourceId` ile — kendi yazdığı dahil) | **Yevmiye fişi:** belgenin fişlenmemiş cari ve kasa / banka kayıtlarını Tek Düzen hesaplarına çevirir — kasa / banka hareketi `100.xx` / `102.xx`, cari hareketi kontrol hesabı (120.02, 320, 335…), kalan fark kurallara göre karşı hesap (gelir + KDV, stok + KDV, gider, 120.01). Kayıtlar fişe bağlanır; ikinci kez fişlenmez. Kilitli döneme ait belge kilit sonrası ilk güne yazılır. |
+| **Gün kapandı** (`night.audit.closed`, iş günü `businessDay`) | **Günlük gelir fişi:** günün folyo kalemleri (hizmet günü; tür ve KDV oranıyla), odaya yazılmayan kapanan adisyonlar ve spa randevuları → gelir hesapları (600.xx) ve hesaplanan KDV (391) alacak, `120.01` misafir ve adisyon hesapları borç. Daha önce yazılanla **farkı** yazar ("düzeltme"). |
 
-Ürettiği olay: "Muhasebe kaydı işlendi". *Örnek:* Resepsiyon 2.400 TL kredi kartı tahsilatı aldı. Muhasebe aktörü yöntem eşlemesinde "Kredi kartı → Garanti POS hesabı" tanımını bulur ve o banka hesabına giriş fişi yazar. Eşleme yoksa iş "Ön muhasebe" görevi olur; muhasebeci eşlemeyi tanımlayıp Eşitle'ye basar.
+Ürettiği olaylar: "Muhasebe kaydı işlendi" (`accounting.posted`) ve "Genel muhasebe değişti" (`ledger.changed`: fiş / hesap planı / kural / ayar; Yevmiye ve Mizan ekranlarını tazeler). *Örnek:* Resepsiyon 2.400 TL kredi kartı tahsilatı aldı. Muhasebe aktörü yöntem eşlemesinde "Kredi kartı → Garanti POS hesabı" tanımını bulur ve o banka hesabına giriş hareketi yazar; `accounting.posted` yayınlar. Aynı aktör bu olayı dinler ve belgeyi yevmiye fişine çevirir: `102.02 Garanti POS (TRY)` 2.400,00 borç / `120.01 Misafir ve adisyon hesapları` 2.400,00 alacak. Eşleme yoksa iş "Ön muhasebe" görevi olur; muhasebeci eşlemeyi tanımlayıp Ön muhasebe → Eşitle'ye basar. Fiş kuralı eksikse (ör. hesap pasif) kayıt yazılır ama fiş yazılmaz; görev "Ön muhasebe kaydı … yevmiye fişine çevrilecek" başlığıyla düşer, muhasebeci kuralı düzeltip Genel muhasebe → Ayarlar → Eşitle'ye basar.
 
 #### Stok aktörü (inventory-worker)
 
@@ -186,6 +191,37 @@ Kural tabanlı. Kapalıyken satış düşümü **"Stok"** modülüne düşer (el
 | --- | --- | --- | --- |
 | Adisyon ödendi (kapandı) | Satılan, ikram edilen ve hazırlanıp iptal edilen ürünleri reçetelerinden malzemeye açar, satış noktasının deposundan düşer; adisyon yeniden açılıp kapanırsa farkı düzeltir; reçetesi olmayan ürünü atlar; tepsi / paket ücretini düşmez | Stok değişti | "Adisyon 1187 stoktan düşülecek (4 ürün)" |
 | Stok değişti (çıkış, fire, transfer, sayım) | Minimumun altına inen malzeme için (yoldaki ve talepteki düşüldükten sonra) satın alma talebi açar, satın alma yetkilisine zil | Satın alma talebi değişti, personel uyarısı | **Atlanır** — satın alma ekranındaki öneri listesi aynı hesabı her an gösterir |
+
+#### Sadakat aktörü (loyalty-worker)
+
+Kural tabanlı (modül 56). Misafire puan kazandırır ve kazanılanı düzeltir. Puan kullanma (folyoya indirim) aktörün işi değildir; resepsiyon rezervasyon ayrıntısından yapar. Kapalıyken iş **"Sadakat"** modülüne manuel görev olarak düşer (`loyalty.manage` sahibi görür) ve hesap sayfasında elle düzeltmeyle tamamlanır. Her kaynakta puan "hak edilen − yazılmış = fark" mantığıyla yazıldığı için aktör yeniden açılıp aynı olay gelse de puan iki kez yazılmaz. 3 deneme, 400 ms. İş kuralı hatası (ör. hesap kapalı) yeniden denenmez, doğrudan göreve düşer.
+
+| Tetikleyen olay | Yaptığı iş | Ürettiği olay | Kapalıysa (görev başlığı) |
+| --- | --- | --- | --- |
+| Folyo kapandı (`folio.closed`) | Rezervasyon sahibine uygun harcamadan puan yazar: vergi kalemleri hariç, indirimler düşülmüş, seviye çarpanıyla, aşağı yuvarlı. Otomatik üyelik açıksa hesabı açar. Acente / voucher ödemeli folyoda (ayar açıkken) 0 | Sadakat puanı hareketi; seviye değiştiyse sadakat seviyesi değişti ve yükselişte zil (`LOYALTY`) | "Kapanan folyonun sadakat puanı yazılacak" |
+| Folyo yeniden açıldı (`folio.reopened`) | O folyodan kazanılanı geri alır. Folyo yeniden kapanınca yeni toplamın puanı yazılır | Sadakat puanı hareketi | "Yeniden açılan folyonun sadakat puanı geri alınacak" |
+| Folyo kalemi iptal edildi (`folio.item.voided`) | Kalem bir puan indirimiyse puanı düşüldüğü paketlere iade eder; değilse bir şey yapmaz | Sadakat puanı hareketi | "İptal edilen kalem puan indirimiyse puan iade edilecek" |
+| Spa randevusu değişti (`spa.appointment.changed`: tamamlandı, geri alındı, ücretlendi, fiyatı değişti) | Misafir kartına bağlı randevuda spa kasasında ödenen tutarın puanını yazar ya da düzeltir (ayarda "Spa kasasında ödenen randevu kazanır" açıksa) | Sadakat puanı hareketi | "Spa randevusunun sadakat puanı yazılacak" |
+
+*Örnek:* Ayşe Demir'in 2.480 TL'lik folyosu kapandı. Aktör `folio.closed`'u yakaladı. Ayşe'nin hesabı yoktu; otomatik üyelik açık olduğu için `SDK-000001` açıldı ve "Kazanıldı +248" yazıldı. Aktör `loyalty.points.changed` yayınladı; Aktivite → Canlı akış'ta aktörün işi "SDK-000001: +248 puan" diye göründü. Ertesi hafta müdür folyoyu yeniden açtı ve aktör −248 yazdı. Folyo 3.000 TL ile yeniden kapanınca aktör +300 yazdı. Aktör o sırada kapalı olsaydı Görevler'de "Kapanan folyonun sadakat puanı yazılacak" görevi çıkardı; müdür Sadakat → Üyeler → hesap → **Düzeltme** ile +248 girip (gerekçe: "Folyo … puanı, aktör kapalıydı") görevi tamamlardı.
+
+#### KBS aktörü (kbs-worker)
+
+Kural tabanlı (modül 58). Konaklama olaylarından **kişi başına** KBS kimlik bildirimi açar; bildirimi dışarı göndermez, gönderimi **KBS göndericisi** (zamanlanmış iş) yapar. KBS ayarı kapalıysa hiçbir şey yapmaz ("KBS kapalı"). Kapalıyken iş **"KBS"** modülüne manuel görev olarak düşer (`kbs.send` sahibi görür): bildirim yasal yükümlülük olduğu için personel resmî KBS ekranından elle bildirir. Bildirimin kaynak anahtarı tekil olduğundan aktör yeniden açılıp aynı olay gelse de ikinci bildirim açılmaz. 3 deneme, 400 ms. İş kuralı hatası (4xx) yeniden denenmez, doğrudan göreve düşer.
+
+**Bugün gerçek KBS / JKBS bağlı değildir;** gönderici yalnız Test ortamına gönderir (dışarı bir şey gitmez). Ayrıntı ve elle bildirme yolu: Ön büro → "KBS kimlik bildirimi".
+
+| Tetikleyen olay | Yaptığı iş | Ürettiği olay | Kapalıysa (görev başlığı) |
+| --- | --- | --- | --- |
+| Misafir giriş yaptı (`guest.checked_in`) | Belgesi girilen her kişi (rezervasyon sahibi ve refakatçiler) için **Giriş** bildirimi açar; belgesiz çocuk atlanır. Zorunlu alan eksikse bildirimi "Gönderilemedi" (`MISSING_FIELDS`) açar ve zil çalar | KBS bildirimi değişti; eksikte personel uyarısı (`KBS`) | "Giren misafirin KBS giriş bildirimi elle yapılacak" |
+| Misafir çıkış yaptı (`guest.checked_out`) | İçeride bildirilmiş her kişi için **Çıkış** bildirimi (ayarda "Çıkış bildirimi" açıksa); kişinin son bildirilen odasıyla, girişe bağlı | KBS bildirimi değişti | "Çıkan misafirin KBS çıkış bildirimi elle yapılacak" |
+| Giriş geri alındı (`guest.check_in_reverted`) | Gönderilmemiş bildirimleri iptal eder; gönderilmiş girişi **Çıkış** bildirimiyle kapatır ("Giriş geri alındı (yanlış giriş) …") | KBS bildirimi değişti | "Geri alınan girişin KBS kaydı elle düzeltilecek" |
+| Çıkış geri alındı (`guest.check_out_reverted`) | Gönderilmemiş çıkışı iptal eder; gönderilmiş çıkıştan sonra yeniden **Giriş** bildirir | KBS bildirimi değişti | "Geri alınan çıkışın KBS kaydı elle düzeltilecek (yeniden giriş)" |
+| Oda atandı (`room.assigned`, konaklama içerideyken) | Son bildirilen odası yeni odadan farklı her kişi için **Oda değişikliği** bildirimi (ayarda açıksa). Girişte oda verilmesi bildirim açmaz | KBS bildirimi değişti | "Oda değiştiren misafirin KBS oda değişikliği elle bildirilecek" |
+
+**Gönderici** (aktör değil, zamanlanmış iş): sırası gelmiş ve bağlı olduğu bildirimi (girişi) bildirilmiş ya da elle bildirilmiş olanları üstlenir; iki süreç aynı bildirimi alamaz. Kimliği gönderim anında misafir kartından kurar ve zorunlu alanları yeniden denetler. Geçici hatada 1, 5, 15, 60, 180, 360 dakika sonra yeniden dener; hak bitince ya da kalıcı hatada "Gönderilemedi" yazar ve `kbs.send` sahiplerine zil çalar (`KBS`). Bağlı olduğu bildirim iptal edilen bekleyeni de iptal eder.
+
+*Örnek:* Anna Schmidt, Max Schmidt ve belgesiz çocuk Mia 101'e girdi. Aktör `guest.checked_in`'i yakaladı ve 2 giriş bildirimi açtı; Aktivite → Canlı akış'ta aktörün işi "…: 2 giriş bildirimi sıraya alındı; 1 belgesiz çocuk bildirilmedi" diye göründü. Gönderici saniyeler içinde ikisini test ortamına gönderdi ve "Bildirildi" (`TKBS-…`) yazdı. Ertesi gün oda 103'e değişti; aktör `room.assigned`'dan 2 oda değişikliği bildirimi açtı. Aktör o sırada kapalı olsaydı Görevler'de "Oda değiştiren misafirin KBS oda değişikliği elle bildirilecek" görevi çıkardı; resepsiyon resmî KBS ekranından elle bildirip görevi notla tamamlardı.
 
 #### Kanal aktörü (channel-sync-worker)
 
@@ -290,6 +326,7 @@ Para izini ya da kapasiteyi değiştiren riskli işler kendi kendine yapılmaz. 
 | Ödeme fişi | Eşik üstü ödeme fişi (ön muhasebe ayarındaki eşik) | Ön muhasebe → fiş | Aynı | Evet |
 | Fatura iptali | Kesilmiş faturanın iptali | Faturalar | Aynı | Evet |
 | Bordro onayı | Hesaplanan bordronun onayı | Bordro → onaya gönder | Aynı | Evet |
+| İzin talebi (`LEAVE`) | Personelin izin talebi ya da İK'nın personel adına girdiği izin (İK ayarında izin onayı açıksa); **süresiz bekler** | İzinlerim → İzin talebi; İK → İzinler → İzin gir | Aynı | Evet |
 | Diğer | Serbest | — | Aynı | Hayır |
 
 **Dört göz kuralı:** "Evet" yazan türlerde isteyen kişi **kendi isteğini onaylayamaz**; ekranda düğme kilitlenir ve sebebi yazar. Reddederek geri çekebilir. Sebep basittir: nakit alınmış bir ödemeyi iptal edip farkı cebe atmak ya da kendine iade yazmak klasik kasa açığıdır; büyük ödemede yazım hatası (10.000 yerine 100.000) misafiri "ödendi" diye çıkarır.
@@ -304,6 +341,8 @@ Para izini ya da kapasiteyi değiştiren riskli işler kendi kendine yapılmaz. 
 6. **İz.** Açılış ve karar denetim izine (karar veren kişiyle), aktör tarafı aktivite akışına yazılır ("onaya gönderildi", "onay reddedildi", "iade yapıldı").
 
 *Örnek:* Resepsiyonist Mehmet 16:20'de 1.250 TL iade isteği açtı. Müdür Zeynep'in zili çaldı. Zeynep 16:35'te detayı açtı: gerekçe "misafir erken ayrıldı, 1 gece iade", ilgili folyo bağlantısı, son karar anı ertesi gün 16:20. "Onayla" dedi, not yazdı. Ödeme modülünün dinleyicisi iadeyi yazdı; Mehmet'in ziline "İstediğim onayın sonucu: onaylandı" düştü; muhasebe aktörü iadeyi kasadan çıkış olarak işledi. Mehmet kendi isteğini açsaydı "Onayla" düğmesi kilitli olurdu.
+
+*Örnek (izin talebi):* Resepsiyonist Ayşe İzinlerim'den 3 günlük yıllık izin istedi. İzin "Onay bekliyor" açıldı, onay kuyruğuna `LEAVE` ("İzin talebi") türünde iş düştü (süresiz), İK izni olanların ziline `HR` türünde "İzin talebi: Ayşe Demir" uyarısı gitti. Ayşe kendi talebini onaylayamaz. Müdür Burak onaylayınca İK modülünün dinleyicisi `approval.granted`'ı yakaladı, yıllık izin bakiyesini **yeniden denetledi** (bu arada bakiye değiştiyse izni reddeder), izni "Onaylandı" yaptı, `hr.leave.changed` yayınladı ve Ayşe'nin ziline "İzniniz onaylandı" düştü; açık İK ekranları `hr.changed` kanalından tazelendi. Ayşe talebi kararlanmadan iptal etseydi onay işi "süresi doldu" olarak kapanırdı.
 
 Aktör kayıttan kalkmışsa (paket kaldırıldı, ad değişti) onaylanan iş kaybolmaz: **"Onay kuyruğu"** modülünde "Onaylanan iş elle yapılacak: …" görevi açılır.
 
@@ -357,7 +396,8 @@ Gece görevlisi `/gun-kapanis` sihirbazını adım adım geçer: **Gelmeyenler �
 2. O gecenin **oda ücretlerini** içerideki bütün konaklamalara basar (gece hassasiyetli; iki kez basılmaz).
 3. **Günlük özeti** (`DailyStats`: doluluk, oda geliri, ADR, RevPAR, tahsilat) yazar — göstergeler gelir raporuyla aynı tanımla.
 4. **Vardiya raporunu** (yöntem bazında beklenen / sayılan / fark, devir notu) kaydeder; PDF olarak indirilebilir.
-5. Günü **kapandı** işaretler, "gün kapandı" olayını yayınlar, iş gününü ilerletir.
+5. Günü **kapandı** işaretler, "gün kapandı" olayını (`night.audit.closed`) yayınlar, iş gününü ilerletir.
+6. "Gün kapandı" olayını **muhasebe aktörü** dinler ve günün **gelir fişini** yazar (genel muhasebe): folyo kalemleri, odaya yazılmayan adisyonlar ve spa randevuları gelir ve KDV hesaplarına alacak, `120.01` borç. Aktör kapalıysa "… gününün gelir fişi yazılacak" görevi düşer; Genel muhasebe → Ayarlar → Eşitle kapanmış günlerin fişini sonradan yazar.
 
 "Başlat" iki görevlinin aynı anda kapatmasını engeller (gün "sürüyor" olur). Takvimden ileri gün kapatılamaz; aynı gün iki kez kapatılamaz. Gün kapanışı başladığında folyo aktörü tamamlanmış gecelerin ücretini önceden basar; dolu odaların kat hizmeti durumu "kirli" olur (ertesi sabahın konaklayan temizliği buradan beslenir).
 
@@ -399,13 +439,18 @@ Olaylar sistemin ana tetikleyicisidir; zamanlanmış işler **güvenlik ağı** 
 | Restoran POS | POS süpürmesi | 15 dk | 16 saati geçen açık vardiya ve 8 saati geçen açık adisyon için şef garsona uyarı (bir kez) |
 | Restoran POS | Oda servisi süpürmesi | 1 dk | Zamanı gelen planlı siparişi mutfağa düşürür; konaklaması biten siparişi iptal eder; kabul bekleyen / geciken sipariş ve toplanmayan tepsi uyarıları |
 | Demirbaş | Garanti zili | 6 sa | Garantisi uyarı penceresine giren kartlar için zil (kart başına bir kez; aynı günün kartları tek zilde) |
+| İK | Özlük belgesi hatırlatması | 12 sa | Süresi İK ayarındaki gün (varsayılan 30) içinde dolacak / dolmuş belgeler için `hr.manage` sahiplerine tek özet zil (`HR`); aynı belge 7 günde bir |
+| Sadakat | Sadakat puan süresi | 12 sa | Programı açık her otelde son kullanma günü geçmiş, kullanılmamış puanı "Süresi doldu" hareketiyle düşer (hesap başına günde bir); 12 aylık seviye penceresi kaydığı için etkin hesapların seviyesini yeniden hesaplar (yükselişte zil `LOYALTY`, düşüşte zil yok) |
 | Faturalar | E-belge gönderimi | 30 sn | Sıradaki e-Fatura / e-Arşiv belgelerini entegratöre gönderir, durumunu izler |
+| KBS | KBS gönderici | 30 sn (ve yeni bildirim sıraya girince hemen) | Sırası gelmiş, girişi bildirilmiş KBS bildirimlerini sırayla gönderir (bugün yalnız test ortamı); geçici hatada 1 / 5 / 15 / 60 / 180 / 360 dk sonra yeniden, hak bitince "Gönderilemedi" + zil; bağlı olduğu bildirim iptal edilen bekleyeni iptal eder. KBS'si kapalı otelin bildirimi gönderilmez |
+| KBS | KBS takılı kurtarma | 5 dk | Süreç gönderim ortasında kapandıysa 5 dakikadan uzun "Gönderiliyor"da kalan bildirimi "Sırada"ya geri alır |
+| KBS | KBS gecikme zili | 1 sa | Açılalı 2 saati geçmiş ve hâlâ bildirilmemiş giriş bildirimi için kritik zil (`KBS`, bildirim başına bir kez): "… yasal süre geçmeden KBS ekranından elle bildirin" |
 
 *Örnek:* Sunucu bakım için pazar 03:00–05:00 arası kapalıydı. Açılışta: outbox tarayıcısı dağıtılmamış 3 olayı dağıttı; oda ücreti işi cumartesi gecesini (zaten kapatılmıştı) kontrol etti, eksik yoktu; konaklayan temizliği pazar sabahının görevlerini açtı; bekleyen mesajlar işi 03:12'de personelin yazdığı ama gönderilemeyen WhatsApp cevabını gönderdi. Kimse bir şey yapmadı.
 
 ## Canlı kanallar: ekranlar nasıl kendiliğinden yenilenir
 
-Sunucu, bir şey değiştiğinde panellere socket üzerinden **yalnızca haber** gönderir ("bu otelde envanter değişti", "onaylar değişti", "manuel görevler değişti", "mesajlar değişti"); veri göndermez. Haber yalnızca o kanala abone olan — yani ilgili ekranı açık tutan — panellere gider; otelin tamamına yayın yapılmaz. Panel haberi alınca kendi sorgusunu tazeler (bazı ekranlarda en sık 10–15 saniyede bir).
+Sunucu, bir şey değiştiğinde panellere socket üzerinden **yalnızca haber** gönderir ("bu otelde envanter değişti", "onaylar değişti", "manuel görevler değişti", "mesajlar değişti", "genel muhasebe değişti" — `ledger.changed`, "İK değişti" — `hr.changed`, "sadakat değişti" — `loyalty.changed`: puan hareketi, seviye, üyelik, ayar; "KBS değişti" — `kbs.changed`: kimlik bildirimleri, mutabakat, ayar); veri göndermez. Haber yalnızca o kanala abone olan — yani ilgili ekranı açık tutan — panellere gider; otelin tamamına yayın yapılmaz. Panel haberi alınca kendi sorgusunu tazeler (bazı ekranlarda en sık 10–15 saniyede bir).
 
 Zil haberi kişiye (`kullanıcı`) ya da izne (`perm`) gider; rozet sunucudan bir kez gelir, sonra haberle artar. Aktivite akışı 500 ms'de bir toplu "yeni satır kimlikleri" alır; içerik HTTP'den okunur (socket kimliği şimdilik istemcinin söylediği e-postadır, bu yüzden socket'ten içerik taşınmaz).
 
@@ -474,9 +519,21 @@ Bu yolculukta personel üç kez dokundu: online check-in onayı, giriş ve çık
 | İş günü | Kapatılmış son günün ertesi; gün kapanışıyla ilerler |
 | Zil | Kişiye ya da izne giden personel uyarısı; 30 gün saklanır |
 | Canlı kanal | "Şu değişti" haberini ilgili ekranlara taşıyan socket kanalı |
+| Yevmiye fişi | Bir belgenin Tek Düzen hesaplarına çift taraflı kaydı (borç = alacak); ön muhasebe hareketinden kendiliğinden ya da elle |
+| Günlük gelir fişi | Gün kapanışında günün gelirini (folyo, adisyon, spa) gelir ve KDV hesaplarına yazan otomatik yevmiye fişi; yeniden çalışınca yalnız farkı yazar |
 | Sürüm damgası | Aynı kaydı iki kişinin aynı anda ezmesini engelleyen koruma |
 | Denetim kaydı | Kişilerin yaptığı değişikliklerin eski / yeni değerle defteri |
 | Aktivite akışı | Aktörlerin işlerinin defteri |
+| İzin bakiyesi | Personelin yıllık ücretli izin hakkı (4857 md. 53: işe giriş yıl dönümlerinde 14 / 20 / 26 gün; 18 yaş altı ve 50 yaş üstüne en az 20) + elle düzeltmeler − onaylı yıllık izinler; iş günüyle |
+| Puantaj (günlük) | Bir personelin bir günü: geldi / gelmedi / izinli / hafta tatili / resmî tatil, giriş-çıkış, mola, çalışılan ve norm üstü dakika; ay sonunda bordroya aktarılır (kaynak TIMESHEET) |
+| Sadakat puanı | Folyo kapanınca harcamadan kazanılan tamsayı puan (varsayılan 10 TL = 1 puan); açık folyoda indirim olarak harcanır (varsayılan 1 puan = 0,50 TL) |
+| Sadakat seviyesi | Son 12 ayda kazanılan puana göre Klasik / Gümüş / Altın…; çarpanı kazanmaya uygulanır, düşebilir |
+| Puan paketi (lot) ve FIFO | Her kazanma ayrı paket olur (kendi son kullanma günüyle); harcama ve süre dolumu en eski paketten başlar |
+| KBS / JKBS | Konaklama tesislerinin misafir kimliğini bildirdiği sistem: Emniyet'in Kimlik Bildirim Sistemi ve Jandarma'nınki. FlexHotel'de kuyruk, mutabakat ve iz hazır; gerçek servis bağlantısı tesis yetkisi ve servis dokümanı bekliyor (bugün yalnız test ortamı) |
+| KBS bildirimi | Bir kişinin giriş, çıkış ya da oda değişikliği kaydı; durumları Sırada / Gönderiliyor / Bildirildi / Gönderilemedi / İptal / Elle bildirildi |
+| Bildirim zinciri | Aynı konaklamada aynı kişinin bildirimleri; her halka öncekine bağlıdır, çıkış girişi bildirilmeden gönderilmez |
+| Elle bildirildi | Personelin resmî KBS ekranından bildirip FlexHotel'de notla işaretlediği bildirim; bağlı çıkışı serbest bırakır |
+| KBS mutabakatı | İçerideki her kişinin girişi bildirilmiş mi denetimi; eksikler nedenleriyle listelenir |
 
 ## Sık sorulanlar
 
@@ -506,6 +563,9 @@ Uyarı, "aktör kapalıydı, iş personele düştü" ya da "sıra doldu" gibi be
 
 **WhatsApp bildirimi gönderebiliyor muyuz?**
 Misafirle **konuşma** (gelen mesaja cevap) WhatsApp üzerinden çalışır. Otelin başlattığı **bildirim** (rezervasyon onayı vb.) WhatsApp'tan gitmez; Meta'nın şablon onayı otel başına ayrı iştir ve henüz yapılmadı. Bildirimler e-posta ve SMS ile gider; şablon ekranında WhatsApp sütunu hazırdır, kanal bağlanınca kullanılır. E-posta geçidi (gelen e-postayı mesaja çevirmek) da henüz yoktur.
+
+**KBS bildirimi gerçekten Emniyet'e gidiyor mu?**
+Hayır, henüz değil. Gerçek KBS / JKBS servisi otelin tesis yetkisi ve servis dokümanıyla bağlanır; o güne kadar yalnız Test ortamı seçilebilir ve dışarı hiçbir şey gönderilmez. Kuyruk, zil, mutabakat ve iz bugünden çalışır; otel resmî ekrandan elle bildirip **Elle bildirildi** işaretler. Bağlantı gelince yalnız sağlayıcı adaptörü yazılır, akış aynı kalır.
 
 **Birden fazla sunucu çalıştırabilir miyiz?**
 Bugün olay bus'ı, aktör sıraları ve kanal kaydı tek süreç içindedir. Çok sunuculu kurulum için bunların paylaşılan bir kuyruğa taşınması gerekir; bu FlexAI 2.0 yol haritasındaki altyapı işlerindendir.

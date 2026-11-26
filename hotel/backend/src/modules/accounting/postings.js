@@ -187,7 +187,7 @@ async function postFolioPaymentRow(context, hotelId, row, original, memo) {
         sourceId: row.id,
         sourceKey,
       });
-      if (posted.created) await stage('accounting.posted', { hotelId, source: 'FOLIO_TRANSFER', ledgerAccountIds: [account.id], treasuryAccountIds: [] });
+      if (posted.created) await stage('accounting.posted', { hotelId, source: 'FOLIO_TRANSFER', sourceId: row.id, ledgerAccountIds: [account.id], treasuryAccountIds: [] });
       return { posted: posted.created, message: posted.created ? `${description} → ${account.name} carisine ${money(amount.abs())} ${context.currency}` : null };
     });
   }
@@ -198,7 +198,7 @@ async function postFolioPaymentRow(context, hotelId, row, original, memo) {
   return writeWithEvents(async (tx, stage) => {
     await lockTreasuryAccounts(tx, hotelId, [account.id]);
     const posted = await postTreasury(tx, { hotelId, treasuryAccountId: account.id, date, ...amounts, description, reference: row.reference, sourceType: 'FOLIO_PAYMENT', sourceId: row.id, sourceKey });
-    if (posted.created) await stage('accounting.posted', { hotelId, source: 'FOLIO_PAYMENT', ledgerAccountIds: [], treasuryAccountIds: [account.id] });
+    if (posted.created) await stage('accounting.posted', { hotelId, source: 'FOLIO_PAYMENT', sourceId: row.id, ledgerAccountIds: [], treasuryAccountIds: [account.id] });
     return { posted: posted.created, message: posted.created ? `${description} → ${account.name} (${amounts.amount} ${account.currency})` : null };
   });
 }
@@ -277,7 +277,7 @@ async function postEventPaymentRow(context, hotelId, row, original, memo) {
       sourceKey,
     });
     const created = ledger.created || movement.created;
-    if (created) await stage('accounting.posted', { hotelId, source: 'EVENT_PAYMENT', ledgerAccountIds: [account.id], treasuryAccountIds: [treasury.id] });
+    if (created) await stage('accounting.posted', { hotelId, source: 'EVENT_PAYMENT', sourceId: row.id, ledgerAccountIds: [account.id], treasuryAccountIds: [treasury.id] });
     return { posted: created, message: created ? `${description} → ${treasury.name}, ${account.name} carisi` : null };
   });
 }
@@ -324,7 +324,7 @@ async function postPosPaymentRow(context, hotelId, row, original, memo) {
   return writeWithEvents(async (tx, stage) => {
     await lockTreasuryAccounts(tx, hotelId, [treasury.id]);
     const posted = await postTreasury(tx, { hotelId, treasuryAccountId: treasury.id, date, ...amounts, description, reference: row.reference, sourceType: 'POS_PAYMENT', sourceId: row.id, sourceKey: `POS_PAYMENT:${row.id}` });
-    if (posted.created) await stage('accounting.posted', { hotelId, source: 'POS_PAYMENT', ledgerAccountIds: [], treasuryAccountIds: [treasury.id] });
+    if (posted.created) await stage('accounting.posted', { hotelId, source: 'POS_PAYMENT', sourceId: row.id, ledgerAccountIds: [], treasuryAccountIds: [treasury.id] });
     return { posted: posted.created, message: posted.created ? `${description} → ${treasury.name}` : null };
   });
 }
@@ -375,7 +375,7 @@ async function postSpaPaymentRow(context, hotelId, row, original, memo) {
   return writeWithEvents(async (tx, stage) => {
     await lockTreasuryAccounts(tx, hotelId, [treasury.id]);
     const posted = await postTreasury(tx, { hotelId, treasuryAccountId: treasury.id, date, ...amounts, description, reference: row.reference, sourceType: 'SPA_PAYMENT', sourceId: row.id, sourceKey: `SPA_PAYMENT:${row.id}` });
-    if (posted.created) await stage('accounting.posted', { hotelId, source: 'SPA_PAYMENT', ledgerAccountIds: [], treasuryAccountIds: [treasury.id] });
+    if (posted.created) await stage('accounting.posted', { hotelId, source: 'SPA_PAYMENT', sourceId: row.id, ledgerAccountIds: [], treasuryAccountIds: [treasury.id] });
     return { posted: posted.created, message: posted.created ? `${description} → ${treasury.name}` : null };
   });
 }
@@ -411,7 +411,7 @@ export async function syncGoodsReceipt(hotelId, receiptId, memo = newMemo()) {
       sourceId: receipt.id,
       sourceKey: `GOODS_RECEIPT:${receipt.id}`,
     });
-    if (posted.created) await stage('accounting.posted', { hotelId, source: 'GOODS_RECEIPT', ledgerAccountIds: [account.id], treasuryAccountIds: [] });
+    if (posted.created) await stage('accounting.posted', { hotelId, source: 'GOODS_RECEIPT', sourceId: receipt.id, ledgerAccountIds: [account.id], treasuryAccountIds: [] });
     return { posted: posted.created, message: posted.created ? `${description} → ${account.name} carisine ${money(receipt.grandTotal)} ${context.currency} borç (vade ${addDays(date, receipt.order.paymentTermDays)})` : 'Zaten işlenmiş' };
   });
 }
@@ -493,7 +493,7 @@ export async function syncEventCharge(hotelId, eventId, memo = newMemo()) {
       description: `${label} · ${event.code} ${event.name}`,
       reference: event.code,
     });
-    if (posted.length) await stage('accounting.posted', { hotelId, source: 'EVENT_CHARGE', ledgerAccountIds: posted.map((row) => row.accountId), treasuryAccountIds: [] });
+    if (posted.length) await stage('accounting.posted', { hotelId, source: 'EVENT_CHARGE', sourceId: event.id, ledgerAccountIds: posted.map((row) => row.accountId), treasuryAccountIds: [] });
     return { posted: posted.length > 0, message: posted.length ? `${label} ${event.code}: ${posted.map((row) => row.amount).join(', ')} ${context.currency} → ${account.name}` : null };
   });
 }
@@ -531,7 +531,7 @@ export async function syncAgencyBonus(hotelId, bonusId, memo = newMemo()) {
       dueDate: null,
       description: `Acente prim hak edişi · ${bonus.rule?.name ?? ''} · ${period}`,
     });
-    if (posted.length) await stage('accounting.posted', { hotelId, source: 'AGENCY_BONUS', ledgerAccountIds: posted.map((row) => row.accountId), treasuryAccountIds: [] });
+    if (posted.length) await stage('accounting.posted', { hotelId, source: 'AGENCY_BONUS', sourceId: bonus.id, ledgerAccountIds: posted.map((row) => row.accountId), treasuryAccountIds: [] });
     return { posted: posted.length > 0, message: posted.length ? `Prim hak edişi → ${account.name}: ${posted.map((row) => row.amount).join(', ')} ${context.currency}` : null };
   });
 }
@@ -600,13 +600,13 @@ export async function syncInvoice(hotelId, invoiceId, memo = newMemo()) {
         sourceId: invoice.id,
         sourceKey,
       });
-      if (posted.created) await stage('accounting.posted', { hotelId, source: 'INVOICE', ledgerAccountIds: [account.id], treasuryAccountIds: [] });
+      if (posted.created) await stage('accounting.posted', { hotelId, source: 'INVOICE', sourceId: invoice.id, ledgerAccountIds: [account.id], treasuryAccountIds: [] });
       return { posted: posted.created, message: posted.created ? `Serbest fatura ${number} → ${account.name} carisine ${money(invoice.total)} ${context.currency} borç (vade ${addDays(date, account.paymentTermDays)})` : null };
     }
     const original = await tx.ledgerEntry.findFirst({ where: { hotelId, sourceKey }, select: { id: true } });
     if (!original) return { skipped: `Serbest fatura ${number}: cariye işlenmemişti` };
     const reversed = await reverseRecords(tx, hotelId, { ledgerEntryIds: [original.id], date, note: `fatura ${number} iptal edildi` });
-    if (reversed.ledger) await stage('accounting.posted', { hotelId, source: 'INVOICE', ledgerAccountIds: reversed.ledgerAccountIds, treasuryAccountIds: [] });
+    if (reversed.ledger) await stage('accounting.posted', { hotelId, source: 'INVOICE', sourceId: invoice.id, ledgerAccountIds: reversed.ledgerAccountIds, treasuryAccountIds: [] });
     return { posted: reversed.ledger > 0, message: reversed.ledger ? `Serbest fatura ${number} iptali → ${account.name} carisinden ters kayıtla düşüldü` : null };
   });
 }

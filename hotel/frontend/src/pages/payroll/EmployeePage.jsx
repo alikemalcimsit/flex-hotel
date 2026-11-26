@@ -25,6 +25,7 @@ import { useHotelToday } from '../../lib/useHotel.js';
 import { toastError, toastSuccess } from '../../store/toast.js';
 import { AdvanceDialog, GarnishmentDialog, IncentiveDialog, OpeningDialog, ReasonDialog, TerminationDialog } from './EmployeeDialogs.jsx';
 import { EmployeeFormDialog } from './EmployeeFormDialog.jsx';
+import { HrEmployeeCard } from '../hr/HrEmployeeCard.jsx';
 
 /** Anahtar / değer satırı. */
 function Field({ label, children }) {
@@ -182,6 +183,8 @@ export function EmployeePage() {
           </Alert>
         )}
       </div>
+
+      <HrEmployeeCard employeeId={employee.id} />
 
       {employee.termination && (
         <Card title="İşten çıkış">

@@ -542,6 +542,9 @@ export const STAFF_ALERT_KINDS = Object.freeze([
   'SALES_FOLLOW_UP',
   'ASSET',
   'STOCK',
+  'HR',
+  'LOYALTY',
+  'KBS',
   'INTEGRATION',
 ]);
 
@@ -571,6 +574,9 @@ export const STAFF_ALERT_KIND_LABELS = Object.freeze({
   MAINTENANCE: 'Arıza / teknik servis',
   ASSET: 'Demirbaş (garantisi bitecekler)',
   STOCK: 'Stok (minimum altı; talep açıldı)',
+  HR: 'İK (izin talebi / kararı, süresi dolacak belge)',
+  LOYALTY: 'Sadakat (seviye yükseldi, puanın süresi doluyor)',
+  KBS: 'KBS kimlik bildirimi (gönderilemedi, gecikti)',
   INTEGRATION: 'Webhook aboneliği kapandı (entegrasyon)',
 });
 

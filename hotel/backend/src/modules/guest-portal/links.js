@@ -125,6 +125,7 @@ export async function revokePortalLink(hotelId, reservationId) {
 
 export const PORTAL_RESERVATION_SELECT = Object.freeze({
   id: true,
+  guestId: true,
   hotelId: true,
   confirmationCode: true,
   status: true,

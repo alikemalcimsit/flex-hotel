@@ -243,7 +243,7 @@ export async function applyInstrumentAction(hotelId, instrumentId, input) {
     });
     await stage('accounting.instrument.changed', { hotelId, instrumentId, action: input.action });
     if (ledgerIds.length || transition.treasury !== 0) {
-      await stage('accounting.posted', { hotelId, source: 'INSTRUMENT', ledgerAccountIds: ledgerIds, treasuryAccountIds: transition.treasury !== 0 ? [treasuryId] : [] });
+      await stage('accounting.posted', { hotelId, source: 'INSTRUMENT', sourceId: instrumentId, ledgerAccountIds: ledgerIds, treasuryAccountIds: transition.treasury !== 0 ? [treasuryId] : [] });
     }
   });
   return getInstrument(hotelId, instrumentId);

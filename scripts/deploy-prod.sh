@@ -21,7 +21,8 @@ cd "$REPO"
 log "Depo güncelleniyor ($BRANCH)"
 git fetch --quiet origin
 # Derleme öncesi üretilen kılavuz referansı ağacı kirletebilir; depodaki sürüme dönülür (yeniden üretilecek).
-git checkout --quiet -- hotel/frontend/src/guide/90-teknik-referans.md 2>/dev/null || true
+# Sunucudaki `npm install` package-lock.json'ı yeniden yazabilir (peer işaretleri); o da depodaki sürüme döner.
+git checkout --quiet -- hotel/frontend/src/guide/90-teknik-referans.md package-lock.json 2>/dev/null || true
 git checkout --quiet "$BRANCH"
 git pull --ff-only --quiet origin "$BRANCH"
 git log -1 --format='  %h %ad %s' --date=short
