@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Button, Icon, Input, Spinner } from '@hotelos/ui';
+import { useT } from '../../i18n/index.jsx';
 import { api, withQuery } from '../../lib/api.js';
 import { formatDate } from '../../lib/format.js';
 import { reservationKeys } from '../../lib/reservations.js';
@@ -27,6 +28,7 @@ export const EMPTY_GUEST_DRAFT = Object.freeze({ firstName: '', lastName: '', ph
  * }} props
  */
 export function GuestPicker({ value, onChange, errors = {}, disabled = false }) {
+  const t = useT();
   const [text, setText] = useState('');
   const [query, setQuery] = useState('');
   const listId = useId();
@@ -54,11 +56,11 @@ export function GuestPicker({ value, onChange, errors = {}, disabled = false }) 
           </span>
           <span className="flex flex-col">
             <span className="font-semibold text-ink">{value.guest.name}</span>
-            <span className="text-xs text-ink-muted">{[value.guest.phone, value.guest.email].filter(Boolean).join(' · ') || 'İletişim bilgisi yok'}</span>
+            <span className="text-xs text-ink-muted">{[value.guest.phone, value.guest.email].filter(Boolean).join(' · ') || t('reservations.guestPicker.noContact')}</span>
           </span>
         </span>
         <Button variant="outline" size="sm" icon="refresh" disabled={disabled} onClick={() => onChange({ ...value, mode: 'search', guest: null })}>
-          Misafiri değiştir
+          {t('reservations.guestPicker.change')}
         </Button>
         <GuestCrmPreview guestId={value.guest.id} />
       </div>
@@ -69,16 +71,16 @@ export function GuestPicker({ value, onChange, errors = {}, disabled = false }) 
     return (
       <div className="flex flex-col gap-3">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Input label="Ad" name="guest.firstName" value={value.draft.firstName} onChange={(e) => setDraft('firstName', e.target.value)} error={errors['guest.firstName']} disabled={disabled} required />
-          <Input label="Soyad" name="guest.lastName" value={value.draft.lastName} onChange={(e) => setDraft('lastName', e.target.value)} error={errors['guest.lastName']} disabled={disabled} required />
-          <Input label="Telefon" name="guest.phone" type="tel" placeholder="0532 111 22 33" value={value.draft.phone} onChange={(e) => setDraft('phone', e.target.value)} error={errors['guest.phone']} disabled={disabled} />
-          <Input label="E-posta" name="guest.email" type="email" value={value.draft.email} onChange={(e) => setDraft('email', e.target.value)} error={errors['guest.email']} disabled={disabled} />
-          <Input label="Uyruk (ülke kodu)" name="guest.nationality" placeholder="TR" maxLength={2} value={value.draft.nationality} onChange={(e) => setDraft('nationality', e.target.value.toUpperCase())} error={errors['guest.nationality']} disabled={disabled} className="sm:w-40" />
+          <Input label={t('reservations.guestPicker.firstName')} name="guest.firstName" value={value.draft.firstName} onChange={(e) => setDraft('firstName', e.target.value)} error={errors['guest.firstName']} disabled={disabled} required />
+          <Input label={t('reservations.guestPicker.lastName')} name="guest.lastName" value={value.draft.lastName} onChange={(e) => setDraft('lastName', e.target.value)} error={errors['guest.lastName']} disabled={disabled} required />
+          <Input label={t('reservations.guestPicker.phone')} name="guest.phone" type="tel" placeholder="0532 111 22 33" value={value.draft.phone} onChange={(e) => setDraft('phone', e.target.value)} error={errors['guest.phone']} disabled={disabled} />
+          <Input label={t('reservations.guestPicker.email')} name="guest.email" type="email" value={value.draft.email} onChange={(e) => setDraft('email', e.target.value)} error={errors['guest.email']} disabled={disabled} />
+          <Input label={t('reservations.guestPicker.nationality')} name="guest.nationality" placeholder="TR" maxLength={2} value={value.draft.nationality} onChange={(e) => setDraft('nationality', e.target.value.toUpperCase())} error={errors['guest.nationality']} disabled={disabled} className="sm:w-40" />
         </div>
-        <p className="text-xs text-ink-muted">Telefon ya da e-postadan biri zorunlu. Aynı iletişim bilgisiyle kayıtlı kart varsa sistem size sorar.</p>
+        <p className="text-xs text-ink-muted">{t('reservations.guestPicker.contactHint')}</p>
         <div>
           <Button variant="ghost" size="sm" icon="search" disabled={disabled} onClick={() => onChange({ ...value, mode: 'search' })}>
-            Var olan misafiri ara
+            {t('reservations.guestPicker.searchExisting')}
           </Button>
         </div>
       </div>
@@ -89,10 +91,10 @@ export function GuestPicker({ value, onChange, errors = {}, disabled = false }) 
   return (
     <div className="flex flex-col gap-3">
       <Input
-        label="Misafir ara"
+        label={t('reservations.guestPicker.searchLabel')}
         name="guest-search"
         type="search"
-        placeholder="Ad soyad, telefon ya da e-posta"
+        placeholder={t('reservations.guestPicker.searchPlaceholder')}
         value={text}
         onChange={(event) => setText(event.target.value)}
         error={errors.guestId}
@@ -100,11 +102,11 @@ export function GuestPicker({ value, onChange, errors = {}, disabled = false }) 
         aria-controls={listId}
       />
       <div id={listId} aria-live="polite" className="flex flex-col gap-1.5">
-        {query.length > 0 && query.length < MIN_QUERY_LENGTH && <p className="text-xs text-ink-muted">En az {MIN_QUERY_LENGTH} karakter yazın.</p>}
-        {search.isFetching && <Spinner label="Aranıyor…" />}
-        {search.isError && <p className="text-xs text-sec-strong">Arama yapılamadı: {search.error.message}</p>}
+        {query.length > 0 && query.length < MIN_QUERY_LENGTH && <p className="text-xs text-ink-muted">{t('reservations.guestPicker.minChars', { count: MIN_QUERY_LENGTH })}</p>}
+        {search.isFetching && <Spinner label={t('reservations.guestPicker.searching')} />}
+        {search.isError && <p className="text-xs text-sec-strong">{t('reservations.guestPicker.searchFailed', { message: search.error.message })}</p>}
         {search.data && results.length === 0 && (
-          <p className="text-xs text-ink-muted">Kayıtlı misafir bulunamadı. Ad araması için en az 3 harfli kelime yazın ya da yeni misafir ekleyin.</p>
+          <p className="text-xs text-ink-muted">{t('reservations.guestPicker.noResults')}</p>
         )}
         {results.map((guest) => (
           <button
@@ -119,10 +121,10 @@ export function GuestPicker({ value, onChange, errors = {}, disabled = false }) 
               <span className="text-xs text-ink-muted">{[guest.phone, guest.email].filter(Boolean).join(' · ')}</span>
             </span>
             <span className="text-right text-xs text-ink-muted">
-              {guest.stayCount > 0 ? `${guest.stayCount} konaklama` : 'Konaklaması yok'}
+              {guest.stayCount > 0 ? t('reservations.guestPicker.stayCount', { count: guest.stayCount }) : t('reservations.guestPicker.noStays')}
               {guest.lastStay && (
                 <span className="block">
-                  Son: {formatDate(guest.lastStay.checkIn)} · {statusLabel(guest.lastStay.status)}
+                  {t('reservations.guestPicker.lastStay', { date: formatDate(guest.lastStay.checkIn), status: statusLabel(guest.lastStay.status) })}
                 </span>
               )}
             </span>
@@ -131,7 +133,7 @@ export function GuestPicker({ value, onChange, errors = {}, disabled = false }) 
       </div>
       <div>
         <Button variant="outline" size="sm" icon="plus" disabled={disabled} onClick={() => onChange({ ...value, mode: 'new' })}>
-          Yeni misafir
+          {t('reservations.guestPicker.newGuest')}
         </Button>
       </div>
     </div>

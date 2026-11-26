@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { DEPOSIT_METHOD_LABELS, checkOutSchema } from '@hotelos/hotel-contracts';
+import { checkOutSchema } from '@hotelos/hotel-contracts';
 import { Alert, Button, Checkbox, Icon, Spinner, Textarea } from '@hotelos/ui';
 import { Modal } from '../../components/Modal.jsx';
+import { MoneyText } from '../../components/MoneyText.jsx';
+import { useT } from '../../i18n/index.jsx';
 import { api, apiPost } from '../../lib/api.js';
 import { folioKeys, folioPath } from '../../lib/folios.js';
 import { frontDeskKeys } from '../../lib/front-desk.js';
@@ -17,6 +19,14 @@ import { PaymentDialog } from '../folios/PaymentDialogs.jsx';
 
 /** Bu kodlarla dönen hata önizlemeyi tazeler (tutar, tarih ya da durum değişti). */
 const REFRESH_CODES = new Set(['STALE_WRITE', 'INVALID_STATUS', 'FEE_CHANGED', 'EARLY_DEPARTURE', 'BALANCE_DUE']);
+
+/**
+ * Çevrilmiş cümledeki `{ad}` yer tutucularını React düğümüyle doldurur (cümle bölünmeden kalın tutar).
+ * @param {string} text @param {Record<string, React.ReactNode>} nodes
+ */
+function fillNodes(text, nodes) {
+  return text.split(/\{(\w+)\}/g).map((part, index) => (index % 2 ? <Fragment key={index}>{nodes[part] ?? `{${part}}`}</Fragment> : part));
+}
 
 /**
  * Check-out formu (modül 6).
@@ -34,6 +44,7 @@ const REFRESH_CODES = new Set(['STALE_WRITE', 'INVALID_STATUS', 'FEE_CHANGED', '
  * @param {{ reservationId: string, onClose: () => void, onDone?: (reservation: object) => void }} props
  */
 export function CheckOutDialog({ reservationId, onClose, onDone }) {
+  const t = useT();
   const queryClient = useQueryClient();
   const can = useCan();
   const canOpenBalance = can(PERMISSIONS.STAYS_OPEN_BALANCE);
@@ -56,7 +67,11 @@ export function CheckOutDialog({ reservationId, onClose, onDone }) {
   const mutation = useMutation({
     mutationFn: (body) => apiPost(`/front-desk/stays/${reservationId}/check-out`, body),
     onSuccess: (updated) => {
-      toastSuccess(`Çıkış yapıldı — ${updated.guest?.name ?? ''}${updated.room ? `, oda ${updated.room.number} kirli olarak işaretlenecek` : ''}`);
+      toastSuccess(
+        updated.room
+          ? t('frontDesk.checkOut.doneRoom', { name: updated.guest?.name ?? '', room: updated.room.number })
+          : t('frontDesk.checkOut.done', { name: updated.guest?.name ?? '' }),
+      );
       queryClient.invalidateQueries({ queryKey: frontDeskKeys.all });
       queryClient.invalidateQueries({ queryKey: reservationKeys.all });
       queryClient.invalidateQueries({ queryKey: folioKeys.all });
@@ -73,15 +88,15 @@ export function CheckOutDialog({ reservationId, onClose, onDone }) {
 
   if (preview.isPending) {
     return (
-      <Modal open size="md" title="Check-out" onClose={onClose}>
-        <Spinner label="Hesap hazırlanıyor…" className="py-10" />
+      <Modal open size="md" title={t('frontDesk.checkOut.title')} onClose={onClose}>
+        <Spinner label={t('frontDesk.checkOut.loading')} className="py-10" />
       </Modal>
     );
   }
   if (preview.isError) {
     return (
-      <Modal open size="md" title="Check-out" onClose={onClose} footer={<Button variant="outline" onClick={onClose}>Kapat</Button>}>
-        <Alert tone="danger" action={<Button variant="outline" size="sm" icon="refresh" onClick={() => preview.refetch()}>Tekrar dene</Button>}>
+      <Modal open size="md" title={t('frontDesk.checkOut.title')} onClose={onClose} footer={<Button variant="outline" onClick={onClose}>{t('common.close')}</Button>}>
+        <Alert tone="danger" action={<Button variant="outline" size="sm" icon="refresh" onClick={() => preview.refetch()}>{t('common.retry')}</Button>}>
           {preview.error.message}
         </Alert>
       </Modal>
@@ -90,12 +105,14 @@ export function CheckOutDialog({ reservationId, onClose, onDone }) {
 
   const data = preview.data;
   const { reservation, departure, lateCheckOut, folio, deposit, currency, pendingCharges } = data;
-  const title = `Check-out — ${reservation.confirmationCode}${reservation.room ? ` · oda ${reservation.room.number}` : ''}`;
+  const title = reservation.room
+    ? t('frontDesk.checkOut.titleCodeRoom', { code: reservation.confirmationCode, room: reservation.room.number })
+    : t('frontDesk.checkOut.titleCode', { code: reservation.confirmationCode });
 
   if (data.blocker) {
     return (
-      <Modal open size="md" title={title} onClose={onClose} footer={<Button variant="outline" onClick={onClose}>Kapat</Button>}>
-        <Alert tone="warning" title="Çıkış yapılamaz">{data.blocker}</Alert>
+      <Modal open size="md" title={title} onClose={onClose} footer={<Button variant="outline" onClick={onClose}>{t('common.close')}</Button>}>
+        <Alert tone="warning" title={t('frontDesk.checkOut.blocked')}>{data.blocker}</Alert>
       </Modal>
     );
   }
@@ -158,9 +175,9 @@ export function CheckOutDialog({ reservationId, onClose, onDone }) {
       onClose={busy ? () => {} : onClose}
       footer={
         <>
-          <Button variant="outline" onClick={onClose} disabled={busy}>Vazgeç</Button>
+          <Button variant="outline" onClick={onClose} disabled={busy}>{t('common.cancel')}</Button>
           <Button type="submit" form="check-out-form" icon="logout" disabled={busy || blockedByBalance || blockedByEarly}>
-            {busy ? 'Çıkış yapılıyor…' : 'Çıkış yap'}
+            {busy ? t('frontDesk.checkOut.busy') : t('frontDesk.checkOut.submit')}
           </Button>
         </>
       }
@@ -173,121 +190,127 @@ export function CheckOutDialog({ reservationId, onClose, onDone }) {
           <div className="min-w-0 text-sm">
             <p className="font-bold text-ink">{reservation.guest.name}</p>
             <p className="text-xs text-ink-muted">
-              {formatDate(reservation.checkIn)} → {formatDate(departure.plannedCheckOut)} · {reservation.nights} gece · giriş {reservation.checkedInTime ?? '—'}
+              {t('frontDesk.checkOut.stayLine', { from: formatDate(reservation.checkIn), to: formatDate(departure.plannedCheckOut), nights: reservation.nights, time: reservation.checkedInTime ?? '—' })}
             </p>
           </div>
         </div>
 
         {serverError && (
-          <Alert tone={['FEE_CHANGED', 'EARLY_DEPARTURE', 'BALANCE_DUE'].includes(serverError.code) ? 'warning' : 'danger'} title="Çıkış yapılmadı">
+          <Alert tone={['FEE_CHANGED', 'EARLY_DEPARTURE', 'BALANCE_DUE'].includes(serverError.code) ? 'warning' : 'danger'} title={t('frontDesk.checkOut.failed')}>
             {serverError.message}
           </Alert>
         )}
 
         {early && (
           <div className="flex flex-col gap-2">
-            <Alert tone="warning" title={`Erken ayrılış: ${departure.releasedNights.length} gece bırakılacak`}>
-              Planlanan çıkış {formatDate(departure.plannedCheckOut)}. Bugünden sonraki geceler satışa döner; konaklama tutarı{' '}
-              <strong>{formatMoney(reservation.totalPrice, currency)}</strong> yerine <strong>{formatMoney(departure.totalPrice, currency)}</strong> olur
-              {departure.promotion ? '.' : ` (${formatMoney(departure.releasedAmount, currency)} düşer).`}
+            <Alert tone="warning" title={t('frontDesk.checkOut.earlyTitle', { count: departure.releasedNights.length })}>
+              {fillNodes(t(departure.promotion ? 'frontDesk.checkOut.earlyBody' : 'frontDesk.checkOut.earlyBodyReleased'), {
+                date: formatDate(departure.plannedCheckOut),
+                from: <strong>{formatMoney(reservation.totalPrice, currency)}</strong>,
+                to: <strong>{formatMoney(departure.totalPrice, currency)}</strong>,
+                released: formatMoney(departure.releasedAmount, currency),
+              })}
               {/* Promosyonlu konaklama (modül 31): kalan gecelerle şart yeniden denetlenir. */}
               {departure.promotion && (
                 <span className="mt-1 block">
                   {departure.promotion.kept
-                    ? `"${departure.promotion.name}" promosyonu korunur; indirim kalan gecelere göre ${formatMoney(departure.promotion.discountAfter, currency)}.`
-                    : `${departure.promotion.message} (${formatMoney(departure.promotion.discountBefore, currency)} indirim geri alınır; fark folyoya işlenir).`}
+                    ? t('frontDesk.checkOut.promotionKept', { name: departure.promotion.name, amount: formatMoney(departure.promotion.discountAfter, currency) })
+                    : t('frontDesk.checkOut.promotionLost', { message: departure.promotion.message, amount: formatMoney(departure.promotion.discountBefore, currency) })}
                 </span>
               )}
             </Alert>
-            <Checkbox label="Misafir bugün ayrılıyor; kalan geceleri bırak" checked={confirmEarly} onChange={(e) => setConfirmEarly(e.target.checked)} disabled={busy} />
+            <Checkbox label={t('frontDesk.checkOut.confirmEarly')} checked={confirmEarly} onChange={(e) => setConfirmEarly(e.target.checked)} disabled={busy} />
           </div>
         )}
         {departure.kind === 'OVERDUE' && (
-          <Alert tone="warning" title={`Çıkış ${departure.overdueDays} gün gecikmiş`}>
-            Planlanan çıkış {formatDate(departure.plannedCheckOut)}. Misafir o tarihte ayrıldıysa çıkışı şimdi kaydedin; hâlâ kalıyorsa önce konaklamayı uzatın.
+          <Alert tone="warning" title={t('frontDesk.checkOut.overdueTitle', { count: departure.overdueDays })}>
+            {t('frontDesk.checkOut.overdueBody', { date: formatDate(departure.plannedCheckOut) })}
           </Alert>
         )}
 
         {lateCheckOut.applies &&
           (lateFee ? (
             <div className="flex flex-col gap-2">
-              <Alert tone="warning" title={`Geç çıkış ücreti: ${formatMoney(lateFee, currency)}`}>
-                Çıkış saati {lateCheckOut.checkOutTime} geçti. Ücret konaklamaya yazılır, folyoya işlenir.
+              <Alert tone="warning" title={t('frontDesk.checkOut.lateFeeTitle', { amount: formatMoney(lateFee, currency) })}>
+                {t('frontDesk.checkOut.lateFeeBody', { time: lateCheckOut.checkOutTime })}
               </Alert>
-              <Checkbox label="Ücret uygulama" hint="Geç çıkış önceden verilmişti, iyi niyet. Denetim izine yazılır." checked={waiveLateFee} onChange={(e) => setWaiveLateFee(e.target.checked)} disabled={busy} />
+              <Checkbox label={t('frontDesk.stay.waiveFee')} hint={t('frontDesk.checkOut.waiveLateFeeHint')} checked={waiveLateFee} onChange={(e) => setWaiveLateFee(e.target.checked)} disabled={busy} />
             </div>
           ) : (
-            <Alert tone="info" title="Geç çıkış">Çıkış saati {lateCheckOut.checkOutTime} geçti; otelin geç çıkış ücreti tanımlı değil.</Alert>
+            <Alert tone="info" title={t('frontDesk.checkOut.lateTitle')}>{t('frontDesk.checkOut.lateNoFee', { time: lateCheckOut.checkOutTime })}</Alert>
           ))}
 
         <section className="flex flex-col gap-2 rounded-panel border border-line p-4" aria-labelledby="check-out-balance">
           <div className="flex items-center justify-between gap-2">
-            <h3 id="check-out-balance" className="text-sm font-bold text-ink">Hesap</h3>
+            <h3 id="check-out-balance" className="text-sm font-bold text-ink">{t('frontDesk.checkOut.account')}</h3>
             {canViewFolio && (
               <Link to={folioPath(reservation.id)} className="text-xs font-semibold text-info-ink underline-offset-2 hover:underline" onClick={onClose}>
-                Folyoyu aç
+                {t('frontDesk.stay.openFolio')}
               </Link>
             )}
           </div>
           <dl className="grid grid-cols-2 gap-y-1 text-sm">
-            <dt className="text-ink-muted">Harcamalar</dt>
-            <dd className="text-right tabular-nums">{formatMoney(folio?.charges ?? '0', currency)}</dd>
-            <dt className="text-ink-muted">Ödenen</dt>
-            <dd className="text-right tabular-nums">{formatMoney(folio?.paid ?? '0', currency)}</dd>
+            <dt className="text-ink-muted">{t('frontDesk.checkOut.charges')}</dt>
+            <dd className="text-right tabular-nums"><MoneyText value={folio?.charges ?? '0'} currency={currency} /></dd>
+            <dt className="text-ink-muted">{t('frontDesk.checkOut.paid')}</dt>
+            <dd className="text-right tabular-nums"><MoneyText value={folio?.paid ?? '0'} currency={currency} /></dd>
             {pendingLines.map((line) => (
-              <PendingRow key={`${line.source}-${line.label}`} label={`İşlenecek: ${line.label}`} value={formatMoney(line.total, currency)} />
+              <PendingRow key={`${line.source}-${line.label}`} label={t('frontDesk.checkOut.pendingLine', { label: line.label })} value={<MoneyText value={line.total} currency={currency} />} />
             ))}
             {Number(data.pendingPayments) !== 0 && (
-              <PendingRow label="Onay bekleyen ödeme (henüz düşülmedi)" value={formatMoney(data.pendingPayments, currency)} />
+              <PendingRow label={t('frontDesk.checkOut.pendingPayments')} value={<MoneyText value={data.pendingPayments} currency={currency} />} />
             )}
-            <dt className="font-bold text-ink">{Number(due) < 0 ? 'İade edilecek' : 'Ödenecek'}</dt>
+            <dt className="font-bold text-ink">{Number(due) < 0 ? t('frontDesk.checkOut.toRefund') : t('frontDesk.checkOut.due')}</dt>
             <dd className={`text-right font-bold tabular-nums ${balanceOpen ? 'text-sec-strong' : 'text-success-ink'}`}>
-              {formatMoney(String(due).replace('-', ''), currency)}
+              <MoneyText value={String(due).replace('-', '')} currency={currency} />
             </dd>
           </dl>
           {pendingCharges.elsewhere.length > 0 && (
             <p className="text-xs text-ink-muted">
-              {pendingCharges.elsewhere.map((line) => `${line.label} (${formatMoney(line.total, currency)})`).join(', ')} → oda{' '}
-              {pendingCharges.elsewhere[0].folio.roomNumber ?? '—'} · {pendingCharges.elsewhere[0].folio.name} folyosuna işlenecek; misafirin borcu değil.
+              {t('frontDesk.checkOut.elsewhere', {
+                lines: pendingCharges.elsewhere.map((line) => `${line.label} (${formatMoney(line.total, currency)})`).join(', '),
+                room: pendingCharges.elsewhere[0].folio.roomNumber ?? '—',
+                folio: pendingCharges.elsewhere[0].folio.name,
+              })}
             </p>
           )}
           {balanceOpen && (
             <Alert
               tone="danger"
-              title={Number(due) > 0 ? 'Ödenmemiş bakiye var' : 'Misafire iade yapılacak'}
+              title={Number(due) > 0 ? t('frontDesk.checkOut.balanceDueTitle') : t('frontDesk.checkOut.refundDueTitle')}
               action={
                 Number(due) > 0 && canReceive && !multiWindow && (
                   <Button size="sm" icon="wallet" onClick={() => setPaying(true)} disabled={busy}>
-                    Ödeme al
+                    {t('frontDesk.checkOut.takePayment')}
                   </Button>
                 )
               }
             >
               {Number(due) > 0
                 ? multiWindow
-                  ? `Hesap kapanmadan çıkış yapılmaz. Konaklamanın ${folio.openFolios} açık folyosu var: ödemeyi folyo ekranından ilgili folyoya alın.`
-                  : 'Hesap kapanmadan çıkış yapılmaz. Ödemeyi alın; hesap tazelenir.'
-                : 'Hesap kapanmadan çıkış yapılmaz. İadeyi folyo ekranından isteyin (onaya gider).'}
+                  ? t('frontDesk.checkOut.balanceDueMulti', { count: folio.openFolios })
+                  : t('frontDesk.checkOut.balanceDueBody')
+                : t('frontDesk.checkOut.refundDueBody')}
             </Alert>
           )}
           {balanceOpen && canOpenBalance && (
             <div className="flex flex-col gap-2">
               <Checkbox
-                label="Bakiyeyle çıkış yap"
-                hint="Şirket faturası, acente ödemesi gibi. Yönetime uyarı düşer, denetim izine yazılır."
+                label={t('frontDesk.checkOut.allowOpenBalance')}
+                hint={t('frontDesk.checkOut.allowOpenBalanceHint')}
                 checked={allowOpenBalance}
                 onChange={(e) => setAllowOpenBalance(e.target.checked)}
                 disabled={busy}
               />
               {allowOpenBalance && (
                 <Textarea
-                  label="Gerekçe"
+                  label={t('frontDesk.checkOut.openBalanceReason')}
                   rows={2}
                   maxLength={500}
                   value={openBalanceReason}
                   onChange={(e) => setOpenBalanceReason(e.target.value)}
                   error={errors.openBalanceReason}
-                  placeholder="ör. Şirket faturası ay sonunda ödenecek"
+                  placeholder={t('frontDesk.checkOut.openBalanceReasonPlaceholder')}
                   disabled={busy}
                 />
               )}
@@ -296,34 +319,32 @@ export function CheckOutDialog({ reservationId, onClose, onDone }) {
         </section>
 
         {data.openLaundry?.length > 0 && (
-          <Alert tone="warning" title={`Teslim edilmemiş ${data.openLaundry.length} çamaşır siparişi var`}>
-            {data.openLaundry.map((order) => `${order.reference} (${formatMoney(order.total, currency)})`).join(', ')}. Ücret teslimde folyoya
-            düşer; çıkıştan sonra teslim edilirse ve folyo kapanmışsa elle işlenir. Önce teslim edin ya da iptal edin.
+          <Alert tone="warning" title={t('frontDesk.checkOut.laundryTitle', { count: data.openLaundry.length })}>
+            {t('frontDesk.checkOut.laundryBody', { orders: data.openLaundry.map((order) => `${order.reference} (${formatMoney(order.total, currency)})`).join(', ') })}
           </Alert>
         )}
 
         {data.lostItems?.matched?.length > 0 && (
-          <Alert tone="warning" title={`Misafirin teslim bekleyen ${data.lostItems.matched.length} kayıp eşyası var`}>
-            {data.lostItems.matched.map((item) => `${item.reference} ${item.description} (${item.storageLocation})`).join(', ')}. Çıkışta teslim edip
-            kayıp eşya ekranından "Teslim et" ile kapatın.
+          <Alert tone="warning" title={t('frontDesk.checkOut.lostTitle', { count: data.lostItems.matched.length })}>
+            {t('frontDesk.checkOut.lostBody', { items: data.lostItems.matched.map((item) => `${item.reference} ${item.description} (${item.storageLocation})`).join(', ') })}
           </Alert>
         )}
         {data.lostItems?.foundInRoom?.length > 0 && (
-          <Alert tone="info" title={`Odasında bulunmuş, sahibi belirlenmemiş ${data.lostItems.foundInRoom.length} eşya`}>
-            {data.lostItems.foundInRoom.map((item) => `${item.reference} ${item.description}`).join(', ')}. Misafire sorun; onunsa kayıp eşya ekranından eşleştirip teslim edin.
+          <Alert tone="info" title={t('frontDesk.checkOut.foundTitle', { count: data.lostItems.foundInRoom.length })}>
+            {t('frontDesk.checkOut.foundBody', { items: data.lostItems.foundInRoom.map((item) => `${item.reference} ${item.description}`).join(', ') })}
           </Alert>
         )}
 
         {deposit && (
-          <Alert tone="info" title={`Girişte teminat alındı: ${DEPOSIT_METHOD_LABELS[deposit.method]} · ${formatMoney(deposit.amount, currency)}`}>
+          <Alert tone="info" title={t('frontDesk.checkOut.depositTitle', { method: t(`frontDesk.depositMethod.${deposit.method}`), amount: formatMoney(deposit.amount, currency) })}>
             {deposit.method === 'CARD_PREAUTH'
-              ? 'Provizyon ödeme değildir: tutarı kartla tahsil edip provizyonu kapatın.'
+              ? t('frontDesk.checkOut.depositPreauth')
               : deposit.recorded === 'POSTED'
-                ? 'Teminat ödeme olarak işlendi, hesaptan düşüldü; misafirin alacağı kalırsa iade edin.'
+                ? t('frontDesk.checkOut.depositPosted')
                 : deposit.recorded === 'PENDING'
-                  ? 'Teminat ödemesi onay bekliyor; onaylanınca hesaptan düşer.'
-                  : 'Teminat henüz ödeme olarak işlenmedi: folyo ekranından "Teminatı işle".'}
-            {deposit.reference ? ` Referans: ${deposit.reference}` : ''}
+                  ? t('frontDesk.checkOut.depositPending')
+                  : t('frontDesk.checkOut.depositNotRecorded')}
+            {deposit.reference ? ` ${t('frontDesk.checkOut.depositReference', { reference: deposit.reference })}` : ''}
           </Alert>
         )}
       </form>
@@ -331,7 +352,7 @@ export function CheckOutDialog({ reservationId, onClose, onDone }) {
   );
 }
 
-/** @param {{ label: string, value: string }} props */
+/** @param {{ label: string, value: React.ReactNode }} props */
 function PendingRow({ label, value }) {
   return (
     <>

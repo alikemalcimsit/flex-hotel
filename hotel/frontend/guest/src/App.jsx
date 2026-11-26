@@ -7,6 +7,7 @@ import { PORTAL_LANGUAGES } from './limits.js';
 import { CheckInPage } from './pages/CheckInPage.jsx';
 import { FolioPage } from './pages/FolioPage.jsx';
 import { HomePage } from './pages/HomePage.jsx';
+import { PayPage } from './pages/PayPage.jsx';
 import { RequestsPage } from './pages/RequestsPage.jsx';
 import { RoomServicePage } from './pages/RoomServicePage.jsx';
 import { SpaPage } from './pages/SpaPage.jsx';
@@ -41,6 +42,8 @@ export function App() {
           <Route path="oda-servisi/:token" element={<RoomServicePage />} />
           {/* Anket (modül 55): çıkış sonrası ve ara anket. */}
           <Route path="a/:token" element={<SurveyPage />} />
+          {/* Sanal POS (modül 50): ödeme linki sayfası. */}
+          <Route path="o/:code" element={<PayPage />} />
           <Route path="*" element={<FullPageMessage code="NOT_FOUND" />} />
         </Routes>
       </BrowserRouter>

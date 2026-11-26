@@ -5,13 +5,16 @@ import { Alert, Badge, Button, Card, EmptyState, Icon, Spinner } from '@hotelos/
 import { ConfirmDialog } from '../../components/ConfirmDialog.jsx';
 import { api, apiPost, withQuery } from '../../lib/api.js';
 import { formatDate, formatMoney } from '../../lib/format.js';
+import { MoneyText } from '../../components/MoneyText.jsx';
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 import { GuestPortalCard } from '../guest-portal/GuestPortalCard.jsx';
 import { LoyaltyReservationCard } from '../loyalty/LoyaltyReservationCard.jsx';
 import { KbsReservationCard } from '../kbs/KbsReservationCard.jsx';
+import { GatewayReservationCard } from '../payment-gateway/GatewayReservationCard.jsx';
 import { reservationKeys } from '../../lib/reservations.js';
 import { RESERVATIONS_CHANNEL } from '../../lib/socket.js';
 import { formatDateTime } from '../../lib/timeFormat.js';
+import { useT } from '../../i18n/index.jsx';
 import { useHotelToday } from '../../lib/useHotel.js';
 import { useLiveChannel } from '../../lib/useLiveChannel.js';
 import { toastError, toastSuccess } from '../../store/toast.js';
@@ -24,38 +27,13 @@ import { NoShowDialog } from './NoShowDialog.jsx';
 import { RoomServiceLinkDialog } from '../pos/RoomServiceLinkDialog.jsx';
 import { RESERVATION_STATUS_TONES, boardLong, errorHint, partyLabel, sourceLabel, statusLabel } from './reservationTheme.js';
 
-/** Denetim izindeki alan adlarının ekrandaki karşılığı. */
-const FIELD_LABELS = Object.freeze({
-  status: 'Durum',
-  checkIn: 'Giriş',
-  checkOut: 'Çıkış',
-  roomTypeId: 'Oda tipi',
-  roomId: 'Oda',
-  adults: 'Yetişkin',
-  children: 'Çocuk',
-  boardType: 'Pansiyon',
-  totalPrice: 'Tutar',
-  discountTotal: 'İndirim',
-  promotionId: 'Promosyon',
-  couponId: 'Kupon',
-  priceMode: 'Fiyat türü',
-  priceNote: 'Fiyat gerekçesi',
-  notes: 'Not',
-  cancelReason: 'İptal sebebi',
-  cancellationFee: 'İptal ücreti',
-  noShowFee: 'Gelmedi ücreti',
-  roomNumber: 'Oda',
-  checkedInAt: 'Giriş zamanı',
-  checkedOutAt: 'Çıkış zamanı',
-  earlyCheckInFee: 'Erken giriş ücreti',
-  lateCheckOutFee: 'Geç çıkış ücreti',
-  vehiclePlate: 'Araç plakası',
-  depositMethod: 'Teminat',
-  depositAmount: 'Teminat tutarı',
-  depositReference: 'Teminat referansı',
-  checkoutOpenBalance: 'Bakiyeyle çıkış tutarı',
-  openBalanceReason: 'Bakiyeyle çıkış gerekçesi',
-});
+/** Denetim izinde ekrana yazılan alanlar; etiketleri `reservations.historyField.<alan>`. */
+const HISTORY_FIELDS = new Set([
+  'status', 'checkIn', 'checkOut', 'roomTypeId', 'roomId', 'adults', 'children', 'boardType', 'totalPrice', 'discountTotal',
+  'promotionId', 'couponId', 'priceMode', 'priceNote', 'notes', 'cancelReason', 'cancellationFee', 'noShowFee', 'roomNumber',
+  'checkedInAt', 'checkedOutAt', 'earlyCheckInFee', 'lateCheckOutFee', 'vehiclePlate', 'depositMethod', 'depositAmount',
+  'depositReference', 'checkoutOpenBalance', 'openBalanceReason',
+]);
 
 /**
  * Rezervasyon detayı (modül 4): bilgiler, gece gece fiyat, durum geçmişi ve
@@ -65,6 +43,7 @@ const FIELD_LABELS = Object.freeze({
  * Başka personel değiştirince (oda atandı, iptal edildi) sayfa canlı tazelenir.
  */
 export function ReservationDetailPage() {
+  const t = useT();
   const { reservationId } = useParams();
   const queryClient = useQueryClient();
   const can = useCan();
@@ -117,7 +96,7 @@ export function ReservationDetailPage() {
   if (query.isPending) {
     return (
       <Card>
-        <Spinner label="Rezervasyon yükleniyor…" className="py-10" />
+        <Spinner label={t('reservations.detail.loading')} className="py-10" />
       </Card>
     );
   }
@@ -125,14 +104,14 @@ export function ReservationDetailPage() {
     return (
       <Alert
         tone="danger"
-        title={query.error.code === 'NOT_FOUND' ? 'Rezervasyon bulunamadı' : 'Rezervasyon yüklenemedi'}
+        title={query.error.code === 'NOT_FOUND' ? t('reservations.detail.notFound') : t('reservations.detail.loadFailed')}
         action={
           query.error.code === 'NOT_FOUND' ? (
             <Link to="/rezervasyonlar/liste">
-              <Button variant="outline" size="sm">Listeye dön</Button>
+              <Button variant="outline" size="sm">{t('reservations.detail.backToList')}</Button>
             </Link>
           ) : (
-            <Button variant="outline" size="sm" icon="refresh" onClick={() => query.refetch()}>Tekrar dene</Button>
+            <Button variant="outline" size="sm" icon="refresh" onClick={() => query.refetch()}>{t('common.retry')}</Button>
           )
         }
       >
@@ -155,53 +134,53 @@ export function ReservationDetailPage() {
           <span className="flex flex-wrap items-center gap-2">
             <span className="font-mono text-lg font-bold text-ink">{detail.confirmationCode}</span>
             <Badge tone={RESERVATION_STATUS_TONES[detail.status]}>{statusLabel(detail.status)}</Badge>
-            {detail.group && <Badge tone="violet">Grup: {detail.group.name}</Badge>}
-            {detail.fromWaitlist && <Badge tone="neutral">Bekleme listesinden</Badge>}
+            {detail.group && <Badge tone="violet">{t('reservations.detail.groupName', { name: detail.group.name })}</Badge>}
+            {detail.fromWaitlist && <Badge tone="neutral">{t('reservations.detail.fromWaitlist')}</Badge>}
           </span>
           <span className="text-xl font-bold text-ink">{detail.guest?.name}</span>
           <span className="text-sm text-ink-muted">
-            {formatDate(detail.checkIn)} – {formatDate(detail.checkOut)} · {detail.nights} gece · {detail.roomType.name}
+            {t('reservations.detail.summary', { checkIn: formatDate(detail.checkIn), checkOut: formatDate(detail.checkOut), nights: detail.nights, roomType: detail.roomType.name })}
           </span>
         </div>
         <div className="flex flex-wrap gap-2">
-          {actions.has('checkIn') && <Button icon="key" onClick={() => setDialog('checkIn')}>Giriş yap</Button>}
-          {actions.has('checkOut') && <Button icon="logout" onClick={() => setDialog('checkOut')}>Çıkış yap</Button>}
-          {actions.has('confirm') && <Button icon="check" onClick={() => setDialog('confirm')}>Onayla</Button>}
-          {actions.has('edit') && <Button variant="outline" icon="pencil" onClick={() => setDialog('edit')}>Düzenle</Button>}
-          {actions.has('noShow') && <Button variant="outline" icon="alertCircle" onClick={() => setDialog('noShow')}>Gelmedi</Button>}
-          {actions.has('cancel') && <Button variant="dangerSoft" icon="close" onClick={() => setDialog('cancel')}>İptal et</Button>}
-          {actions.has('reinstate') && <Button variant="outline" icon="rotateCcw" onClick={() => setDialog('reinstate')}>Geri al</Button>}
+          {actions.has('checkIn') && <Button icon="key" onClick={() => setDialog('checkIn')}>{t('reservations.detail.checkIn')}</Button>}
+          {actions.has('checkOut') && <Button icon="logout" onClick={() => setDialog('checkOut')}>{t('reservations.detail.checkOut')}</Button>}
+          {actions.has('confirm') && <Button icon="check" onClick={() => setDialog('confirm')}>{t('reservations.detail.confirm')}</Button>}
+          {actions.has('edit') && <Button variant="outline" icon="pencil" onClick={() => setDialog('edit')}>{t('reservations.detail.edit')}</Button>}
+          {actions.has('noShow') && <Button variant="outline" icon="alertCircle" onClick={() => setDialog('noShow')}>{t('reservations.detail.noShow')}</Button>}
+          {actions.has('cancel') && <Button variant="dangerSoft" icon="close" onClick={() => setDialog('cancel')}>{t('reservations.detail.cancel')}</Button>}
+          {actions.has('reinstate') && <Button variant="outline" icon="rotateCcw" onClick={() => setDialog('reinstate')}>{t('reservations.detail.reinstate')}</Button>}
           {/* Oda servisi (modül 41): misafirin QR sipariş bağlantısı girişte verilir. */}
           {detail.status === 'CHECKED_IN' && (can(PERMISSIONS.POS_OPERATE) || can(PERMISSIONS.REQUESTS_MANAGE)) && (
-            <Button variant="outline" icon="link" onClick={() => setDialog('roomServiceLink')}>Oda servisi bağlantısı</Button>
+            <Button variant="outline" icon="link" onClick={() => setDialog('roomServiceLink')}>{t('reservations.detail.roomServiceLink')}</Button>
           )}
         </div>
       </div>
 
       {closed && (
-        <Alert tone={detail.status === 'CANCELLED' ? 'danger' : 'warning'} title={detail.status === 'CANCELLED' ? 'İptal edildi' : 'Misafir gelmedi'}>
+        <Alert tone={detail.status === 'CANCELLED' ? 'danger' : 'warning'} title={detail.status === 'CANCELLED' ? t('reservations.detail.cancelledTitle') : t('reservations.detail.noShowTitle')}>
           {detail.status === 'CANCELLED' ? (
-            <>
-              {formatDateTime(detail.cancelledAt, timeZone)} · {detail.cancelledBy}. Sebep: {detail.cancelReason}. İptal ücreti:{' '}
-              {formatMoney(detail.cancellationFee ?? '0', currency)}.
-            </>
+            t('reservations.detail.cancelledText', {
+              at: formatDateTime(detail.cancelledAt, timeZone),
+              by: detail.cancelledBy,
+              reason: detail.cancelReason,
+              fee: formatMoney(detail.cancellationFee ?? '0', currency),
+            })
           ) : (
-            <>
-              {formatDateTime(detail.noShowAt, timeZone)} işaretlendi. Gelmedi ücreti: {formatMoney(detail.noShowFee ?? '0', currency)}.
-            </>
+            t('reservations.detail.noShowText', { at: formatDateTime(detail.noShowAt, timeZone), fee: formatMoney(detail.noShowFee ?? '0', currency) })
           )}{' '}
-          Ücretin tahsilatı folyo ve ödeme modülünde yapılır.
+          {t('reservations.detail.feeCollectionHint')}
         </Alert>
       )}
 
       {detail.checkedInAt && (
-        <Alert tone={detail.status === 'CHECKED_OUT' ? 'info' : 'success'} title={detail.status === 'CHECKED_OUT' ? 'Çıkış yaptı' : 'Misafir içeride'}>
-          Giriş: {formatDateTime(detail.checkedInAt, timeZone)} · {detail.checkedInBy}
-          {detail.earlyCheckInFee ? ` · erken giriş ücreti ${formatMoney(detail.earlyCheckInFee, currency)}` : ''}
-          {detail.checkedOutAt ? `. Çıkış: ${formatDateTime(detail.checkedOutAt, timeZone)} · ${detail.checkedOutBy}` : ''}
-          {detail.lateCheckOutFee ? ` · geç çıkış ücreti ${formatMoney(detail.lateCheckOutFee, currency)}` : ''}
+        <Alert tone={detail.status === 'CHECKED_OUT' ? 'info' : 'success'} title={detail.status === 'CHECKED_OUT' ? t('reservations.detail.checkedOutTitle') : t('reservations.detail.inHouseTitle')}>
+          {t('reservations.detail.checkedInAt', { at: formatDateTime(detail.checkedInAt, timeZone), by: detail.checkedInBy })}
+          {detail.earlyCheckInFee ? ` · ${t('reservations.detail.earlyCheckInFee', { fee: formatMoney(detail.earlyCheckInFee, currency) })}` : ''}
+          {detail.checkedOutAt ? `. ${t('reservations.detail.checkedOutAt', { at: formatDateTime(detail.checkedOutAt, timeZone), by: detail.checkedOutBy })}` : ''}
+          {detail.lateCheckOutFee ? ` · ${t('reservations.detail.lateCheckOutFee', { fee: formatMoney(detail.lateCheckOutFee, currency) })}` : ''}
           {detail.checkoutOpenBalance
-            ? `. Bakiyeyle çıkış: ${formatMoney(detail.checkoutOpenBalance, currency)} (${detail.openBalanceReason})`
+            ? `. ${t('reservations.detail.openBalance', { amount: formatMoney(detail.checkoutOpenBalance, currency), reason: detail.openBalanceReason })}`
             : ''}
           .
         </Alert>
@@ -209,33 +188,33 @@ export function ReservationDetailPage() {
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_24rem]">
         <div className="flex flex-col gap-5">
-          <Card title="Konaklama">
+          <Card title={t('reservations.detail.stayCard')}>
             <dl className="grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
-              <Field label="Giriş">{formatDate(detail.checkIn)}</Field>
-              <Field label="Çıkış">{formatDate(detail.checkOut)}</Field>
-              <Field label="Oda tipi">{detail.roomType.code} — {detail.roomType.name}</Field>
-              <Field label="Oda">
+              <Field label={t('reservations.detail.fieldCheckIn')}>{formatDate(detail.checkIn)}</Field>
+              <Field label={t('reservations.detail.fieldCheckOut')}>{formatDate(detail.checkOut)}</Field>
+              <Field label={t('reservations.detail.fieldRoomType')}>{detail.roomType.code} — {detail.roomType.name}</Field>
+              <Field label={t('reservations.detail.fieldRoom')}>
                 {detail.room ? (
                   <span className="font-semibold">{detail.room.number}</span>
                 ) : (
-                  <span className="text-ink-muted">Atanmadı</span>
+                  <span className="text-ink-muted">{t('reservations.detail.unassigned')}</span>
                 )}{' '}
                 <Link to={`/oda-plani?from=${detail.checkIn}`} className="ml-2 text-xs font-semibold text-info-ink underline-offset-2 hover:underline">
-                  Oda planında gör
+                  {t('reservations.detail.viewOnPlan')}
                 </Link>
               </Field>
-              <Field label="Kişi">{partyLabel(detail.adults, detail.children)}</Field>
-              <Field label="Pansiyon">{boardLong(detail.boardType)}</Field>
+              <Field label={t('reservations.detail.fieldParty')}>{partyLabel(detail.adults, detail.children)}</Field>
+              <Field label={t('reservations.detail.fieldBoard')}>{boardLong(detail.boardType)}</Field>
               {/* Paket (modül 28): seçiliyse pansiyon ve fiyat paketten gelir. */}
               {detail.package && (
-                <Field label="Paket">
+                <Field label={t('reservations.detail.fieldPackage')}>
                   <span className="font-semibold">{detail.package.name}</span>
                   <span className="ml-2 font-mono text-xs text-ink-muted">{detail.package.code}</span>
                 </Field>
               )}
-              <Field label="Kaynak">{sourceLabel(detail.source)}</Field>
+              <Field label={t('reservations.detail.fieldSource')}>{sourceLabel(detail.source)}</Field>
               {detail.agency && (
-                <Field label="Acente">
+                <Field label={t('reservations.detail.fieldAgency')}>
                   {can(PERMISSIONS.AGENCIES_VIEW) ? (
                     <Link to={`/acenteler/${detail.agency.id}`} className="font-semibold text-info-ink underline-offset-2 hover:underline">
                       {detail.agency.name}
@@ -248,13 +227,13 @@ export function ReservationDetailPage() {
               )}
               {/* Kanaldan geldiyse (modül 33): kanal, kanaldaki kod ve bizdeki işlenme durumu. */}
               {detail.channel && (
-                <Field label="Kanal">
+                <Field label={t('reservations.detail.fieldChannel')}>
                   {can(PERMISSIONS.CHANNEL_MANAGER_VIEW) ? (
                     <Link to={`/kanallar/${detail.channel.channelId}/rezervasyonlar`} className="font-semibold text-info-ink underline-offset-2 hover:underline">
-                      {detail.channel.channelName ?? 'Kanal'}
+                      {detail.channel.channelName ?? t('reservations.detail.fieldChannel')}
                     </Link>
                   ) : (
-                    <span className="font-semibold">{detail.channel.channelName ?? 'Kanal'}</span>
+                    <span className="font-semibold">{detail.channel.channelName ?? t('reservations.detail.fieldChannel')}</span>
                   )}
                   {(detail.channel.otaName || detail.channel.externalCode) && (
                     <span className="ml-2 text-xs text-ink-muted">
@@ -269,21 +248,21 @@ export function ReservationDetailPage() {
                   )}
                 </Field>
               )}
-              <Field label="Açan">{detail.createdBy} · {formatDateTime(detail.createdAt, timeZone)}</Field>
-              {detail.confirmedAt && <Field label="Onaylandı">{formatDateTime(detail.confirmedAt, timeZone)}</Field>}
-              {detail.roomSince && <Field label="Bu odada">{formatDate(detail.roomSince)} tarihinden beri</Field>}
+              <Field label={t('reservations.detail.fieldCreatedBy')}>{detail.createdBy} · {formatDateTime(detail.createdAt, timeZone)}</Field>
+              {detail.confirmedAt && <Field label={t('reservations.detail.fieldConfirmedAt')}>{formatDateTime(detail.confirmedAt, timeZone)}</Field>}
+              {detail.roomSince && <Field label={t('reservations.detail.fieldRoomSince')}>{t('reservations.detail.roomSinceValue', { date: formatDate(detail.roomSince) })}</Field>}
             </dl>
             {detail.notes && (
               <p className="mt-4 whitespace-pre-wrap rounded-item bg-canvas p-3 text-sm text-ink">{detail.notes}</p>
             )}
           </Card>
 
-          <Card title="Misafir">
+          <Card title={t('reservations.detail.guestCard')}>
             <dl className="grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
-              <Field label="Ad soyad">{detail.guest.name}</Field>
-              <Field label="Uyruk">{detail.guest.nationality ?? '—'}</Field>
-              <Field label="Telefon">{detail.guest.phone ?? '—'}</Field>
-              <Field label="E-posta">{detail.guest.email ?? '—'}</Field>
+              <Field label={t('reservations.detail.fieldGuestName')}>{detail.guest.name}</Field>
+              <Field label={t('reservations.detail.fieldNationality')}>{detail.guest.nationality ?? '—'}</Field>
+              <Field label={t('reservations.detail.fieldPhone')}>{detail.guest.phone ?? '—'}</Field>
+              <Field label={t('reservations.detail.fieldEmail')}>{detail.guest.email ?? '—'}</Field>
             </dl>
           </Card>
 
@@ -293,14 +272,16 @@ export function ReservationDetailPage() {
 
           {can(PERMISSIONS.KBS_VIEW) && <KbsReservationCard reservationId={detail.id} />}
 
+          {can(PERMISSIONS.PAYMENT_GATEWAY_VIEW) && <GatewayReservationCard reservationId={detail.id} />}
+
           {detail.groupMembers.length > 0 && (
             <Card
-              title={`Grup: ${detail.group.name}`}
-              description={`Grup kodu ${detail.group.code} · ${detail.groupMembers.length} oda`}
+              title={t('reservations.detail.groupName', { name: detail.group.name })}
+              description={t('reservations.detail.groupDescription', { code: detail.group.code, count: detail.groupMembers.length })}
               actions={
                 canManage && detail.groupMembers.some((member) => ['PENDING', 'CONFIRMED'].includes(member.status)) ? (
                   <Button size="sm" variant="dangerSoft" icon="close" onClick={() => setDialog('cancelGroup')}>
-                    Grubu iptal et
+                    {t('reservations.detail.cancelGroup')}
                   </Button>
                 ) : null
               }
@@ -314,7 +295,7 @@ export function ReservationDetailPage() {
                     <span>{member.roomType.code}{member.roomNumber ? ` · ${member.roomNumber}` : ''}</span>
                     <span className="text-xs text-ink-muted">{partyLabel(member.adults, member.children)}</span>
                     <span className="font-semibold">{formatMoney(member.totalPrice, currency)}</span>
-                    <Badge tone={RESERVATION_STATUS_TONES[member.status]}>{member.statusLabel}</Badge>
+                    <Badge tone={RESERVATION_STATUS_TONES[member.status]}>{statusLabel(member.status)}</Badge>
                   </li>
                 ))}
               </ul>
@@ -325,9 +306,9 @@ export function ReservationDetailPage() {
         </div>
 
         <div className="flex flex-col gap-5">
-          <Card title="Fiyat">
+          <Card title={t('reservations.detail.priceCard')}>
             <table className="w-full text-sm">
-              <caption className="sr-only">Gece gece fiyat</caption>
+              <caption className="sr-only">{t('reservations.detail.nightlyCaption')}</caption>
               <tbody className="divide-y divide-line">
                 {detail.nightlyRates.map((night) => (
                   <tr key={night.date}>
@@ -337,9 +318,9 @@ export function ReservationDetailPage() {
                       {night.seasonName
                         ? night.multiplier
                           ? `${night.seasonName} ×${night.multiplier.replace('.', ',')}`
-                          : `Kontrat: ${night.seasonName}`
+                          : t('reservations.detail.contractNight', { season: night.seasonName })
                         : night.multiplier === null
-                          ? 'elle / aktarılan'
+                          ? t('reservations.detail.manualNight')
                           : ''}
                     </td>
                     <td className="py-1.5 text-right font-semibold">
@@ -354,7 +335,7 @@ export function ReservationDetailPage() {
             {detail.promotion && (
               <div className="mt-3 flex flex-col gap-0.5 rounded-item bg-canvas p-2.5 text-xs">
                 <span className="flex justify-between gap-2">
-                  <span>Liste fiyatı</span>
+                  <span>{t('reservations.detail.listPrice')}</span>
                   <span>{formatMoney(detail.promotion.listTotal, currency)}</span>
                 </span>
                 <span className="flex justify-between gap-2 font-semibold text-success-ink">
@@ -368,29 +349,29 @@ export function ReservationDetailPage() {
                   </span>
                   <span className="shrink-0">−{formatMoney(detail.discountTotal, currency)}</span>
                 </span>
-                {detail.promotion.bookedOn && <span className="text-ink-muted">Satış günü {formatDate(detail.promotion.bookedOn)}; koşullar açılıştaki haliyle korunur.</span>}
+                {detail.promotion.bookedOn && <span className="text-ink-muted">{t('reservations.detail.bookedOn', { date: formatDate(detail.promotion.bookedOn) })}</span>}
               </div>
             )}
             <div className="mt-3 flex items-baseline justify-between border-t border-line pt-3">
-              <span className="font-semibold">Toplam</span>
-              <span className="text-lg font-bold">{formatMoney(detail.totalPrice, currency)}</span>
+              <span className="font-semibold">{t('reservations.detail.total')}</span>
+              <MoneyText value={detail.totalPrice} currency={currency} className="text-right text-lg font-bold" block />
             </div>
             {detail.priceMode === 'MANUAL' && (
-              <p className="mt-1 text-xs text-warning-ink">Elle girilen fiyat · {detail.priceNote}</p>
+              <p className="mt-1 text-xs text-warning-ink">{t('reservations.detail.manualPrice', { note: detail.priceNote })}</p>
             )}
             {detail.taxes.included.map((tax) => (
-              <p key={tax.name} className="text-xs text-ink-muted">%{tax.rate} {tax.name} dahil ({formatMoney(tax.amount, currency)})</p>
+              <p key={tax.name} className="text-xs text-ink-muted">{t('reservations.detail.taxIncluded', { rate: tax.rate, name: tax.name, amount: formatMoney(tax.amount, currency) })}</p>
             ))}
             {detail.taxes.added.map((tax) => (
-              <p key={tax.name} className="text-xs text-ink-muted">+ %{tax.rate} {tax.name}: {formatMoney(tax.amount, currency)} (folyoda eklenir)</p>
+              <p key={tax.name} className="text-xs text-ink-muted">{t('reservations.detail.taxAdded', { rate: tax.rate, name: tax.name, amount: formatMoney(tax.amount, currency) })}</p>
             ))}
             {detail.cancellationPreview && (
               <p className="mt-2 text-xs text-ink-muted">
                 {detail.cancellationPreview.freeUntil
                   ? detail.cancellationPreview.penaltyApplies
-                    ? `Şimdi iptal edilirse ${formatMoney(detail.cancellationPreview.fee, currency)} ceza uygulanır.`
-                    : `${formatDate(detail.cancellationPreview.freeUntil)} tarihine kadar ücretsiz iptal.`
-                  : 'İptal cezası yok.'}
+                    ? t('reservations.detail.penaltyNow', { fee: formatMoney(detail.cancellationPreview.fee, currency) })
+                    : t('reservations.detail.freeCancelUntil', { date: formatDate(detail.cancellationPreview.freeUntil) })
+                  : t('reservations.detail.noPenalty')}
               </p>
             )}
           </Card>
@@ -457,24 +438,24 @@ export function ReservationDetailPage() {
       {dialog === 'roomServiceLink' && <RoomServiceLinkDialog reservationId={reservationId} onClose={() => setDialog(null)} />}
       <ConfirmDialog
         open={dialog === 'confirm'}
-        title="Rezervasyonu onayla"
-        message="Opsiyonlu rezervasyon kesinleşir ve misafire onay bildirimi gönderilir."
-        confirmLabel="Onayla"
+        title={t('reservations.detail.confirmTitle')}
+        message={t('reservations.detail.confirmMessage')}
+        confirmLabel={t('reservations.detail.confirm')}
         confirmVariant="primary"
         confirmIcon="check"
         isPending={simpleAction.isPending}
-        onConfirm={() => simpleAction.mutate({ path: 'confirm', success: 'Rezervasyon onaylandı' })}
+        onConfirm={() => simpleAction.mutate({ path: 'confirm', success: t('reservations.detail.confirmed') })}
         onClose={() => setDialog(null)}
       />
       <ConfirmDialog
         open={dialog === 'reinstate'}
-        title="İptali / gelmediyi geri al"
-        message="Rezervasyon yeniden yer tutar (müsaitlik denetlenir). Eski odası bu arada başkasına verildiyse oda ataması kaldırılır; alınmış ücret bilgisi temizlenir."
-        confirmLabel="Geri al"
+        title={t('reservations.detail.reinstateTitle')}
+        message={t('reservations.detail.reinstateMessage')}
+        confirmLabel={t('reservations.detail.reinstate')}
         confirmVariant="primary"
         confirmIcon="rotateCcw"
         isPending={simpleAction.isPending}
-        onConfirm={() => simpleAction.mutate({ path: 'reinstate', success: 'Rezervasyon geri alındı' })}
+        onConfirm={() => simpleAction.mutate({ path: 'reinstate', success: t('reservations.detail.reinstated') })}
         onClose={() => setDialog(null)}
       />
     </div>
@@ -496,6 +477,7 @@ function Field({ label, children }) {
  * @param {{ reservationId: string, timeZone: string, currency: string }} props
  */
 function History({ reservationId, timeZone, currency }) {
+  const t = useT();
   const can = useCan();
   const query = useInfiniteQuery({
     queryKey: reservationKeys.history(reservationId),
@@ -507,27 +489,27 @@ function History({ reservationId, timeZone, currency }) {
 
   return (
     <Card
-      title="Geçmiş"
+      title={t('reservations.history.title')}
       actions={
         can(PERMISSIONS.ACTIVITY_VIEW) ? (
           <Link
             to={`/aktivite/kayit/Reservation/${reservationId}`}
             className="inline-flex items-center gap-1.5 rounded-control border border-line px-3 py-1.5 text-xs font-semibold text-ink-soft hover:bg-black/[0.04] hover:text-ink"
-            title="Bu rezervasyona dokunan her işlemin adımları: aktörler, süreler, değişen alanlar"
+            title={t('reservations.history.chainHint')}
           >
             <Icon name="link" className="size-3.5" />
-            İşlem zinciri
+            {t('reservations.history.chain')}
           </Link>
         ) : null
       }
     >
       {query.isPending && <Spinner className="py-6" />}
       {query.isError && (
-        <Alert tone="danger" title="Geçmiş yüklenemedi" action={<Button size="sm" variant="outline" icon="refresh" onClick={() => query.refetch()}>Tekrar dene</Button>}>
+        <Alert tone="danger" title={t('reservations.history.loadFailed')} action={<Button size="sm" variant="outline" icon="refresh" onClick={() => query.refetch()}>{t('common.retry')}</Button>}>
           {query.error.message}
         </Alert>
       )}
-      {query.data && items.length === 0 && <EmptyState icon="clock" title="Kayıt yok" />}
+      {query.data && items.length === 0 && <EmptyState icon="clock" title={t('reservations.history.empty')} />}
       <ol className="flex flex-col gap-3">
         {items.map((entry) => (
           <li key={entry.id} className="flex gap-3">
@@ -535,7 +517,7 @@ function History({ reservationId, timeZone, currency }) {
               <Icon name={entry.action === 'CREATE' ? 'plus' : 'pencil'} className="size-3.5" />
             </span>
             <span className="flex flex-col text-sm">
-              <span className="font-semibold text-ink">{describeEntry(entry, currency)}</span>
+              <span className="font-semibold text-ink">{describeEntry(entry, currency, t)}</span>
               <span className="text-xs text-ink-muted">{entry.actor} · {formatDateTime(entry.at, timeZone)}</span>
             </span>
           </li>
@@ -543,7 +525,7 @@ function History({ reservationId, timeZone, currency }) {
       </ol>
       {query.hasNextPage && (
         <Button className="mt-3" variant="outline" size="sm" icon="arrowDown" disabled={query.isFetchingNextPage} onClick={() => query.fetchNextPage()}>
-          {query.isFetchingNextPage ? 'Yükleniyor…' : 'Daha eski'}
+          {query.isFetchingNextPage ? t('common.loading') : t('reservations.history.older')}
         </Button>
       )}
     </Card>
@@ -553,30 +535,32 @@ function History({ reservationId, timeZone, currency }) {
 /**
  * @param {{ action: string, before: any, after: any, changedFields: string[] }} entry
  * @param {string} currency
+ * @param {(key: string, vars?: object) => string} t
  */
-function describeEntry(entry, currency) {
-  if (entry.action === 'CREATE') return `Rezervasyon açıldı (${statusLabel(entry.after?.status)})`;
+function describeEntry(entry, currency, t) {
+  if (entry.action === 'CREATE') return t('reservations.history.created', { status: statusLabel(entry.after?.status) });
   const before = entry.before ?? {};
   const after = entry.after ?? {};
   if (before.status && after.status && before.status !== after.status) {
     const fee = after.status === 'CANCELLED' ? after.cancellationFee : after.status === 'NO_SHOW' ? after.noShowFee : null;
-    return `Durum: ${statusLabel(before.status)} → ${statusLabel(after.status)}${fee ? ` · ücret ${formatMoney(fee, currency)}` : ''}${after.feeWaived ? ' (ücretten vazgeçildi)' : ''}`;
+    const change = t('reservations.history.statusChange', { from: statusLabel(before.status), to: statusLabel(after.status) });
+    return `${change}${fee ? ` · ${t('reservations.history.fee', { fee: formatMoney(fee, currency) })}` : ''}${after.feeWaived ? ` ${t('reservations.history.feeWaived')}` : ''}`;
   }
   const show = (field, value) => {
     if (value === null || value === undefined) return '—';
     if (field === 'checkIn' || field === 'checkOut') return formatDate(value);
     if (field === 'totalPrice' || field === 'discountTotal') return formatMoney(value, currency);
     // Promosyon / kupon kimlik olarak tutulur: eklendi mi kaldırıldı mı yeter (ad, detayın fiyat kartında).
-    if (field === 'promotionId' || field === 'couponId') return 'var';
+    if (field === 'promotionId' || field === 'couponId') return t('reservations.history.present');
     return String(value);
   };
-  const fields = entry.changedFields.length ? entry.changedFields : Object.keys(after).filter((key) => key in FIELD_LABELS);
+  const fields = entry.changedFields.length ? entry.changedFields : Object.keys(after).filter((key) => HISTORY_FIELDS.has(key));
   const parts = fields
-    .filter((field) => FIELD_LABELS[field] && !['roomTypeId', 'roomId', 'roomNumber'].includes(field))
-    .map((field) => `${FIELD_LABELS[field]}: ${show(field, before[field])} → ${show(field, after[field])}`);
-  if (fields.includes('roomTypeId')) parts.push('Oda tipi değişti');
+    .filter((field) => HISTORY_FIELDS.has(field) && !['roomTypeId', 'roomId', 'roomNumber'].includes(field))
+    .map((field) => `${t(`reservations.historyField.${field}`)}: ${show(field, before[field])} → ${show(field, after[field])}`);
+  if (fields.includes('roomTypeId')) parts.push(t('reservations.history.roomTypeChanged'));
   if (fields.includes('roomId') || 'roomNumber' in after) {
-    parts.push(after.roomNumber ? `Oda: ${after.roomNumber}` : 'Oda ataması kaldırıldı');
+    parts.push(after.roomNumber ? t('reservations.history.room', { room: after.roomNumber }) : t('reservations.history.roomUnassigned'));
   }
-  return parts.length ? parts.join(' · ') : 'Güncellendi';
+  return parts.length ? parts.join(' · ') : t('reservations.history.updated');
 }

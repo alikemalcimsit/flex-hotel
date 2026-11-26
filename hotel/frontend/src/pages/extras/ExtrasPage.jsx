@@ -2,6 +2,7 @@ import { Navigate, Outlet } from 'react-router-dom';
 import { PageHeader } from '../../components/PageHeader.jsx';
 import { TabNav } from '../../components/TabNav.jsx';
 import { childrenOf } from '../../layout/navigation.js';
+import { useNavText } from '../../i18n/useNavText.js';
 import { useAuthStore } from '../../store/auth.js';
 
 /**
@@ -10,7 +11,8 @@ import { useAuthStore } from '../../store/auth.js';
 export function ExtrasPage() {
   const role = useAuthStore((state) => state.user?.role);
   const permissions = useAuthStore((state) => state.permissions);
-  const tabs = childrenOf('/ek-hizmetler', role, permissions);
+  const nav = useNavText();
+  const tabs = nav.tabs('/ek-hizmetler', childrenOf('/ek-hizmetler', role, permissions));
 
   return (
     <div className="flex flex-col gap-6">

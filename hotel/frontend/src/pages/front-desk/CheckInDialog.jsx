@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { IDENTITY_POLICY_LABELS, checkInSchema } from '@hotelos/hotel-contracts';
+import { DEPOSIT_METHODS, checkInSchema } from '@hotelos/hotel-contracts';
 import { Alert, Badge, Button, Checkbox, Icon, Input, Select, Spinner } from '@hotelos/ui';
 import { IdReadBadge, IdScanDialog } from '../../components/IdScanDialog.jsx';
 import { Modal } from '../../components/Modal.jsx';
+import { useI18n, useT } from '../../i18n/index.jsx';
 import { api, apiPost } from '../../lib/api.js';
-import { DEPOSIT_OPTIONS, READINESS, frontDeskKeys } from '../../lib/front-desk.js';
+import { READINESS, frontDeskKeys } from '../../lib/front-desk.js';
 import { documentPath, guestPortalKeys } from '../../lib/guestPortal.js';
 import { isMinor, stillFromDocument } from '../../lib/idScan.js';
 import { EMPTY_KBS_EXTRAS, kbsExtrasBody, kbsExtrasForm, kbsRequiredExtras } from '../../lib/kbsFormat.js';
@@ -40,6 +41,8 @@ const liveRead = (identity, read) => (read && stillFromDocument(identityBody(ide
  * @param {{ reservationId: string, onClose: () => void, onDone?: (reservation: object) => void }} props
  */
 export function CheckInDialog({ reservationId, onClose, onDone }) {
+  const t = useT();
+  const { locale } = useI18n();
   const queryClient = useQueryClient();
   const can = useCan();
   const canAssignRoom = can(PERMISSIONS.ROOMS_OPERATE);
@@ -100,7 +103,11 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
   const mutation = useMutation({
     mutationFn: (body) => apiPost(`/front-desk/stays/${reservationId}/check-in`, body),
     onSuccess: (updated) => {
-      toastSuccess(`Giriş yapıldı — ${updated.guest?.name ?? ''}${updated.room ? `, oda ${updated.room.number}` : ''}`);
+      toastSuccess(
+        updated.room
+          ? t('frontDesk.checkIn.doneRoom', { name: updated.guest?.name ?? '', room: updated.room.number })
+          : t('frontDesk.checkIn.done', { name: updated.guest?.name ?? '' }),
+      );
       queryClient.invalidateQueries({ queryKey: frontDeskKeys.all });
       queryClient.invalidateQueries({ queryKey: reservationKeys.all });
       onDone?.(updated);
@@ -120,15 +127,15 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
 
   if (preview.isPending || !onlineSettled) {
     return (
-      <Modal open size="lg" title="Check-in" onClose={onClose}>
-        <Spinner label="Konaklama yükleniyor…" className="py-10" />
+      <Modal open size="lg" title={t('frontDesk.checkIn.title')} onClose={onClose}>
+        <Spinner label={t('frontDesk.checkIn.loading')} className="py-10" />
       </Modal>
     );
   }
   if (preview.isError) {
     return (
-      <Modal open size="md" title="Check-in" onClose={onClose} footer={<Button variant="outline" onClick={onClose}>Kapat</Button>}>
-        <Alert tone="danger" action={<Button variant="outline" size="sm" icon="refresh" onClick={() => preview.refetch()}>Tekrar dene</Button>}>
+      <Modal open size="md" title={t('frontDesk.checkIn.title')} onClose={onClose} footer={<Button variant="outline" onClick={onClose}>{t('common.close')}</Button>}>
+        <Alert tone="danger" action={<Button variant="outline" size="sm" icon="refresh" onClick={() => preview.refetch()}>{t('common.retry')}</Button>}>
           {preview.error.message}
         </Alert>
       </Modal>
@@ -136,12 +143,12 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
   }
 
   const { reservation, room, earlyCheckIn, identityPolicy, currency } = data;
-  const title = `Check-in — ${reservation.confirmationCode}`;
+  const title = t('frontDesk.checkIn.titleCode', { code: reservation.confirmationCode });
 
   if (data.blocker) {
     return (
-      <Modal open size="md" title={title} onClose={onClose} footer={<Button variant="outline" onClick={onClose}>Kapat</Button>}>
-        <Alert tone="warning" title="Giriş yapılamaz">{data.blocker}</Alert>
+      <Modal open size="md" title={title} onClose={onClose} footer={<Button variant="outline" onClick={onClose}>{t('common.close')}</Button>}>
+        <Alert tone="warning" title={t('frontDesk.checkIn.blocked')}>{data.blocker}</Alert>
       </Modal>
     );
   }
@@ -190,7 +197,7 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
       return;
     }
     if (!targetRoom) {
-      setErrors({ roomId: 'Misafire oda seçin' });
+      setErrors({ roomId: t('frontDesk.checkIn.roomRequired') });
       return;
     }
     setErrors({});
@@ -202,7 +209,7 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
   // Online check-in'de misafirin yüklediği belgeler: tarayıcının okuma kaynağı (görüntü yine cihazda okunur).
   const onlineDocuments = (onlineCheckin?.documents ?? [])
     .filter((doc) => !doc.purged)
-    .map((doc, index) => ({ id: doc.id, label: doc.person === 0 ? `Rezervasyon sahibi (${index + 1})` : `${doc.person}. refakatçi (${index + 1})`, path: documentPath(onlineCheckin.id, doc.id, 'full') }));
+    .map((doc, index) => ({ id: doc.id, label: doc.person === 0 ? t('frontDesk.checkIn.docOwner', { n: index + 1 }) : t('frontDesk.checkIn.docCompanion', { person: doc.person, n: index + 1 }), path: documentPath(onlineCheckin.id, doc.id, 'full') }));
   const scanCompanion = scanFor && scanFor !== 'guest' && scanFor !== 'new' ? companions.find((companion) => companion.key === scanFor) : null;
   const guestCardName = { firstName: data.guest.firstName, lastName: data.guest.lastName };
   const guestReadLive = liveRead(guest, guestRead);
@@ -238,9 +245,9 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
       onClose={busy ? () => {} : onClose}
       footer={
         <>
-          <Button variant="outline" onClick={onClose} disabled={busy}>Vazgeç</Button>
+          <Button variant="outline" onClick={onClose} disabled={busy}>{t('common.cancel')}</Button>
           <Button type="submit" form="check-in-form" icon="key" disabled={busy || roomBlocked}>
-            {busy ? 'Giriş yapılıyor…' : earlyFee && !waiveEarlyFee ? `Giriş yap (${formatMoney(earlyFee, currency)} erken giriş)` : 'Giriş yap'}
+            {busy ? t('frontDesk.checkIn.busy') : earlyFee && !waiveEarlyFee ? t('frontDesk.checkIn.submitWithFee', { amount: formatMoney(earlyFee, currency) }) : t('frontDesk.checkIn.submit')}
           </Button>
         </>
       }
@@ -256,68 +263,72 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
               {guestName && <span className="ml-2 text-xs font-normal text-ink-muted line-through">{reservation.guest.name}</span>}
             </p>
             <p className="text-xs text-ink-muted">
-              {formatDate(reservation.checkIn)} → {formatDate(reservation.checkOut)} · {reservation.nights} gece · {reservation.roomType.name} ·{' '}
+              {formatDate(reservation.checkIn)} → {formatDate(reservation.checkOut)} · {t('frontDesk.checkIn.nights', { count: reservation.nights })} · {reservation.roomType.name} ·{' '}
               {partyLabel(reservation.adults, reservation.children)} · {reservation.boardType}
             </p>
-            {reservation.lateArrival && <Badge tone="warning" className="mt-1">Geç geldi (giriş günü {formatDate(reservation.checkIn)})</Badge>}
-            {reservation.notes && <p className="mt-1 text-xs text-ink-soft">Not: {reservation.notes}</p>}
+            {reservation.lateArrival && <Badge tone="warning" className="mt-1">{t('frontDesk.checkIn.lateArrival', { date: formatDate(reservation.checkIn) })}</Badge>}
+            {reservation.notes && <p className="mt-1 text-xs text-ink-soft">{t('frontDesk.checkIn.note', { notes: reservation.notes })}</p>}
           </div>
         </div>
 
         {onlineCheckin && (
-          <Alert tone={onlineCheckin.status === 'APPROVED' ? 'info' : 'warning'} title="Online check-in'den dolduruldu">
+          <Alert tone={onlineCheckin.status === 'APPROVED' ? 'info' : 'warning'} title={t('frontDesk.checkIn.onlineTitle')}>
             {onlineCheckin.status === 'APPROVED'
-              ? `Bilgiler ${onlineCheckin.reviewedBy ?? 'resepsiyon'} tarafından onaylandı. Misafirin belgesini görüp girişi tamamlayın.`
+              ? t('frontDesk.checkIn.onlineApproved', { by: onlineCheckin.reviewedBy ?? t('frontDesk.checkIn.onlineReception') })
               : onlineCheckin.status === 'REJECTED'
-                ? 'Online check-in\'de misafirden düzeltme istendi: bilgileri misafirin belgesinden doğrulayın.'
-                : 'Online check-in henüz incelenmedi: misafirin belgesini görüp bilgileri doğrulayın.'}
-            {onlineCheckin.arrivalTime ? ` Tahmini varış ${onlineCheckin.arrivalTime}.` : ''}
+                ? t('frontDesk.checkIn.onlineRejected')
+                : t('frontDesk.checkIn.onlinePending')}
+            {onlineCheckin.arrivalTime ? ` ${t('frontDesk.checkIn.onlineArrival', { time: onlineCheckin.arrivalTime })}` : ''}
           </Alert>
         )}
         {serverError && (
-          <Alert tone={serverError.code === 'FEE_CHANGED' || serverError.code === 'ROOM_NOT_READY' ? 'warning' : 'danger'} title="Giriş yapılmadı">
+          <Alert tone={serverError.code === 'FEE_CHANGED' || serverError.code === 'ROOM_NOT_READY' ? 'warning' : 'danger'} title={t('frontDesk.checkIn.failed')}>
             {serverError.message}
           </Alert>
         )}
         {errorCount > 0 && !serverError && (
-          <Alert tone="danger" title="Eksik ya da hatalı bilgi">İşaretli alanları düzeltin.</Alert>
+          <Alert tone="danger" title={t('frontDesk.checkIn.invalidTitle')}>{t('frontDesk.checkIn.invalidBody')}</Alert>
         )}
 
         <section className="flex flex-col gap-3" aria-labelledby="check-in-room">
-          <h3 id="check-in-room" className="text-sm font-bold text-ink">Oda</h3>
+          <h3 id="check-in-room" className="text-sm font-bold text-ink">{t('frontDesk.checkIn.room')}</h3>
           {targetRoom ? (
             <div className="flex flex-wrap items-center gap-3">
               <span className="text-2xl font-bold tabular-nums text-ink">{targetRoom.number}</span>
-              <Badge tone={READINESS[targetRoom.readiness]?.tone ?? 'neutral'}>{READINESS[targetRoom.readiness]?.label ?? targetRoom.readiness}</Badge>
-              {pickedRoom && <Badge tone="info" dot={false}>Girişte verilecek</Badge>}
+              <Badge tone={READINESS[targetRoom.readiness]?.tone ?? 'neutral'}>{READINESS[targetRoom.readiness] ? t(`frontDesk.readiness.${targetRoom.readiness}`) : targetRoom.readiness}</Badge>
+              {pickedRoom && <Badge tone="info" dot={false}>{t('frontDesk.checkIn.assignOnCheckIn')}</Badge>}
               {!choosingRoom && canAssignRoom && (
                 <Button type="button" size="sm" variant="outline" icon="bed" onClick={() => setChoosingRoom(true)} disabled={busy}>
-                  Başka oda
+                  {t('frontDesk.checkIn.otherRoom')}
                 </Button>
               )}
             </div>
           ) : (
-            <Alert tone={canAssignRoom ? 'info' : 'warning'} title="Oda verilmemiş">
+            <Alert tone={canAssignRoom ? 'info' : 'warning'} title={t('frontDesk.checkIn.noRoomTitle')}>
               {canAssignRoom
-                ? 'Aşağıdan misafire oda seçin; giriş ile aynı işlemde atanır.'
-                : 'Oda atama yetkiniz yok; odayı oda planından atayacak birine haber verin.'}
+                ? t('frontDesk.checkIn.noRoomPick')
+                : t('frontDesk.checkIn.noRoomNoPermission')}
             </Alert>
           )}
           {roomBlocked && room.occupant && (
-            <Alert tone="danger" title="Odada önceki misafir hâlâ içeride">
-              {room.occupant.guestName} ({room.occupant.confirmationCode}) çıkış yapmadı. Önce onun çıkışını yapın ya da başka oda seçin.
+            <Alert tone="danger" title={t('frontDesk.checkIn.occupiedTitle')}>
+              {t('frontDesk.checkIn.occupiedBody', { name: room.occupant.guestName, code: room.occupant.confirmationCode })}
             </Alert>
           )}
           {roomBlocked && room.block && (
-            <Alert tone="danger" title="Oda arızalı / hizmet dışı">
+            <Alert tone="danger" title={t('frontDesk.checkIn.blockedRoomTitle')}>
               {room.block.reason}
-              {room.block.until ? ` (${formatDate(room.block.until)} tarihine kadar)` : ''}. Başka oda seçin.
+              {room.block.until ? ` ${t('frontDesk.checkIn.blockedUntil', { date: formatDate(room.block.until) })}` : ''}. {t('frontDesk.checkIn.pickAnotherRoom')}
             </Alert>
           )}
           {roomNotReady && (
             <Checkbox
-              label={`Oda henüz hazır değil${NOT_READY.has(targetRoom.housekeepingStatus) ? ` (${READINESS[targetRoom.housekeepingStatus].label.toLocaleLowerCase('tr')})` : ''}; yine de giriş yap`}
-              hint="Misafir odaya temizlik bitince çıkacaksa. Denetim izine yazılır."
+              label={
+                NOT_READY.has(targetRoom.housekeepingStatus)
+                  ? t('frontDesk.checkIn.notReadyAcceptStatus', { status: t(`frontDesk.readiness.${targetRoom.housekeepingStatus}`).toLocaleLowerCase(locale) })
+                  : t('frontDesk.checkIn.notReadyAccept')
+              }
+              hint={t('frontDesk.checkIn.notReadyHint')}
               checked={acceptNotReady}
               onChange={(event) => setAcceptNotReady(event.target.checked)}
               disabled={busy}
@@ -342,17 +353,17 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
         <section className="flex flex-col gap-3" aria-labelledby="check-in-identity">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 id="check-in-identity" className="flex flex-wrap items-center gap-2 text-sm font-bold text-ink">
-              Misafirin kimliği
+              {t('frontDesk.checkIn.guestIdentity')}
               <IdReadBadge read={guestReadLive ? { at: null } : guestSavedRead} />
-              {guestRead && !guestReadLive && <Badge tone="warning">okunduktan sonra elle değişti</Badge>}
+              {guestRead && !guestReadLive && <Badge tone="warning">{t('frontDesk.checkIn.editedAfterRead')}</Badge>}
             </h3>
             <Button type="button" size="sm" variant="outline" icon="camera" onClick={() => setScanFor('guest')} disabled={busy}>
-              Kimlik tara
+              {t('frontDesk.checkIn.scan')}
             </Button>
           </div>
           {guestName && (
-            <Alert tone="info" title="Ad belgedeki gibi düzeltilecek" action={<Button type="button" size="sm" variant="outline" icon="rotateCcw" onClick={() => setGuestName(null)} disabled={busy}>Geri al</Button>}>
-              Kart: {guestCardName.firstName} {guestCardName.lastName} → {guestName.firstName} {guestName.lastName}. Girişle birlikte misafir kartına yazılır.
+            <Alert tone="info" title={t('frontDesk.checkIn.renameTitle')} action={<Button type="button" size="sm" variant="outline" icon="rotateCcw" onClick={() => setGuestName(null)} disabled={busy}>{t('frontDesk.list.revert')}</Button>}>
+              {t('frontDesk.checkIn.renameBody', { from: `${guestCardName.firstName} ${guestCardName.lastName}`, to: `${guestName.firstName} ${guestName.lastName}` })}
             </Alert>
           )}
           {errors['guest.documentRead'] && <p className="text-xs font-semibold text-sec-strong">{errors['guest.documentRead']}</p>}
@@ -363,11 +374,11 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
         <section className="flex flex-col gap-3" aria-labelledby="check-in-companions">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 id="check-in-companions" className="text-sm font-bold text-ink">
-              Refakatçiler <span className="font-normal text-ink-muted">({companions.length} / {maxCompanions})</span>
+              {t('frontDesk.checkIn.companions')} <span className="font-normal text-ink-muted">({companions.length} / {maxCompanions})</span>
             </h3>
             <div className="flex flex-wrap gap-2">
               <Button type="button" size="sm" variant="outline" icon="camera" onClick={() => setScanFor('new')} disabled={busy || companions.length >= maxCompanions}>
-                Tarayarak ekle
+                {t('frontDesk.checkIn.scanAdd')}
               </Button>
               <Button
                 type="button"
@@ -377,33 +388,33 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
                 onClick={() => setCompanions((list) => [...list, emptyCompanion()])}
                 disabled={busy || companions.length >= maxCompanions}
               >
-                Kişi ekle
+                {t('frontDesk.checkIn.addPerson')}
               </Button>
             </div>
           </div>
           <p className="text-xs text-ink-muted">
-            Kimlik politikası: <strong>{IDENTITY_POLICY_LABELS[identityPolicy]}</strong>
-            {identityPolicy === 'ALL_ADULTS' && reservation.adults > 1 ? ` — ${reservation.adults - 1} yetişkinin kimliği daha gerekli.` : '.'}
+            {t('frontDesk.checkIn.identityPolicy')} <strong>{t(`frontDesk.identityPolicy.${identityPolicy}`)}</strong>
+            {identityPolicy === 'ALL_ADULTS' && reservation.adults > 1 ? ` — ${t('frontDesk.checkIn.moreAdultIds', { count: reservation.adults - 1 })}` : '.'}
           </p>
           {errors.companions && <p className="text-xs font-semibold text-sec-strong">{errors.companions}</p>}
           {companions.map((companion, index) => (
             <fieldset key={companion.key} className="flex flex-col gap-3 rounded-panel border border-line p-4">
-              <legend className="px-1 text-xs font-bold text-ink-muted">{index + 1}. kişi</legend>
+              <legend className="px-1 text-xs font-bold text-ink-muted">{t('frontDesk.checkIn.person', { n: index + 1 })}</legend>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="flex flex-wrap items-center gap-2">
                   <IdReadBadge read={liveRead(companion.identity, companion.read) ? { at: null } : !companion.read && companion.savedRead ? companion.savedRead : null} />
-                  {companion.read && !liveRead(companion.identity, companion.read) && <Badge tone="warning">okunduktan sonra elle değişti</Badge>}
+                  {companion.read && !liveRead(companion.identity, companion.read) && <Badge tone="warning">{t('frontDesk.checkIn.editedAfterRead')}</Badge>}
                 </span>
                 <Button type="button" size="sm" variant="outline" icon="camera" onClick={() => setScanFor(companion.key)} disabled={busy}>
-                  Kimlik tara
+                  {t('frontDesk.checkIn.scan')}
                 </Button>
               </div>
               {errors[`companions.${index}.documentRead`] && <p className="text-xs font-semibold text-sec-strong">{errors[`companions.${index}.documentRead`]}</p>}
               <div className="grid gap-3 sm:grid-cols-2">
-                <Input label="Ad" value={companion.firstName} onChange={(e) => updateCompanion(companion.key, { firstName: e.target.value })} error={errors[`companions.${index}.firstName`]} disabled={busy} />
-                <Input label="Soyad" value={companion.lastName} onChange={(e) => updateCompanion(companion.key, { lastName: e.target.value })} error={errors[`companions.${index}.lastName`]} disabled={busy} />
+                <Input label={t('frontDesk.checkIn.firstName')} value={companion.firstName} onChange={(e) => updateCompanion(companion.key, { firstName: e.target.value })} error={errors[`companions.${index}.firstName`]} disabled={busy} />
+                <Input label={t('frontDesk.checkIn.lastName')} value={companion.lastName} onChange={(e) => updateCompanion(companion.key, { lastName: e.target.value })} error={errors[`companions.${index}.lastName`]} disabled={busy} />
               </div>
-              <Checkbox label="Çocuk (belge isteğe bağlı)" checked={companion.isChild} onChange={(e) => updateCompanion(companion.key, { isChild: e.target.checked })} disabled={busy} />
+              <Checkbox label={t('frontDesk.checkIn.child')} checked={companion.isChild} onChange={(e) => updateCompanion(companion.key, { isChild: e.target.checked })} disabled={busy} />
               <IdentityFields
                 value={companion.identity}
                 onChange={(identity) => updateCompanion(companion.key, { identity })}
@@ -424,27 +435,27 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
               />
               <div className="flex justify-end">
                 <Button type="button" size="sm" variant="ghost" icon="trash" onClick={() => setCompanions((list) => list.filter((item) => item.key !== companion.key))} disabled={busy}>
-                  Kaldır
+                  {t('frontDesk.checkIn.remove')}
                 </Button>
               </div>
             </fieldset>
           ))}
         </section>
 
-        <section className="grid gap-3 sm:grid-cols-2" aria-label="Araç ve teminat">
-          <Input label="Araç plakası (isteğe bağlı)" value={plate} onChange={(e) => setPlate(e.target.value)} error={errors.vehiclePlate} placeholder="34 ABC 123" maxLength={20} disabled={busy} />
+        <section className="grid gap-3 sm:grid-cols-2" aria-label={t('frontDesk.checkIn.vehicleDeposit')}>
+          <Input label={t('frontDesk.checkIn.plate')} value={plate} onChange={(e) => setPlate(e.target.value)} error={errors.vehiclePlate} placeholder="34 ABC 123" maxLength={20} disabled={busy} />
           <Select
-            label="Teminat"
+            label={t('frontDesk.checkIn.deposit')}
             value={deposit.method}
             onChange={(e) => setDeposit({ ...deposit, method: e.target.value })}
-            options={DEPOSIT_OPTIONS}
+            options={DEPOSIT_METHODS.map((method) => ({ value: method, label: t(`frontDesk.depositMethod.${method}`) }))}
             error={errors['deposit.method']}
             disabled={busy}
           />
           {deposit.method !== 'NONE' && (
             <>
               <Input
-                label={`Teminat tutarı (${currency})`}
+                label={t('frontDesk.checkIn.depositAmount', { currency })}
                 inputMode="decimal"
                 value={deposit.amount}
                 onChange={(e) => setDeposit({ ...deposit, amount: e.target.value })}
@@ -453,11 +464,11 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
                 disabled={busy}
               />
               <Input
-                label="Provizyon / dekont no (isteğe bağlı)"
+                label={t('frontDesk.checkIn.depositReference')}
                 value={deposit.reference}
                 onChange={(e) => setDeposit({ ...deposit, reference: e.target.value })}
                 error={errors['deposit.reference']}
-                placeholder="Kart numarası yazmayın"
+                placeholder={t('frontDesk.checkIn.depositReferencePlaceholder')}
                 maxLength={40}
                 disabled={busy}
               />
@@ -468,19 +479,25 @@ export function CheckInDialog({ reservationId, onClose, onDone }) {
         {earlyCheckIn.applies && (
           earlyFee ? (
             <div className="flex flex-col gap-2">
-              <Alert tone="warning" title={`Erken giriş ücreti: ${formatMoney(earlyFee, currency)}`}>
-                Giriş saati {earlyCheckIn.checkInTime}; misafir daha önce giriyor. Ücret konaklamaya yazılır, folyoya işlenir.
+              <Alert tone="warning" title={t('frontDesk.checkIn.earlyFeeTitle', { amount: formatMoney(earlyFee, currency) })}>
+                {t('frontDesk.checkIn.earlyFeeBody', { time: earlyCheckIn.checkInTime })}
               </Alert>
-              <Checkbox label="Ücret uygulama" hint="Oda hazırdı, iyi niyet. Denetim izine yazılır." checked={waiveEarlyFee} onChange={(e) => setWaiveEarlyFee(e.target.checked)} disabled={busy} />
+              <Checkbox label={t('frontDesk.stay.waiveFee')} hint={t('frontDesk.checkIn.waiveEarlyFeeHint')} checked={waiveEarlyFee} onChange={(e) => setWaiveEarlyFee(e.target.checked)} disabled={busy} />
             </div>
           ) : (
-            <Alert tone="info" title="Erken giriş">Giriş saati {earlyCheckIn.checkInTime}; otelin erken giriş ücreti tanımlı değil.</Alert>
+            <Alert tone="info" title={t('frontDesk.checkIn.earlyTitle')}>{t('frontDesk.checkIn.earlyNoFee', { time: earlyCheckIn.checkInTime })}</Alert>
           )
         )}
       </form>
       {scanFor && (
         <IdScanDialog
-          title={scanFor === 'guest' ? `Kimlik tara — ${guestCardName.firstName} ${guestCardName.lastName}` : scanFor === 'new' ? 'Kimlik tara — yeni refakatçi' : `Kimlik tara — ${scanCompanion?.firstName || 'refakatçi'}`}
+          title={
+            scanFor === 'guest'
+              ? t('frontDesk.checkIn.scanTitle', { name: `${guestCardName.firstName} ${guestCardName.lastName}` })
+              : scanFor === 'new'
+                ? t('frontDesk.checkIn.scanTitleNew')
+                : t('frontDesk.checkIn.scanTitle', { name: scanCompanion?.firstName || t('frontDesk.checkIn.companion') })
+          }
           current={
             scanFor === 'guest'
               ? { ...(guestName ?? guestCardName), ...guest }

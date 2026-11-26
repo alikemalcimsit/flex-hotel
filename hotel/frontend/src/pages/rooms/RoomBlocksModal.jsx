@@ -1,15 +1,11 @@
 import { useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  blockRoomSchema,
-  ROOM_BLOCK_TYPE_HINTS,
-  ROOM_BLOCK_TYPE_LABELS,
-  ROOM_BLOCK_TYPES,
-} from '@hotelos/hotel-contracts';
+import { blockRoomSchema, ROOM_BLOCK_TYPES } from '@hotelos/hotel-contracts';
 import { Alert, Button, EmptyState, ERROR_CLASS, Icon, Input, LABEL_CLASS, Spinner } from '@hotelos/ui';
 import { ConfirmDialog } from '../../components/ConfirmDialog.jsx';
 import { Modal } from '../../components/Modal.jsx';
 import { BlockTypeBadge } from '../../components/RoomStateBadges.jsx';
+import { useT } from '../../i18n/index.jsx';
 import { api, apiDelete, apiPost, withQuery } from '../../lib/api.js';
 import { formatDate } from '../../lib/format.js';
 import { useHotelToday } from '../../lib/useHotel.js';
@@ -19,21 +15,22 @@ import { toastError, toastSuccess } from '../../store/toast.js';
 /** Modal içindeki listede bir sayfada gösterilen kayıt. */
 const BLOCK_PAGE_SIZE = 5;
 
+/** Sekmeler: değer → sözlük anahtarı. */
 const SCOPES = Object.freeze([
-  { value: 'ACTIVE', label: 'Süren ve yaklaşan' },
-  { value: 'PAST', label: 'Geçmiş' },
+  { value: 'ACTIVE', labelKey: 'roomPlan.blocks.scopeActive' },
+  { value: 'PAST', labelKey: 'roomPlan.blocks.scopePast' },
 ]);
 
-const STATE_LABELS = Object.freeze({
-  CURRENT: 'Sürüyor',
-  UPCOMING: 'Başlayacak',
-  ENDED: 'Bitti',
+const STATE_LABEL_KEYS = Object.freeze({
+  CURRENT: 'roomPlan.blocks.stateCurrent',
+  UPCOMING: 'roomPlan.blocks.stateUpcoming',
+  ENDED: 'roomPlan.blocks.stateEnded',
 });
 
-/** Kaldırma düğmesinin adı: başlamamış kayıt iptal edilir, süren kayıt bugün biter. */
-const REMOVAL_ACTIONS = Object.freeze({
-  CANCEL: { label: 'İptal et', confirm: 'İptal et' },
-  END: { label: 'Bugün bitir', confirm: 'Bugün bitir' },
+/** Kaldırma düğmesinin adı (sözlük anahtarı): başlamamış kayıt iptal edilir, süren kayıt bugün biter. */
+const REMOVAL_ACTION_KEYS = Object.freeze({
+  CANCEL: 'roomPlan.blocks.cancel',
+  END: 'roomPlan.blocks.endToday',
 });
 
 /**
@@ -48,6 +45,7 @@ const REMOVAL_ACTIONS = Object.freeze({
  * @param {{ room: { id: string, number: string }, canManage: boolean, onClose: () => void }} props
  */
 export function RoomBlocksModal({ room, canManage, onClose }) {
+  const t = useT();
   const queryClient = useQueryClient();
   const [scope, setScope] = useState('ACTIVE');
   const [page, setPage] = useState(1);
@@ -67,14 +65,10 @@ export function RoomBlocksModal({ room, canManage, onClose }) {
     mutationFn: (block) => apiDelete(`/rooms/blocks/${block.id}`),
     onSuccess: (result, block) => {
       if (result.mode === 'CANCELLED') {
-        toastSuccess('Kayıt iptal edildi');
+        toastSuccess(t('roomPlan.blocks.cancelled'));
       } else {
         // Sunucu yalnızca arızalı (satış dışı) kaydı bitince odayı kirli yapar.
-        toastSuccess(
-          block.type === 'OUT_OF_ORDER'
-            ? 'Kayıt bugün itibarıyla bitirildi; oda kirli işaretlendi'
-            : 'Kayıt bugün itibarıyla bitirildi',
-        );
+        toastSuccess(t(block.type === 'OUT_OF_ORDER' ? 'roomPlan.blocks.endedDirty' : 'roomPlan.blocks.ended'));
       }
       setRemoving(null);
       refresh();
@@ -95,16 +89,16 @@ export function RoomBlocksModal({ room, canManage, onClose }) {
       <Modal
         open
         size="lg"
-        title={`${room.number} numaralı oda — arıza kayıtları`}
+        title={t('roomPlan.blocks.title', { room: room.number })}
         onClose={onClose}
         footer={
           <Button variant="outline" onClick={onClose}>
-            Kapat
+            {t('common.close')}
           </Button>
         }
       >
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          <div role="tablist" aria-label="Kayıt kapsamı" className="inline-flex gap-1 rounded-control border border-line p-1">
+          <div role="tablist" aria-label={t('roomPlan.blocks.scopeAria')} className="inline-flex gap-1 rounded-control border border-line p-1">
             {SCOPES.map((option) => (
               <button
                 key={option.value}
@@ -116,13 +110,13 @@ export function RoomBlocksModal({ room, canManage, onClose }) {
                   scope === option.value ? 'bg-ink text-white' : 'text-ink-muted hover:bg-black/[0.04] hover:text-ink'
                 }`}
               >
-                {option.label}
+                {t(option.labelKey)}
               </button>
             ))}
           </div>
           {canManage && scope === 'ACTIVE' && !showForm && (
             <Button size="sm" icon="plus" onClick={() => setShowForm(true)}>
-              Yeni kayıt
+              {t('roomPlan.blocks.newRecord')}
             </Button>
           )}
         </div>
@@ -144,10 +138,10 @@ export function RoomBlocksModal({ room, canManage, onClose }) {
         {listQuery.isError && (
           <Alert
             tone="danger"
-            title="Kayıtlar yüklenemedi"
+            title={t('roomPlan.blocks.loadFailed')}
             action={
               <Button variant="outline" size="sm" icon="refresh" onClick={() => listQuery.refetch()}>
-                Tekrar dene
+                {t('common.retry')}
               </Button>
             }
           >
@@ -158,32 +152,32 @@ export function RoomBlocksModal({ room, canManage, onClose }) {
         {listQuery.data && items.length === 0 && (
           <EmptyState
             icon="checkCircle"
-            title={scope === 'ACTIVE' ? 'Süren ya da yaklaşan arıza kaydı yok' : 'Geçmiş arıza kaydı yok'}
-            description={scope === 'ACTIVE' ? 'Oda hizmette; satılabilir ve misafire verilebilir.' : undefined}
+            title={scope === 'ACTIVE' ? t('roomPlan.blocks.emptyActive') : t('roomPlan.blocks.emptyPast')}
+            description={scope === 'ACTIVE' ? t('roomPlan.blocks.emptyActiveHint') : undefined}
           />
         )}
 
         {items.length > 0 && (
           <ul className={`flex flex-col gap-2.5 transition-opacity duration-200 ${listQuery.isFetching ? 'opacity-60' : ''}`}>
             {items.map((block) => {
-              const action = canManage ? REMOVAL_ACTIONS[block.removal] : null;
+              const actionKey = canManage ? REMOVAL_ACTION_KEYS[block.removal] : null;
               return (
                 <li key={block.id} className="flex flex-wrap items-start justify-between gap-3 rounded-panel border border-line px-4 py-3.5">
                   <div className="min-w-0 space-y-1.5">
                     <div className="flex flex-wrap items-center gap-2">
                       <BlockTypeBadge type={block.type} />
-                      <span className="text-xs font-bold text-ink-muted">{STATE_LABELS[block.state]}</span>
+                      <span className="text-xs font-bold text-ink-muted">{STATE_LABEL_KEYS[block.state] ? t(STATE_LABEL_KEYS[block.state]) : block.state}</span>
                     </div>
                     <p className="text-sm font-semibold text-ink">
-                      {formatDate(block.startDate)} → {block.endDate ? formatDate(block.endDate) : 'süresiz'}
-                      {block.endDate && <span className="font-normal text-ink-muted"> (bitiş günü dahil değil)</span>}
+                      {formatDate(block.startDate)} → {block.endDate ? formatDate(block.endDate) : t('roomPlan.shared.openEnded')}
+                      {block.endDate && <span className="font-normal text-ink-muted"> {t('roomPlan.blocks.endExclusive')}</span>}
                     </p>
                     <p className="text-sm text-ink-soft">{block.reason}</p>
-                    <p className="text-xs text-ink-muted">Açan: {block.createdBy}</p>
+                    <p className="text-xs text-ink-muted">{t('roomPlan.blocks.openedBy', { name: block.createdBy })}</p>
                   </div>
-                  {action && (
+                  {actionKey && (
                     <Button variant="dangerSoft" size="sm" onClick={() => setRemoving(block)}>
-                      {action.label}
+                      {t(actionKey)}
                     </Button>
                   )}
                 </li>
@@ -193,17 +187,17 @@ export function RoomBlocksModal({ room, canManage, onClose }) {
         )}
 
         {meta && meta.totalPages > 1 && (
-          <nav aria-label="Kayıt sayfaları" className="mt-4 flex items-center justify-between gap-3">
-            <span className="text-xs font-semibold text-ink-muted">Toplam {meta.total} kayıt</span>
+          <nav aria-label={t('roomPlan.blocks.pages')} className="mt-4 flex items-center justify-between gap-3">
+            <span className="text-xs font-semibold text-ink-muted">{t('roomPlan.blocks.total', { count: meta.total })}</span>
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" icon="chevronLeft" disabled={page <= 1} onClick={() => setPage(page - 1)}>
-                Önceki
+                {t('roomPlan.shared.prev')}
               </Button>
               <span className="text-sm font-semibold text-ink-soft" aria-live="polite">
                 {meta.page} / {meta.totalPages}
               </span>
               <Button variant="outline" size="sm" disabled={page >= meta.totalPages} onClick={() => setPage(page + 1)}>
-                Sonraki
+                {t('roomPlan.shared.next')}
                 <Icon name="chevronRight" className="size-3.5" />
               </Button>
             </div>
@@ -213,15 +207,15 @@ export function RoomBlocksModal({ room, canManage, onClose }) {
 
       <ConfirmDialog
         open={Boolean(removing)}
-        title={removing?.removal === 'END' ? 'Kaydı bugün bitir' : 'Kaydı iptal et'}
+        title={removing?.removal === 'END' ? t('roomPlan.blocks.confirmEndTitle') : t('roomPlan.blocks.confirmCancelTitle')}
         message={
           removing?.removal === 'END'
-            ? `Kayıt bugün itibarıyla biter; oda bu geceden itibaren misafire verilebilir${
-                removing?.type === 'OUT_OF_ORDER' ? ' ve temizlik için kirli işaretlenir' : ''
-              }. Önceki geceler "${ROOM_BLOCK_TYPE_LABELS[removing?.type]}" olarak kalır.`
-            : 'Henüz başlamamış kayıt tamamen iptal edilir.'
+            ? t(removing?.type === 'OUT_OF_ORDER' ? 'roomPlan.blocks.confirmEndMessageDirty' : 'roomPlan.blocks.confirmEndMessage', {
+                type: t(`roomPlan.blockType.${removing?.type}`),
+              })
+            : t('roomPlan.blocks.confirmCancelMessage')
         }
-        confirmLabel={removing ? REMOVAL_ACTIONS[removing.removal]?.confirm : undefined}
+        confirmLabel={removing && REMOVAL_ACTION_KEYS[removing.removal] ? t(REMOVAL_ACTION_KEYS[removing.removal]) : undefined}
         isPending={removeMutation.isPending}
         error={removeMutation.error}
         onClose={() => {
@@ -238,6 +232,7 @@ export function RoomBlocksModal({ room, canManage, onClose }) {
  * @param {{ roomId: string, onCancel: () => void, onCreated: () => void }} props
  */
 function NewBlockForm({ roomId, onCancel, onCreated }) {
+  const t = useT();
   const { today } = useHotelToday();
   const [form, setForm] = useState({ type: 'OUT_OF_ORDER', startDate: today, endDate: '', reason: '' });
   const [errors, setErrors] = useState({});
@@ -245,7 +240,7 @@ function NewBlockForm({ roomId, onCancel, onCreated }) {
   const createMutation = useMutation({
     mutationFn: (values) => apiPost(`/rooms/${roomId}/blocks`, values),
     onSuccess: () => {
-      toastSuccess('Arıza kaydı açıldı');
+      toastSuccess(t('roomPlan.blocks.created'));
       onCreated();
     },
     onError: (error) => {
@@ -269,7 +264,7 @@ function NewBlockForm({ roomId, onCancel, onCreated }) {
       return;
     }
     if (form.startDate < today) {
-      setErrors({ startDate: 'Kayıt bugünden önce başlayamaz' });
+      setErrors({ startDate: t('roomPlan.blocks.startBeforeToday') });
       return;
     }
     setErrors({});
@@ -281,7 +276,7 @@ function NewBlockForm({ roomId, onCancel, onCreated }) {
   return (
     <form onSubmit={handleSubmit} className="mb-6 rounded-panel border border-line bg-surface-muted p-5" noValidate>
       <fieldset>
-        <legend className={LABEL_CLASS}>Kayıt tipi</legend>
+        <legend className={LABEL_CLASS}>{t('roomPlan.blocks.type')}</legend>
         <div className="mt-2 grid gap-3 sm:grid-cols-2">
           {ROOM_BLOCK_TYPES.map((type) => {
             const selected = form.type === type;
@@ -301,8 +296,8 @@ function NewBlockForm({ roomId, onCancel, onCreated }) {
                   className="mt-1 size-4 accent-[var(--color-ink)]"
                 />
                 <span>
-                  <span className="block text-sm font-bold text-ink">{ROOM_BLOCK_TYPE_LABELS[type]}</span>
-                  <span className="mt-0.5 block text-xs leading-relaxed text-ink-muted">{ROOM_BLOCK_TYPE_HINTS[type]}</span>
+                  <span className="block text-sm font-bold text-ink">{t(`roomPlan.blockType.${type}`)}</span>
+                  <span className="mt-0.5 block text-xs leading-relaxed text-ink-muted">{t(`roomPlan.blockTypeHint.${type}`)}</span>
                 </span>
               </label>
             );
@@ -313,7 +308,7 @@ function NewBlockForm({ roomId, onCancel, onCreated }) {
 
       <div className="mt-5 grid gap-5 sm:grid-cols-2">
         <Input
-          label="Başlangıç"
+          label={t('roomPlan.shared.from')}
           name="startDate"
           type="date"
           min={today}
@@ -322,7 +317,7 @@ function NewBlockForm({ roomId, onCancel, onCreated }) {
           error={errors.startDate}
         />
         <Input
-          label="Bitiş (boş = süresiz)"
+          label={t('roomPlan.blocks.end')}
           name="endDate"
           type="date"
           min={form.startDate || today}
@@ -331,12 +326,12 @@ function NewBlockForm({ roomId, onCancel, onCreated }) {
           error={errors.endDate}
         />
         <Input
-          label="Sebep"
+          label={t('roomPlan.blocks.reason')}
           name="reason"
           value={form.reason}
           onChange={setField('reason')}
           error={errors.reason}
-          placeholder="Su basması, klima arızası, boya…"
+          placeholder={t('roomPlan.blocks.reasonPlaceholder')}
           className="sm:col-span-2"
         />
       </div>
@@ -354,12 +349,17 @@ function NewBlockForm({ roomId, onCancel, onCreated }) {
       )}
 
       {failure?.code === 'WOULD_OVERBOOK' && (
-        <Alert tone="danger" className="mt-5" title="Bu kayıt overbooking'e yol açar">
+        <Alert tone="danger" className="mt-5" title={t('roomPlan.blocks.overbookTitle')}>
           <p>{failure.message}</p>
           <ul className="mt-2 list-inside list-disc text-xs">
             {failure.details.nights.map((night) => (
               <li key={`${night.roomTypeId}-${night.day}`}>
-                {formatDate(night.day)} ({night.roomTypeCode}): {night.sellable} satılabilir oda, {night.demand} rezervasyon
+                {t('roomPlan.blocks.overbookNight', {
+                  date: formatDate(night.day),
+                  type: night.roomTypeCode,
+                  sellable: night.sellable,
+                  demand: night.demand,
+                })}
               </li>
             ))}
           </ul>
@@ -368,10 +368,10 @@ function NewBlockForm({ roomId, onCancel, onCreated }) {
 
       <div className="mt-5 flex flex-wrap justify-end gap-3">
         <Button variant="outline" onClick={onCancel} disabled={createMutation.isPending} type="button">
-          Vazgeç
+          {t('common.cancel')}
         </Button>
         <Button type="submit" icon="lock" disabled={createMutation.isPending}>
-          {createMutation.isPending ? 'Kaydediliyor…' : 'Kaydı aç'}
+          {createMutation.isPending ? t('common.saving') : t('roomPlan.blocks.submit')}
         </Button>
       </div>
     </form>

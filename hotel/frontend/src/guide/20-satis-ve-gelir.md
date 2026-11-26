@@ -540,7 +540,7 @@ Tarih + kişi + pansiyon + kupon → oda tipi kartları (fiyat, indirim etiketi,
 ### Arka planda
 
 - Fiyat, personelin gördüğü aynı teklif hesabıdır; public yanıt **kırpılır**: promosyon / kupon / acente kimlikleri ve gece dökümü dönmez; indirim yalnızca tutar + etiket; müsaitlik 0–5'e kırpılır (gerçek envanter sızmaz).
-- Rezervasyon **bekleyen (PENDING)** açılır — ödeme yok; **resepsiyon onaylar**. Yer yoksa sebepli reddedilir, onaya gitmez. Aynı istek ağ hatasında tekrar gönderilse ikinci rezervasyon açılmaz.
+- Rezervasyon **bekleyen (PENDING)** açılır; **resepsiyon onaylar**. Sanal POS ayarında **Widget ön ödemesi** (İlk gece / Konaklamanın tamamı) açıksa widget misafiri rezervasyondan hemen sonra **Ön ödemeye geç** ile kartla ödeme sayfasına yönlendirir; ödeme folyoya Sanal POS olarak düşer ama rezervasyonu kendiliğinden kesinleştirmez (bkz. Folyo, kasa → Sanal POS). Yer yoksa sebepli reddedilir, onaya gitmez. Aynı istek ağ hatasında tekrar gönderilse ikinci rezervasyon açılmaz.
 - Koruma: anahtar → kanal, Origin ∈ izinli siteler, IP hız sınırı (okuma 30/dk, yazma 5/dk), yanıtlar önbelleksiz.
 - Rezervasyon kaynağı **WIDGET** olarak düşer; rezervasyon listesinde görünür.
 
@@ -560,8 +560,24 @@ Tarih + kişi + pansiyon + kupon → oda tipi kartları (fiyat, indirim etiketi,
 
 - Widget doğrudan satıştır, kanal değildir; kanal yöneticisi ekranında görünmez.
 - Paket satışı widget'ta yok; oda + pansiyon satılır.
-- Metinler tr/en hazır; dil seçici ileriki sürüm.
-- Online ödeme gelince rezervasyon doğrudan onaylı açılabilir; şimdilik resepsiyon onayı şart.
+- Metinler tr/en; dil misafirin tarayıcı dilinden seçilir (Türkçe tarayıcı → Türkçe, diğerleri → İngilizce). Widget'ta elle dil seçici yoktur; **para birimi seçici** vardır (aşağıda).
+- Widget ön ödemesi alınsa da rezervasyon bekleyen açılır; resepsiyon onayı şart. Ödeme linki açılamazsa (ör. misafir portalı adresi yok) rezervasyon yine geçerlidir, ön ödeme personelle alınır.
+
+### Döviz seçici ve "yaklaşık" fiyat
+
+Otelin güncel döviz kuru varsa widget'ın arama formunda **Para birimi** (İngilizcede "Currency") seçicisi çıkar. İlk seçenek otelin para birimidir (TRY); diğerleri kur ayarındaki dövizlerdir (Kasa → Döviz kurları → TCMB kurları → Çekilecek dövizler; ayar hiç kaydedilmediyse kuru girilmiş bütün dövizler). Yalnız **en çok 4 günlük** kuru olan dövizler listelenir; güncel kur yoksa seçici hiç görünmez ve fiyatlar yalnız otelin para biriminde çıkar.
+
+Misafir bir döviz seçerse oda kartlarındaki fiyat, indirim, toplam ve ön ödeme tutarının yanına parantez içinde **yaklaşık karşılık** eklenir:
+
+> 9072.00 TRY (yaklaşık 179.13 EUR)
+
+(İngilizce widget'ta "approx."). Karşılık widget açıldığında alınan güncel kurla (ör. 1 EUR = 50,6441 TL) hesaplanır ve iki haneye yuvarlanır. **Rezervasyon ve ödeme otelin para biriminde** açılır: seçilen döviz rezervasyona yazılmaz, resepsiyonun gördüğü toplam yine 9.072 TL'dir.
+
+**Ön ödeme bağlantısı:** Sanal POS ayarında widget ön ödemesi açıksa onay ekranında "Rezervasyonunuzu güvenceye almak için ön ödemeyi kartla yapabilirsiniz." ve **Ön ödemeye geç · 4800.00 TRY (yaklaşık 94.78 EUR)** düğmesi çıkar. Ödeme sayfasında çekilecek tutar TL'dir (4.800 TL); kartın bankası kendi kuruyla çevirir, misafirin ekstresindeki euro tutarı "yaklaşık"tan biraz farklı olabilir.
+
+**Örnek:** Hollandalı misafir İngilizce tarayıcıyla siteye girdi; widget İngilizce açıldı. Currency: **EUR** seçti. Standart oda kartı: "9072.00 TRY (approx. 179.13 EUR)". Rezervasyonu tamamladı, "Go to prepayment · 4800.00 TRY (approx. 94.78 EUR)" ile kartla 4.800 TL ödedi. Rezervasyon listesinde bekleyen, kaynak WIDGET, toplam 9.072 TL; folyoda 4.800 TL Sanal POS ödemesi.
+
+**Dikkat:** Kasada kur 3 günü aşacak kadar girilmezse (TCMB otomatik çekmesi kapalı ve kimse girmiyorsa) döviz seçici widget'tan kaybolur. Otomatik çekmeyi açmak bunu önler (Folyo, kasa → Kasa → TCMB'den otomatik kur).
 
 ## Satış CRM (call center)
 

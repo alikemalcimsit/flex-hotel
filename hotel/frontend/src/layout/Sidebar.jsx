@@ -2,6 +2,8 @@ import { forwardRef, useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { Icon } from '@hotelos/ui';
 import { Logo } from '../components/Logo.jsx';
+import { useT } from '../i18n/index.jsx';
+import { useNavText } from '../i18n/useNavText.js';
 import { visibleSections } from './navigation.js';
 
 const LINK_BASE =
@@ -38,6 +40,8 @@ export const Sidebar = forwardRef(function Sidebar(
   firstLinkRef,
 ) {
   const sections = visibleSections(role, permissions);
+  const t = useT();
+  const nav = useNavText();
   const badgeFor = (item) => (item.badge ? badges[item.badge] ?? null : null);
 
   return (
@@ -51,7 +55,7 @@ export const Sidebar = forwardRef(function Sidebar(
           ref={firstLinkRef}
           to="/"
           onClick={onNavigate}
-          aria-label="FlexHotel — panel ana sayfası"
+          aria-label={t('layout.sidebar.home')}
           className="rounded-item"
         >
           <Logo compact={isCollapsed} className="text-[1.6rem]" />
@@ -60,7 +64,7 @@ export const Sidebar = forwardRef(function Sidebar(
           <button
             type="button"
             onClick={onClose}
-            aria-label="Menüyü kapat"
+            aria-label={t('layout.sidebar.close')}
             className="grid size-10 place-items-center rounded-control text-sidebar-muted transition-colors duration-200 hover:bg-white/[0.08] hover:text-sidebar-ink"
           >
             <Icon name="close" className="size-5" />
@@ -75,19 +79,19 @@ export const Sidebar = forwardRef(function Sidebar(
           </span>
           <span className="min-w-0">
             <span className="block truncate text-sm font-bold text-sidebar-ink">{hotel.name}</span>
-            {hotel.code && <span className="block text-xs text-sidebar-muted">Kod: {hotel.code}</span>}
+            {hotel.code && <span className="block text-xs text-sidebar-muted">{t('layout.sidebar.hotelCode', { code: hotel.code })}</span>}
           </span>
         </div>
       )}
 
-      <nav aria-label="Ana menü" className="flex-1 overflow-y-auto overscroll-contain px-4 py-5">
+      <nav aria-label={t('layout.sidebar.mainNav')} className="flex-1 overflow-y-auto overscroll-contain px-4 py-5">
         {sections.map((section) => (
           <div key={section.title} className="mb-5 last:mb-0">
             {isCollapsed ? (
               <div aria-hidden="true" className="mx-auto mb-3 h-px w-8 bg-sidebar-line" />
             ) : (
               <p className="mb-2 px-3 text-[0.7rem] font-bold uppercase tracking-[0.12em] text-sidebar-muted/80">
-                {section.title}
+                {nav.section(section)}
               </p>
             )}
             <ul className="flex flex-col gap-1">
@@ -100,7 +104,7 @@ export const Sidebar = forwardRef(function Sidebar(
                       to={item.to}
                       end={item.end}
                       onClick={onNavigate}
-                      title={isCollapsed ? [item.label, badgeFor(item)?.label].filter(Boolean).join(' — ') : undefined}
+                      title={isCollapsed ? [nav.item(item), badgeFor(item)?.label].filter(Boolean).join(' — ') : undefined}
                       className={({ isActive }) =>
                         `${LINK_BASE} ${isCollapsed ? 'justify-center px-0 py-3' : 'px-3 py-2.5'} ${
                           isActive ? LINK_ACTIVE : LINK_IDLE
@@ -113,7 +117,7 @@ export const Sidebar = forwardRef(function Sidebar(
                             <Icon name={item.icon} className={`size-5 ${isActive ? 'text-sec' : ''}`} />
                             {isCollapsed && <CollapsedDot badge={badgeFor(item)} />}
                           </span>
-                          <span className={isCollapsed ? 'sr-only' : 'flex-1 truncate'}>{item.label}</span>
+                          <span className={isCollapsed ? 'sr-only' : 'flex-1 truncate'}>{nav.item(item)}</span>
                           <NavBadge badge={badgeFor(item)} isActive={isActive} isCollapsed={isCollapsed} />
                         </>
                       )}
@@ -184,6 +188,7 @@ function NavGroup({ item, onNavigate }) {
   const { pathname } = useLocation();
   const isInside = pathname === item.to || pathname.startsWith(`${item.to}/`);
   const [isOpen, setIsOpen] = useState(isInside);
+  const nav = useNavText();
   const listId = `nav-${item.to.replace(/\W+/g, '')}`;
 
   useEffect(() => {
@@ -200,7 +205,7 @@ function NavGroup({ item, onNavigate }) {
         className={`${LINK_BASE} px-3 py-2.5 ${isInside ? 'text-sidebar-ink' : LINK_IDLE}`}
       >
         <Icon name={item.icon} className={`size-5 shrink-0 ${isInside ? 'text-sec' : ''}`} />
-        <span className="flex-1 truncate text-left">{item.label}</span>
+        <span className="flex-1 truncate text-left">{nav.item(item)}</span>
         <Icon
           name="chevronDown"
           className={`size-4 shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
@@ -217,7 +222,7 @@ function NavGroup({ item, onNavigate }) {
                 `${LINK_BASE} rounded-item px-3 py-2 text-[0.85rem] ${isActive ? LINK_ACTIVE : LINK_IDLE}`
               }
             >
-              {child.label}
+              {nav.child(child, item)}
             </NavLink>
           </li>
         ))}

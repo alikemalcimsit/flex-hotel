@@ -1,16 +1,18 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { BOARD_TYPE_LABELS, MAX_BULK_CHECK_INS, RESERVATION_STATUS_LABELS } from '@hotelos/hotel-contracts';
+import { MAX_BULK_CHECK_INS } from '@hotelos/hotel-contracts';
 import { Alert, Badge, Button, Card, Checkbox, Icon, Textarea } from '@hotelos/ui';
 import { Modal } from '../../components/Modal.jsx';
 import { PageHeader } from '../../components/PageHeader.jsx';
 import { QueryFallback } from '../../components/QueryFallback.jsx';
+import { useI18n, useT } from '../../i18n/index.jsx';
 import { api, apiPost } from '../../lib/api.js';
 import { formatDate, formatMoney } from '../../lib/format.js';
 import { RESERVATION_STATUS_TONES, reservationKeys } from '../../lib/reservations.js';
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 import { toastSuccess } from '../../store/toast.js';
+import { boardShort, statusLabel } from './reservationTheme.js';
 
 /**
  * Grup dosyası (modül 30): grubun rezervasyonları, folyo bakiyeleri ve toplu
@@ -26,6 +28,8 @@ const BATCH_ELIGIBLE = Object.freeze({
 });
 
 export function GroupFilePage() {
+  const t = useT();
+  const { locale } = useI18n();
   const { groupId } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -56,12 +60,12 @@ export function GroupFilePage() {
     mutationFn: (body) => apiPost(`/reservations/groups/${groupId}/cancel`, body),
     onSuccess: (result) => {
       setCancelling(false);
-      toastSuccess(`${result.cancelled ?? ''} oda iptal edildi`.trim());
+      toastSuccess(t('reservations.groupFile.cancelled', { count: result.cancelled ?? '' }).trim());
       refresh();
     },
   });
 
-  const fallback = <QueryFallback query={query} errorTitle="Grup dosyası yüklenemedi" />;
+  const fallback = <QueryFallback query={query} errorTitle={t('reservations.groupFile.loadFailed')} />;
   if (query.isPending || query.isError) return <div className="flex flex-col gap-6"><BackLink />{fallback}</div>;
 
   const group = query.data;
@@ -81,9 +85,9 @@ export function GroupFilePage() {
     if (eligible.length === 0) return;
     const items = eligible.map((row) => ({ id: row.id, expectedUpdatedAt: row.updatedAt }));
     const call = {
-      assign: { label: 'Toplu oda atama', path: '/rooms/assignments/auto-batch', body: { reservationIds: eligible.map((row) => row.id) } },
-      checkIn: { label: 'Toplu check-in', path: '/front-desk/stays/check-in-batch', body: { items } },
-      checkOut: { label: 'Toplu check-out', path: '/front-desk/stays/check-out-batch', body: { items } },
+      assign: { label: t('reservations.groupFile.batchAssign'), path: '/rooms/assignments/auto-batch', body: { reservationIds: eligible.map((row) => row.id) } },
+      checkIn: { label: t('reservations.groupFile.batchCheckIn'), path: '/front-desk/stays/check-in-batch', body: { items } },
+      checkOut: { label: t('reservations.groupFile.batchCheckOut'), path: '/front-desk/stays/check-out-batch', body: { items } },
     }[kind];
     setBatchResult(null);
     batchMutation.mutate(call);
@@ -100,31 +104,31 @@ export function GroupFilePage() {
             key: 'select',
             header: '',
             render: (row) => (
-              <Checkbox label="" aria-label={`${row.confirmationCode} seç`} checked={selected.has(row.id)} onChange={() => toggle(row.id)} disabled={busy} />
+              <Checkbox label="" aria-label={t('reservations.groupFile.selectRow', { code: row.confirmationCode })} checked={selected.has(row.id)} onChange={() => toggle(row.id)} disabled={busy} />
             ),
           },
         ]
       : []),
     {
       key: 'code',
-      header: 'Onay kodu',
+      header: t('reservations.groupFile.colCode'),
       render: (row) => (
         <Link to={`/rezervasyonlar/${row.id}`} className="font-mono text-xs font-semibold text-ink hover:underline">
           {row.confirmationCode}
         </Link>
       ),
     },
-    { key: 'guest', header: 'Misafir', className: 'font-semibold', render: (row) => row.guest.name },
-    { key: 'roomType', header: 'Oda tipi', render: (row) => row.roomType.code },
-    { key: 'room', header: 'Oda', render: (row) => row.room?.number ?? <Badge tone="warning" dot={false}>Atanmadı</Badge> },
-    { key: 'stay', header: 'Giriş – çıkış', render: (row) => `${formatDate(row.checkIn)} – ${formatDate(row.checkOut)}` },
-    { key: 'party', header: 'Kişi', className: 'tabular-nums', render: (row) => `${row.adults}+${row.children}` },
-    { key: 'board', header: 'Pansiyon', render: (row) => BOARD_TYPE_LABELS[row.boardType]?.split(' — ')[0] ?? row.boardType },
-    { key: 'status', header: 'Durum', render: (row) => <Badge tone={RESERVATION_STATUS_TONES[row.status]}>{RESERVATION_STATUS_LABELS[row.status]}</Badge> },
-    { key: 'totalPrice', header: 'Fiyat', className: 'tabular-nums text-right', render: (row) => formatMoney(row.totalPrice, row.currency) },
+    { key: 'guest', header: t('reservations.groupFile.colGuest'), className: 'font-semibold', render: (row) => row.guest.name },
+    { key: 'roomType', header: t('reservations.groupFile.colRoomType'), render: (row) => row.roomType.code },
+    { key: 'room', header: t('reservations.groupFile.colRoom'), render: (row) => row.room?.number ?? <Badge tone="warning" dot={false}>{t('reservations.detail.unassigned')}</Badge> },
+    { key: 'stay', header: t('reservations.groupFile.colStay'), render: (row) => `${formatDate(row.checkIn)} – ${formatDate(row.checkOut)}` },
+    { key: 'party', header: t('reservations.groupFile.colParty'), className: 'tabular-nums', render: (row) => `${row.adults}+${row.children}` },
+    { key: 'board', header: t('reservations.groupFile.colBoard'), render: (row) => boardShort(row.boardType) },
+    { key: 'status', header: t('reservations.groupFile.colStatus'), render: (row) => <Badge tone={RESERVATION_STATUS_TONES[row.status]}>{statusLabel(row.status)}</Badge> },
+    { key: 'totalPrice', header: t('reservations.groupFile.colPrice'), className: 'tabular-nums text-right', render: (row) => formatMoney(row.totalPrice, row.currency) },
     {
       key: 'balance',
-      header: 'Bakiye',
+      header: t('reservations.groupFile.colBalance'),
       className: 'tabular-nums text-right',
       render: (row) =>
         Number(row.balance) !== 0 ? <span className="font-semibold text-sec-strong">{formatMoney(row.balance, row.currency)}</span> : formatMoney(row.balance, row.currency),
@@ -140,22 +144,22 @@ export function GroupFilePage() {
         actions={
           canManage && openRooms > 0 ? (
             <Button variant="dangerSoft" icon="trash" onClick={() => setCancelling(true)} disabled={busy}>
-              Grubu iptal et
+              {t('reservations.detail.cancelGroup')}
             </Button>
           ) : undefined
         }
       />
 
       <div className="flex flex-wrap gap-2">
-        <Badge tone="info" dot={false}>{group.summary.rooms} oda</Badge>
+        <Badge tone="info" dot={false}>{t('reservations.groupFile.rooms', { count: group.summary.rooms })}</Badge>
         {Object.entries(group.summary.byStatus).map(([status, total]) => (
           <Badge key={status} tone={RESERVATION_STATUS_TONES[status]} dot={false}>
-            {total} {RESERVATION_STATUS_LABELS[status]?.toLocaleLowerCase('tr')}
+            {t('reservations.groupFile.statusCount', { count: total, status: statusLabel(status).toLocaleLowerCase(locale) })}
           </Badge>
         ))}
-        <Badge tone="neutral" dot={false}>Toplam {formatMoney(group.summary.totalPrice, group.summary.currency)}</Badge>
+        <Badge tone="neutral" dot={false}>{t('reservations.groupFile.total', { amount: formatMoney(group.summary.totalPrice, group.summary.currency) })}</Badge>
         {Number(group.summary.openBalance) !== 0 && (
-          <Badge tone="warning" dot={false}>Açık bakiye {formatMoney(group.summary.openBalance, group.summary.currency)}</Badge>
+          <Badge tone="warning" dot={false}>{t('reservations.groupFile.openBalance', { amount: formatMoney(group.summary.openBalance, group.summary.currency) })}</Badge>
         )}
       </div>
 
@@ -163,7 +167,7 @@ export function GroupFilePage() {
         <Card>
           <div className="flex flex-wrap items-center gap-3 text-sm">
             <Checkbox
-              label={selected.size > 0 ? `${selected.size} seçili` : 'Tümünü seç'}
+              label={selected.size > 0 ? t('reservations.groupFile.selected', { count: selected.size }) : t('reservations.groupFile.selectAll')}
               name="select-all"
               checked={selected.size > 0 && selected.size === rows.length}
               onChange={() => setSelected(selected.size === rows.length ? new Set() : new Set(rows.map((row) => row.id)))}
@@ -171,24 +175,23 @@ export function GroupFilePage() {
             />
             <span className="ml-auto flex flex-wrap gap-2">
               <Button variant="outline" size="sm" icon="bed" disabled={busy || count('assign') === 0} onClick={() => runBatch('assign')}>
-                Toplu oda ata ({count('assign')})
+                {t('reservations.groupFile.assignButton', { count: count('assign') })}
               </Button>
               <Button variant="outline" size="sm" icon="key" disabled={busy || count('checkIn') === 0 || count('checkIn') > MAX_BULK_CHECK_INS} onClick={() => runBatch('checkIn')}>
-                Toplu check-in ({count('checkIn')})
+                {t('reservations.groupFile.checkInButton', { count: count('checkIn') })}
               </Button>
               <Button variant="outline" size="sm" icon="checkCircle" disabled={busy || count('checkOut') === 0} onClick={() => runBatch('checkOut')}>
-                Toplu check-out ({count('checkOut')})
+                {t('reservations.groupFile.checkOutButton', { count: count('checkOut') })}
               </Button>
             </span>
           </div>
           <p className="mt-2 text-xs text-ink-muted">
-            Toplu giriş kimlik / depozito sormaz: ayrıntı gereken misafir sebeple atlanır, tek tek alınır. Toplu çıkış yalnızca
-            bakiyesi kapalı konaklamaları kapatır.
+            {t('reservations.groupFile.batchHint')}
           </p>
         </Card>
       )}
 
-      {batchMutation.isError && <Alert tone="danger" title="Toplu işlem başarısız">{batchMutation.error.message}</Alert>}
+      {batchMutation.isError && <Alert tone="danger" title={t('reservations.groupFile.batchFailed')}>{batchMutation.error.message}</Alert>}
       {batchResult && <BatchResultAlert label={batchResult.label} result={batchResult.result} rows={rows} onClose={() => setBatchResult(null)} />}
 
       <div className="overflow-x-auto rounded-card bg-surface shadow-card">
@@ -230,14 +233,15 @@ export function GroupFilePage() {
 
 /** Toplu işlem sonucu: başarı sayısı + başarısızların sebebi (onay koduyla). */
 function BatchResultAlert({ label, result, rows, onClose }) {
+  const t = useT();
   const failures = (result.results ?? []).filter((row) => !row.ok);
   const codeOf = (id) => rows.find((row) => row.id === id)?.confirmationCode ?? id;
   const succeeded = result.succeeded ?? result.assigned ?? 0;
   return (
     <Alert
       tone={failures.length === 0 ? 'success' : 'warning'}
-      title={`${label}: ${succeeded} başarılı${failures.length ? `, ${failures.length} atlandı` : ''}`}
-      action={<Button variant="ghost" size="sm" onClick={onClose}>Kapat</Button>}
+      title={failures.length ? t('reservations.groupFile.resultWithSkipped', { label, succeeded, skipped: failures.length }) : t('reservations.groupFile.result', { label, succeeded })}
+      action={<Button variant="ghost" size="sm" onClick={onClose}>{t('common.close')}</Button>}
     >
       {failures.length > 0 && (
         <ul className="mt-1 list-inside list-disc text-sm">
@@ -253,37 +257,39 @@ function BatchResultAlert({ label, result, rows, onClose }) {
 }
 
 function CancelGroupModal({ openRooms, isPending, error, onClose, onConfirm }) {
+  const t = useT();
   const [reason, setReason] = useState('');
   return (
     <Modal
       open
-      title="Grubu iptal et"
+      title={t('reservations.detail.cancelGroup')}
       onClose={onClose}
       footer={
         <>
           <Button variant="outline" onClick={onClose} disabled={isPending}>
-            Vazgeç
+            {t('common.cancel')}
           </Button>
           <Button variant="dangerSoft" icon="trash" disabled={isPending || reason.trim().length === 0} onClick={() => onConfirm(reason.trim())}>
-            {isPending ? 'İptal ediliyor…' : `${openRooms} odayı iptal et`}
+            {isPending ? t('reservations.cancel.submitting') : t('reservations.cancel.submitGroup', { count: openRooms })}
           </Button>
         </>
       }
     >
       <p className="text-sm text-ink-muted">
-        Grubun açık (bekleyen / onaylı) odaları birlikte iptal edilir; giriş yapmış ya da kapanmış odalara dokunulmaz.
+        {t('reservations.groupFile.cancelHint')}
       </p>
-      <Textarea label="İptal sebebi" name="reason" rows={2} maxLength={300} value={reason} onChange={(event) => setReason(event.target.value)} className="mt-4" />
-      {error && <Alert tone="danger" title="İptal edilemedi" className="mt-4">{error.message}</Alert>}
+      <Textarea label={t('reservations.cancel.reasonLabel')} name="reason" rows={2} maxLength={300} value={reason} onChange={(event) => setReason(event.target.value)} className="mt-4" />
+      {error && <Alert tone="danger" title={t('reservations.groupFile.cancelFailed')} className="mt-4">{error.message}</Alert>}
     </Modal>
   );
 }
 
 function BackLink() {
+  const t = useT();
   return (
     <Link to="/gruplar" className="inline-flex w-fit items-center gap-1.5 text-sm font-semibold text-ink-muted hover:text-ink">
       <Icon name="arrowLeft" className="size-4" />
-      Gruplar
+      {t('reservations.groups.title')}
     </Link>
   );
 }

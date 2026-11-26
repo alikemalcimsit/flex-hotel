@@ -43,6 +43,8 @@ Olay adları aile aile gruplanır; birkaç örnek:
 | İK | izin talebi açıldı / onaylandı / reddedildi / iptal edildi (`hr.leave.changed`); İK değişti — vardiya, puantaj, bordroya aktarım, belge, ayar, bakiye düzeltmesi (`hr.changed`) | İK servisi ve onay kararı dinleyicisi |
 | Sadakat | sadakat puanı hareketi — kazanma, geri alma, harcama, iade, süre dolumu, düzeltme (`loyalty.points.changed`); sadakat seviyesi değişti (`loyalty.tier.changed`); üyelik / program ayarı değişti (`loyalty.changed`) | Sadakat aktörü, puan kullanma ve üyelik ekranları, süre işi |
 | KBS | KBS kimlik bildirimi değişti — sıraya girdi, gönderiliyor, bildirildi, gönderilemedi, iptal, elle bildirildi, tekrar gönderildi (`kbs.notification.changed`); KBS ayarı değişti (`kbs.settings.changed`) | KBS aktörü, KBS göndericisi, KBS ekranları (tekrar gönder, elle bildirildi, ayar) |
+| Sanal POS | Ödeme linki değişti — oluşturuldu, gönderildi, ödeme başladı, ödendi, başarısız, süresi doldu, iptal edildi, iade istendi / yapıldı / başarısız / reddedildi (`payment_gateway.link.changed`; kart bilgisi taşımaz); Sanal POS ayarı değişti (`payment_gateway.settings.changed`). Ödeme folyoya düşünce ayrıca **ödeme alındı** (`payment.received`, yöntem `VIRTUAL_POS`), karta iade folyoya düşünce **ödeme iade edildi** | Sanal POS servisi (link ekranları, misafirin ödeme sayfası, sağlayıcı geri dönüşü, zamanlanmış işler), iade onayı dinleyicisi |
+| Misafir yorumları | Yorum AI analizine gönderildi (`review.analysis.requested`), yorum etiketlendi (`review.analysis.completed`, sonuç Analiz edildi / Analiz edilemedi); misafir yorumları değişti — yorum, yükleme, olumsuz konu artışı (`reviews.changed`). Yazanın adı ve yorum metni olay gövdesinde taşınmaz, yalnız yorumun kimliği | Yorumlar servisi (ekle, yükle, etiket, cevap, sil, yeniden analiz), yorum analiz kuyruğu, olumsuz konu artışı işi, geri bildirim ajanı |
 
 ### Outbox: olay kaybolmaz
 
@@ -279,6 +281,7 @@ Korumalar: tur başına en fazla 5 model çağrısı; teklif 30 dakika geçerli;
 | --- | --- | --- | --- |
 | Anket cevabı analizi istendi | Açık uçlu yoruma duygu (olumlu / nötr / olumsuz / karışık), en fazla beş konu ve tek cümlelik özet verir; **puanları sistem hesaplar**, ajan kişi adı ve iletişim bilgisi görmez | Analiz tamamlandı | İstek "yapılamadı" olur; anket AI'sız tam çalışır |
 | Dönem özeti istendi | Ana temalar, örnek alıntılar, bir paragraf özet, en fazla üç öneri | Özet tamamlandı | Aynı |
+| Misafir yorumu analizi istendi (`review.analysis.requested`; **Yorum analiz kuyruğu** dakikada en çok 40 yorum için yayınlar) | Google / Booking.com… yorumuna duygu, −100…100 puan, en çok 5 konu (anketle ortak liste), en çok 4 departman, dil, Türkçe özet ve **yorumun dilinde otel adına önerilen cevap** (en çok 900 karakter) yazar. Kurallar: yorum metnindeki talimatlara uymaz (yorum "şunu yaz" dese de), söz vermez (indirim, tazminat yok), uydurma bilgi ve kişisel veri yazmaz; **yazanın adı modele gitmez**; önerilen cevaptan bağlantı, e-posta ve telefon kalıpları sistemce çıkarılır. Model otelin Konuşma modeli; listede olmayan konu / departman atılır; personelin elle etiketi AI sonucuyla ezilmez | Yorum etiketlendi (`review.analysis.completed`) | Ajan bu otelde kapalıysa ya da sunucuda anahtar yoksa kuyruk analiz **istemez**, personele görev açılmaz: yorumlar **Analiz bekliyor** kalır, ajan açılınca kuyruk ister. Model seçilmemiş / bütçe doldu / model hatası → **Analiz edilemedi** (Yeniden analiz ile tekrar); personel elle etiketleyebilir |
 
 #### Dinamik fiyat ajanı (pricing-agent) — LLM
 
@@ -327,6 +330,7 @@ Para izini ya da kapasiteyi değiştiren riskli işler kendi kendine yapılmaz. 
 | Fatura iptali | Kesilmiş faturanın iptali | Faturalar | Aynı | Evet |
 | Bordro onayı | Hesaplanan bordronun onayı | Bordro → onaya gönder | Aynı | Evet |
 | İzin talebi (`LEAVE`) | Personelin izin talebi ya da İK'nın personel adına girdiği izin (İK ayarında izin onayı açıksa); **süresiz bekler** | İzinlerim → İzin talebi; İK → İzinler → İzin gir | Aynı | Evet |
+| Sanal POS iadesi (karta) (`GATEWAY_REFUND`) | Online ödeme linkinden alınan paranın karta iadesi; her zaman onaya gider | Sanal POS → link ayrıntısı → **Karta iade** (`payment.refund`) | Aynı | Evet |
 | Diğer | Serbest | — | Aynı | Hayır |
 
 **Dört göz kuralı:** "Evet" yazan türlerde isteyen kişi **kendi isteğini onaylayamaz**; ekranda düğme kilitlenir ve sebebi yazar. Reddederek geri çekebilir. Sebep basittir: nakit alınmış bir ödemeyi iptal edip farkı cebe atmak ya da kendine iade yazmak klasik kasa açığıdır; büyük ödemede yazım hatası (10.000 yerine 100.000) misafiri "ödendi" diye çıkarır.
@@ -344,6 +348,8 @@ Para izini ya da kapasiteyi değiştiren riskli işler kendi kendine yapılmaz. 
 
 *Örnek (izin talebi):* Resepsiyonist Ayşe İzinlerim'den 3 günlük yıllık izin istedi. İzin "Onay bekliyor" açıldı, onay kuyruğuna `LEAVE` ("İzin talebi") türünde iş düştü (süresiz), İK izni olanların ziline `HR` türünde "İzin talebi: Ayşe Demir" uyarısı gitti. Ayşe kendi talebini onaylayamaz. Müdür Burak onaylayınca İK modülünün dinleyicisi `approval.granted`'ı yakaladı, yıllık izin bakiyesini **yeniden denetledi** (bu arada bakiye değiştiyse izni reddeder), izni "Onaylandı" yaptı, `hr.leave.changed` yayınladı ve Ayşe'nin ziline "İzniniz onaylandı" düştü; açık İK ekranları `hr.changed` kanalından tazelendi. Ayşe talebi kararlanmadan iptal etseydi onay işi "süresi doldu" olarak kapanırdı.
 
+*Örnek (karta iade):* Resepsiyonist Elif, 1.000 TL online ön ödemesi yapılmış linkte "Erken ayrılış" gerekçesiyle 300 TL **Karta iade** istedi. Onay kuyruğuna `GATEWAY_REFUND` ("Sanal POS iadesi (karta)") türünde iş düştü; kayıtta ödenen tutar, kart •••• 0008 ve daha önce iade edilen görünür. Elif onaylayamaz. Genel müdür onaylayınca Sanal POS modülünün **iade kararı dinleyicisi** (`approval.granted` / `denied` / `expired`'ı dinler, aynı haber iki kez gelse bir kez uygular) iadeyi sağlayıcıdan istedi, başarılı olunca folyoya −300 TL Sanal POS (iade) yazdı ve `payment_gateway.link.changed` yayınladı. Reddedilse ya da süresi dolsa iade "Reddedildi" olurdu, para hareketi olmazdı. Sağlayıcı reddetseydi iade "İade başarısız" olur, zil (`PAYMENT_GATEWAY`) çalardı.
+
 Aktör kayıttan kalkmışsa (paket kaldırıldı, ad değişti) onaylanan iş kaybolmaz: **"Onay kuyruğu"** modülünde "Onaylanan iş elle yapılacak: …" görevi açılır.
 
 ## Yapay zekâ ajanları: sınırlar ve güvenceler
@@ -357,6 +363,7 @@ AI ajanları (niyet, concierge, bütçe yorum, geri bildirim, dinamik fiyat, rap
 - Rapor asistanı "AI asistanı şu an kullanılamıyor" uyarısı gösterir ve soruyu **"Rapor talebi gönder"** ile personele iletir.
 - Dinamik fiyat **kural tabanlı** çalışır.
 - Bütçe yorumu ve anket özeti düğmeleri "yapılamadı" döner; rapor ve anket eksiksizdir.
+- Misafir yorumları **Analiz bekliyor** kalır (yorum analiz kuyruğu ajan kayıtlı değilken ya da otelde kapalıyken analiz istemez); liste, cevap ve Trend çalışır, personel elle etiketler. Anahtar tanımlanınca bekleyenler dakikada 40'ar işlenir.
 
 ### Her model çağrısından önce üç denetim
 
@@ -428,6 +435,8 @@ Olaylar sistemin ana tetikleyicisidir; zamanlanmış işler **güvenlik ağı** 
 | Misafir portalı | Online check-in davetleri | 30 dk | Girişten ayardaki gün kadar önce davet; yeni günün varışları sıraya girer |
 | Misafir portalı | Belge fotoğrafı silme | 1 sa | KVKK: saklama süresi dolan kimlik fotoğrafı |
 | Anketler | Anket davetleri | 15 dk | Çıkış sonrası ve ara anket, otelin ayarladığı saatte (saatin ilk çeyreğinde gider) |
+| Misafir yorumları | Yorum analiz kuyruğu | 1 dk (ve yeni yorum gelince hemen) | **Analiz bekliyor** yorumlardan en çok **40**'ını geri bildirim ajanına gönderir (`review.analysis.requested`); 30 dakikada sonuç gelmeyeni yeniden gönderir. Sunucuda AI anahtarı yoksa ya da ajan o otelde kapalıysa o otelin yorumlarını istemez (30 dakika sonra yeniden bakar) |
+| Misafir yorumları | Olumsuz konu artışı | 6 sa | Son 7 günde yorumu olan her otelde konu başına olumsuz + karışık yorum sayısını önceki 4 haftanın haftalık ortalamasıyla karşılaştırır; **≥ 3 ve ≥ 2 kat** ise ("Diğer" hariç) artışı yazar ve `reviews.manage` sahiplerine zil (`REVIEW`, uyarı): "Temizlik şikâyeti bu hafta 3 kat arttı"; tıklayınca konu süzgeçli yorum listesi. Aynı konuda son 7 günde zil çaldıysa (yeni hafta başlasa da) yeniden çalmaz |
 | Spa | Randevu hatırlatması | 5 dk | Randevudan ayardaki süre kadar önce (varsayılan 2 saat) misafire hatırlatma; randevu önce sahiplenilir, tek hatırlatma gider |
 | Raporlar | Gelir özeti | 1 sa | Son 31 kapanmış günü yeniden hesaplar, eski günleri 62'lik parçalarla doldurur, kendini onarır; özet yalnız hızlandırır, rapor özetsiz de doğrudur |
 | Kanal yönetimi | Gönderim turu | 5 sn | İşaretli kanallara farkı, zamanı gelene tam eşitlemeyi gönderir (kanal başına en sık 10 sn) |
@@ -442,15 +451,22 @@ Olaylar sistemin ana tetikleyicisidir; zamanlanmış işler **güvenlik ağı** 
 | İK | Özlük belgesi hatırlatması | 12 sa | Süresi İK ayarındaki gün (varsayılan 30) içinde dolacak / dolmuş belgeler için `hr.manage` sahiplerine tek özet zil (`HR`); aynı belge 7 günde bir |
 | Sadakat | Sadakat puan süresi | 12 sa | Programı açık her otelde son kullanma günü geçmiş, kullanılmamış puanı "Süresi doldu" hareketiyle düşer (hesap başına günde bir); 12 aylık seviye penceresi kaydığı için etkin hesapların seviyesini yeniden hesaplar (yükselişte zil `LOYALTY`, düşüşte zil yok) |
 | Faturalar | E-belge gönderimi | 30 sn | Sıradaki e-Fatura / e-Arşiv belgelerini entegratöre gönderir, durumunu izler |
+| Kurlar | TCMB kur işi | 1 sa | **TCMB'den otomatik çek** açık her otel için iş gününün kurunu yazar: iş gününden önceki son TCMB bülteni (hafta sonu / tatil geriye bakılır, en çok 10 gün), ayardaki kur türü ve dövizler; 100 birimlik kurlar (JPY) 1 birime bölünür. O gün elle girilmiş kur ezilmez ("atlanan: EUR (elle girilmiş)"), aynı kur yeniden yazılmaz, bültende olmayan döviz atlanır. Bülten tur başına bir kez indirilir; bir otelin hatası diğerlerini durdurmaz. Sonuç (başarılı / başarısız + mesaj) kur ayarına yazılır, Kasa → Döviz kurları → TCMB kurları kartında görünür; TCMB'ye ulaşılamazsa sonraki saatte yeniden dener, mevcut kurlar olduğu gibi kalır |
 | KBS | KBS gönderici | 30 sn (ve yeni bildirim sıraya girince hemen) | Sırası gelmiş, girişi bildirilmiş KBS bildirimlerini sırayla gönderir (bugün yalnız test ortamı); geçici hatada 1 / 5 / 15 / 60 / 180 / 360 dk sonra yeniden, hak bitince "Gönderilemedi" + zil; bağlı olduğu bildirim iptal edilen bekleyeni iptal eder. KBS'si kapalı otelin bildirimi gönderilmez |
 | KBS | KBS takılı kurtarma | 5 dk | Süreç gönderim ortasında kapandıysa 5 dakikadan uzun "Gönderiliyor"da kalan bildirimi "Sırada"ya geri alır |
+| Sanal POS | Sanal POS takılan ödeme | 5 dk | 10 dakikadan uzun "Ödeme sürüyor"da kalan ödeme linkini sağlayıcıya sorarak sonuçlandırır (geri dönüş kaybolduysa): ödendiyse folyoya yazar, yarıda kaldıysa link yeniden ödenebilir olur; iyzico'da misafirin eski sekmeden ödemiş olabileceği önceki oturumları da sorar. "Doğrulanamadı" işaretli linki sormaz |
+| Sanal POS | Sanal POS folyoya yazılamayan ödeme | 5 dk | Alınmış ama folyoya yazılamamış ödemeyi (ör. açık folyo yoktu) yeniden yazar; sağlayıcıya yeniden sormaz |
+| Sanal POS | Sanal POS süre dolumu | 15 dk | Son geçerliliği geçmiş, ödenmemiş linki "Süresi doldu" yapar |
+| Sanal POS | Sanal POS takılan iade | 15 dk | 15 dakikadır "İade ediliyor"da kalan karta iade için kritik zil (`PAYMENT_GATEWAY`, bir kez): sağlayıcı panelinden kontrol edin, yeniden istemeyin |
 | KBS | KBS gecikme zili | 1 sa | Açılalı 2 saati geçmiş ve hâlâ bildirilmemiş giriş bildirimi için kritik zil (`KBS`, bildirim başına bir kez): "… yasal süre geçmeden KBS ekranından elle bildirin" |
 
 *Örnek:* Sunucu bakım için pazar 03:00–05:00 arası kapalıydı. Açılışta: outbox tarayıcısı dağıtılmamış 3 olayı dağıttı; oda ücreti işi cumartesi gecesini (zaten kapatılmıştı) kontrol etti, eksik yoktu; konaklayan temizliği pazar sabahının görevlerini açtı; bekleyen mesajlar işi 03:12'de personelin yazdığı ama gönderilemeyen WhatsApp cevabını gönderdi. Kimse bir şey yapmadı.
 
+*Örnek (TCMB kur işi):* Gece görevlisi 25 Kasım'ı 00:40'ta kapattı; iş günü 26 Kasım oldu. Kapanıştan sonraki ilk turda (00:58) TCMB kur işi 25.11.2026 bültenini indirdi ve döviz alış kuruyla USD 50,5531, EUR 55,2971 yazdı (kaynak **TCMB · 25 Kas 2026**). Sonraki saatlik turlar aynı kuru buldu, hiçbir şey yazmadı. Sabah 09:30'da müdür EUR'yu bankanın kuruyla elle 55,10 girdi; 10:58 turu EUR'yu atladı ("atlanan: EUR (elle girilmiş)"), USD'ye dokunmadı. Öğleden sonra TCMB'nin sitesi bir saat yanıt vermedi; 14:58 turu "TCMB'den alınamadı: …" yazdı, kurlar değişmedi; 15:58 turu yine başarılı oldu.
+
 ## Canlı kanallar: ekranlar nasıl kendiliğinden yenilenir
 
-Sunucu, bir şey değiştiğinde panellere socket üzerinden **yalnızca haber** gönderir ("bu otelde envanter değişti", "onaylar değişti", "manuel görevler değişti", "mesajlar değişti", "genel muhasebe değişti" — `ledger.changed`, "İK değişti" — `hr.changed`, "sadakat değişti" — `loyalty.changed`: puan hareketi, seviye, üyelik, ayar; "KBS değişti" — `kbs.changed`: kimlik bildirimleri, mutabakat, ayar); veri göndermez. Haber yalnızca o kanala abone olan — yani ilgili ekranı açık tutan — panellere gider; otelin tamamına yayın yapılmaz. Panel haberi alınca kendi sorgusunu tazeler (bazı ekranlarda en sık 10–15 saniyede bir).
+Sunucu, bir şey değiştiğinde panellere socket üzerinden **yalnızca haber** gönderir ("bu otelde envanter değişti", "onaylar değişti", "manuel görevler değişti", "mesajlar değişti", "genel muhasebe değişti" — `ledger.changed`, "İK değişti" — `hr.changed`, "sadakat değişti" — `loyalty.changed`: puan hareketi, seviye, üyelik, ayar; "KBS değişti" — `kbs.changed`: kimlik bildirimleri, mutabakat, ayar; "Sanal POS değişti" — `payment-gateway.changed`: ödeme linkleri, iadeler, ayar; Sanal POS işlemleri, link ayrıntısı ve rezervasyondaki Sanal POS kartı bununla tazelenir; "misafir yorumları değişti" — `reviews.changed`: yorum eklendi / yüklendi / etiketlendi / cevaplandı / silindi, AI analizi bitti, olumsuz konu artışı; Yorumlar listesi, yorum ayrıntısı ve Trend bununla tazelenir); veri göndermez. Haber yalnızca o kanala abone olan — yani ilgili ekranı açık tutan — panellere gider; otelin tamamına yayın yapılmaz. Panel haberi alınca kendi sorgusunu tazeler (bazı ekranlarda en sık 10–15 saniyede bir).
 
 Zil haberi kişiye (`kullanıcı`) ya da izne (`perm`) gider; rozet sunucudan bir kez gelir, sonra haberle artar. Aktivite akışı 500 ms'de bir toplu "yeni satır kimlikleri" alır; içerik HTTP'den okunur (socket kimliği şimdilik istemcinin söylediği e-postadır, bu yüzden socket'ten içerik taşınmaz).
 
@@ -473,7 +489,7 @@ Onay kararları, aktör açma / kapama, ayar değişiklikleri, kullanıcı işle
 - **Yetki:** Her uç, isteğin gövdesi doğrulanmadan **önce** kimlik ve izin denetiminden geçer: anonim → 401, izinsiz → 403. Korumalı bir ucun alan listesi yetkisize sızmaz.
 - **Otel kapsamı:** Oturum oteli taşır; her sorgu otelle süzülür. Başka otelin kaydı adres değiştirerek de görünmez.
 - **Sırlar:** SMTP ve SMS parolaları, WhatsApp token'ları AES-256-GCM ile şifreli saklanır (`SETTINGS_SECRET_KEY`); hiçbir cevapta geri dönmez. Anahtar değişirse parolalar yeniden girilir.
-- **Kişisel veri:** Kimlik numaraları maskeli; olay gövdelerinde telefon / e-posta / kart maskelenir; AI ajanları anket yorumunu kişi adı ve iletişim bilgisi olmadan görür; kimlik ve eşya fotoğrafları saklama süresi dolunca silinir; rapor tasarımcısında belge numarası sütunu yoktur.
+- **Kişisel veri:** Kimlik numaraları maskeli; olay gövdelerinde telefon / e-posta / kart maskelenir; AI ajanları anket yorumunu kişi adı ve iletişim bilgisi olmadan görür; misafir yorumlarında yazanın adı modele gitmez; kimlik ve eşya fotoğrafları saklama süresi dolunca silinir; rapor tasarımcısında belge numarası sütunu yoktur.
 - **Hız sınırı:** IP + personel başına (varsayılan dakikada 600 istek). Web chat'te IP ve oturum başına ayrı sınır.
 - **Soft delete:** Silinen kayıt veritabanından silinmez, "silindi" işaretlenir; listelerde görünmez ama izi kalır. Silinen oda numarası ya da oda tipi kodu yeniden kullanılabilir.
 - **Para:** Tutarlar metin olarak taşınır ve özel para aritmetiğiyle hesaplanır; kayan nokta hatası (0,1 + 0,2) olmaz. Envanteri azaltan yazmalar kilitle yapılır: iki resepsiyonist son odayı aynı anda satamaz.
@@ -534,6 +550,15 @@ Bu yolculukta personel üç kez dokundu: online check-in onayı, giriş ve çık
 | Bildirim zinciri | Aynı konaklamada aynı kişinin bildirimleri; her halka öncekine bağlıdır, çıkış girişi bildirilmeden gönderilmez |
 | Elle bildirildi | Personelin resmî KBS ekranından bildirip FlexHotel'de notla işaretlediği bildirim; bağlı çıkışı serbest bırakır |
 | KBS mutabakatı | İçerideki her kişinin girişi bildirilmiş mi denetimi; eksikler nedenleriyle listelenir |
+| Sanal POS | Kartla internetten ödeme almayı sağlayan ödeme kuruluşu hizmeti. FlexHotel'de sağlayıcı iyzico (sandbox / canlı) ya da dışarı çıkmayan Test ortamı; ödeme folyoya `VIRTUAL_POS` yöntemiyle düşer |
+| Ödeme linki | Konaklamaya bağlı, tutarı ve son geçerliliği belli, tek kez ödenen bağlantı (`/misafir/o/:code`); başarısız denemeden sonra yeniden denenir |
+| Barındırılan ödeme sayfası | Kartın otelin değil ödeme kuruluşunun sayfasında girildiği yöntem (iyzico Checkout Form). Kart bilgisi otelin sunucusuna hiç gelmez; otel yalnız sonucu ve kartın son 4 hanesini görür |
+| 3D Secure | Kart sahibinin bankasının ödeme sırasında ek doğrulaması (çoğunlukla SMS şifresi). FlexHotel'de ödeme kuruluşunun sayfasında yapılır |
+| Sandbox | Ödeme kuruluşunun deneme ortamı: gerçek para çekilmez, test kartlarıyla çalışılır (iyzico: `sandbox-merchant.iyzipay.com`, anahtarlar `sandbox-` ile başlar). Canlı ortamdan ayrı anahtarlarla çalışır |
+| Misafir yorumu | Google, Booking.com, Tripadvisor, Expedia, Airbnb gibi sitelerde misafirin herkese açık yazdığı yorum. FlexHotel'e otomatik gelmez; elle ya da Excel / CSV ile girilir |
+| Duygu analizi | Geri bildirim ajanının yoruma verdiği duygu (Olumlu / Nötr / Olumsuz / Karışık), −100…100 duygu puanı, konu ve departman etiketi. Personel düzeltebilir (elle etiket AI'ın yerine geçer) |
+| Önerilen cevap | Ajanın yorumun dilinde otel adına yazdığı cevap taslağı; platforma gönderilmez, personel düzenleyip kopyalar, platformda yayınlar ve **Cevaplandı** işaretler |
+| Olumsuz konu artışı (anomali) | Bir konudaki olumsuz / karışık yorumun son 7 günde ≥ 3 ve önceki 4 haftanın haftalık ortalamasının ≥ 2 katı olması; zil (`REVIEW`) aynı konu için 7 günde bir |
 
 ## Sık sorulanlar
 

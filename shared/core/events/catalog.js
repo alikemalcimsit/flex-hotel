@@ -547,6 +547,8 @@ export const EVENT_CATALOG = Object.freeze({
       'LOYALTY',
       'KBS',
       'INTEGRATION',
+      'PAYMENT_GATEWAY',
+      'REVIEW',
     ]),
     userId: z.string().uuid().nullable(),
     permission: z.string().nullable(),
@@ -1082,6 +1084,17 @@ export const EVENT_CATALOG = Object.freeze({
   }),
   'kbs.settings.changed': hotelScoped.extend({ isEnabled: z.boolean(), provider: z.string() }),
 
+  /* ── Sanal POS (modül 50) ──
+     Ödeme linki açıldı, gönderildi, ödeme başladı / sonuçlandı, süresi doldu, iptal edildi, iade istendi / sonuçlandı. Kart bilgisi taşımaz.
+     Ödeme folyoya düşünce ayrıca `payment.received` (yöntem VIRTUAL_POS). */
+  'payment_gateway.link.changed': hotelScoped.extend({
+    linkId: z.string().uuid(),
+    reservationId: z.string().uuid(),
+    status: z.enum(['OPEN', 'PROCESSING', 'PAID', 'FAILED', 'EXPIRED', 'CANCELLED']),
+    change: z.enum(['CREATED', 'SENT', 'STARTED', 'SESSION', 'PAID', 'FAILED', 'EXPIRED', 'CANCELLED', 'REFUND_REQUESTED', 'REFUNDED', 'REFUND_FAILED', 'REFUND_REJECTED']),
+  }),
+  'payment_gateway.settings.changed': hotelScoped.extend({ isEnabled: z.boolean(), provider: z.string() }),
+
   /* ── Temassız uygulamalar (modül 53) ── */
   /** Online check-in gönderildi / onaylandı / düzeltme istendi / giriş yapıldı / belgeleri silindi. Kişisel veri taşımaz. */
   'online_checkin.changed': hotelScoped.extend({
@@ -1100,6 +1113,11 @@ export const EVENT_CATALOG = Object.freeze({
   /** Açık uçlu cevabın AI etiketi istendi (insight-agent) / yazıldı. */
   'survey.analysis.requested': hotelScoped.extend({ responseId: z.string().uuid() }),
   'survey.analysis.completed': hotelScoped.extend({ responseId: z.string().uuid(), status: z.enum(['DONE', 'FAILED']) }),
+
+  /* ── Misafir yorumları (modül 54) ── insight-agent yorumu etiketler ve cevap önerir; anomali işi olumsuz konu artışında zil çalar. */
+  'review.analysis.requested': hotelScoped.extend({ reviewId: z.string().uuid() }),
+  'review.analysis.completed': hotelScoped.extend({ reviewId: z.string().uuid(), status: z.enum(['DONE', 'FAILED']) }),
+  'reviews.changed': hotelScoped.extend({ area: z.enum(['REVIEW', 'IMPORT', 'ANOMALY']), reviewId: z.string().uuid().nullable().default(null) }),
   /** Dönemin tema özeti istendi (insight-agent) / yazıldı. */
   'survey.insight.requested': hotelScoped.extend({ insightId: z.string().uuid() }),
   'survey.insight.completed': hotelScoped.extend({ insightId: z.string().uuid(), status: z.enum(['READY', 'FAILED']) }),
@@ -1659,6 +1677,8 @@ export const HR_EVENTS = Object.freeze(['hr.leave.changed', 'hr.changed', 'emplo
 export const LOYALTY_EVENTS = Object.freeze(['loyalty.points.changed', 'loyalty.tier.changed', 'loyalty.changed']);
 /** KBS (modül 58): bildirim listesi, mutabakat, ayar (`kbs.changed` kanalı). */
 export const KBS_EVENTS = Object.freeze(['kbs.notification.changed', 'kbs.settings.changed']);
+/** Sanal POS (modül 50): ödeme linkleri, işlemler, ayar (`payment-gateway.changed` kanalı). */
+export const PAYMENT_GATEWAY_EVENTS = Object.freeze(['payment_gateway.link.changed', 'payment_gateway.settings.changed']);
 
 /** Misafir portalı ve online check-in (modül 53): ekranlar bunlarla tazelenir (`guest-portal.changed` kanalı). */
 export const GUEST_PORTAL_EVENTS = Object.freeze(['online_checkin.changed', 'guest_portal.link.changed', 'guest_portal.settings.changed']);
@@ -1667,6 +1687,8 @@ export const GUEST_PORTAL_EVENTS = Object.freeze(['online_checkin.changed', 'gue
 export const SPA_EVENTS = Object.freeze(['spa.appointment.changed', 'spa.session.changed', 'spa.payment.changed', 'spa.setup.changed']);
 
 /** Anket ve memnuniyet (modül 55): ekranlar bunlarla tazelenir (`surveys.changed` kanalı). */
+/** Misafir yorumları (modül 54): liste, ayrıntı, trend (`reviews.changed` kanalı). */
+export const REVIEW_EVENTS = Object.freeze(['review.analysis.completed', 'reviews.changed']);
 export const SURVEY_EVENTS = Object.freeze(['survey.response.submitted', 'survey.analysis.completed', 'survey.insight.requested', 'survey.insight.completed', 'survey.followup.changed', 'survey.settings.changed']);
 
 /** Acente bonusu (modül 35): ekranlar bunlarla tazelenir (`agency-bonus.changed` kanalı). */

@@ -230,6 +230,20 @@ export const PERMISSIONS = Object.freeze({
   KBS_SEND: 'kbs.send',
   /** KBS ayarları (tesis kodu, kullanıcı, parola, zorunlu alanlar), bağlantı denemesi. */
   KBS_MANAGE: 'kbs.manage',
+
+  /** Sanal POS (modül 50): ödeme linkleri ve işlemler. */
+  PAYMENT_GATEWAY_VIEW: 'payment_gateway.view',
+  /** Ödeme linki oluşturmak, misafire göndermek, iptal etmek. */
+  PAYMENT_GATEWAY_SEND: 'payment_gateway.send',
+  /** Sanal POS ayarları (sağlayıcı, anahtarlar, widget ön ödemesi). */
+  PAYMENT_GATEWAY_SETUP: 'payment_gateway.setup',
+
+  /** Misafir yorumları (modül 54): liste, ayrıntı, trend. */
+  REVIEWS_VIEW: 'reviews.view',
+  /** Yoruma cevap taslağı yazmak, "cevaplandı / cevap gerekmiyor" işaretlemek. */
+  REVIEWS_REPLY: 'reviews.reply',
+  /** Yorum eklemek, dosyadan yüklemek, etiketi düzeltmek, silmek, yeniden analiz. */
+  REVIEWS_MANAGE: 'reviews.manage',
   /** Online check-in listesi ve ayrıntısı (belge fotoğrafları dahil), misafir portalı bağlantıları (modül 53). */
   GUEST_PORTAL_VIEW: 'guest_portal.view',
   /** Online check-in onayı / düzeltme isteği; portal bağlantısı ver / iptal et, daveti gönder. */
@@ -424,6 +438,12 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.KBS_VIEW]: 'KBS kimlik bildirimlerini ve mutabakatı görüntüle',
   [PERMISSIONS.KBS_SEND]: 'Hatalı KBS bildirimini tekrar gönder, elle bildirildi olarak işaretle',
   [PERMISSIONS.KBS_MANAGE]: 'KBS ayarları (tesis kodu, kullanıcı, parola, zorunlu alanlar) ve bağlantı denemesi',
+  [PERMISSIONS.PAYMENT_GATEWAY_VIEW]: 'Sanal POS ödeme linklerini ve işlemlerini görüntüle',
+  [PERMISSIONS.PAYMENT_GATEWAY_SEND]: 'Ödeme linki oluştur, misafire gönder, iptal et',
+  [PERMISSIONS.PAYMENT_GATEWAY_SETUP]: 'Sanal POS ayarları: sağlayıcı, anahtarlar, widget ön ödemesi',
+  [PERMISSIONS.REVIEWS_VIEW]: 'Misafir yorumlarını, AI etiketlerini ve trendi görüntüle',
+  [PERMISSIONS.REVIEWS_REPLY]: 'Yoruma cevap taslağı yaz, cevaplandı olarak işaretle',
+  [PERMISSIONS.REVIEWS_MANAGE]: 'Yorum ekle / dosyadan yükle, etiketi düzelt, sil, yeniden analiz et',
   [PERMISSIONS.GUEST_PORTAL_VIEW]: 'Online check-in\'leri ve belge fotoğraflarını gör, misafir portalı bağlantısını gör',
   [PERMISSIONS.GUEST_PORTAL_MANAGE]: 'Online check-in onayla / düzeltme iste; portal bağlantısı ver, iptal et, davet gönder',
   [PERMISSIONS.GUEST_PORTAL_SETUP]: 'Misafir portalı ayarları: davet ve açılış günleri, belge saklama süresi, metinler',
@@ -553,6 +573,8 @@ export const PERMISSION_GROUPS = Object.freeze([
   { key: 'hr', label: 'İK', permissions: [PERMISSIONS.HR_VIEW, PERMISSIONS.HR_MANAGE, PERMISSIONS.HR_SELF] },
   { key: 'loyalty', label: 'Sadakat programı', permissions: [PERMISSIONS.LOYALTY_VIEW, PERMISSIONS.LOYALTY_REDEEM, PERMISSIONS.LOYALTY_MANAGE] },
   { key: 'kbs', label: 'KBS kimlik bildirimi', permissions: [PERMISSIONS.KBS_VIEW, PERMISSIONS.KBS_SEND, PERMISSIONS.KBS_MANAGE] },
+  { key: 'payment_gateway', label: 'Sanal POS', permissions: [PERMISSIONS.PAYMENT_GATEWAY_VIEW, PERMISSIONS.PAYMENT_GATEWAY_SEND, PERMISSIONS.PAYMENT_GATEWAY_SETUP] },
+  { key: 'reviews', label: 'Misafir yorumları', permissions: [PERMISSIONS.REVIEWS_VIEW, PERMISSIONS.REVIEWS_REPLY, PERMISSIONS.REVIEWS_MANAGE] },
   { key: 'guest_portal', label: 'Misafir portalı ve online check-in', permissions: [PERMISSIONS.GUEST_PORTAL_VIEW, PERMISSIONS.GUEST_PORTAL_MANAGE, PERMISSIONS.GUEST_PORTAL_SETUP] },
   { key: 'surveys', label: 'Anket ve memnuniyet', permissions: [PERMISSIONS.SURVEYS_VIEW, PERMISSIONS.SURVEYS_FOLLOW_UP, PERMISSIONS.SURVEYS_SETUP] },
   { key: 'spa', label: 'Spa ve spor salonu', permissions: [PERMISSIONS.SPA_VIEW, PERMISSIONS.SPA_BOOK, PERMISSIONS.SPA_PAYMENT, PERMISSIONS.SPA_SUPERVISE, PERMISSIONS.SPA_SETUP] },
@@ -602,6 +624,12 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.KBS_VIEW,
     PERMISSIONS.KBS_SEND,
     PERMISSIONS.KBS_MANAGE,
+    PERMISSIONS.PAYMENT_GATEWAY_VIEW,
+    PERMISSIONS.PAYMENT_GATEWAY_SEND,
+    PERMISSIONS.PAYMENT_GATEWAY_SETUP,
+    PERMISSIONS.REVIEWS_VIEW,
+    PERMISSIONS.REVIEWS_REPLY,
+    PERMISSIONS.REVIEWS_MANAGE,
     PERMISSIONS.SETTINGS_VIEW,
     PERMISSIONS.ROOMS_VIEW,
     PERMISSIONS.ROOMS_MANAGE,
@@ -748,6 +776,10 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     // Sadakat (modül 56): misafirin puanını görür, folyoda kullanır, üye yapar.
     PERMISSIONS.KBS_VIEW,
     PERMISSIONS.KBS_SEND,
+    PERMISSIONS.PAYMENT_GATEWAY_VIEW,
+    PERMISSIONS.PAYMENT_GATEWAY_SEND,
+    PERMISSIONS.REVIEWS_VIEW,
+    PERMISSIONS.REVIEWS_REPLY,
     PERMISSIONS.LOYALTY_VIEW,
     PERMISSIONS.LOYALTY_REDEEM,
     // İK (modül 52): kendi izin talebi, bakiyesi ve vardiyası.
@@ -837,6 +869,7 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.MAINTENANCE_OPERATE,
   ]),
   ACCOUNTING: Object.freeze([
+    PERMISSIONS.PAYMENT_GATEWAY_VIEW,
     // Sadakat (modül 56): puan yükümlülüğünü ve indirimleri izler.
     PERMISSIONS.LOYALTY_VIEW,
     PERMISSIONS.SETTINGS_VIEW,

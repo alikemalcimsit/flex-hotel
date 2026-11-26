@@ -1,7 +1,8 @@
 import { memo, useMemo } from 'react';
-import { HOUSEKEEPING_STATUS_LABELS, ROOM_OCCUPANCY_LABELS } from '@hotelos/hotel-contracts';
 import { Icon } from '@hotelos/ui';
-import { formatDate } from '../../lib/format.js';
+import { useT } from '../../i18n/index.jsx';
+import { formatDate, formatPercent } from '../../lib/format.js';
+import { countText, guestsText } from './planText.jsx';
 import {
   BLOCK_TONES,
   DROP_TONES,
@@ -59,10 +60,10 @@ const HOUSEKEEPING_DOTS = Object.freeze({
   INSPECTED: 'bg-violet-500',
 });
 
-/** @param {{ occupancy: string, housekeepingStatus: string }} room */
-function roomStateLabel(room) {
-  const occupancy = ROOM_OCCUPANCY_LABELS[room.occupancy] ?? room.occupancy;
-  const housekeeping = HOUSEKEEPING_STATUS_LABELS[room.housekeepingStatus] ?? room.housekeepingStatus;
+/** @param {(key: string, fallback?: string) => string} t @param {{ occupancy: string, housekeepingStatus: string }} room */
+function roomStateLabel(t, room) {
+  const occupancy = t(`roomPlan.occupancy.${room.occupancy}`, room.occupancy);
+  const housekeeping = t(`roomPlan.housekeeping.${room.housekeepingStatus}`, room.housekeepingStatus);
   return `${occupancy} · ${housekeeping}`;
 }
 
@@ -79,18 +80,14 @@ function barMatches(bar, tokens) {
 }
 
 /**
+ * @param {(key: string, vars?: object) => string} t
  * @param {string} date
  * @param {object | undefined} stats
  */
-function summaryTitle(date, stats) {
+function summaryTitle(t, date, stats) {
   const { dayMonth } = dayLabel(date);
   if (!stats) return dayMonth;
-  return (
-    `${dayMonth} — giriş ${stats.arrivals} (${stats.arrivalsDone} yapıldı), ` +
-    `çıkış ${stats.departures} (${stats.departuresDone} yapıldı), konaklayan ${stats.stayovers}\n` +
-    `Satılan ${stats.sold} / satılabilir ${stats.sellable} · boş ${stats.free} · oda bekleyen ${stats.unassigned}\n` +
-    `Arızalı ${stats.outOfOrder} · hizmet dışı ${stats.outOfService} · doluluk %${stats.occupancyPct}`
-  );
+  return t('roomPlan.grid.daySummary', { ...stats, date: dayMonth, occupancy: formatPercent(stats.occupancyPct) });
 }
 
 /**
@@ -128,6 +125,7 @@ export function PlanGrid({
   onSelectReservation,
   onCreateReservation,
 }) {
+  const t = useT();
   const { dates, today } = planWindow;
   const template = `${ROOM_COLUMN_PX}px repeat(${dates.length}, minmax(${MIN_CELL_PX}px, 1fr))`;
   const summaryByDate = useMemo(() => new Map(summary.map((entry) => [entry.date, entry])), [summary]);
@@ -158,7 +156,7 @@ export function PlanGrid({
           style={{ display: 'grid', gridTemplateColumns: template }}
         >
           <div className="sticky left-0 z-10 border-r border-line bg-surface-muted px-4 py-2 text-[0.7rem] font-bold uppercase tracking-[0.08em] text-ink-muted">
-            Oda
+            {t('roomPlan.grid.room')}
           </div>
           {days.map((day) => {
             const stats = summaryByDate.get(day.date);
@@ -166,13 +164,13 @@ export function PlanGrid({
               <div
                 key={day.date}
                 aria-current={day.isToday ? 'date' : undefined}
-                title={summaryTitle(day.date, stats)}
+                title={summaryTitle(t, day.date, stats)}
                 className={`border-l border-line px-1 py-1.5 text-center ${day.isWeekend ? 'bg-info-soft/60' : ''} ${
                   day.isToday ? 'shadow-[inset_0_-3px_0_var(--color-sec)]' : ''
                 }`}
               >
                 <div className={`text-[0.7rem] font-bold capitalize ${day.isToday ? 'text-sec-strong' : 'text-ink-muted'}`}>
-                  {day.isToday ? 'Bugün' : day.weekday}
+                  {day.isToday ? t('common.today') : day.weekday}
                 </div>
                 <div className="text-xs font-semibold tabular-nums text-ink">{day.dayMonth}</div>
                 {stats && (
@@ -180,18 +178,18 @@ export function PlanGrid({
                     <span className="text-success-ink">
                       <span aria-hidden="true">↓</span>
                       {stats.arrivals}
-                      <span className="sr-only"> giriş,</span>
+                      <span className="sr-only"> {t('roomPlan.grid.srArrivals')},</span>
                     </span>
                     <span className="text-ink-muted">
                       <span aria-hidden="true">↑</span>
                       {stats.departures}
-                      <span className="sr-only"> çıkış,</span>
+                      <span className="sr-only"> {t('roomPlan.grid.srDepartures')},</span>
                     </span>
                   </div>
                 )}
                 {stats && (
                   <div className={`text-[0.65rem] font-bold tabular-nums ${occupancyTone(stats.occupancyPct)}`}>
-                    <span className="sr-only">doluluk </span>%{stats.occupancyPct}
+                    <span className="sr-only">{t('roomPlan.grid.srOccupancy')} </span>{formatPercent(stats.occupancyPct)}
                   </div>
                 )}
               </div>
@@ -246,6 +244,8 @@ const RoomRow = memo(function RoomRow({
   onSelectReservation,
   onCreateReservation,
 }) {
+  const t = useT();
+  const stateLabel = roomStateLabel(t, room);
   return (
     <div
       style={{ display: 'grid', gridTemplateColumns: template }}
@@ -280,16 +280,16 @@ const RoomRow = memo(function RoomRow({
             <span className="truncate text-[0.7rem] font-semibold text-ink-muted">{room.roomTypeCode}</span>
             {room.condition !== 'IN_SERVICE' && (
               <span
-                title={BLOCK_TONES[room.condition]?.label}
+                title={BLOCK_TONES[room.condition] ? t(BLOCK_TONES[room.condition].labelKey) : undefined}
                 className={`rounded-full px-1.5 py-0.5 text-[0.6rem] font-bold ${
                   room.condition === 'OUT_OF_ORDER' ? 'bg-danger-soft text-danger-ink' : 'bg-black/[0.06] text-ink-soft'
                 }`}
               >
-                {room.condition === 'OUT_OF_ORDER' ? 'Arıza' : 'H.dışı'}
+                {room.condition === 'OUT_OF_ORDER' ? t('roomPlan.grid.outOfOrderShort') : t('roomPlan.grid.outOfServiceShort')}
               </span>
             )}
           </div>
-          <div className="flex items-center gap-1.5 text-[0.7rem] text-ink-muted" title={roomStateLabel(room)}>
+          <div className="flex items-center gap-1.5 text-[0.7rem] text-ink-muted" title={stateLabel}>
             <span
               aria-hidden="true"
               className={`size-1.5 rounded-full ${room.occupancy === 'OCCUPIED' ? 'bg-info' : 'bg-ink-muted/40'}`}
@@ -298,8 +298,8 @@ const RoomRow = memo(function RoomRow({
               aria-hidden="true"
               className={`size-1.5 rounded-full ${HOUSEKEEPING_DOTS[room.housekeepingStatus] ?? 'bg-ink-muted/40'}`}
             />
-            <span className="truncate">{room.floor}. kat</span>
-            <span className="sr-only">, {roomStateLabel(room)}</span>
+            <span className="truncate">{t('roomPlan.shared.floor', { floor: room.floor })}</span>
+            <span className="sr-only">, {stateLabel}</span>
           </div>
         </div>
       </div>
@@ -320,8 +320,8 @@ const RoomRow = memo(function RoomRow({
             type="button"
             style={{ gridColumn: index + 2, gridRow: 1 }}
             className={`${tone} cursor-cell transition-colors hover:bg-info-soft/60 focus-visible:bg-info-soft/60 focus-visible:outline-none`}
-            aria-label={`${room.number} numaralı odaya ${day.date} girişli rezervasyon aç`}
-            title="Bu odaya bu gün girişli rezervasyon aç"
+            aria-label={t('roomPlan.grid.createAria', { room: room.number, date: day.date })}
+            title={t('roomPlan.grid.createTitle')}
             onClick={() => onCreateReservation(room, day.date)}
           />
         );
@@ -335,9 +335,12 @@ const RoomRow = memo(function RoomRow({
           className={`z-10 m-1 flex items-center gap-1 self-center overflow-hidden rounded-item px-2 py-1 text-[0.7rem] font-semibold ${
             BLOCK_TONES[block.type]?.bar ?? ''
           }`}
-          title={`${BLOCK_TONES[block.type]?.label}: ${block.reason} (${formatDate(block.startDate)} → ${
-            block.endDate ? formatDate(block.endDate) : 'süresiz'
-          })`}
+          title={t('roomPlan.grid.blockTitle', {
+            type: BLOCK_TONES[block.type] ? t(BLOCK_TONES[block.type].labelKey) : block.type,
+            reason: block.reason,
+            from: formatDate(block.startDate),
+            to: block.endDate ? formatDate(block.endDate) : t('roomPlan.shared.openEnded'),
+          })}
         >
           <Icon name="alertTriangle" className="size-3 shrink-0" />
           <span className="truncate">{block.reason}</span>
@@ -362,18 +365,26 @@ const RoomRow = memo(function RoomRow({
 });
 
 function ReservationBar({ bar, room, canOperate, isDragging, isMatch, onDragStart, onDragEnd, onSelect }) {
+  const t = useT();
   const tone = RESERVATION_TONES[bar.status] ?? RESERVATION_TONES.CONFIRMED;
   // Kapanmış dilim (misafir buradan taşındı) geçmiştir; sürüklenemez.
   const draggable = canOperate && !bar.movedOut && MOVABLE_STATUSES.has(bar.status);
   const summary = [
-    `${bar.guestName ?? 'Misafir'} · ${bar.confirmationCode} · ${tone.label}`,
-    `${formatDate(bar.checkIn)} → ${formatDate(bar.checkOut)} (${bar.nights} gece) · ${bar.adults} yetişkin` +
-      (bar.children > 0 ? ` + ${bar.children} çocuk` : ''),
-    bar.movedIn ? `${formatDate(bar.sliceFrom)} gecesi bu odaya taşındı` : null,
+    `${bar.guestName ?? t('roomPlan.shared.guest')} · ${bar.confirmationCode} · ${t(tone.labelKey)}`,
+    t('roomPlan.grid.barDates', {
+      checkIn: formatDate(bar.checkIn),
+      checkOut: formatDate(bar.checkOut),
+      nights: countText(t, 'roomPlan.shared.nights', bar.nights),
+      guests: guestsText(t, bar.adults, bar.children),
+    }),
+    bar.movedIn ? t('roomPlan.grid.movedIn', { date: formatDate(bar.sliceFrom) }) : null,
     bar.movedOut
-      ? `${formatDate(bar.sliceTo)} gecesi başka odaya taşındı${bar.moveReason ? ` (${bar.moveReason})` : ''}`
+      ? t(bar.moveReason ? 'roomPlan.grid.movedOutReason' : 'roomPlan.grid.movedOut', {
+          date: formatDate(bar.sliceTo),
+          reason: bar.moveReason,
+        })
       : null,
-    bar.typeMismatch ? `Misafirin oda tipi ${bar.roomTypeCode}, oda ${room.roomTypeCode}` : null,
+    bar.typeMismatch ? t('roomPlan.grid.typeMismatch', { guestType: bar.roomTypeCode, roomType: room.roomTypeCode }) : null,
   ]
     .filter(Boolean)
     .join('\n');
@@ -420,7 +431,7 @@ function ReservationBar({ bar, room, canOperate, isDragging, isMatch, onDragStar
     >
       {bar.continuesBefore && <span aria-hidden="true">‹</span>}
       {bar.movedIn && (
-        <span aria-hidden="true" className="shrink-0" title="Bu odaya taşındı">
+        <span aria-hidden="true" className="shrink-0" title={t('roomPlan.grid.movedInTitle')}>
           ↳
         </span>
       )}

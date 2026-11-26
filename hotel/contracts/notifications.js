@@ -84,7 +84,7 @@ export function notificationRetryAt(attemptsMade, now) {
 /* ─────────────── Tetikleyiciler ve şablonlar ─────────────── */
 
 /** Şablonu olan olaylar. */
-export const NOTIFICATION_TRIGGERS = Object.freeze(['RESERVATION_CONFIRMED', 'ROOM_ASSIGNED', 'CHECKED_IN', 'CHECKED_OUT', 'CHECKIN_INVITE', 'SURVEY_POST_STAY', 'SURVEY_MID_STAY', 'SPA_BOOKED', 'SPA_REMINDER']);
+export const NOTIFICATION_TRIGGERS = Object.freeze(['RESERVATION_CONFIRMED', 'ROOM_ASSIGNED', 'CHECKED_IN', 'CHECKED_OUT', 'CHECKIN_INVITE', 'SURVEY_POST_STAY', 'SURVEY_MID_STAY', 'SPA_BOOKED', 'SPA_REMINDER', 'PAYMENT_LINK']);
 
 /** Geçmişte görünen bütün kaynaklar (şablonlu olaylar + kanal testi). */
 export const NOTIFICATION_SOURCES = Object.freeze([...NOTIFICATION_TRIGGERS, 'CHANNEL_TEST']);
@@ -99,6 +99,7 @@ export const NOTIFICATION_SOURCE_LABELS = Object.freeze({
   SURVEY_MID_STAY: 'Ara anket',
   SPA_BOOKED: 'Spa randevu onayı',
   SPA_REMINDER: 'Spa randevu hatırlatması',
+  PAYMENT_LINK: 'Ödeme linki',
   CHANNEL_TEST: 'Kanal testi',
 });
 
@@ -119,6 +120,8 @@ export const NOTIFICATION_TRIGGER_HINTS = Object.freeze({
     'Konaklamaya bağlı spa randevusu ya da ders kaydı kesinleşince gönderilir (personel açınca, misafir portaldan alınca, yedekten asıla geçince). {hizmetAdi}, {randevuTarihi} ve {randevuSaati} randevunun bilgileridir.',
   SPA_REMINDER:
     'Randevudan, spa ayarındaki saat kadar önce gönderilir (konaklamaya bağlı açık randevuya; ayarda 0 ise gönderilmez).',
+  PAYMENT_LINK:
+    'Personel rezervasyondan / folyodan sanal POS ödeme linkini gönderince gider. {odemeLinki} misafirin ödeme bağlantısı, {odemeTutari} tutarı, {odemeSonTarihi} son geçerlilik günüdür.',
 });
 
 /**
@@ -171,6 +174,9 @@ export const TEMPLATE_VARIABLES = Object.freeze({
   hizmetAdi: 'Spa hizmetinin / dersin adı',
   randevuTarihi: 'Spa randevusunun günü',
   randevuSaati: 'Spa randevusunun saati',
+  odemeLinki: 'Sanal POS ödeme bağlantısı',
+  odemeTutari: 'Ödenecek tutar (para birimiyle)',
+  odemeSonTarihi: 'Ödeme bağlantısının son geçerlilik günü',
 });
 
 const STAY_VARIABLES = Object.freeze([
@@ -201,6 +207,7 @@ export const TRIGGER_VARIABLES = Object.freeze({
   SURVEY_MID_STAY: Object.freeze([...STAY_VARIABLES, 'odaNo', 'anketLinki']),
   SPA_BOOKED: Object.freeze([...STAY_VARIABLES, 'hizmetAdi', 'randevuTarihi', 'randevuSaati']),
   SPA_REMINDER: Object.freeze([...STAY_VARIABLES, 'hizmetAdi', 'randevuTarihi', 'randevuSaati']),
+  PAYMENT_LINK: Object.freeze([...STAY_VARIABLES, 'odemeLinki', 'odemeTutari', 'odemeSonTarihi']),
 });
 
 /** Önizleme ve uzunluk denetimi için gerçekçi (uzunca) örnek değerler. */
@@ -222,6 +229,9 @@ export const TEMPLATE_SAMPLE_VALUES = Object.freeze({
   hizmetAdi: 'Aromaterapi Masajı (60 dk)',
   randevuTarihi: '16.09.2026',
   randevuSaati: '15:30',
+  odemeLinki: 'https://hotel.flexai.tr/misafir/o/q8Zr2LwX5aTn0bK3vYcP7dJ1sMhE4uGf',
+  odemeTutari: '2.480,00 TL',
+  odemeSonTarihi: '19.09.2026',
 });
 
 const VARIABLE_PATTERN = /\{([A-Za-z]+)\}/g;
@@ -512,6 +522,20 @@ export const DEFAULT_NOTIFICATION_TEMPLATES = Object.freeze([
     'Dear {misafirAdi},\n\nYour {hizmetAdi} appointment is today at {randevuSaati}. We look forward to seeing you at the spa reception 10 minutes early.\n\n{otelAdi} · {otelTelefonu}',
   ),
   en('SPA_REMINDER', 'SMS', null, '{otelAdi}: your {hizmetAdi} appointment is today at {randevuSaati}. See you soon.'),
+  tr(
+    'PAYMENT_LINK',
+    'EMAIL',
+    'Ödeme bağlantınız — {otelAdi}',
+    'Sayın {misafirAdi},\n\n{onayKodu} numaralı rezervasyonunuz için {odemeTutari} tutarındaki ödemeyi aşağıdaki güvenli bağlantıdan kartla yapabilirsiniz. Kart bilgileriniz ödeme kuruluşunun sayfasında girilir, otelimize iletilmez.\n\nÖdeme: {odemeLinki}\n\nBağlantı {odemeSonTarihi} tarihine kadar geçerlidir ve size özeldir. Sorularınız için: {otelTelefonu}\n{otelAdi}',
+  ),
+  tr('PAYMENT_LINK', 'SMS', null, '{otelAdi}: {odemeTutari} ödemeniz için güvenli bağlantı ({odemeSonTarihi} tarihine kadar): {odemeLinki}'),
+  en(
+    'PAYMENT_LINK',
+    'EMAIL',
+    'Your payment link — {otelAdi}',
+    'Dear {misafirAdi},\n\nYou can pay {odemeTutari} for reservation {onayKodu} by card through the secure link below. Your card details are entered on the payment provider\'s page and are never shared with the hotel.\n\nPay: {odemeLinki}\n\nThe link is valid until {odemeSonTarihi} and is personal. Questions: {otelTelefonu}\n{otelAdi}',
+  ),
+  en('PAYMENT_LINK', 'SMS', null, '{otelAdi}: secure link to pay {odemeTutari} (valid until {odemeSonTarihi}): {odemeLinki}'),
 ]);
 
 /* ─────────────── Personel uyarıları ─────────────── */
@@ -546,6 +570,8 @@ export const STAFF_ALERT_KINDS = Object.freeze([
   'LOYALTY',
   'KBS',
   'INTEGRATION',
+  'PAYMENT_GATEWAY',
+  'REVIEW',
 ]);
 
 export const STAFF_ALERT_KIND_LABELS = Object.freeze({
@@ -578,6 +604,8 @@ export const STAFF_ALERT_KIND_LABELS = Object.freeze({
   LOYALTY: 'Sadakat (seviye yükseldi, puanın süresi doluyor)',
   KBS: 'KBS kimlik bildirimi (gönderilemedi, gecikti)',
   INTEGRATION: 'Webhook aboneliği kapandı (entegrasyon)',
+  PAYMENT_GATEWAY: 'Sanal POS (online ödeme alındı, iade başarısız)',
+  REVIEW: 'Misafir yorumları (olumsuz konu artışı)',
 });
 
 export const STAFF_ALERT_SEVERITIES = Object.freeze(['INFO', 'WARNING', 'CRITICAL']);

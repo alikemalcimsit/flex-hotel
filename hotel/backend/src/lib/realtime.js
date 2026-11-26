@@ -19,6 +19,8 @@ import {
   HR_EVENTS,
   LOYALTY_EVENTS,
   KBS_EVENTS,
+  PAYMENT_GATEWAY_EVENTS,
+  REVIEW_EVENTS,
   GUEST_PORTAL_EVENTS,
   SURVEY_EVENTS,
   SPA_EVENTS,
@@ -165,6 +167,10 @@ export const HR_CHANNEL = 'hr.changed';
 export const LOYALTY_CHANNEL = 'loyalty.changed';
 /** KBS (modül 58): kimlik bildirimleri, mutabakat, ayar. */
 export const KBS_CHANNEL = 'kbs.changed';
+/** Sanal POS (modül 50): ödeme linkleri ve işlemler. */
+export const PAYMENT_GATEWAY_CHANNEL = 'payment-gateway.changed';
+/** Misafir yorumları (modül 54). */
+export const REVIEWS_CHANNEL = 'reviews.changed';
 
 /** Misafir portalı ve online check-in (modül 53). */
 export const GUEST_PORTAL_CHANNEL = 'guest-portal.changed';
@@ -225,6 +231,8 @@ const CHANNEL_EVENTS = Object.freeze({
   [HR_CHANNEL]: HR_EVENTS,
   [LOYALTY_CHANNEL]: LOYALTY_EVENTS,
   [KBS_CHANNEL]: KBS_EVENTS,
+  [PAYMENT_GATEWAY_CHANNEL]: PAYMENT_GATEWAY_EVENTS,
+  [REVIEWS_CHANNEL]: REVIEW_EVENTS,
   [GUEST_PORTAL_CHANNEL]: GUEST_PORTAL_EVENTS,
   [SURVEY_CHANNEL]: SURVEY_EVENTS,
   [SPA_CHANNEL]: SPA_EVENTS,

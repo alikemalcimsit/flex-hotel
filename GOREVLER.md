@@ -3773,12 +3773,41 @@ olay kataloğu, zamanlanmış işler, tablolar, modül durumu; elle düzenlenmez
 
 ### 50. Sanal POS / ödeme geçidi — Ali Kemal
 **Gün sonu:** Misafire ödeme linki gönderiliyor veya widget'ta kartla ödeme yapılıyor; sonuç otomatik folyoya düşüyor.
-- [ ] Backend: PaymentGatewayConfig, PaymentTransaction tabloları; sağlayıcı adaptörü (iyzico veya PayTR)
-- [ ] Backend: ödeme linki üret, 3D Secure akışı, webhook → `payment.received`
-- [ ] Ekran: Sağlayıcı ayarları
-- [ ] Ekran: "Ödeme linki gönder" (rezervasyon / folyo üzerinden; e-posta / WhatsApp ile)
-- [ ] Widget'a kart ödeme adımı
-- [ ] Ekran: İşlem listesi (başarılı / başarısız / iade)
+- [x] Backend: `PaymentGatewaySettings`, `PaymentLink`, `PaymentLinkEvent`, `GatewayRefund`; sağlayıcı adaptörü **iyzico** (Checkout Form) + Test ortamı
+- [x] Backend: ödeme linki üret, 3D Secure (iyzico'nun barındırılan sayfasında), geri dönüş → sonucu sunucu sorar → `payment.received` (VIRTUAL_POS)
+- [x] Ekran: Sağlayıcı ayarları (`/sanal-pos/ayarlar`)
+- [x] Ekran: "Ödeme linki oluştur / gönder" (rezervasyon ayrıntısı; şablon `PAYMENT_LINK`, açık kanallardan)
+- [x] Widget'a kart ödeme adımı (ayardaki ön ödeme: ilk gece / tamamı) + portalda "Kartla öde"
+- [x] Ekran: İşlem listesi (`/sanal-pos/linkler`: ödendi / başarısız / süresi doldu / iade)
+
+> **📌 Modül 50 tamamlandı (26 Kasım 2026 — Ali Kemal). iyzico sandbox'ta uçtan uca deneme BEKLİYOR.** iyzico bağlantısı gerçek:
+> resmî doküman ve iyzipay-node SDK'sına göre yazıldı, IYZWSv2 istek imzası ve cevap imzası resmî test vektörleriyle sınandı
+> (`providers/iyzico.test.js`). Sandbox anahtarı (sandbox-merchant.iyzipay.com, ücretsiz) girilince sandbox'ta denenecek; canlı para
+> için otelin iyzico üye iş yeri sözleşmesi ve canlı anahtarı gerekir. Bugün uçtan uca çalışan: **Test ortamı** (taklit ödeme sayfası).
+>
+> Kararlar: **barındırılan ödeme sayfası** — kart bilgisi otele hiç gelmez (PCI kapsamı dışı), 3D Secure iyzico'da. Geri dönüşte
+> tarayıcıdan yalnız token gelir; sunucu sonucu iyzico'ya kendisi sorar, imza + `price` + para birimi + sepet kimliği (= link)
+> tutmazsa "doğrulanamadı" (folyoya yazılmaz, kritik zil). Ödeme folyoya `VIRTUAL_POS` (kaynak anahtarı sağlayıcının ödeme no'su:
+> aynı sonuç iki kez gelse de tek; aynı linke ikinci gerçek ödeme ayrı satır + zil); para bankada olduğundan büyük ödeme onayına
+> gitmez — **Test ortamında gider** (TEST seçip "ödendi" yazmak dört gözü atlatmasın). Test ödemesi yalnız sunucunun açtığı güncel
+> oturumla. Link açıldığı sağlayıcı / ortam değişince ödenemez. Ödenip folyoya yazılamayan (açık folyo yok) link "ödendi" kalır,
+> `paymentId` boş, kritik zil, iş yeniden yazar; link bir daha ödemeye açılmaz. Kurtarma işi geri dönüşü gelmeyen denemeyi ve
+> önceki oturumları sorar. **İade dört gözle** (`GATEWAY_REFUND`): onaylanınca iyzico `/payment/refund` (kalem işlem no'su) →
+> folyoya eksi VIRTUAL_POS (onayına bağlı); ağ hatasında "sonuç belirsiz" (panelden kontrol), takılan iade zili.
+>
+> **API** `/payment-gateway`: `settings` (+ `test`), `links` (+ `:id`, `send`, `cancel`, `refund`), `reservations/:id` (+ `links`);
+> misafir `/public/pay/:code` (+ `start`, `callback` form POST → 303, `test-checkout`); portal `POST /public/portal/:token/pay`;
+> widget `reserve` cevabına `payment`. İzinler `payment_gateway.view` (müdür, ön büro, muhasebe), `.send` (müdür, ön büro), `.setup`
+> (müdür); iade `payment.refund`. Olaylar `payment_gateway.link.changed`, `payment_gateway.settings.changed`; kanal
+> `payment-gateway.changed`; zil `PAYMENT_GATEWAY`; bildirim tetikleyicisi `PAYMENT_LINK`. Migration `20261126160000_payment_gateway`.
+>
+> **Test:** iyzico birim 6 (resmî imza vektörleri, istek gövdesi, sonuç eşleme, hata türleri); entegrasyon 5 (link + gönderim + misafir
+> ödemesi uçtan uca + tekrar gelen geri dönüş + sahte token + test eşiği; folyoya yazılamayan ödeme ve yeniden yazım; kart reddi /
+> ikinci deneme / yarıda bırakma kurtarma / süre dolumu; dört gözlü iade; portal + widget + izinler). Ödeme, folyo, onay, bildirim,
+> portal, widget regresyonu 106/106.
+>
+> **Devir:** 84 (provizyon, kart token'ı, ters ibraz) aynı sağlayıcı arayüzüne eklenir. iyzico webhook (X-IYZ-SIGNATURE-V3) hesapta
+> açtırılınca kurtarma işinin yanına eklenebilir. Bilinçli sınır: PayTR adaptörü yok (arayüz hazır).
 
 > **FlexAI 2.0'dan not (3 Kasım 2026 — Ahmet):** 84 provizyon (al, artır, kapat, serbest bırak), kart token'ı ve ters ibraz
 > bildirimi isteyecek; sağlayıcı arayüzünü bunları sonradan ekleyebilecek biçimde kur (49'un `providers/` deseni:
@@ -3982,12 +4011,37 @@ olay kataloğu, zamanlanmış işler, tablolar, modül durumu; elle düzenlenmez
 
 ### 54. Misafir yorum entegrasyonu + duygu analizi — Ali Kemal
 **Gün sonu:** Google / Booking yorumları sisteme düşüyor; AI olumlu-olumsuz ve konu etiketi veriyor, cevap öneriyor; trend grafiği var.
-- [ ] Backend: Review, ReviewAnalysis tabloları; yorum çekme (API varsa) + manuel / Excel yükleme
-- [ ] insight-agent paketi (toplu çalışır: duygu, konu etiketi, önerilen cevap, anomali: "temizlik şikâyeti bu hafta 3 kat arttı")
-- [ ] Ekran: Yorum listesi (kaynak, puan, duygu, konu; filtre)
-- [ ] Ekran: Yorum detayı + önerilen cevap → düzenle → gönder / kopyala
-- [ ] Ekran: Trend grafiği (haftalık duygu, konu dağılımı)
-- [ ] Anomali → yöneticiye bildirim
+- [x] Backend: `Review` (analiz aynı satırda, 1:1), `ReviewImport`, `ReviewAnomaly`; elle ekleme + Excel / CSV yükleme (API çekme yok — not)
+- [x] insight-agent'a yorum işi (`review.analysis.requested`): duygu, −100…100 puan, konu, departman, dil, Türkçe özet, önerilen cevap; anomali işi
+- [x] Ekran: Yorum listesi (kaynak, puan, duygu, konu, departman, cevap durumu; filtre)
+- [x] Ekran: Yorum detayı + önerilen cevap → düzenle → kopyala → "cevaplandı"
+- [x] Ekran: Trend (haftalık sayı / puan / duygu, konu ve departman dağılımı, anomaliler)
+- [x] Anomali → müdüre zil (`REVIEW`)
+
+> **📌 Modül 54 tamamlandı (27 Kasım 2026 — Ali Kemal).** **Otomatik çekme yok:** Google Business Profile API OAuth + Google'ın
+> erişim onayını, Booking.com yorum API'si bağlantı ortaklığını istiyor; yorumlar elle ya da Excel / CSV ile gelir (Booking extranet ve
+> Google dışa aktarım başlıkları otomatik eşleşir: `REVIEW_IMPORT_FIELDS`). Cevap platforma gönderilmez: kopyalanır, "cevaplandı"
+> işaretlenir.
+>
+> Kararlar: yükleme modül 26'nın deseninde (tarayıcı okur, sunucu önizler, **ya hep ya hiç**, aynı istek kimliği ikinci kez yazmaz);
+> olumlu / olumsuz ayrı sütunlar "Olumlu: … / Olumsuz: …" olarak birleşir; tarih yerel / ISO / ISO saatli / Excel seri günü; puan
+> kaynağın ölçeğinde (Google / Tripadvisor / Airbnb 5, Booking / Expedia 10) ve %'ye çevrilir. **Mükerrer:** kaynak + dış kimlik, yoksa
+> kaynak + gün + yazar + başlık + metin (büyük / küçük harf ve boşluk duyarsız); silinen yorumun anahtarı serbest kalır. **AI:** kuyruk
+> işi dakikada en çok 40 yorumu ister (yükleme ajanı boğmasın), 30 dk'da sonuç yoksa yeniden; ajan kayıtlı değilse (model anahtarı
+> yok) istemez, yorumlar "analiz bekliyor" kalır; yazanın adı modele gitmez; cevap yorumun dilinde, söz vermez, kişisel veri yazmaz.
+> Personel etiketi düzeltebilir (`manuallyTagged`); "yeniden analiz" etiketi AI'a bırakır. **Anomali:** son 7 gün olumsuz / karışık
+> konu sayısı ≥ 3 ve önceki 4 haftanın haftalık ortalamasının ≥ 2 katı ("Diğer" hariç); otel + konu + hafta başına bir kez, 6 saatte bir.
+>
+> **API** `/reviews`: liste (+ özet), `trends`, `import`, `:id` (+ `tags`, `reply`, `reanalyze`, sil). İzinler `reviews.view` / `.reply`
+> (müdür, ön büro), `.manage` (müdür). Olaylar `review.analysis.requested` / `.completed`, `reviews.changed`; kanal `reviews.changed`;
+> zil `REVIEW`. Migration `20261127090000_reviews`.
+>
+> **Test:** sözleşme 9 (ölçek, anahtar, hafta, anomali, Booking / Google başlıkları, satır okuma, şemalar), ajan +2 (yorum istemi
+> kişisel veri taşımaz, ayrıştırma sınırları; etiket + cevap, AI yok / bozuk cevap), entegrasyon 2 (Booking dosyası önizleme / ya hep ya
+> hiç / yazma / tekrar / mükerrer + sahte modelle analiz; elle ekleme, etiket, cevap, trend, anomali zili bir kez, silme, izinler).
+>
+> **Devir:** 80 / 81 / 102 aynı ajanı ve şemayı (duygu puanı, konu, departman, dil) kullanır. Google API erişimi alınırsa `reviews`
+> modülüne çekme işi eklenir (dedupe dış kimlikle hazır).
 
 > **FlexAI 2.0'dan not (3 Kasım 2026 — Ahmet):** insight-agent'ın çıktısını şemalı yaz (duygu puanı, konu, departman, dil):
 > 80 (tercih çıkarma), 81 (konaklama içi duygu) ve 102 (kalite skoru) aynı ajanı ve şemayı kullanacak.
@@ -4285,11 +4339,26 @@ olay kataloğu, zamanlanmış işler, tablolar, modül durumu; elle düzenlenmez
 
 ### 60. Çoklu dil & çoklu para birimi — Ali Kemal
 **Gün sonu:** Arayüz TR / EN arasında geçiyor; fiyatlar seçilen para biriminde görünüyor; günlük kur otomatik geliyor.
-- [ ] Frontend: i18n altyapısı (çeviri dosyaları, dil seçici, tarih / sayı formatı)
-- [ ] Tüm mevcut ekranların metinlerini çeviri anahtarına taşıma
-- [ ] Backend: ExchangeRate günlük çekme (TCMB), kur geçmişi
-- [ ] Ekran: Para birimi seçici; fiyat gösterimlerinde dönüşüm
-- [ ] Fatura ve widget'ta döviz desteği
+- [x] Frontend: i18n altyapısı (alan alan sözlükler `src/i18n/{tr,en}`, dil seçici, tarih / sayı formatı dile duyarlı)
+- [ ] Tüm mevcut ekranların metinlerini çeviri anahtarına taşıma — **kısmi (kullanıcı kararı):** menü, giriş, üst çubuk, ön büro, rezervasyon, oda planı / odalar, folyo, kasa ve kurlar taşındı; kalanlar kademeli
+- [x] Backend: ExchangeRate günlük çekme (TCMB), kur geçmişi (kaynak + bülten günü)
+- [x] Ekran: Para birimi seçici (kullanıcı tercihi); fiyat gösterimlerinde yaklaşık karşılık (`MoneyText`)
+- [x] Fatura ve widget'ta döviz desteği (fatura TL + döviz karşılığı notu; widget döviz seçici, yaklaşık fiyat, ön ödeme bağlantısı)
+
+> **📌 Modül 60 tamamlandı (27 Kasım 2026 — Ali Kemal; çeviri kapsamı kullanıcı kararıyla "altyapı + ana ekranlar").**
+> **TCMB:** herkese açık XML (`/kurlar/YYYYAA/GGAAYYYY.xml`, biçim gerçek bültenle doğrulandı); iş günü B'nin kuru = B'den önceki son
+> bülten (hafta sonu atlanır, tatilde 404 → geriye; en çok 10 gün), ayardaki kur türü (döviz / efektif alış / satış), birim (JPY 100)
+> bölünür. Saatlik iş + "şimdi çek"; elle girilen kur ezilmez (koşullu yazım), TCMB'den gelen değeri elle aynısıyla kaydetmek onaylar.
+> Çekme sonucu ayarın sürümünü değiştirmez; bir otelin hatası işi durdurmaz; bülten tur başına bir kez iner.
+> **Fatura:** TL kesilir; taslakta seçilen dövizin karşılığı kesimde kesim gününe kadarki son kurla (en çok 3 gün eski) hesaplanır,
+> UBL notuna ve PDF'e yazılır (`FOREIGN_RATE_MISSING` / `FOREIGN_RATE_STALE`). Tam dövizli e-fatura (DocumentCurrencyCode ≠ TRY) yok.
+> **Widget:** güncel kurlu ve kur ayarındaki dövizler; misafir seçer, fiyatın yanında "yaklaşık" karşılık; rezervasyon otelin para
+> biriminde; modül 50'nin ön ödeme bağlantısı widget'ta gösterilir. **Kullanıcı:** `locale` (tr / en) ve `displayCurrency`;
+> `PATCH /auth/me/preferences`. Migration `20261127120000_i18n_currency`.
+>
+> **Test:** sözleşme 3 (bülten günleri, kur, karşılık, şemalar), TCMB okuyucu 2 (gerçek bülten, arşiv adresi, tatil, HTTP hatası),
+> entegrasyon 2 (çekme kuralları, elle öncelik, ulaşılamama, ayar sürümü; tercih, widget dövizleri) + fatura döviz karşılığı 1; ön yüz
+> sözlük eşitliği testi.
 
 ### 61. Webhook & açık API — arkadaşın
 **Gün sonu:** Dış sistemler API key ile bağlanıyor; istedikleri event'i kendi URL'lerine alıyor; dokümantasyon sayfası var.
@@ -4415,6 +4484,15 @@ olay kataloğu, zamanlanmış işler, tablolar, modül durumu; elle düzenlenmez
 >
 > Paketler yeşil: backend birim 806, sözleşme 699, ön yüz 170, entegrasyon 856 (tam koşuda yerel veritabanı bir an
 > erişilemez olunca düşen 2 dosya yeniden koşturuldu: 43/43).
+>
+> **Ali'nin 50 / 54 / 60'ıyla birleşimde (26 Kasım):** dil / gösterim para birimi tercihi `User.hotelId`'ye göre
+> yazılıyordu → başka otelde (erişimle) çalışan zincir üyesi tercih değiştirince 401 ile oturumdan düşüyordu; tercih artık
+> kişiye göre yazılır, önce o otele erişimin sürdüğü denetlenir (entegrasyon testi eklendi). Tercih kaydı tarayıcıdaki
+> oturumdan açık oteli siliyordu (sayfa yenilenince seçici kayboluyordu) → düzeltildi. Zincir menüsü, otel seçici ve
+> "erişiminiz kaldırıldı" uyarısı İngilizce sözlüğe eklendi. Migration adı Ali'nin aynı zaman damgalı `reviews`
+> migration'ından sonraya alındı: `20261127130000_chain_console`. Yeni otel sihirbazı sanal POS ayarını kopyalamaz (anahtar
+> otele özeldir) ve kur ayarını kopyalamaz (yeni otelde TCMB çekme kapalı başlar). Birleşik paketler yeşil: backend birim
+> 814, sözleşme 717, ön yüz 200, çekirdek 52, entegrasyon 867.
 
 ---
 

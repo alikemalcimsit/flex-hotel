@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { Spinner } from '@hotelos/ui';
 import { useAuthStore } from './store/auth.js';
+import { useT } from './i18n/index.jsx';
 import { AppLayout } from './layout/AppLayout.jsx';
 import { ToastHost } from './components/ToastHost.jsx';
 import { LoginPage } from './pages/LoginPage.jsx';
@@ -233,6 +234,10 @@ const KbsNotificationsPage = lazy(() => import('./pages/kbs/NotificationsPage.js
 const KbsNotificationPage = lazy(() => import('./pages/kbs/NotificationPage.jsx').then((m) => ({ default: m.NotificationPage })));
 const KbsReconciliationPage = lazy(() => import('./pages/kbs/ReconciliationPage.jsx').then((m) => ({ default: m.ReconciliationPage })));
 const KbsSettingsPage = lazy(() => import('./pages/kbs/KbsSettingsPage.jsx').then((m) => ({ default: m.KbsSettingsPage })));
+const GatewayLayout = lazy(() => import('./pages/payment-gateway/GatewayLayout.jsx').then((m) => ({ default: m.GatewayLayout })));
+const GatewayLinksPage = lazy(() => import('./pages/payment-gateway/LinksPage.jsx').then((m) => ({ default: m.LinksPage })));
+const GatewayLinkPage = lazy(() => import('./pages/payment-gateway/LinkPage.jsx').then((m) => ({ default: m.LinkPage })));
+const GatewaySettingsPage = lazy(() => import('./pages/payment-gateway/GatewaySettingsPage.jsx').then((m) => ({ default: m.GatewaySettingsPage })));
 const HrLayout = lazy(() => import('./pages/hr/HrLayout.jsx').then((m) => ({ default: m.HrLayout })));
 const HrLeavesPage = lazy(() => import('./pages/hr/LeavesPage.jsx').then((m) => ({ default: m.LeavesPage })));
 const HrLeaveBalancesPage = lazy(() => import('./pages/hr/LeaveBalancesPage.jsx').then((m) => ({ default: m.LeaveBalancesPage })));
@@ -294,6 +299,10 @@ const ArrivalsTab = lazy(() => import('./pages/front-desk/ArrivalsTab.jsx').then
 const DeparturesTab = lazy(() => import('./pages/front-desk/DeparturesTab.jsx').then((m) => ({ default: m.DeparturesTab })));
 const OnlineCheckinTab = lazy(() => import('./pages/guest-portal/OnlineCheckinTab.jsx').then((m) => ({ default: m.OnlineCheckinTab })));
 const GuestPortalSettingsPage = lazy(() => import('./pages/guest-portal/GuestPortalSettingsPage.jsx').then((m) => ({ default: m.GuestPortalSettingsPage })));
+const ReviewsLayout = lazy(() => import('./pages/reviews/ReviewsLayout.jsx').then((m) => ({ default: m.ReviewsLayout })));
+const ReviewsPage = lazy(() => import('./pages/reviews/ReviewsPage.jsx').then((m) => ({ default: m.ReviewsPage })));
+const ReviewPage = lazy(() => import('./pages/reviews/ReviewPage.jsx').then((m) => ({ default: m.ReviewPage })));
+const ReviewTrendsPage = lazy(() => import('./pages/reviews/TrendsPage.jsx').then((m) => ({ default: m.TrendsPage })));
 const SurveysLayout = lazy(() => import('./pages/surveys/SurveysLayout.jsx').then((m) => ({ default: m.SurveysLayout })));
 const SurveyReportPage = lazy(() => import('./pages/surveys/SurveyReportPage.jsx').then((m) => ({ default: m.SurveyReportPage })));
 const SurveyResponsesPage = lazy(() => import('./pages/surveys/SurveyResponsesPage.jsx').then((m) => ({ default: m.SurveyResponsesPage })));
@@ -356,11 +365,12 @@ function RequireTaskScope({ children }) {
 }
 
 export default function App() {
+  const t = useT();
   return (
     <>
       {/* Sayfa parçası inerken kısa bir bekleme göstergesi; yerel ağda göz
           kırpması kadar sürer ama boş ekran bırakmaz. */}
-      <Suspense fallback={<Spinner label="Sayfa yükleniyor…" className="py-20" />}>
+      <Suspense fallback={<Spinner label={t('common.pageLoading')} className="py-20" />}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route
@@ -1271,6 +1281,20 @@ export default function App() {
               <Route path="tasarim" element={<SurveyDesignPage />} />
               <Route path="ayarlar" element={<SurveySettingsPage />} />
             </Route>
+            {/* Misafir yorumları (modül 54): liste, ayrıntı, trend. */}
+            <Route
+              path="yorumlar"
+              element={
+                <RequirePermission permission={PERMISSIONS.REVIEWS_VIEW}>
+                  <ReviewsLayout />
+                </RequirePermission>
+              }
+            >
+              <Route index element={<Navigate to="/yorumlar/liste" replace />} />
+              <Route path="liste" element={<ReviewsPage />} />
+              <Route path="liste/:reviewId" element={<ReviewPage />} />
+              <Route path="trend" element={<ReviewTrendsPage />} />
+            </Route>
             {/* Spa ve spor salonu (modül 57): takvim, randevular, dersler, rapor, tanımlar, ayarlar. */}
             <Route
               path="spa"
@@ -1401,6 +1425,20 @@ export default function App() {
               <Route path="bildirimler/:notificationId" element={<KbsNotificationPage />} />
               <Route path="mutabakat" element={<KbsReconciliationPage />} />
               <Route path="ayarlar" element={<KbsSettingsPage />} />
+            </Route>
+            {/* Sanal POS (modül 50): ödeme linkleri (ayrıntı dahil), ayarlar. */}
+            <Route
+              path="sanal-pos"
+              element={
+                <RequirePermission permission={PERMISSIONS.PAYMENT_GATEWAY_VIEW}>
+                  <GatewayLayout />
+                </RequirePermission>
+              }
+            >
+              <Route index element={<Navigate to="/sanal-pos/linkler" replace />} />
+              <Route path="linkler" element={<GatewayLinksPage />} />
+              <Route path="linkler/:linkId" element={<GatewayLinkPage />} />
+              <Route path="ayarlar" element={<GatewaySettingsPage />} />
             </Route>
             {/* İK (modül 52): izinler, izin bakiyeleri, vardiya, puantaj, belgeler, ayarlar; personelin kendi sayfası ayrı. */}
             <Route

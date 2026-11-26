@@ -1,5 +1,6 @@
 import { MAX_MOVE_REASON_LENGTH } from '@hotelos/hotel-contracts';
 import { Input } from '@hotelos/ui';
+import { useT } from '../../i18n/index.jsx';
 
 /**
  * Oda değişikliği sebebi — hızlı seçenekler + serbest metin.
@@ -9,31 +10,34 @@ import { Input } from '@hotelos/ui';
  * yazmakla uğraşmasın diye sık sebepler tek dokunuşla seçilir.
  */
 
-export const MOVE_REASON_SUGGESTIONS = Object.freeze([
-  'Odada arıza',
-  'Misafir talebi',
-  'Upgrade',
-  'Gürültü şikâyeti',
-  'Grup/aile yakın oda',
+/** Sözlük anahtarları (`roomPlan.moveReason.*`); seçilen metin etkin dilde sebep olarak yazılır. */
+export const MOVE_REASON_SUGGESTION_KEYS = Object.freeze([
+  'roomPlan.moveReason.fault',
+  'roomPlan.moveReason.guestRequest',
+  'roomPlan.moveReason.upgrade',
+  'roomPlan.moveReason.noise',
+  'roomPlan.moveReason.nearby',
 ]);
 
 /**
  * @param {{ value: string, onChange: (value: string) => void, disabled?: boolean }} props
  */
 export function MoveReasonField({ value, onChange, disabled = false }) {
+  const t = useT();
+  const suggestions = MOVE_REASON_SUGGESTION_KEYS.map((key) => t(key));
   return (
     <div className="flex flex-col gap-2">
       <Input
-        label="Taşıma sebebi (isteğe bağlı)"
+        label={t('roomPlan.moveReason.label')}
         name="moveReason"
         value={value}
         maxLength={MAX_MOVE_REASON_LENGTH}
-        placeholder="ör. Klima çalışmıyor"
+        placeholder={t('roomPlan.moveReason.placeholder')}
         onChange={(event) => onChange(event.target.value)}
         disabled={disabled}
       />
-      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Hızlı sebep seçenekleri">
-        {MOVE_REASON_SUGGESTIONS.map((suggestion) => (
+      <div className="flex flex-wrap gap-1.5" role="group" aria-label={t('roomPlan.moveReason.quickAria')}>
+        {suggestions.map((suggestion) => (
           <button
             key={suggestion}
             type="button"

@@ -2,12 +2,9 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   HOUSEKEEPING_STATUSES,
-  HOUSEKEEPING_STATUS_LABELS,
   housekeepingTransitionError,
   ROOM_CONDITIONS,
-  ROOM_CONDITION_LABELS,
   ROOM_OCCUPANCIES,
-  ROOM_OCCUPANCY_LABELS,
   roomInputSchema,
 } from '@hotelos/hotel-contracts';
 import { Alert, Button, Input, Select, Textarea } from '@hotelos/ui';
@@ -16,6 +13,7 @@ import { DataTable } from '../../components/DataTable.jsx';
 import { Modal } from '../../components/Modal.jsx';
 import { BlockTypeBadge, HousekeepingBadge, OccupancyBadge } from '../../components/RoomStateBadges.jsx';
 import { Toolbar } from '../../components/Toolbar.jsx';
+import { useT } from '../../i18n/index.jsx';
 import { apiPatch } from '../../lib/api.js';
 import { formatDate } from '../../lib/format.js';
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
@@ -27,15 +25,14 @@ import { useRoomTypes } from './useRoomTypes.js';
 
 const EMPTY_ROOM = { number: '', floor: '1', roomTypeId: '', notes: '' };
 
-/** @param {string} allLabel @param {readonly string[]} values @param {Record<string, string>} labels */
-const filterOptions = (allLabel, values, labels) => [
+/**
+ * @param {(key: string) => string} t @param {string} allLabel @param {readonly string[]} values
+ * @param {string} prefix sözlük anahtarı öneki (ör. `roomPlan.occupancy.`)
+ */
+const filterOptions = (t, allLabel, values, prefix) => [
   { value: '', label: allLabel },
-  ...values.map((value) => ({ value, label: labels[value] })),
+  ...values.map((value) => ({ value, label: t(`${prefix}${value}`) })),
 ];
-
-const OCCUPANCY_FILTER_OPTIONS = filterOptions('Tüm odalar', ROOM_OCCUPANCIES, ROOM_OCCUPANCY_LABELS);
-const HOUSEKEEPING_FILTER_OPTIONS = filterOptions('Tüm durumlar', HOUSEKEEPING_STATUSES, HOUSEKEEPING_STATUS_LABELS);
-const CONDITION_FILTER_OPTIONS = filterOptions('Tümü', ROOM_CONDITIONS, ROOM_CONDITION_LABELS);
 
 const EMPTY_FILTERS = Object.freeze({ roomTypeId: '', occupancy: '', housekeepingStatus: '', condition: '' });
 
@@ -48,6 +45,7 @@ const EMPTY_FILTERS = Object.freeze({ roomTypeId: '', occupancy: '', housekeepin
  * "Boş" yapılabiliyordu.
  */
 export function RoomListTab() {
+  const t = useT();
   const queryClient = useQueryClient();
   const can = useCan();
   const canManage = can(PERMISSIONS.ROOMS_MANAGE);
@@ -74,7 +72,12 @@ export function RoomListTab() {
     mutationFn: ({ room, status }) =>
       apiPatch(`/rooms/${room.id}/housekeeping`, { status, expectedUpdatedAt: room.updatedAt }),
     onSuccess: (updated) => {
-      toastSuccess(`${updated.number} numaralı oda: ${HOUSEKEEPING_STATUS_LABELS[updated.housekeepingStatus]}`);
+      toastSuccess(
+        t('roomPlan.roomList.housekeepingSaved', {
+          room: updated.number,
+          status: t(`roomPlan.housekeeping.${updated.housekeepingStatus}`),
+        }),
+      );
       refreshRooms();
     },
     onError: (error) => {
@@ -92,11 +95,11 @@ export function RoomListTab() {
   const hasFilter = Boolean(resource.search || Object.values(filters).some(Boolean));
 
   const columns = [
-    { key: 'number', header: 'Oda', className: 'font-bold' },
-    { key: 'floor', header: 'Kat' },
+    { key: 'number', header: t('roomPlan.roomList.colRoom'), className: 'font-bold' },
+    { key: 'floor', header: t('roomPlan.roomList.colFloor') },
     {
       key: 'roomType',
-      header: 'Tip',
+      header: t('roomPlan.roomList.colType'),
       render: (row) =>
         row.roomTypeCode ? (
           <span className="whitespace-nowrap">
@@ -109,12 +112,12 @@ export function RoomListTab() {
     },
     {
       key: 'occupancy',
-      header: 'Doluluk',
+      header: t('roomPlan.filter.occupancy'),
       render: (row) => <OccupancyBadge occupancy={row.occupancy} />,
     },
     {
       key: 'housekeeping',
-      header: 'Kat hizmeti',
+      header: t('roomPlan.filter.housekeeping'),
       render: (row) =>
         canOperate ? (
           <HousekeepingSelect
@@ -128,7 +131,7 @@ export function RoomListTab() {
     },
     {
       key: 'condition',
-      header: 'Arıza',
+      header: t('roomPlan.filter.condition'),
       render: (row) => <ConditionCell room={row} />,
     },
   ];
@@ -139,57 +142,57 @@ export function RoomListTab() {
         actions={
           canManage && (
             <Button icon="plus" onClick={() => setEditing(EMPTY_ROOM)} disabled={roomTypes.length === 0}>
-              Yeni oda
+              {t('roomPlan.roomList.newRoom')}
             </Button>
           )
         }
       >
         <Input
           name="search"
-          label="Ara"
+          label={t('roomPlan.filter.search')}
           type="search"
-          placeholder="Oda numarası…"
+          placeholder={t('roomPlan.roomList.searchPlaceholder')}
           value={resource.search}
           onChange={(event) => resource.setSearch(event.target.value)}
           className="w-full sm:w-40"
         />
         <Select
           name="roomTypeFilter"
-          label="Oda tipi"
+          label={t('roomPlan.filter.roomType')}
           value={filters.roomTypeId}
           onChange={setFilter('roomTypeId')}
-          options={[{ value: '', label: 'Tüm tipler' }, ...roomTypeOptions]}
+          options={[{ value: '', label: t('roomPlan.filter.allTypes') }, ...roomTypeOptions]}
           className="w-full sm:w-48"
         />
         <Select
           name="occupancyFilter"
-          label="Doluluk"
+          label={t('roomPlan.filter.occupancy')}
           value={filters.occupancy}
           onChange={setFilter('occupancy')}
-          options={OCCUPANCY_FILTER_OPTIONS}
+          options={filterOptions(t, t('roomPlan.filter.allRooms'), ROOM_OCCUPANCIES, 'roomPlan.occupancy.')}
           className="w-full sm:w-36"
         />
         <Select
           name="housekeepingFilter"
-          label="Kat hizmeti"
+          label={t('roomPlan.filter.housekeeping')}
           value={filters.housekeepingStatus}
           onChange={setFilter('housekeepingStatus')}
-          options={HOUSEKEEPING_FILTER_OPTIONS}
+          options={filterOptions(t, t('roomPlan.filter.allStatuses'), HOUSEKEEPING_STATUSES, 'roomPlan.housekeeping.')}
           className="w-full sm:w-44"
         />
         <Select
           name="conditionFilter"
-          label="Arıza"
+          label={t('roomPlan.filter.condition')}
           value={filters.condition}
           onChange={setFilter('condition')}
-          options={CONDITION_FILTER_OPTIONS}
+          options={filterOptions(t, t('common.all'), ROOM_CONDITIONS, 'roomPlan.condition.')}
           className="w-full sm:w-36"
         />
       </Toolbar>
 
       {roomTypes.length === 0 && canManage && (
-        <Alert tone="warning" title="Henüz oda tipi tanımlanmamış">
-          Oda ekleyebilmek için önce Ayarlar → Oda tipleri bölümünden en az bir tip tanımlayın.
+        <Alert tone="warning" title={t('roomPlan.shared.noRoomTypes')}>
+          {t('roomPlan.roomList.noTypesHint')}
         </Alert>
       )}
 
@@ -202,20 +205,22 @@ export function RoomListTab() {
         error={resource.error}
         onRetry={resource.refetch}
         onPageChange={resource.setPage}
-        emptyTitle={hasFilter ? 'Eşleşen oda yok' : 'Henüz oda yok'}
-        emptyHint={hasFilter ? 'Filtreleri değiştirip tekrar deneyin.' : 'Rezervasyon alabilmek için odaları tanımlayın.'}
+        emptyTitle={hasFilter ? t('roomPlan.roomList.emptyFiltered') : t('roomPlan.roomList.emptyNone')}
+        emptyHint={hasFilter ? t('roomPlan.roomList.emptyFilteredHint') : t('roomPlan.roomList.emptyNoneHint')}
         rowActions={(row) => (
           <div className="flex justify-end gap-2">
             <Button variant="outline" size="sm" icon="alertTriangle" onClick={() => setBlocksRoom(row)}>
-              Arıza kayıtları{row.openBlockCount > 0 ? ` (${row.openBlockCount})` : ''}
+              {row.openBlockCount > 0
+                ? t('roomPlan.roomList.blocksCount', { count: row.openBlockCount })
+                : t('roomPlan.roomList.blocks')}
             </Button>
             {canManage && (
               <>
                 <Button variant="outline" size="sm" icon="pencil" onClick={() => setEditing(row)}>
-                  Düzenle
+                  {t('roomPlan.roomList.edit')}
                 </Button>
                 <Button variant="dangerSoft" size="sm" icon="trash" onClick={() => setDeleting(row)}>
-                  Sil
+                  {t('roomPlan.roomList.delete')}
                 </Button>
               </>
             )}
@@ -251,8 +256,8 @@ export function RoomListTab() {
 
       <ConfirmDialog
         open={Boolean(deleting)}
-        title="Odayı sil"
-        message={`"${deleting?.number}" numaralı oda silinecek. Aktif rezervasyonu varsa ya da silinmesi gelecek rezervasyonları karşılayamayacak hâle getirecekse işlem reddedilir. Açık arıza kayıtları odayla birlikte kapanır.`}
+        title={t('roomPlan.roomList.deleteTitle')}
+        message={t('roomPlan.roomList.deleteMessage', { room: deleting?.number })}
         isPending={resource.deleteMutation.isPending}
         error={resource.deleteMutation.error}
         onClose={() => {
@@ -279,11 +284,13 @@ export function RoomListTab() {
  * @param {{ room: { number: string, housekeepingStatus: string }, disabled: boolean, onChange: (status: string) => void }} props
  */
 function HousekeepingSelect({ room, disabled, onChange }) {
+  const t = useT();
   const options = HOUSEKEEPING_STATUSES.map((status) => {
     const blocked = housekeepingTransitionError(room.housekeepingStatus, status) !== null;
+    const label = t(`roomPlan.housekeeping.${status}`);
     return {
       value: status,
-      label: blocked ? `${HOUSEKEEPING_STATUS_LABELS[status]} (önce temizlenmeli)` : HOUSEKEEPING_STATUS_LABELS[status],
+      label: blocked ? t('roomPlan.roomList.mustCleanFirst', { status: label }) : label,
       disabled: blocked,
     };
   });
@@ -292,7 +299,7 @@ function HousekeepingSelect({ room, disabled, onChange }) {
     <Select
       name={`housekeeping-${room.number}`}
       value={room.housekeepingStatus}
-      aria-label={`${room.number} numaralı odanın kat hizmeti durumu`}
+      aria-label={t('roomPlan.roomList.housekeepingAria', { room: room.number })}
       onChange={(event) => onChange(event.target.value)}
       options={options}
       disabled={disabled}
@@ -307,23 +314,27 @@ function HousekeepingSelect({ room, disabled, onChange }) {
  * @param {{ room: { currentBlock: { type: string, endDate: string | null } | null, openBlockCount: number } }} props
  */
 function ConditionCell({ room }) {
+  const t = useT();
   if (room.currentBlock) {
     return (
       <span className="flex flex-col items-start gap-1">
         <BlockTypeBadge type={room.currentBlock.type} />
         <span className="whitespace-nowrap text-xs text-ink-muted">
-          {room.currentBlock.endDate ? `${formatDate(room.currentBlock.endDate)} tarihinde biter` : 'Süresiz'}
+          {room.currentBlock.endDate
+            ? t('roomPlan.roomList.endsOn', { date: formatDate(room.currentBlock.endDate) })
+            : t('roomPlan.roomList.openEnded')}
         </span>
       </span>
     );
   }
   if (room.openBlockCount > 0) {
-    return <span className="whitespace-nowrap text-xs font-semibold text-ink-muted">Yaklaşan kayıt var</span>;
+    return <span className="whitespace-nowrap text-xs font-semibold text-ink-muted">{t('roomPlan.roomList.upcoming')}</span>;
   }
   return <span className="text-ink-muted">—</span>;
 }
 
 function RoomFormModal({ initial, roomTypeOptions, onSubmit, onClose, isPending }) {
+  const t = useT();
   const [form, setForm] = useState({
     number: initial.number ?? '',
     floor: String(initial.floor ?? '1'),
@@ -352,24 +363,24 @@ function RoomFormModal({ initial, roomTypeOptions, onSubmit, onClose, isPending 
   return (
     <Modal
       open
-      title={initial.id ? 'Odayı düzenle' : 'Yeni oda'}
+      title={initial.id ? t('roomPlan.roomList.editTitle') : t('roomPlan.roomList.newRoom')}
       onClose={onClose}
       footer={
         <>
           <Button variant="outline" onClick={onClose} disabled={isPending}>
-            Vazgeç
+            {t('common.cancel')}
           </Button>
           <Button type="submit" form="room-form" icon="check" disabled={isPending}>
-            {isPending ? 'Kaydediliyor…' : 'Kaydet'}
+            {isPending ? t('common.saving') : t('common.save')}
           </Button>
         </>
       }
     >
       <form id="room-form" onSubmit={handleSubmit} className="grid gap-5 sm:grid-cols-2">
-        <Input label="Oda numarası" name="number" value={form.number} onChange={setField('number')} error={errors.number} />
-        <Input label="Kat" name="floor" type="number" value={form.floor} onChange={setField('floor')} error={errors.floor} />
+        <Input label={t('roomPlan.roomList.number')} name="number" value={form.number} onChange={setField('number')} error={errors.number} />
+        <Input label={t('roomPlan.filter.floor')} name="floor" type="number" value={form.floor} onChange={setField('floor')} error={errors.floor} />
         <Select
-          label="Oda tipi"
+          label={t('roomPlan.filter.roomType')}
           name="roomTypeId"
           value={form.roomTypeId}
           onChange={setField('roomTypeId')}
@@ -378,7 +389,7 @@ function RoomFormModal({ initial, roomTypeOptions, onSubmit, onClose, isPending 
           className="sm:col-span-2"
         />
         <Textarea
-          label="Not"
+          label={t('roomPlan.roomList.note')}
           name="notes"
           value={form.notes}
           onChange={setField('notes')}
@@ -388,8 +399,7 @@ function RoomFormModal({ initial, roomTypeOptions, onSubmit, onClose, isPending 
       </form>
       {initial.id && (
         <Alert tone="info" className="mt-5">
-          Oda tipini değiştirmek eski tipin envanterini bir azaltır; gelecekteki rezervasyonlar karşılanamayacaksa sistem
-          değişikliği reddeder.
+          {t('roomPlan.roomList.typeChangeInfo')}
         </Alert>
       )}
     </Modal>

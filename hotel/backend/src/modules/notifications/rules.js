@@ -52,6 +52,9 @@ export function triggerSkipReason(trigger, reservation, businessDate) {
     case 'SPA_REMINDER':
       // Spa randevusu gelecek ya da içerideki misafirin olabilir (gelmeden önce de alınır).
       return ['PENDING', 'CONFIRMED', 'CHECKED_IN'].includes(reservation.status) ? null : `Rezervasyon durumu uygun değil (${reservation.status})`;
+    case 'PAYMENT_LINK':
+      // Sanal POS ödeme linki (modül 50): personel gönderir; iptal edilmiş konaklamaya gitmez.
+      return reservation.status === 'CANCELLED' ? 'Rezervasyon iptal edilmiş' : null;
     default:
       return 'Bilinmeyen tetikleyici';
   }

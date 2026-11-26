@@ -3,16 +3,17 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { addDaysIso } from '../../lib/reservations.js';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  HOUSEKEEPING_STATUS_LABELS,
+  HOUSEKEEPING_STATUSES,
   MAX_PLAN_DAYS,
   PLAN_ROOMS_PAGE_SIZE,
   PLAN_WINDOW_OPTIONS,
-  ROOM_CONDITION_LABELS,
-  ROOM_OCCUPANCY_LABELS,
+  ROOM_CONDITIONS,
+  ROOM_OCCUPANCIES,
 } from '@hotelos/hotel-contracts';
 import { Alert, Badge, Button, Card, EmptyState, Icon, Input, Select, Spinner } from '@hotelos/ui';
 import { ConfirmDialog } from '../../components/ConfirmDialog.jsx';
 import { PageHeader } from '../../components/PageHeader.jsx';
+import { useT } from '../../i18n/index.jsx';
 import { api, apiDelete, apiPost, apiPut, withQuery } from '../../lib/api.js';
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 import { useHotelToday } from '../../lib/useHotel.js';
@@ -70,22 +71,17 @@ const ISO_DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 /** Adres çubuğunda taşınan filtreler (sunucu sorgusuyla aynı adlar). */
 const FILTER_KEYS = Object.freeze(['search', 'roomTypeId', 'floor', 'occupancy', 'housekeepingStatus', 'condition']);
 
-const CONDITION_OPTIONS = [
-  { value: ALL, label: 'Tümü' },
-  ...Object.entries(ROOM_CONDITION_LABELS).map(([value, label]) => ({ value, label })),
+/**
+ * Süzgeç seçenekleri: "hepsi" + sözleşmedeki değerler, etiketler etkin dilde.
+ * @param {(key: string) => string} t @param {string} allLabel @param {readonly string[]} values @param {string} prefix
+ */
+const filterOptions = (t, allLabel, values, prefix) => [
+  { value: ALL, label: allLabel },
+  ...values.map((value) => ({ value, label: t(`${prefix}${value}`) })),
 ];
 
-const HOUSEKEEPING_OPTIONS = [
-  { value: ALL, label: 'Tüm durumlar' },
-  ...Object.entries(HOUSEKEEPING_STATUS_LABELS).map(([value, label]) => ({ value, label })),
-];
-
-const OCCUPANCY_OPTIONS = [
-  { value: ALL, label: 'Tüm odalar' },
-  ...Object.entries(ROOM_OCCUPANCY_LABELS).map(([value, label]) => ({ value, label })),
-];
-
-const DAY_OPTIONS = PLAN_WINDOW_OPTIONS.map((value) => ({ value: String(value), label: `${value} gün` }));
+/** @param {(key: string, vars?: object) => string} t @param {number} days */
+const dayOption = (t, days) => ({ value: String(days), label: t('roomPlan.plan.dayCount', { count: days }) });
 
 /**
  * Adres çubuğundaki görünüm. Elle değiştirilmiş (geçersiz) değerler sessizce
@@ -105,22 +101,24 @@ function readView(params) {
   };
 }
 
-/** Oda değişikliği sonucunu kullanıcıya anlatan metin. */
-function changeRoomMessage(data) {
+/** Oda değişikliği sonucunu kullanıcıya anlatan metin. @param {(key: string, vars?: object) => string} t */
+function changeRoomMessage(t, data) {
   const roomNumber = data.reservation?.roomNumber ?? '';
+  const vars = { from: data.previousRoomNumber, to: roomNumber };
   switch (data.mode) {
     case 'UNCHANGED':
-      return 'Rezervasyon zaten bu odada';
+      return t('roomPlan.plan.unchanged');
     case 'IN_HOUSE_MOVED':
-      return `Misafir ${data.previousRoomNumber} → ${roomNumber} odasına taşındı. ${data.previousRoomNumber} numaralı oda kirli olarak işaretlendi.`;
+      return t('roomPlan.plan.inHouseMoved', vars);
     case 'MOVED':
-      return `Rezervasyon ${data.previousRoomNumber} → ${roomNumber} odasına taşındı`;
+      return t('roomPlan.plan.moved', vars);
     default:
-      return `${roomNumber} numaralı oda atandı`;
+      return t('roomPlan.shared.roomAssigned', { room: roomNumber });
   }
 }
 
 export function RoomPlanPage() {
+  const t = useT();
   const queryClient = useQueryClient();
   const can = useCan();
   const canOperate = can(PERMISSIONS.ROOMS_OPERATE);
@@ -203,7 +201,7 @@ export function RoomPlanPage() {
     mutationFn: ({ reservationId, roomId, reason }) =>
       apiPut(`/plan/reservations/${reservationId}/room`, { roomId, reason: reason || null }),
     onSuccess: (data) => {
-      toastSuccess(changeRoomMessage(data));
+      toastSuccess(changeRoomMessage(t, data));
       setPendingMove(null);
       setMoveTarget(null);
       refresh();
@@ -214,7 +212,7 @@ export function RoomPlanPage() {
   const unassignMutation = useMutation({
     mutationFn: (reservationId) => apiDelete(`/plan/reservations/${reservationId}/room`),
     onSuccess: () => {
-      toastSuccess('Oda ataması kaldırıldı');
+      toastSuccess(t('roomPlan.plan.unassigned'));
       setUnassignTarget(null);
       refresh();
     },
@@ -224,8 +222,8 @@ export function RoomPlanPage() {
   const autoAssignMutation = useMutation({
     mutationFn: (reservationId) => apiPost(`/rooms/assignments/${reservationId}/auto`, {}),
     onSuccess: (data) => {
-      if (data.assigned) toastSuccess(`${data.room.number} numaralı oda atandı`);
-      else toastError(data.reason ?? 'Uygun oda bulunamadı');
+      if (data.assigned) toastSuccess(t('roomPlan.shared.roomAssigned', { room: data.room.number }));
+      else toastError(data.reason ?? t('roomPlan.shared.noRoomFound'));
       refresh();
     },
     onError: (error) => toastError(error.message),
@@ -257,9 +255,10 @@ export function RoomPlanPage() {
       const conflict = conflictOnRow(room, remainingStay(payload, today), payload.reservationId);
       if (conflict) {
         toastError(
-          conflict.kind === 'BLOCK'
-            ? `${room.number} numaralı odada bu tarihlerde arıza kaydı var: ${conflict.label}`
-            : `${room.number} numaralı oda bu tarihlerde dolu: ${conflict.label}`,
+          t(conflict.kind === 'BLOCK' ? 'roomPlan.plan.conflictBlock' : 'roomPlan.plan.conflictBooked', {
+            room: room.number,
+            label: conflict.label,
+          }),
         );
         return;
       }
@@ -271,16 +270,17 @@ export function RoomPlanPage() {
       }
       mutateChangeRoom({ reservationId: payload.reservationId, roomId: room.id });
     },
-    [endDrag, mutateChangeRoom, today],
+    [endDrag, mutateChangeRoom, today, t],
   );
 
   const setFilter = (key) => (event) => updateView({ [key]: event.target.value });
 
   // Adresten elle gelen gün sayısı listede yoksa seçenek olarak eklenir; yoksa
   // açılır liste yanlış değeri gösterirdi.
-  const dayOptions = DAY_OPTIONS.some((option) => option.value === String(days))
-    ? DAY_OPTIONS
-    : [...DAY_OPTIONS, { value: String(days), label: `${days} gün` }];
+  const baseDayOptions = PLAN_WINDOW_OPTIONS.map((value) => dayOption(t, value));
+  const dayOptions = baseDayOptions.some((option) => option.value === String(days))
+    ? baseDayOptions
+    : [...baseDayOptions, dayOption(t, days)];
 
   const data = planQuery.data;
   const meta = data?.meta;
@@ -289,14 +289,14 @@ export function RoomPlanPage() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Oda planı"
-        description="Tüm odalar ve rezervasyonlar tek takvimde; sürükleyerek oda değiştirin."
+        title={t('roomPlan.plan.title')}
+        description={t('roomPlan.plan.description')}
       />
 
       <div className="flex flex-col gap-4 rounded-card bg-surface p-5 shadow-card">
         <div className="flex flex-wrap items-end gap-3">
           <Input
-            label="Başlangıç"
+            label={t('roomPlan.shared.from')}
             name="from"
             type="date"
             value={from ?? ''}
@@ -304,7 +304,7 @@ export function RoomPlanPage() {
             className="w-full sm:w-44"
           />
           <Select
-            label="Gün"
+            label={t('roomPlan.plan.days')}
             name="days"
             value={String(days)}
             onChange={(event) => updateView({ days: event.target.value })}
@@ -313,72 +313,72 @@ export function RoomPlanPage() {
           />
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" icon="chevronLeft" onClick={() => updateView({ from: addDays(from, -days) })}>
-              Geri
+              {t('roomPlan.plan.back')}
             </Button>
             <Button variant="secondary" onClick={() => updateView({ from: null })} disabled={!pinnedFrom}>
-              Bugün
+              {t('common.today')}
             </Button>
             <Button variant="outline" onClick={() => updateView({ from: addDays(from, days) })}>
-              İleri
+              {t('roomPlan.plan.forward')}
               <Icon name="chevronRight" className="size-4 shrink-0" />
             </Button>
           </div>
 
           <span className="ml-auto flex items-center gap-2" aria-live="polite">
             {planQuery.isFetching && <Spinner className="size-4" />}
-            <Badge tone={isLive ? 'success' : 'warning'}>{isLive ? 'Canlı' : 'Canlı değil'}</Badge>
+            <Badge tone={isLive ? 'success' : 'warning'}>{isLive ? t('common.live') : t('common.notLive')}</Badge>
           </span>
         </div>
 
         <div className="flex flex-wrap items-end gap-3 border-t border-line pt-4">
           <Input
-            label="Ara"
+            label={t('roomPlan.filter.search')}
             name="search"
             type="search"
-            placeholder="Oda, misafir ya da onay kodu…"
+            placeholder={t('roomPlan.plan.searchPlaceholder')}
             value={searchText}
             onChange={(event) => setSearchText(event.target.value)}
             className="w-full sm:w-64"
           />
           <Select
-            label="Oda tipi"
+            label={t('roomPlan.filter.roomType')}
             name="roomTypeId"
             value={filters.roomTypeId}
             onChange={setFilter('roomTypeId')}
-            options={[{ value: ALL, label: 'Tüm tipler' }, ...roomTypeOptions]}
+            options={[{ value: ALL, label: t('roomPlan.filter.allTypes') }, ...roomTypeOptions]}
             className="w-full sm:w-52"
           />
           <Input
-            label="Kat"
+            label={t('roomPlan.filter.floor')}
             name="floor"
             type="number"
-            placeholder="Tümü"
+            placeholder={t('common.all')}
             value={filters.floor}
             onChange={setFilter('floor')}
             className="w-24"
           />
           <Select
-            label="Doluluk"
+            label={t('roomPlan.filter.occupancy')}
             name="occupancy"
             value={filters.occupancy}
             onChange={setFilter('occupancy')}
-            options={OCCUPANCY_OPTIONS}
+            options={filterOptions(t, t('roomPlan.filter.allRooms'), ROOM_OCCUPANCIES, 'roomPlan.occupancy.')}
             className="w-full sm:w-40"
           />
           <Select
-            label="Kat hizmeti"
+            label={t('roomPlan.filter.housekeeping')}
             name="housekeepingStatus"
             value={filters.housekeepingStatus}
             onChange={setFilter('housekeepingStatus')}
-            options={HOUSEKEEPING_OPTIONS}
+            options={filterOptions(t, t('roomPlan.filter.allStatuses'), HOUSEKEEPING_STATUSES, 'roomPlan.housekeeping.')}
             className="w-full sm:w-44"
           />
           <Select
-            label="Arıza"
+            label={t('roomPlan.filter.condition')}
             name="condition"
             value={filters.condition}
             onChange={setFilter('condition')}
-            options={CONDITION_OPTIONS}
+            options={filterOptions(t, t('common.all'), ROOM_CONDITIONS, 'roomPlan.condition.')}
             className="w-full sm:w-40"
           />
           {filtersActive && (
@@ -390,7 +390,7 @@ export function RoomPlanPage() {
                 updateView(Object.fromEntries(FILTER_KEYS.map((key) => [key, null])));
               }}
             >
-              Filtreleri temizle
+              {t('roomPlan.plan.clearFilters')}
             </Button>
           )}
         </div>
@@ -409,17 +409,17 @@ export function RoomPlanPage() {
 
       {planQuery.isPending && (
         <Card>
-          <Spinner label="Oda planı hazırlanıyor…" className="py-10" />
+          <Spinner label={t('roomPlan.plan.loading')} className="py-10" />
         </Card>
       )}
 
       {planQuery.isError && (
         <Alert
           tone="danger"
-          title="Oda planı yüklenemedi"
+          title={t('roomPlan.plan.loadFailed')}
           action={
             <Button variant="outline" size="sm" icon="refresh" onClick={() => planQuery.refetch()}>
-              Tekrar dene
+              {t('common.retry')}
             </Button>
           }
         >
@@ -431,12 +431,8 @@ export function RoomPlanPage() {
         <Card>
           <EmptyState
             icon="bed"
-            title={filtersActive ? 'Aramaya uyan oda yok' : 'Henüz oda tanımlanmamış'}
-            description={
-              filtersActive
-                ? 'Misafir aramasında yalnızca bu tarih aralığındaki konaklamalar aranır. Filtreleri temizleyin ya da tarihi değiştirin.'
-                : 'Ayarlar → Oda tipleri ve Odalar → Oda listesi bölümünden oda ekleyin.'
-            }
+            title={filtersActive ? t('roomPlan.plan.emptyFiltered') : t('roomPlan.plan.emptyNoRooms')}
+            description={filtersActive ? t('roomPlan.plan.emptyFilteredHint') : t('roomPlan.plan.emptyNoRoomsHint')}
           />
         </Card>
       )}
@@ -469,9 +465,9 @@ export function RoomPlanPage() {
           <div className="flex flex-wrap items-center justify-between gap-4">
             <Legend />
             {meta && meta.totalPages > 1 && (
-              <nav aria-label="Oda sayfaları" className="flex items-center gap-2">
+              <nav aria-label={t('roomPlan.plan.pages')} className="flex items-center gap-2">
                 <span className="text-xs font-semibold text-ink-muted">
-                  {meta.total} odadan {data.items.length} tanesi
+                  {t('roomPlan.plan.pageSummary', { total: meta.total, shown: data.items.length })}
                 </span>
                 <Button
                   variant="outline"
@@ -480,7 +476,7 @@ export function RoomPlanPage() {
                   disabled={page <= 1}
                   onClick={() => updateView({ page: page - 1 }, { resetPage: false })}
                 >
-                  Önceki
+                  {t('roomPlan.shared.prev')}
                 </Button>
                 <span className="text-sm font-semibold text-ink-soft" aria-live="polite">
                   {meta.page} / {meta.totalPages}
@@ -491,7 +487,7 @@ export function RoomPlanPage() {
                   disabled={page >= meta.totalPages}
                   onClick={() => updateView({ page: page + 1 }, { resetPage: false })}
                 >
-                  Sonraki
+                  {t('roomPlan.shared.next')}
                   <Icon name="chevronRight" className="size-3.5" />
                 </Button>
               </nav>
@@ -551,13 +547,11 @@ export function RoomPlanPage() {
 
       <ConfirmDialog
         open={Boolean(unassignTarget)}
-        title="Oda ataması kaldırılsın mı?"
-        confirmLabel="Kaldır"
+        title={t('roomPlan.plan.unassignTitle')}
+        confirmLabel={t('roomPlan.plan.unassignConfirm')}
         confirmIcon="close"
         message={
-          unassignTarget
-            ? `${unassignTarget.room?.number} numaralı odanın ataması kaldırılacak; rezervasyon "oda bekleyenler" şeridine düşecek.`
-            : ''
+          unassignTarget ? t('roomPlan.plan.unassignMessage', { room: unassignTarget.room?.number }) : ''
         }
         isPending={unassignMutation.isPending}
         error={unassignMutation.error}
@@ -573,25 +567,26 @@ export function RoomPlanPage() {
 
 /** Izgaranın okunması için gereken tek açıklama — renkler tek kaynaktan. */
 function Legend() {
+  const t = useT();
   return (
     <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-semibold text-ink-soft">
       {Object.entries(RESERVATION_TONES).map(([key, tone]) => (
-        <span key={key} className="flex items-center gap-2" title={tone.hint}>
+        <span key={key} className="flex items-center gap-2" title={t(tone.hintKey)}>
           <span aria-hidden="true" className={`inline-block size-3.5 rounded-[5px] ${tone.swatch}`} />
-          {tone.label}
+          {t(tone.labelKey)}
         </span>
       ))}
       {Object.entries(BLOCK_TONES).map(([key, tone]) => (
-        <span key={key} className="flex items-center gap-2" title={tone.hint}>
+        <span key={key} className="flex items-center gap-2" title={t(tone.hintKey)}>
           <span aria-hidden="true" className={`inline-block size-3.5 rounded-[5px] ${tone.swatch}`} />
-          {tone.label}
+          {t(tone.labelKey)}
         </span>
       ))}
       <span className="flex items-center gap-1.5">
-        <span aria-hidden="true">↳ / →</span> odaya taşındı / odadan taşındı
+        <span aria-hidden="true">↳ / →</span> {t('roomPlan.plan.legendMoved')}
       </span>
       <span className="font-medium text-ink-muted">
-        Satır başındaki iki nokta: doluluk ve kat hizmeti. Bir sütun bir gecedir; çıkış günü boyanmaz.
+        {t('roomPlan.plan.legendHint')}
       </span>
     </div>
   );

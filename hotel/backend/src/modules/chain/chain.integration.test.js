@@ -325,6 +325,24 @@ describe('zincir konsolu (modül 63, entegrasyon)', { skip }, () => {
     assert.equal(none, null);
   });
 
+  it('kişisel tercih (dil, modül 60) erişimle açılan otelde de yazılır; erişim kalkınca yazılamaz', async () => {
+    await grant(users.desk.id, hotelB.id, 'MANAGER');
+    const home = await login('desk@test.local');
+    const away = (await call(home.accessToken, 'POST', '/auth/switch-hotel', { hotelId: hotelB.id, refreshToken: home.refreshToken })).json().data;
+    const saved = await call(away.accessToken, 'PATCH', '/auth/me/preferences', { locale: 'en' });
+    assert.equal(saved.statusCode, 200, saved.body);
+    assert.equal(saved.json().data.user.locale, 'en');
+    assert.equal(saved.json().data.user.role, 'MANAGER', 'dönen rol açık oteldeki rol');
+    assert.equal((await db.user.findUnique({ where: { id: users.desk.id } })).locale, 'en');
+
+    await db.userHotel.deleteMany({ where: { userId: users.desk.id, hotelId: hotelB.id } });
+    const { clearMembershipCache } = await import('../../lib/memberships.js');
+    clearMembershipCache();
+    const denied = await call(away.accessToken, 'PATCH', '/auth/me/preferences', { locale: 'tr' });
+    assert.equal(denied.statusCode, 401);
+    assert.equal((await db.user.findUnique({ where: { id: users.desk.id } })).locale, 'en', 'erişimi kalkmış oturum tercih yazamaz');
+  });
+
   it('pasife alma: kişi başka bir otelin erişimle TEK yöneticisiyse reddedilir; başka yönetici gelince geçer', async () => {
     const suffix = randomUUID().slice(0, 6).toUpperCase();
     const fresh = await db.hotel.create({ data: { name: 'Yeni Otel', code: `NEW-${suffix}`, currency: 'TRY' } });

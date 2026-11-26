@@ -1,4 +1,6 @@
-import { PAYMENT_KIND_LABELS, PAYMENT_METHOD_LABELS, PAYMENT_SOURCE_LABELS, PAYMENT_STATUS_LABELS } from '@hotelos/hotel-contracts';
+import { CASH_ORIGIN_LABELS, PAYMENT_KIND_LABELS, PAYMENT_METHOD_LABELS, PAYMENT_SOURCE_LABELS, PAYMENT_STATUS_LABELS } from '@hotelos/hotel-contracts';
+import { getCurrentLocale } from '../i18n/current.js';
+import { tNow } from '../i18n/translate.js';
 
 /**
  * Ödeme (modül 17): sorgu anahtarları ve ortak yardımcılar.
@@ -15,6 +17,8 @@ export const cashKeys = Object.freeze({
   /** @param {object} filters */
   movements: (filters) => ['cash', 'movements', filters],
   rates: ['cash', 'rates'],
+  /** Kur ayarı: TCMB'den otomatik çekme, kur türü, dövizler (modül 60). */
+  rateSettings: ['cash', 'rate-settings'],
   /** @param {object} filters */
   rateHistory: (filters) => ['cash', 'rate-history', filters],
   /** @param {object} input */
@@ -32,16 +36,20 @@ export const PAYMENT_METHOD_ICONS = Object.freeze({
 
 export const PAYMENT_STATUS_TONES = Object.freeze({ PENDING: 'warning', POSTED: 'success', DECLINED: 'neutral' });
 
-export const methodLabel = (method) => PAYMENT_METHOD_LABELS[method] ?? method;
-export const kindLabel = (kind) => PAYMENT_KIND_LABELS[kind] ?? kind;
-export const sourceLabel = (source) => PAYMENT_SOURCE_LABELS[source] ?? source;
-export const paymentStatusLabel = (status) => PAYMENT_STATUS_LABELS[status] ?? status;
+/** Etkin arayüz dilinde etiketler (modül 60; sözlük `i18n/tr/payments.js`, `i18n/en/payments.js`, Türkçesi sözleşmeden). */
+export const methodLabel = (method) => tNow(`payments.method.${method}`, PAYMENT_METHOD_LABELS[method] ?? method);
+export const kindLabel = (kind) => tNow(`payments.kind.${kind}`, PAYMENT_KIND_LABELS[kind] ?? kind);
+export const sourceLabel = (source) => tNow(`payments.source.${source}`, PAYMENT_SOURCE_LABELS[source] ?? source);
+export const paymentStatusLabel = (status) => tNow(`payments.status.${status}`, PAYMENT_STATUS_LABELS[status] ?? status);
+/** @param {string} origin FOLIO | EVENT | POS | SPA */
+export const originLabel = (origin) => tNow(`payments.origin.${origin}`, CASH_ORIGIN_LABELS[origin] ?? origin);
 
-/** "36.125000" → "36,125" (gösterim; hesap sunucuda). */
+/** "36.125000" → "36,125" (İngilizcede "36.125"; gösterim; hesap sunucuda). */
 export function formatRate(rate) {
   if (!rate) return '—';
   const text = String(rate);
-  return (text.includes('.') ? text.replace(/0+$/, '').replace(/\.$/, '') : text).replace('.', ',');
+  const trimmed = text.includes('.') ? text.replace(/0+$/, '').replace(/\.$/, '') : text;
+  return getCurrentLocale() === 'tr' ? trimmed.replace('.', ',') : trimmed;
 }
 
 /** Eksi işaretsiz tutar metni ("-500.00" → "500.00"). */

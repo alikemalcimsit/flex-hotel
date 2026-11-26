@@ -48,7 +48,7 @@ Giriş yaptığınızda sistem size bir **oturum anahtarı** (JWT) verir; panel 
 - Hesabınız pasife alınırsa açık oturumunuz da düşer: ilk istekte "Oturum açmanız gerekiyor" alırsınız ve giriş ekranına dönersiniz.
 - Aynı hesapla iki cihazdan girilebilir; her cihaz kendi yenileme anahtarını taşır.
 
-**Örnek: Elif'in ilk günü.** Yönetici, Elif için `elif@otelim.com` adresiyle **Ön büro** rolünde kullanıcı açtı ve geçici şifre verdi. Elif giriş yaptı; sol menüde Panel, Görevler, Kılavuz, Giriş / çıkış, Rezervasyonlar, Oda planı, Misafirler, Sadakat (Üyeler ve Ayarlar; ayarı kaydedemez), KBS (Bildirimler, Mutabakat, Ayarlar; ayarı kaydedemez), Satış CRM, Folyolar, Kasa, Minibar & çamaşır, Kat hizmetleri (yalnızca görüntüleme), Kayıp eşya, Teknik servis, Gün kapanış, Etkinlikler, Mesajlar, İstekler, Anketler, Spa, Faturalar, Odalar, Bildirimler (yalnızca Gönderim geçmişi) ve İzinlerim gördü. **Göremedi:** Raporlar (rapor izni yok), Onaylar (onay görüntüleme izni yok), Aktörler, Ayarlar, Bütçe, Acenteler, Promosyonlar, Kanallar, Stok, Satın alma, Mutfak, Restoran, Personel, Bordro, İK, Ön muhasebe, Demirbaş. Panel'de gelir kartları yerine hızlı erişim kartları çıktı, çünkü Ön büro rolünde "Günlük durumu görüntüle (gelir)" izni yok. Elif ilk iş olarak kullanıcı menüsünden kendi şifresini değiştirmek istedi; bu ekran yok — yönetici sıfırlar. Not aldı.
+**Örnek: Elif'in ilk günü.** Yönetici, Elif için `elif@otelim.com` adresiyle **Ön büro** rolünde kullanıcı açtı ve geçici şifre verdi. Elif giriş yaptı; sol menüde Panel, Görevler, Kılavuz, Giriş / çıkış, Rezervasyonlar, Oda planı, Misafirler, Sadakat (Üyeler ve Ayarlar; ayarı kaydedemez), KBS (Bildirimler, Mutabakat, Ayarlar; ayarı kaydedemez), Satış CRM, Folyolar, Kasa, Minibar & çamaşır, Kat hizmetleri (yalnızca görüntüleme), Kayıp eşya, Teknik servis, Gün kapanış, Etkinlikler, Mesajlar, İstekler, Anketler, Yorumlar (Yorumlar ve Trend; yükleyemez, silemez), Spa, Faturalar, Odalar, Bildirimler (yalnızca Gönderim geçmişi) ve İzinlerim gördü. **Göremedi:** Raporlar (rapor izni yok), Onaylar (onay görüntüleme izni yok), Aktörler, Ayarlar, Bütçe, Acenteler, Promosyonlar, Kanallar, Stok, Satın alma, Mutfak, Restoran, Personel, Bordro, İK, Ön muhasebe, Demirbaş. Panel'de gelir kartları yerine hızlı erişim kartları çıktı, çünkü Ön büro rolünde "Günlük durumu görüntüle (gelir)" izni yok. Elif ilk iş olarak kullanıcı menüsünden kendi şifresini değiştirmek istedi; bu ekran yok — yönetici sıfırlar. Not aldı.
 
 ### Demo hesabı
 
@@ -60,6 +60,46 @@ Giriş yaptığınızda sistem size bir **oturum anahtarı** (JWT) verir; panel 
 | resepsiyon@hotel.local | 123456 | Ön büro (FRONT_DESK) |
 
 Demo otelin kodu `DEMO`'dur; oda tipleri, odalar, sezonlar, vergiler, örnek rezervasyonlar ve 16 hazır bildirim şablonu yüklüdür. Canlı bir otelde bu hesapları silip kendi kullanıcılarınızı açın; şifreler en az 8 karakter olmalıdır.
+
+## Dil ve gösterim para birimi
+
+Her kullanıcı iki tercihi kendisi seçer: **arayüz dili** (Türkçe / English) ve **gösterim para birimi**. İkisi de kullanıcıya kayıtlıdır (bu cihaza değil); başka bilgisayardan girdiğinizde de aynı dil ve para birimiyle açılır. Otelin ayarlarını, kayıtları ve başka kullanıcıların ekranını değiştirmez.
+
+### Nereden değiştirilir
+
+- **Kullanıcı menüsü** (sağ üstte adınız): **Arayüz dili** ve **Gösterim para birimi** seçicileri. Seçtiğiniz anda geçerli olur: sayfa yeniden yüklenmez, ekran yeni dilde yeniden çizilir (yüklü veriler korunur; açık bir formda kaydetmediğiniz yazı kaybolabilir, önce kaydedin). Kaydedilemezse "Tercih kaydedilemedi: …" uyarısı çıkar.
+- **Giriş ekranı:** üstte **Türkçe / English** düğmeleri. Giriş yapmadan dili değiştirir; düğmeye bastıktan sonra giriş yaparsanız seçim hesabınıza da yazılır. Basmadan giriş yaparsanız hesabınızda kayıtlı dil geçerli olur.
+
+**Hangi dil açılır:** önce hesabınızda kayıtlı dil; giriş yapılmamışsa bu cihazda giriş ekranında seçilen dil; o da yoksa tarayıcının dili (İngilizce tarayıcı → English); hiçbiri uymuyorsa Türkçe. Yeni açılan her kullanıcının dili Türkçe başlar.
+
+### Hangi ekranlar İngilizce
+
+Arayüzün İngilizcesi bugün şu ekranlarda var: **menü** (yan menüdeki bütün maddeler ve bölüm başlıkları), **giriş ekranı**, **üst çubuk ve kullanıcı menüsü**, **ön büro** (Gelecekler / Gidecekler / İçeridekiler, giriş ve çıkış pencereleri), **rezervasyonlar**, **oda planı ve odalar**, **folyo**, **kasa ve döviz kurları** (TCMB ayarı dahil) ve **fatura taslağındaki döviz karşılığı alanı**. Diğer ekranlar şimdilik English seçilse de **Türkçe görünür**; parça parça taşınacaklardır. Bir ekranda İngilizcesi henüz yazılmamış tek bir metin varsa o metin Türkçe çıkar, ekran bozulmaz.
+
+Dil seçimi yalnız **personel panelini** etkiler. Misafire giden e-posta / SMS'in dili misafirin uyruğundan seçilir (Yönetim → Bildirimler → Şablonlar); misafir portalı ve web rezervasyon widget'ı misafirin kendi tarayıcı dilinden açılır. Fatura PDF'i ve e-belge Türkçedir.
+
+### Tarih ve sayı biçimi
+
+Dil tarih ve sayı biçimini de değiştirir:
+
+| | Türkçe | English |
+| --- | --- | --- |
+| Tutar | 12.000,00 TRY | 12,000.00 TRY |
+| Tarih | 25 Kas 2026 | 25 Nov 2026 |
+| Tarih ve saat | 25 Kas 2026 14:05 | 25 Nov 2026, 14:05 |
+| Oran | %10 | 10% |
+
+Biçim yalnız görünüştür; kayıtlar ve hesaplar değişmez.
+
+### Gösterim para birimi
+
+Gösterim para birimi seçiliyse (USD, EUR, GBP, CHF, RUB, JPY, SAR, AZN, CNY, DKK, SEK, NOK) otelin para birimindeki tutarların yanında küçük ve soluk bir **yaklaşık karşılık** görünür: **"2.480,00 TRY ≈ 48,97 EUR"**. Karşılık güncel kurla (Kasa → Döviz kurları) hesaplanır; üzerine gelince hangi kurla hesaplandığı yazar ("Yaklaşık karşılık: 1 EUR = 50,6441 TRY (26 Kas 2026)"). Varsayılan "Yalnız otelin para birimi"dir, yani karşılık gösterilmez.
+
+- **Kayıtlar otelin para biriminde kalır.** Folyo, ödeme, kasa, fatura, rapor hep TL'dir; gösterim para birimi yalnız göz kolaylığıdır. Misafire "yaklaşık" diye söyleyin; ödeme alırken döviz ve kur ödeme penceresinde ayrıca seçilir (Folyo, kasa → Ödemeler → Döviz).
+- Karşılık bugün **folyo**, **rezervasyon ayrıntısı** ve **kasa** ekranlarındaki tutarlarda görünür.
+- Karşılık şu durumlarda **sessizce görünmez** (tutarın kendisi her zaman görünür): seçtiğiniz dövizin kuru hiç girilmemiş ya da 3 günden eski; kurları okuma izniniz yok (kasa görüntüleme, ödeme alma, iade ya da kur yönetimi izinlerinden biri gerekir); tutar zaten başka bir dövizde (ör. 200 EUR'luk döviz ödemesi çevrilmez).
+
+**Örnek:** Elif kullanıcı menüsünden Arayüz dili **English**, Gösterim para birimi **EUR** seçti. Menü "Front office", "Reservations", "Cash desk" olarak değişti; folyoda bakiye "2,480.00 TRY ≈ 48.97 EUR" göründü (günün EUR kuru 50,6441). Menüde "Reports" yazdı ama Raporlar ekranının içi Türkçe kaldı (henüz çevrilmedi). Elif ertesi gün başka bir bilgisayardan girdi; panel yine İngilizce ve EUR karşılıklı açıldı.
 
 ## Roller ve yetkiler
 
@@ -79,10 +119,10 @@ Aşağıdaki tablo varsayılan izinlerden derlenmiştir; oteliniz matrisi deği�
 | Rol | Görür ve yapar | Görmez / yapamaz |
 | --- | --- | --- |
 | **Yönetici** | Her şey. Ayarlar menüsü yalnızca bu role açılır. Aktörleri açar / kapatır, rol matrisini düzenler, kullanıcı açar. | — |
-| **Müdür** | Operasyonun tamamı: rezervasyon, giriş / çıkış, fiyatı elle belirleme, açık bakiyeyle çıkışa izin, folyo indirimi, iade / iptal isteme, onayları karara bağlama, kat hizmeti ve teknik servisin tüm akışı, misafir CRM, sadakat programı (ayar, seviyeler, elle puan düzeltmesi), KBS kimlik bildirimi (ayar, bağlantı denemesi, tekrar gönder, elle bildirildi, mutabakat), raporlar ve rapor asistanı, bütçe onayı, acente kontratı, promosyon, kanal yönetimi, acente primi, banket, POS (ikram / indirim yetkisi dahil), reçete, satın alma, stok, demirbaş, ön muhasebe, fatura ayarları, misafir portalı, anket, spa, gün kapanışı. Aktör panelini **görür**. | Aktörleri açıp kapatamaz (yöneticinin kararı), kullanıcı ekleyemez, rol matrisini düzenleyemez, bordro ve ücretleri görmez. Ayarlar menüsü görünmez (ayarları görüntüleme izni API düzeyinde vardır). |
-| **Ön büro** | Rezervasyon açma / düzenleme / iptal, gelecekler-gidecekler-konaklayanlar, giriş / çıkış, oda atama ve oda durumu, misafir mesajları ve istekler, folyo görüntüleme ve harcama işleme, ödeme alma, iade isteme (onaylayamaz), kasa görünümü, minibar / çamaşır girişi, kayıp eşya teslimi, kat hizmeti kuyruğunu görme ("104 ne zaman hazır olur?"), salon takvimini görme ve etkinlik depozitosu alma, folyo faturası kesme, online check-in inceleme, düşük anket puanı takibi, spa randevusu alma, arıza bileti açma, misafir kartı düzenleme ve birleştirme, sadakat puanı kullandırma (folyoda indirim) ve misafiri üye yapma, KBS bildirimlerini ve mutabakatı görme, gönderilemeyen bildirimi tekrar gönderme ve elle bildirildi işaretleme (KBS ayarını kaydedemez), **gün kapanışı** (gece vardiyası). Satış CRM de ön büroya açıktır. | Folyo indirimi ve kapanmış folyoyu yeniden açma, bildirim şablonları, raporlar, bütçe, ayarlar, aktör paneli, onayları karara bağlama. |
+| **Müdür** | Operasyonun tamamı: rezervasyon, giriş / çıkış, fiyatı elle belirleme, açık bakiyeyle çıkışa izin, folyo indirimi, iade / iptal isteme, onayları karara bağlama, kat hizmeti ve teknik servisin tüm akışı, misafir CRM, sadakat programı (ayar, seviyeler, elle puan düzeltmesi), KBS kimlik bildirimi (ayar, bağlantı denemesi, tekrar gönder, elle bildirildi, mutabakat), Sanal POS (ayar ve anahtarlar, ödeme linki oluşturma / gönderme / iptal, karta iade isteme), misafir yorumları (ekle, dosyadan yükle, etiketi düzelt, yeniden analiz, sil, cevap; olumsuz konu artışı zili), raporlar ve rapor asistanı, bütçe onayı, acente kontratı, promosyon, kanal yönetimi, acente primi, banket, POS (ikram / indirim yetkisi dahil), reçete, satın alma, stok, demirbaş, ön muhasebe, fatura ayarları, misafir portalı, anket, spa, gün kapanışı. Aktör panelini **görür**. | Aktörleri açıp kapatamaz (yöneticinin kararı), kullanıcı ekleyemez, rol matrisini düzenleyemez, bordro ve ücretleri görmez. Ayarlar menüsü görünmez (ayarları görüntüleme izni API düzeyinde vardır). |
+| **Ön büro** | Rezervasyon açma / düzenleme / iptal, gelecekler-gidecekler-konaklayanlar, giriş / çıkış, oda atama ve oda durumu, misafir mesajları ve istekler, folyo görüntüleme ve harcama işleme, ödeme alma, iade isteme (onaylayamaz), kasa görünümü, minibar / çamaşır girişi, kayıp eşya teslimi, kat hizmeti kuyruğunu görme ("104 ne zaman hazır olur?"), salon takvimini görme ve etkinlik depozitosu alma, folyo faturası kesme, online check-in inceleme, düşük anket puanı takibi, spa randevusu alma, arıza bileti açma, misafir kartı düzenleme ve birleştirme, sadakat puanı kullandırma (folyoda indirim) ve misafiri üye yapma, KBS bildirimlerini ve mutabakatı görme, gönderilemeyen bildirimi tekrar gönderme ve elle bildirildi işaretleme (KBS ayarını kaydedemez), Sanal POS ödeme linki oluşturma / gönderme / iptal ve karta iade isteme (Sanal POS ayarını kaydedemez, iadeyi onaylayamaz), misafir yorumlarını ve AI etiketini görme, cevap taslağı yazma ve Cevaplandı / Cevap gerekmiyor işaretleme (yorum yükleyemez, etiketi değiştiremez, silemez), **gün kapanışı** (gece vardiyası). Satış CRM de ön büroya açıktır. | Folyo indirimi ve kapanmış folyoyu yeniden açma, bildirim şablonları, raporlar, bütçe, ayarlar, aktör paneli, onayları karara bağlama. |
 | **Kat hizmetleri** | Oda durumu, gidecekler listesi (hangi oda boşalacak), kat hizmeti görevleri (başlat / bitir / sorun bildir; varsayılanda görev açma, atama ve kontrol de açık), misafir istekleri, minibar ve çamaşır girişi, bulunan eşyayı kaydetme, arıza bileti açma / çözme. | Folyo, kasa, rezervasyon açma, mesaj yazma, misafir iletişim bilgileri (kayıp eşyada teslim yetkisi yok), raporlar. |
-| **Muhasebe** | Günlük durum (gelir içerir), folyo düzeltme ve indirim, tahsilat, iade isteme, kasa ve döviz kuru, minibar / çamaşır fiyat listeleri, gelir raporları ve rapor asistanı, bütçe hazırlama ve gerçekleşen gider girişi, acente carisi ve prim ödeme işareti, promosyon kullanım raporu, sadakat üyeleri ve bakiyeleri (yalnız görüntüleme), etkinlik tahsilatı, POS raporları, spa geliri, reçete maliyeti, satın alma ve stok izleme, ön muhasebe (cari, kasa / banka, çek / senet, fiş), genel muhasebe (hesap planı, yevmiye fişi, mizan, kurallar, dönem kilidi, fiş iptali), faturalar ve e-belge, personel ve bordro (ücret, puantaj, hesaplama, ödeme), demirbaş ve amortisman. Onay kuyruğunu görür. | Onayları karara bağlama, kontrat / promosyon / kanal düzenleme, kasa-banka tanımı ve fiş iptali (müdürün), bordro yasal parametre teyidi (yöneticinin), rezervasyon ve giriş / çıkış işlemleri. |
+| **Muhasebe** | Günlük durum (gelir içerir), folyo düzeltme ve indirim, tahsilat, iade isteme, kasa ve döviz kuru, minibar / çamaşır fiyat listeleri, gelir raporları ve rapor asistanı, bütçe hazırlama ve gerçekleşen gider girişi, acente carisi ve prim ödeme işareti, promosyon kullanım raporu, sadakat üyeleri ve bakiyeleri (yalnız görüntüleme), Sanal POS işlemlerini görme ve karta iade isteme (link oluşturamaz), etkinlik tahsilatı, POS raporları, spa geliri, reçete maliyeti, satın alma ve stok izleme, ön muhasebe (cari, kasa / banka, çek / senet, fiş), genel muhasebe (hesap planı, yevmiye fişi, mizan, kurallar, dönem kilidi, fiş iptali), faturalar ve e-belge, personel ve bordro (ücret, puantaj, hesaplama, ödeme), demirbaş ve amortisman. Onay kuyruğunu görür. | Onayları karara bağlama, kontrat / promosyon / kanal düzenleme, kasa-banka tanımı ve fiş iptali (müdürün), bordro yasal parametre teyidi (yöneticinin), rezervasyon ve giriş / çıkış işlemleri. |
 | **Yiyecek & İçecek** | POS: vardiya aç / kapat, adisyon, sipariş, ödeme, odaya yazma; mutfak ekranı; etkinlik programını ve menüsünü görme; misafir istekleri; restoranda unutulan eşyayı kaydetme; reçeteleri okuma; satın alma talebi açma ve mal kabul; stok görüntüleme. | İkram / indirim / gönderilmiş kalemi iptal (şef garson yetkisi — otel matristen açabilir), menü ve fiyat tanımları, reçete düzenleme (otel şef için açabilir), tedarikçi seçimi ve sipariş. |
 
 ### İzin grubu bazında varsayılan matris
@@ -111,6 +151,7 @@ Aşağıdaki tablo Ayarlar → Roller & İzinler ekranındaki varsayılan işare
 | Misafir CRM | Hepsi | Hepsi | — | — | — |
 | Sadakat programı (`loyalty.view` / `loyalty.redeem` / `loyalty.manage`) | Hepsi (görüntüle, puan kullan / üye yap, ayar ve düzeltme) | Görüntüle, puan kullan / üye yap | — | Görüntüle | — |
 | KBS kimlik bildirimi (`kbs.view` / `kbs.send` / `kbs.manage`) | Hepsi (görüntüle, tekrar gönder / elle bildirildi, ayar ve bağlantı denemesi) | Görüntüle, tekrar gönder / elle bildirildi | — | — | — |
+| Sanal POS (`payment_gateway.view` / `payment_gateway.send` / `payment_gateway.setup`) | Hepsi (görüntüle, link oluştur / gönder / iptal, ayar ve bağlantı denemesi) | Görüntüle, link oluştur / gönder / iptal | — | Görüntüle | — |
 | Bütçe | Görüntüle, düzenle, onayla | — | — | Görüntüle, düzenle | — |
 | Acente ve kontrat | Görüntüle, yönet | — | — | Görüntüle | — |
 | Satış CRM | Görüntüle, yönet | Görüntüle, yönet | — | — | — |
@@ -129,6 +170,7 @@ Aşağıdaki tablo Ayarlar → Roller & İzinler ekranındaki varsayılan işare
 | İK (`hr.view` / `hr.manage` / `hr.self`) | Hepsi (görüntüle, yönet, kendi sayfası) | Kendi sayfası (`hr.self`) | Kendi sayfası (`hr.self`) | Hepsi (görüntüle, yönet, kendi sayfası) | Kendi sayfası (`hr.self`) |
 | Misafir portalı | Hepsi | Görüntüle, onayla / davet | — | — | — |
 | Anket ve memnuniyet | Hepsi | Görüntüle, düşük puan takibi | — | — | — |
+| Misafir yorumları (`reviews.view` / `reviews.reply` / `reviews.manage`) | Hepsi (görüntüle, cevapla, ekle / yükle / etiket / sil / yeniden analiz) | Görüntüle, cevapla | — | — | — |
 | Spa ve spor salonu | Hepsi | Görüntüle, randevu al | — | Görüntüle | — |
 | Acente primi | Görüntüle, yönet, ödendi işaretle | — | — | Görüntüle, ödendi işaretle | — |
 | Kanal yönetimi | Görüntüle, yönet | — | — | — | — |
@@ -141,7 +183,7 @@ Tabloyu okurken dikkat: "Bordro ayarları" (yasal parametre teyidi) ve "Aktörle
 
 ### Yetki kuralları hakkında bilmeniz gerekenler
 
-- **Dört göz kuralı.** Para izini değiştiren işlerde (iade, büyük ödeme, folyo kalemi iptali, ödeme iptali, acente primi, etkinlik ödemesi, adisyon düzeltmesi, satın alma siparişi, ödeme fişi, fatura iptali, bordro) isteyen kişi **kendi isteğini onaylayamaz**; başka bir yetkili onaylamalıdır. Reddetmek (geri çekmek) serbesttir.
+- **Dört göz kuralı.** Para izini değiştiren işlerde (iade, karta iade (Sanal POS), büyük ödeme, folyo kalemi iptali, ödeme iptali, acente primi, etkinlik ödemesi, adisyon düzeltmesi, satın alma siparişi, ödeme fişi, fatura iptali, bordro) isteyen kişi **kendi isteğini onaylayamaz**; başka bir yetkili onaylamalıdır. Reddetmek (geri çekmek) serbesttir.
 - **Gerekçe isteyen işler.** Sistem fiyatı yerine elle toplam girmek, bakiyesi kapanmadan çıkışa izin vermek, kapalı folyoyu yeniden açmak gibi işler ayrı izinle korunur ve gerekçe ister; gerekçe denetim izine yazılır.
 - **Kişisel veri maskeleme.** Kimlik numaraları listelerde ve denetim izinde maskeli görünür; personel listesinde ücret ve IBAN ayrı izin ister; kayıp eşyada misafirin iletişim bilgisi yalnızca teslim yetkisi olana görünür.
 - **Otel kapsamı.** Her kullanıcı tek bir otele bağlıdır. Bütün sorgular oturumdaki otelle süzülür; başka otelin kaydını görmek adres değiştirerek de mümkün değildir.
@@ -173,6 +215,7 @@ Bu grup aslında "operasyon" grubudur; ön büro dışındaki departmanların ek
 | Satış CRM | `/satis` | Fırsat panosu, arama günlüğü, teklifler. |
 | Folyolar | `/folyolar` | Konaklama hesapları: kalemler, bölme / birleştirme, aktarma, kapatma. |
 | Kasa | `/kasa` | Günlük kasa (yöntem bazında tahsilat / iade) ve döviz kurları. |
+| Sanal POS | `/sanal-pos` | Online kartla ödeme: **İşlemler** (`/sanal-pos/linkler`; bir linkin ayrıntısı `/sanal-pos/linkler/:linkId` — kopyala, gönder, iptal, karta iade, iz) ve **Ayarlar** (`/sanal-pos/ayarlar` — sağlayıcı, ortam, anahtarlar, sunucunun dış adresi, link süresi, taksit, portal ve widget ödemesi, bağlantıyı dene) (`payment_gateway.view`). Misafirin ödeme sayfası `/misafir/o/:code`. iyzico bağlantısı sandbox'ta uçtan uca deneme bekliyor; bugün uçtan uca Test ortamı çalışır. |
 | Minibar & çamaşır | `/ek-hizmetler` | Minibar girişi ve kayıtları, çamaşırhane siparişleri, günlük rapor, fiyat listeleri. |
 | Kat hizmetleri | `/kat-hizmetleri` | Görev panosu, görevlinin kendi listesi, kat şefi kontrolü, kat haritası. |
 | Kayıp eşya | `/kayip-esya` | Bulunan eşya kaydı, misafirle eşleştirme, teslim / kargo, kapatma. |
@@ -189,6 +232,7 @@ Bu grup aslında "operasyon" grubudur; ön büro dışındaki departmanların ek
 | Mesajlar | `/mesajlar` | Misafir konuşmaları (WhatsApp, web chat), AI / personel modu; cevap bekleyen sayısı rozet. |
 | İstekler | `/istekler` | Misafir istekleri (havlu, yastık, arıza bildirimi…), öncelik, hedef süre, atama. |
 | Anketler | `/anketler` | NPS, cevaplar, düşük puan takibi, AI dönem özeti. |
+| Yorumlar | `/yorumlar` | Google, Booking.com ve diğer sitelerdeki misafir yorumları (elle ya da Excel / CSV ile; otomatik çekme yok): **Yorumlar** (`/yorumlar/liste`; bir yorumun ayrıntısı `/yorumlar/liste/:reviewId` — AI etiketi, önerilen cevap, kopyala, Cevaplandı işareti) ve **Trend** (`/yorumlar/trend` — haftalık sayı, ortalama puan, duygu, konu ve departman tabloları, olumsuz konu artışları). |
 | Spa | `/spa` | Terapist takvimi, randevular, grup dersleri, spa kasası. |
 | Mutfak | `/mutfak` | Reçeteler ve malzeme kartları (maliyet, kâr marjı, alerjen). |
 | Satın alma | `/satin-alma` | Talepler → teklif turları → siparişler → mal kabul; tedarikçiler. |
@@ -295,7 +339,7 @@ Ekranlar kendiliğinden yenilenir. Bir rezervasyon açılınca oda planı, bir �
 
 ### Zil ve uyarılar
 
-Sağ üstteki **zil** size yönelik uyarıları toplar. Bir uyarı ya **bir kişiye** (ör. istediğiniz onayın sonucu, size atanan istek) ya da **bir izne** (ör. "onay bekleyen iş" onaylayabilen herkese; "personele bırakılan iş" o modülde yetkili herkese) gider. Uyarı türleri arasında şunlar vardır: yeni misafir mesajı, acil misafir isteği, geciken misafir isteği, personele bırakılan iş, misafire ulaşamayan bildirim, onay bekleyen iş, bekleme listesinde yer açıldı, bakiyesi kapanmadan çıkış, AI konuşmayı devretti, AI bütçesi doldu, kanal rezervasyonu dikkat istiyor, kanal senkronu başarısız, banket opsiyon / depozito, POS uzun vardiya / unutulmuş adisyon, fatura gönderilemedi, online check-in inceleme bekliyor, ankette düşük puan, spa, arıza, satış takibi, demirbaş garanti bitişi, stok minimum altı, İK (izin talebi / kararı, süresi dolacak özlük belgesi), sadakat (misafirin seviyesi yükseldi), KBS (kimlik bildirimi gönderilemedi, eksik bilgi, giriş bildirimi 2 saattir gecikti).
+Sağ üstteki **zil** size yönelik uyarıları toplar. Bir uyarı ya **bir kişiye** (ör. istediğiniz onayın sonucu, size atanan istek) ya da **bir izne** (ör. "onay bekleyen iş" onaylayabilen herkese; "personele bırakılan iş" o modülde yetkili herkese) gider. Uyarı türleri arasında şunlar vardır: yeni misafir mesajı, acil misafir isteği, geciken misafir isteği, personele bırakılan iş, misafire ulaşamayan bildirim, onay bekleyen iş, bekleme listesinde yer açıldı, bakiyesi kapanmadan çıkış, AI konuşmayı devretti, AI bütçesi doldu, kanal rezervasyonu dikkat istiyor, kanal senkronu başarısız, banket opsiyon / depozito, POS uzun vardiya / unutulmuş adisyon, fatura gönderilemedi, online check-in inceleme bekliyor, ankette düşük puan, spa, arıza, satış takibi, demirbaş garanti bitişi, stok minimum altı, İK (izin talebi / kararı, süresi dolacak özlük belgesi), sadakat (misafirin seviyesi yükseldi), KBS (kimlik bildirimi gönderilemedi, eksik bilgi, giriş bildirimi 2 saattir gecikti), Sanal POS (online ödeme alındı, online ödeme doğrulanamadı, online ödeme folyoya yazılamadı, aynı linke ikinci ödeme, karta iade başarısız / sonuçlanmadı, iade folyoya yazılamadı), misafir yorumları (`REVIEW`: olumsuz konu artışı, ör. "Temizlik şikâyeti bu hafta 3 kat arttı"; müdüre gider, tıklayınca konu süzgeçli yorum listesi açılır).
 
 Uyarıya tıkladığınızda ilgili ekrana gidersiniz (ör. göreve, onaya, konuşmaya). Zil tercihlerinden istemediğiniz türleri susturabilirsiniz. Uyarılar 30 gün saklanır; zil bir iş listesi değildir — işin kendisi ilgili ekranda durur. Aynı konu için tekrar tekrar uyarı üretilmez (aynı onay, aynı görev tek uyarıda birleşir).
 
@@ -331,7 +375,7 @@ Otelin "bugün"ü takvimden değil **gün kapanışından** okunur. Gece görevl
 
 ### Para ve vergi
 
-Bütün tutarlar otelin **tek para biriminde** tutulur. Döviz ödemeleri günlük kurla çevrilir (Kasa → Döviz kurları). Vergiler ayarda "fiyata dahil" ya da "hariç" olarak tanımlanır; raporlardaki gelir, ADR ve RevPAR **vergiler hariç** hesaplanır. Rezervasyon ve folyo kalemlerindeki vergi dökümü aynı formülü kullanır; iki ekran arasında fark görmezsiniz.
+Bütün tutarlar otelin **tek para biriminde** tutulur. Döviz ödemeleri günlük kurla çevrilir (Kasa → Döviz kurları; kur elle girilir ya da TCMB'den otomatik çekilir). Kullanıcı menüsündeki **gösterim para birimi** tutarların yanına yalnız yaklaşık karşılık ekler, kaydı değiştirmez (yukarıda "Dil ve gösterim para birimi"). Vergiler ayarda "fiyata dahil" ya da "hariç" olarak tanımlanır; raporlardaki gelir, ADR ve RevPAR **vergiler hariç** hesaplanır. Rezervasyon ve folyo kalemlerindeki vergi dökümü aynı formülü kullanır; iki ekran arasında fark görmezsiniz.
 
 **Örnek:** Oda fiyatı 2.000 TL, KDV %10 ve konaklama vergisi %2 "fiyata dahil". Rezervasyon ekranındaki vergi dökümü net 1.785,71 + KDV 178,57 + konaklama vergisi 35,71 = 2.000,00 gösterir. Gelir raporunda o gecenin "oda geliri" 1.785,71'dir; misafirin ödediği 2.000'dir. Bir Alman misafir 100 € nakit ödedi; Kasa → Döviz kurları'ndaki günün kuruyla (ör. 38,20) 3.820,00 TL olarak kasaya işlendi; raporlar hep TL'dir.
 
@@ -447,8 +491,10 @@ Yeni bir oteli sisteme almak için aşağıdaki kontrol listesini sırayla geçi
 | İK | İK → Ayarlar; Personel kartı → Kullanıcı hesabı | Hafta tatili günü, günlük / haftalık norm, resmî tatiller (sabit tatilleri ekle + dinî bayramlar elle), izin onayı, belge hatırlatma günü; her personel kartına kullanıcı hesabı bağı ve doğum tarihi | Varsayılanlarla çalışır (Pazar, 7,5 / 45 saat, sabit tatiller); dinî bayramlar izinden düşmez; bağı olmayan personel İzinlerim'i kullanamaz |
 | Sadakat | Sadakat → Ayarlar (`/sadakat/ayarlar`) | **Program açık**, program adı, 1 puan için harcama (varsayılan 10), puan değeri (0,50), en az kullanım (100), folyonun en çok %'si (50), süre (24 ay), otomatik üyelik, acente / cari ödemeli folyo kazanmaz, spa kasası kazanır; seviyeler (Klasik 0 / Gümüş 1.000 ×1,25 / Altın 3.000 ×1,5) | Program kapalı kalır: kimse puan kazanmaz ve kullanamaz; misafir kartındaki ve rezervasyondaki sadakat kartları görünmez. Sonradan açılınca geçmiş folyolar puan getirmez |
 | KBS | KBS → Ayarlar (`/kbs/ayarlar`) | **KBS açık**, sağlayıcı (bugün yalnız Test ortamı), tesis kodu, kullanıcı adı, parola (yalnız yazılır), çıkış / oda değişikliği bildirimi, zorunlu alanlar (cinsiyet, doğum tarihi açık; anne-baba adı, doğum yeri kapalı; TC vatandaşına ek alan sorma açık), test davranışı; **Bağlantıyı dene** | KBS kapalı kalır: bildirim açılmaz, girişte KBS alanları zorunlu olmaz; otel resmî ekrandan elle bildirmeye devam eder. Sonradan açılınca önceki girişler için bildirim açılmaz (Mutabakat'ta "Bildirim açılmamış") |
+| Sanal POS | Sanal POS → Ayarlar (`/sanal-pos/ayarlar`) | **Sanal POS açık**, sağlayıcı (Test ortamı ya da iyzico), ortam (sandbox / canlı), API anahtarı ve gizli anahtar (yalnız yazılır; `SETTINGS_SECRET_KEY` gerekir), **sunucunun dış adresi** (ör. `https://hotel.flexai.tr/api`; ödeme sonucu buraya döner), link süresi (72 saat), en çok taksit (1), portalda kartla ödeme, widget ön ödemesi, test davranışı; **Bağlantıyı dene**. Önce misafir portalı adresi girilmeli (ödeme sayfası orada açılır); canlı için iyzico üye iş yeri sözleşmesi ve ödeme yöntemi eşlemesinde Sanal POS → banka hesabı | Sanal POS kapalı kalır: ödeme linki açılamaz, portalda **Kartla öde** ve widget ön ödemesi görünmez; kartla ödeme resepsiyonda fiziki POS'tan alınır |
 | Misafir portalı | Portal ayarları | Davet günü, açılış günü, belge saklama süresi, metinler | Online check-in daveti gitmez |
 | Anket | Anketler → ayarlar | Sorular, gönderim günü / saati, yorum bağlantıları | Anket daveti gitmez |
+| Misafir yorumları | Yorumlar → **Dosyadan yükle** (`/yorumlar/liste`); Ayarlar → AI asistanı | Ayar ekranı yok. İlk iş: Booking extranet'inden ve Google işletme profilinden son birkaç ayın yorumlarını dışa aktarıp yükleyin (başlıklar kendiliğinden eşleşir). AI analizi için `OPENAI_API_KEY`, AI açık ve Konuşma modeli (fiyatıyla) | Yorum listesi boş kalır (otomatik çekme yok); AI yoksa yorumlar "Analiz bekliyor" kalır, elle etiketlenir |
 
 ### Adım 13 — Mevcut veriyi taşıyın
 

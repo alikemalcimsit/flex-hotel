@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { DEPARTURE_VIEWS, DEPARTURE_VIEW_LABELS, DEPOSIT_METHOD_LABELS, MAX_BULK_CHECK_OUTS, RESERVATION_COUNT_CAP } from '@hotelos/hotel-contracts';
+import { DEPARTURE_VIEWS, MAX_BULK_CHECK_OUTS, RESERVATION_COUNT_CAP } from '@hotelos/hotel-contracts';
 import { Badge, Button } from '@hotelos/ui';
 import { BulkResultAlert, useRowSelection } from '../../components/BulkSelection.jsx';
 import { ConfirmDialog } from '../../components/ConfirmDialog.jsx';
 import { DataTable } from '../../components/DataTable.jsx';
+import { useT } from '../../i18n/index.jsx';
 import { apiPost } from '../../lib/api.js';
 import { frontDeskKeys } from '../../lib/front-desk.js';
 import { toastError } from '../../store/toast.js';
@@ -24,6 +25,7 @@ import { useStayList } from './useStayList.js';
  */
 export function DeparturesTab() {
   const can = useCan();
+  const t = useT();
   const canManage = can(PERMISSIONS.STAYS_MANAGE);
   const list = useStayList('departures', { views: DEPARTURE_VIEWS, defaultView: 'EXPECTED' });
   const summary = useFrontDeskSummary().data;
@@ -31,6 +33,7 @@ export function DeparturesTab() {
   const [revert, setRevert] = useState(null);
   const expected = list.filters.view === 'EXPECTED';
   const { query } = list;
+  const viewLabels = Object.fromEntries(DEPARTURE_VIEWS.map((view) => [view, t(`frontDesk.departureView.${view}`)]));
   const queryClient = useQueryClient();
   const selection = useRowSelection();
   const [confirmBulk, setConfirmBulk] = useState(false);
@@ -60,51 +63,51 @@ export function DeparturesTab() {
   };
 
   const columns = [
-    ...(canManage && expected ? [selection.column(rows, bulkEligible, 'Bakiyesi açık: çıkışı tek tek yapın (ödeme ya da gerekçe gerekir)')] : []),
+    ...(canManage && expected ? [selection.column(rows, bulkEligible, t('frontDesk.departures.bulkIneligible'))] : []),
     {
       key: 'room',
-      header: 'Oda',
+      header: t('frontDesk.list.room'),
       render: (row) => <span className="text-base font-bold tabular-nums">{row.room?.number ?? '—'}</span>,
     },
-    { key: 'guest', header: 'Misafir', render: (row) => <GuestCell row={row} /> },
+    { key: 'guest', header: t('frontDesk.list.guest'), render: (row) => <GuestCell row={row} /> },
     {
       key: 'stay',
-      header: 'Konaklama',
+      header: t('frontDesk.list.stay'),
       render: (row) => (
         <span className="flex flex-col whitespace-nowrap">
           <span>
-            {formatDate(row.checkIn)} – {formatDate(row.checkOut)} <span className="text-xs text-ink-muted">({row.nights} gece)</span>
+            {formatDate(row.checkIn)} – {formatDate(row.checkOut)} <span className="text-xs text-ink-muted">{t('frontDesk.list.nights', { count: row.nights })}</span>
           </span>
-          {row.overdue && <span className="text-xs font-semibold text-sec-strong">Çıkış günü geçti</span>}
+          {row.overdue && <span className="text-xs font-semibold text-sec-strong">{t('frontDesk.list.overdue')}</span>}
         </span>
       ),
     },
-    { key: 'party', header: 'Kişi', render: (row) => <span className="whitespace-nowrap text-xs">{partyLabel(row.adults, row.children)}</span> },
+    { key: 'party', header: t('frontDesk.list.party'), render: (row) => <span className="whitespace-nowrap text-xs">{partyLabel(row.adults, row.children)}</span> },
     expected
       ? {
           key: 'balance',
-          header: 'Bakiye',
+          header: t('frontDesk.list.balance'),
           render: (row) => <BalanceCell balance={row.balance} currency={row.currency} reservationId={row.id} />,
         }
       : {
           key: 'at',
-          header: 'Çıkış',
+          header: t('frontDesk.list.checkOut'),
           render: (row) => (
             <span className="flex flex-col whitespace-nowrap text-xs">
               <span>
                 <span className="font-semibold text-ink">{row.checkedOutTime}</span> · {row.checkedOutBy}
               </span>
-              {row.checkoutOpenBalance && <span className="font-semibold text-sec-strong">Bakiyeyle: {formatMoney(row.checkoutOpenBalance, row.currency)}</span>}
+              {row.checkoutOpenBalance && <span className="font-semibold text-sec-strong">{t('frontDesk.departures.withBalance', { amount: formatMoney(row.checkoutOpenBalance, row.currency) })}</span>}
             </span>
           ),
         },
     {
       key: 'deposit',
-      header: 'Teminat',
+      header: t('frontDesk.list.deposit'),
       render: (row) =>
         row.depositMethod ? (
           <Badge tone="info" dot={false}>
-            {DEPOSIT_METHOD_LABELS[row.depositMethod]} · {formatMoney(row.depositAmount, row.currency)}
+            {t(`frontDesk.depositMethod.${row.depositMethod}`)} · {formatMoney(row.depositAmount, row.currency)}
           </Badge>
         ) : (
           <span className="text-xs text-ink-muted">—</span>
@@ -116,30 +119,30 @@ export function DeparturesTab() {
     <div className="flex flex-col gap-5">
       <StayFilters
         views={DEPARTURE_VIEWS}
-        labels={DEPARTURE_VIEW_LABELS}
+        labels={viewLabels}
         value={list.filters.view}
         onChange={list.setView}
         counts={{ EXPECTED: summary?.departures.expected, CHECKED_OUT: summary?.departures.checkedOut }}
         searchText={list.searchText}
         onSearch={list.setSearchText}
       />
-      {bulkResult && <BulkResultAlert title="Toplu çıkış" result={bulkResult} labelOf={labelOf} onClose={() => setBulkResult(null)} />}
+      {bulkResult && <BulkResultAlert title={t('frontDesk.departures.bulkTitle')} result={bulkResult} labelOf={labelOf} onClose={() => setBulkResult(null)} />}
       {canManage && expected && selection.count > 0 && (
         <div className="flex flex-wrap items-center justify-end gap-3">
-          <span className="text-sm text-ink-muted">{selection.count} konaklama seçili (yalnız bakiyesi kapalı olanlar seçilebilir)</span>
+          <span className="text-sm text-ink-muted">{t('frontDesk.departures.selected', { count: selection.count })}</span>
           <Button type="button" icon="logout" disabled={bulkCheckOut.isPending || selection.count > MAX_BULK_CHECK_OUTS} onClick={() => setConfirmBulk(true)}>
-            Seçilenlerin çıkışını yap ({selection.count})
+            {t('frontDesk.departures.bulkSubmit', { count: selection.count })}
           </Button>
         </div>
       )}
       {canManage && expected && selection.count === 0 && rows.length > 0 && (
         <p className="text-xs text-ink-muted">
-          Toplu çıkış: bakiyesi kapalı konaklamaları seçip birlikte çıkarabilirsiniz ({rows.filter(bulkEligible).length} / {rows.length} seçilebilir). Bakiyesi açık olanlar ödeme ya da gerekçe istediği için tek tek yapılır.
+          {t('frontDesk.departures.bulkHint', { eligible: rows.filter(bulkEligible).length, total: rows.length })}
         </p>
       )}
       {expected && summary?.departures.overdue > 0 && (
         <p className="text-sm text-sec-strong">
-          {summary.departures.overdue} misafirin çıkış günü geçti ama çıkışı yapılmadı. Ayrıldıysa çıkışı kaydedin, kalıyorsa konaklamayı uzatın.
+          {t('frontDesk.departures.overdueNote', { count: summary.departures.overdue })}
         </p>
       )}
       <DataTable
@@ -151,29 +154,29 @@ export function DeparturesTab() {
         error={query.error}
         onRetry={() => query.refetch()}
         onPageChange={list.setPage}
-        emptyTitle={list.filters.search ? 'Aramaya uyan misafir yok' : expected ? 'Bugün çıkışı beklenen misafir yok' : 'Bugün henüz çıkış yapılmadı'}
+        emptyTitle={list.filters.search ? t('frontDesk.list.noMatch') : expected ? t('frontDesk.departures.emptyExpected') : t('frontDesk.departures.emptyCheckedOut')}
         rowActions={
           canManage
             ? (row) =>
                 expected ? (
                   <Button size="sm" icon="logout" onClick={() => setCheckOut(row.id)}>
-                    Çıkış yap
+                    {t('frontDesk.departures.checkOut')}
                   </Button>
                 ) : row.canRevertCheckOut ? (
                   <Button size="sm" variant="ghost" icon="rotateCcw" onClick={() => setRevert(row)}>
-                    Geri al
+                    {t('frontDesk.list.revert')}
                   </Button>
                 ) : null
             : undefined
         }
       />
-      {query.data?.meta?.totalCapped && <p className="text-xs text-ink-muted">{RESERVATION_COUNT_CAP}+ kayıt; aramayla daraltın.</p>}
+      {query.data?.meta?.totalCapped && <p className="text-xs text-ink-muted">{t('frontDesk.list.capped', { cap: RESERVATION_COUNT_CAP })}</p>}
       {checkOut && <CheckOutDialog reservationId={checkOut} onClose={() => setCheckOut(null)} />}
       <ConfirmDialog
         open={confirmBulk}
-        title={`${selection.count} konaklamanın çıkışını yap`}
-        message="Her konaklama tek tek çıkışın kuralıyla işlenir: oda kirliye düşer, folyo kapanır. Geç çıkış ücreti, erken ayrılış onayı ya da açık bakiye isteyenler toplu yapılmaz; atlanıp listelenir, onları tek tek yapın."
-        confirmLabel="Çıkışları yap"
+        title={t('frontDesk.departures.confirmTitle', { count: selection.count })}
+        message={t('frontDesk.departures.confirmMessage')}
+        confirmLabel={t('frontDesk.departures.confirmLabel')}
         confirmVariant="primary"
         confirmIcon="logout"
         isPending={bulkCheckOut.isPending}

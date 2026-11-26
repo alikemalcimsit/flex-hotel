@@ -154,6 +154,36 @@ Bir turda en fazla 100 kayıt alınır; istek 20 saniyelik bütçeyle durur, ekr
 
 Folyo ya da etkinlikle ilgisi olmayan satışlar için (toplantı salonu kirası, komisyon dışı hizmet) **Kesilenler** sekmesindeki **Serbest fatura** düğmesi. Cari seçilir; alıcı carinin kartından gelir, taslakta düzenlenir; satırlar elle girilir. Kesilince **cariye vadeli alacak** yazılır (ön muhasebe); iptal edilince fatura tarihli ters kayıt düşer. Yetki `invoices.manage`.
 
+### Döviz karşılığı
+
+**Ne işe yarar:** yabancı misafir ya da şirket faturadaki tutarın kendi para birimindeki karşılığını görmek ister ("bu kaç euro?"). FlexHotel faturayı **otelin para biriminde (TL) keser**; istenirse toplamın seçilen dövizdeki karşılığını kur ve günüyle faturaya **not** olarak yazar. Tam dövizli e-fatura (belge para birimi EUR, satırlar dövizde) **yoktur**: e-belgede belge para birimi her zaman TRY'dir (`DocumentCurrencyCode` TRY), tutarlar TL'dir, döviz yalnız bilgi notudur.
+
+**Taslakta seçim:** fatura taslağında alıcı formunun altındaki **Döviz karşılığı** seçicisi. Seçenekler "Yok (yalnız otelin para birimi)" (varsayılan) ve USD, EUR, GBP, CHF, RUB, JPY, SAR, AZN, CNY, DKK, SEK, NOK; otelin kendi para birimi listede yoktur. Seçip **Kaydet** deyin. Taslakta toplamlar kartının altında "EUR karşılığı kesimde güncel kurdan hesaplanır." yazar; tutar henüz hesaplanmaz, çünkü kur kesim gününe göre seçilir. Alıcı türünden bağımsızdır (Türk şirkete de yazılabilir). Yetki: taslağı düzenleyen fatura izni yeter.
+
+**Kesimde kur ve not:** **Kes** basıldığında, fatura gününe (otelin takvim günü) kadar girilmiş o dövizin **son kuru** alınır (Kasa → Döviz kurları; elle girilmiş ya da TCMB'den çekilmiş). Ödenecek toplam (vergiler dahil) bu kura bölünür, iki haneye yuvarlanır ve faturanın notlarına şu satır eklenir:
+
+> Döviz karşılığı: 236,95 EUR (1 EUR = 50,6441 TL, otel kuru, 26.11.2026)
+
+Kaynak elle girilmiş kurda "otel kuru", TCMB'den gelen kurda "TCMB" yazar; tarih kurun girildiği iş günüdür. Kur, karşılık ve kur günü faturayla birlikte saklanır: kur tablosu sonradan değişse de kesilmiş faturanın karşılığı değişmez. Kesilmiş faturada toplamlar kartının altında "Döviz karşılığı: 236,95 EUR" ve küçük satırda "1 EUR = 50,6441 TRY · 26 Kas 2026" görünür.
+
+**Örnek:** Muhasebe bir şirkete toplantı salonu kirası için 12.000 TL'lik serbest fatura taslağı açtı, Döviz karşılığı **EUR** seçti. O gün Kasa → Döviz kurları'nda EUR elle **50,6441** girilmişti. Kes → fatura toplamı **12.000,00 TL** (değişmedi), not: "Döviz karşılığı: 236,95 EUR (1 EUR = 50,6441 TL, otel kuru, 26.11.2026)" (12.000 ÷ 50,6441 = 236,946… → 236,95). e-Belgede belge para birimi TRY, not satırında aynı metin.
+
+**Kur yok / eski kur hataları** (kesim durur, fatura numarası verilmez, taslak olduğu gibi kalır):
+
+| Durum | Hata | Ne yapmalı |
+| --- | --- | --- |
+| Seçilen dövizin hiç kuru yok (ör. GBP seçildi, GBP hiç girilmedi) | `FOREIGN_RATE_MISSING`: "GBP için kesim gününün kuru yok. Kasa › Döviz kurları ekranından kuru girin (ya da TCMB'den çekin) veya döviz karşılığını kaldırın." | Kuru girin ya da TCMB ayarına ekleyip "şimdi çek" deyin; ya da seçiciyi "Yok"a alıp kaydedin, sonra yeniden **Kes** |
+| Son kur 3 günden eski | `FOREIGN_RATE_STALE`: "EUR kuru 20.11.2026 tarihli (3 günden eski); güncel kuru girin ya da TCMB'den çekin." | Günün kurunu girin ya da TCMB'den çekin, yeniden **Kes** |
+
+Eski kurun sessizce yazılmaması bilinçlidir: dövizli ödemedeki 3 gün eşiğiyle aynıdır.
+
+**PDF ve e-belgede not:** fatura PDF'inin **Notlar** bölümünde "Döviz karşılığı: 236,95 EUR (1 EUR = 50,6441 TL, 26.11.2026)" satırı (hizmet dönemi notunun altında, alt bilgi ve banka bilgisinin üstünde) yer alır. e-Fatura / e-Arşiv belgesinde aynı bilgi kaynağıyla birlikte not satırı olarak gider; GİB'e giden tutarlar TL'dir.
+
+**Dikkat:**
+
+- Döviz karşılığı **bilgidir**, borç değildir: cari hesap ve tahsilat TL izlenir. Misafir dövizle öderse ödeme kendi günündeki kurla çevrilir; faturadaki karşılıkla kuruşu kuruşuna tutması beklenmez.
+- Kesilmiş faturanın döviz karşılığı değiştirilemez; yanlışsa fatura iptal edilip yeni taslakta düzeltilir.
+
 ### Fatura iptali
 
 Fatura silinmez; **iptal edilir** ve iptal **dört göz** kuralına bağlıdır: isteyen `İptal iste` der (gerekçe zorunlu), onay kuyruğuna `Fatura iptali` türünde iş düşer, başka bir yetkili onaylar. Onay beklerken e-belge gönderimi durur. Onaylanınca:
@@ -220,6 +250,7 @@ Taslak ve kesilmiş fatura aynı ekranda, farklı kutularla görünür (`/fatura
 | Başlık | Kaynak (folyo · oda · misafir / etkinlik · dosya no / serbest · cari), durum rozeti (taslak, kesildi, gönderiliyor, entegratörde, tamamlandı, reddedildi, gönderilemedi, iptal onayı bekliyor, iptal), belge türü (e-Fatura / e-Arşiv) |
 | Alıcı formu (taslakta) | Tür: kişi / şirket / yabancı kişi / yurt dışındaki şirket. Kişide ad soyad + TC kimlik; şirkette ünvan + VKN + vergi dairesi; yabancı kişide uyruk + pasaport; yurt dışındaki şirkette ülke + kendi vergi no. Adres (il, ilçe, posta kodu, ülke), e-posta. Tür bir kez seçilip hatırlanır (aynı alıcının sonraki faturası aynı türle açılır). |
 | "Kesmeden önce" | Eksiklerin madde listesi; her madde ilgili alana götürür. Boş değilse Kes kapalı. |
+| Döviz karşılığı | Taslakta döviz seçici ("Yok" varsayılan); toplamlar kartının altında taslakta "kesimde hesaplanır", kesilmişte karşılık tutarı, kur ve günü (bkz. Döviz karşılığı) |
 | Yasal süre | Hizmet bitiminden 7 gün; kalan gün yeşil / sarı / kırmızı; süre geçtiyse "süresi geçti" (kesim engellenmez, raporlanır). |
 | Başlangıç uyarısı | Kaynak faturalama başlangıcından önce kapanmışsa "önceki sistemde faturalanmış sayılır" |
 | Satırlar | Açıklama, miktar, birim fiyat (KDV hariç), iskonto, KDV oranı / kodu, konaklama vergisi, satır toplamı. Folyo faturasında salt okunur; serbest faturada düzenlenir. |
@@ -237,6 +268,7 @@ Taslak ve kesilmiş fatura aynı ekranda, farklı kutularla görünür (`/fatura
 - **Fatura kesildikten sonra folyo açılmıyor.** Doğru davranış; önce iptal.
 - Folyo kalemleri vergi dökümü olmadan işlenmişse (eski veriler) kesim "vergi dökümü eksik" hatasıyla durur; kalem düzeltilmelidir.
 - Faturanın tarihi takvim günüdür; **gece kapanışını geciktirmek fatura tarihini değiştirmez**.
+- **Kesim "kur yok" / "kur eski" diye durdu.** Taslakta döviz karşılığı seçilmiş; o dövizin güncel kurunu girin (ya da TCMB'den çekin) veya karşılığı kaldırın.
 - Yasal süre rozeti kırmızıya dönmüşse öncelik verin; sistem süreyi kendisi uzatamaz.
 
 ## Ön muhasebe (cariler, kasa / banka, çek / senet, fişler)

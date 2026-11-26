@@ -1,13 +1,15 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Icon } from '@hotelos/ui';
+import { useT } from '../i18n/index.jsx';
 import { initialsFor } from './initials.js';
+import { UserPreferences } from './UserPreferences.jsx';
 
 /**
  * Üst bardaki kullanıcı menüsü — Spark Admin'in profil açılır menüsü.
  *
  * Şablonda "Hesabım / Ayarlar / Ekranı kilitle" vardı; panelde bu ekranların
  * karşılığı yok, işe yaramayan bağlantı konmadı. Menüde gerçekte olan: kim
- * olarak girildiği ve çıkış.
+ * olarak girildiği, arayüz dili / gösterim para birimi (modül 60) ve çıkış.
  *
  * Klavye: açılınca odak ilk maddeye gider; Esc kapatıp düğmeye döner; Tab ile
  * dışarı çıkınca ya da dışarı tıklanınca kapanır.
@@ -16,6 +18,7 @@ import { initialsFor } from './initials.js';
  */
 export function UserMenu({ name, email, roleLabel, onLogout }) {
   const [isOpen, setIsOpen] = useState(false);
+  const t = useT();
   const rootRef = useRef(null);
   const buttonRef = useRef(null);
   const firstItemRef = useRef(null);
@@ -78,7 +81,7 @@ export function UserMenu({ name, email, roleLabel, onLogout }) {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 top-full z-30 mt-2 w-64 animate-pop-in rounded-panel border border-line bg-surface py-2 shadow-float">
+        <div className="absolute right-0 top-full z-30 mt-2 w-72 animate-pop-in rounded-panel border border-line bg-surface py-2 shadow-float">
           <div className="border-b border-line px-5 pb-3 pt-1.5">
             <p className="truncate text-sm font-bold text-ink">{name}</p>
             {email && <p className="truncate text-xs text-ink-muted">{email}</p>}
@@ -88,6 +91,7 @@ export function UserMenu({ name, email, roleLabel, onLogout }) {
               </p>
             )}
           </div>
+          <UserPreferences />
           <div id={menuId} role="menu" aria-labelledby={buttonId} className="pt-1.5">
             <button
               ref={firstItemRef}
@@ -100,7 +104,7 @@ export function UserMenu({ name, email, roleLabel, onLogout }) {
               className="flex w-full items-center gap-3 px-5 py-2.5 text-left text-sm font-semibold text-sec-strong transition-colors duration-150 hover:bg-danger-soft focus:bg-danger-soft focus:outline-none"
             >
               <Icon name="logout" className="size-[18px]" />
-              Çıkış yap
+              {t('auth.logout')}
             </button>
           </div>
         </div>

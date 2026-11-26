@@ -1,0 +1,22 @@
+/** Ortak kısa metinler (düğmeler, durumlar, gün adları). Anahtarlar `common.` ile başlar. */
+export default Object.freeze({
+  'common.save': 'Kaydet',
+  'common.saving': 'Kaydediliyor…',
+  'common.cancel': 'Vazgeç',
+  'common.close': 'Kapat',
+  'common.retry': 'Tekrar dene',
+  'common.loading': 'Yükleniyor…',
+  'common.loadMore': 'Daha fazla',
+  'common.noRecords': 'Kayıt yok.',
+  'common.none': 'Yok',
+  'common.all': 'Tümü',
+  'common.live': 'Canlı',
+  'common.notLive': 'Canlı değil',
+  'common.notSaved': 'Kaydedilmedi',
+  'common.today': 'Bugün',
+  'common.yesterday': 'Dün',
+  'common.tomorrow': 'Yarın',
+  'common.pageLoading': 'Sayfa yükleniyor…',
+  'common.approxAmount': '≈ {amount}',
+  'common.approxTitle': 'Yaklaşık karşılık: 1 {currency} = {rate} {hotelCurrency} ({date})',
+});

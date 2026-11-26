@@ -1,14 +1,15 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { BOARD_TYPE_LABELS, RESERVATION_STATUS_LABELS } from '@hotelos/hotel-contracts';
 import { Alert, Badge, Button, Icon, Spinner } from '@hotelos/ui';
 import { Modal } from '../../components/Modal.jsx';
 import { HousekeepingBadge, OccupancyBadge } from '../../components/RoomStateBadges.jsx';
+import { useT } from '../../i18n/index.jsx';
 import { api } from '../../lib/api.js';
 import { folioPath } from '../../lib/folios.js';
 import { formatDate, formatMoney } from '../../lib/format.js';
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 import { RESERVATION_TONES } from './planTheme.js';
+import { countText, guestsText } from './planText.jsx';
 
 /**
  * Izgaradaki bara tıklayınca açılan konaklama detayı.
@@ -29,6 +30,7 @@ import { RESERVATION_TONES } from './planTheme.js';
  * }} props
  */
 export function ReservationDrawer({ reservationId, canOperate, onClose, onChangeRoom, onUnassign }) {
+  const t = useT();
   const canViewFolio = useCan()(PERMISSIONS.FOLIO_VIEW);
   const query = useQuery({
     queryKey: ['plan', 'reservation', reservationId],
@@ -42,41 +44,41 @@ export function ReservationDrawer({ reservationId, canOperate, onClose, onChange
     <Modal
       open
       size="md"
-      title={detail ? `${detail.confirmationCode}` : 'Rezervasyon'}
+      title={detail ? `${detail.confirmationCode}` : t('roomPlan.drawer.fallbackTitle')}
       onClose={onClose}
       footer={
         <>
           <Button variant="outline" onClick={onClose}>
-            Kapat
+            {t('common.close')}
           </Button>
           {detail && (
             <Link to={`/rezervasyonlar/${detail.id}`}>
               <Button variant="outline" icon="bookOpen">
-                Rezervasyon sayfası
+                {t('roomPlan.drawer.reservationPage')}
               </Button>
             </Link>
           )}
           {detail && canOperate && detail.actions.canUnassign && (
             <Button variant="dangerSoft" icon="close" onClick={() => onUnassign(detail)}>
-              Oda atamasını kaldır
+              {t('roomPlan.drawer.unassign')}
             </Button>
           )}
           {detail && canOperate && (
             <Button icon="key" disabled={!detail.actions.canChangeRoom} onClick={() => onChangeRoom(detail)}>
-              {detail.room ? 'Odayı değiştir' : 'Oda ata'}
+              {detail.room ? t('roomPlan.drawer.changeRoom') : t('roomPlan.drawer.assignRoom')}
             </Button>
           )}
         </>
       }
     >
-      {query.isPending && <Spinner label="Rezervasyon yükleniyor…" className="py-8" />}
+      {query.isPending && <Spinner label={t('roomPlan.drawer.loading')} className="py-8" />}
 
       {query.isError && (
         <Alert
           tone="danger"
           action={
             <Button variant="outline" size="sm" icon="refresh" onClick={() => query.refetch()}>
-              Tekrar dene
+              {t('common.retry')}
             </Button>
           }
         >
@@ -92,76 +94,78 @@ export function ReservationDrawer({ reservationId, canOperate, onClose, onChange
               className={`size-2.5 rounded-full ${tone?.swatch ?? ''}`}
             />
             <span className="text-sm font-bold text-ink">
-              {RESERVATION_STATUS_LABELS[detail.status] ?? detail.status}
+              {t(`roomPlan.reservationStatus.${detail.status}`, detail.status)}
             </span>
             {detail.room ? (
               <Badge tone="info" dot={false}>
-                Oda {detail.room.number}
+                {t('roomPlan.shared.room', { number: detail.room.number })}
               </Badge>
             ) : (
               <Badge tone="warning" dot={false}>
-                Oda bekliyor
+                {t('roomPlan.drawer.awaitingRoom')}
               </Badge>
             )}
             <Badge dot={false}>{detail.roomType.code}</Badge>
           </div>
 
           <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
-            <Field label="Misafir">
+            <Field label={t('roomPlan.shared.guest')}>
               <span className="font-semibold text-ink">
                 {detail.guest.firstName} {detail.guest.lastName}
               </span>
               {detail.guest.phone && <div className="text-xs text-ink-muted">{detail.guest.phone}</div>}
               {detail.guest.email && <div className="truncate text-xs text-ink-muted">{detail.guest.email}</div>}
             </Field>
-            <Field label="Konaklama">
+            <Field label={t('roomPlan.drawer.stay')}>
               {formatDate(detail.checkIn)} → {formatDate(detail.checkOut)}
               <div className="text-xs text-ink-muted">
-                {detail.nights} gece · {detail.adults} yetişkin
-                {detail.children > 0 ? ` + ${detail.children} çocuk` : ''}
+                {countText(t, 'roomPlan.shared.nights', detail.nights)} · {guestsText(t, detail.adults, detail.children)}
               </div>
             </Field>
-            <Field label="Oda tipi">
+            <Field label={t('roomPlan.drawer.roomType')}>
               {detail.roomType.code} — {detail.roomType.name}
               <div className="text-xs text-ink-muted">
-                Kapasite: {detail.roomType.capacityAdults} yetişkin, {detail.roomType.capacityChildren} çocuk
+                {t('roomPlan.drawer.capacity', {
+                  adults: countText(t, 'roomPlan.shared.adults', detail.roomType.capacityAdults),
+                  children: countText(t, 'roomPlan.shared.children', detail.roomType.capacityChildren),
+                })}
               </div>
             </Field>
-            <Field label="Pansiyon">{BOARD_TYPE_LABELS[detail.boardType] ?? detail.boardType}</Field>
-            <Field label="Toplam tutar">{formatMoney(detail.totalPrice, detail.currency)}</Field>
-            <Field label="Folyo">
+            <Field label={t('roomPlan.drawer.board')}>{t(`roomPlan.board.${detail.boardType}`, detail.boardType)}</Field>
+            <Field label={t('roomPlan.drawer.total')}>{formatMoney(detail.totalPrice, detail.currency)}</Field>
+            <Field label={t('roomPlan.drawer.folio')}>
               {detail.folio ? (
                 <>
                   {formatMoney(detail.folio.balance, detail.folio.currency)}
                   <span className="text-xs text-ink-muted">
                     {' '}
-                    · {detail.folio.status === 'OPEN' ? 'açık' : 'kapalı'}
-                    {detail.folio.count > 1 ? ` · ${detail.folio.count} folyo` : ''}
+                    · {detail.folio.status === 'OPEN' ? t('roomPlan.drawer.folioOpen') : t('roomPlan.drawer.folioClosed')}
+                    {detail.folio.count > 1 ? ` · ${t('roomPlan.drawer.folioCount', { count: detail.folio.count })}` : ''}
                   </span>
                   {canViewFolio && (
                     <Link to={folioPath(detail.id)} className="block text-xs font-semibold text-info-ink underline-offset-2 hover:underline">
-                      Folyoyu aç
+                      {t('roomPlan.drawer.openFolio')}
                     </Link>
                   )}
                 </>
               ) : (
-                <span className="text-ink-muted">Henüz folyo açılmadı</span>
+                <span className="text-ink-muted">{t('roomPlan.drawer.noFolio')}</span>
               )}
             </Field>
           </dl>
 
           {detail.room && (
             <div className="flex flex-wrap items-center gap-2 rounded-panel border border-line bg-surface-muted px-4 py-3">
-              <span className="text-sm font-bold text-ink">Oda {detail.room.number}</span>
-              <span className="text-xs text-ink-muted">{detail.room.floor}. kat</span>
+              <span className="text-sm font-bold text-ink">{t('roomPlan.shared.room', { number: detail.room.number })}</span>
+              <span className="text-xs text-ink-muted">{t('roomPlan.shared.floor', { floor: detail.room.floor })}</span>
               <OccupancyBadge occupancy={detail.room.occupancy} />
               <HousekeepingBadge status={detail.room.housekeepingStatus} />
             </div>
           )}
 
           {detail.roomHistory.length > 1 && (
-            <section aria-label="Oda geçmişi">
-              <h3 className="mb-2 text-xs font-bold uppercase tracking-[0.06em] text-ink-muted">Oda geçmişi</h3>
+            <section aria-label={t('roomPlan.drawer.roomHistory')}>
+              <h3 className="mb-2 text-xs font-bold uppercase tracking-[0.06em] text-ink-muted">{t('roomPlan.drawer.roomHistory')}</h3>
               <ol className="flex flex-col gap-1.5">
                 {detail.roomHistory.map((entry) => (
                   <li
@@ -173,7 +177,7 @@ export function ReservationDrawer({ reservationId, canOperate, onClose, onChange
                       {formatDate(entry.from)} → {formatDate(entry.to)}
                     </span>
                     {entry.reason && <span className="text-xs text-ink-muted">· {entry.reason}</span>}
-                    {entry.movedBy && <span className="text-xs text-ink-muted">· taşıyan {entry.movedBy}</span>}
+                    {entry.movedBy && <span className="text-xs text-ink-muted">· {t('roomPlan.drawer.movedBy', { name: entry.movedBy })}</span>}
                   </li>
                 ))}
               </ol>
@@ -182,7 +186,7 @@ export function ReservationDrawer({ reservationId, canOperate, onClose, onChange
 
           {detail.notes && (
             <div className="rounded-panel border border-line bg-surface-muted px-4 py-3 text-sm text-ink-soft">
-              <span className="mb-1 block text-xs font-bold uppercase tracking-[0.06em] text-ink-muted">Not</span>
+              <span className="mb-1 block text-xs font-bold uppercase tracking-[0.06em] text-ink-muted">{t('roomPlan.drawer.note')}</span>
               {detail.notes}
             </div>
           )}
@@ -191,7 +195,7 @@ export function ReservationDrawer({ reservationId, canOperate, onClose, onChange
             <Alert tone="info">
               <span className="flex items-center gap-2">
                 <Icon name="info" className="size-4 shrink-0" />
-                {detail.actions.reason} — oda değişikliği yapılamaz.
+                {t('roomPlan.drawer.cannotChange', { reason: detail.actions.reason })}
               </span>
             </Alert>
           )}

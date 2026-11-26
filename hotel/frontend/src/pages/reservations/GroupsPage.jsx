@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Badge, Button, Input } from '@hotelos/ui';
 import { DataTable } from '../../components/DataTable.jsx';
 import { PageHeader } from '../../components/PageHeader.jsx';
+import { useT } from '../../i18n/index.jsx';
 import { api, withQuery } from '../../lib/api.js';
 import { formatDate, formatDateTime } from '../../lib/format.js';
 import { reservationKeys } from '../../lib/reservations.js';
@@ -15,6 +16,7 @@ const SEARCH_DEBOUNCE_MS = 300;
  * ve durumu. Satır grup dosyasına gider (toplu oda atama / giriş / çıkış orada).
  */
 export function GroupsPage() {
+  const t = useT();
   const navigate = useNavigate();
   const [searchText, setSearchText] = useState('');
   const [search, setSearch] = useState('');
@@ -37,7 +39,7 @@ export function GroupsPage() {
   const columns = [
     {
       key: 'name',
-      header: 'Grup',
+      header: t('reservations.groups.colGroup'),
       render: (row) => (
         <Link to={`/gruplar/${row.id}`} className="block min-w-0">
           <span className="block truncate font-semibold text-ink hover:underline">{row.name}</span>
@@ -45,38 +47,38 @@ export function GroupsPage() {
         </Link>
       ),
     },
-    { key: 'rooms', header: 'Oda', className: 'tabular-nums' },
+    { key: 'rooms', header: t('reservations.groups.colRooms'), className: 'tabular-nums' },
     {
       key: 'state',
-      header: 'Durum',
+      header: t('reservations.groups.colState'),
       render: (row) => (
         <span className="flex flex-wrap gap-1.5">
-          {row.open > 0 && <Badge tone="info" dot={false}>{row.open} açık</Badge>}
-          {row.inHouse > 0 && <Badge tone="success" dot={false}>{row.inHouse} içeride</Badge>}
-          {row.open === 0 && row.inHouse === 0 && <Badge tone="neutral" dot={false}>Kapandı</Badge>}
+          {row.open > 0 && <Badge tone="info" dot={false}>{t('reservations.groups.open', { count: row.open })}</Badge>}
+          {row.inHouse > 0 && <Badge tone="success" dot={false}>{t('reservations.groups.inHouse', { count: row.inHouse })}</Badge>}
+          {row.open === 0 && row.inHouse === 0 && <Badge tone="neutral" dot={false}>{t('reservations.groups.closed')}</Badge>}
         </span>
       ),
     },
     {
       key: 'stay',
-      header: 'Giriş – çıkış',
+      header: t('reservations.groups.colStay'),
       render: (row) => (row.checkIn ? `${formatDate(row.checkIn)} – ${formatDate(row.checkOut)}` : '—'),
     },
-    { key: 'createdAt', header: 'Açılış', className: 'text-ink-muted', render: (row) => formatDateTime(row.createdAt) },
+    { key: 'createdAt', header: t('reservations.groups.colCreatedAt'), className: 'text-ink-muted', render: (row) => formatDateTime(row.createdAt) },
   ];
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="Gruplar"
-        description="Grup rezervasyonlarının dosyaları: rooming list, toplu oda atama, toplu giriş ve çıkış."
-        actions={<Button icon="plus" onClick={() => navigate('/rezervasyonlar/yeni')}>Yeni grup</Button>}
+        title={t('reservations.groups.title')}
+        description={t('reservations.groups.description')}
+        actions={<Button icon="plus" onClick={() => navigate('/rezervasyonlar/yeni')}>{t('reservations.groups.newGroup')}</Button>}
       />
       <Input
         name="search"
-        label="Ara"
+        label={t('reservations.groups.searchLabel')}
         type="search"
-        placeholder="Grup adı ya da koduna göre ara…"
+        placeholder={t('reservations.groups.searchPlaceholder')}
         value={searchText}
         onChange={(event) => setSearchText(event.target.value)}
         className="w-full sm:w-80"
@@ -90,8 +92,8 @@ export function GroupsPage() {
         error={query.error}
         onRetry={query.refetch}
         onPageChange={setPage}
-        emptyTitle={search ? 'Aramanızla eşleşen grup yok' : 'Henüz grup rezervasyonu yok'}
-        emptyHint={search ? undefined : 'Yeni rezervasyon ekranında "Grup" türünü seçerek ya da rooming list yükleyerek grup açın.'}
+        emptyTitle={search ? t('reservations.groups.noMatch') : t('reservations.groups.empty')}
+        emptyHint={search ? undefined : t('reservations.groups.emptyHint')}
       />
     </div>
   );

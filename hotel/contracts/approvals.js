@@ -36,6 +36,7 @@ export const APPROVAL_TYPES = Object.freeze([
   'INVOICE_CANCEL',
   'PAYROLL',
   'LEAVE',
+  'GATEWAY_REFUND',
   'OTHER',
 ]);
 
@@ -56,6 +57,7 @@ export const APPROVAL_TYPE_LABELS = Object.freeze({
   INVOICE_CANCEL: 'Fatura iptali',
   PAYROLL: 'Bordro onayı',
   LEAVE: 'İzin talebi',
+  GATEWAY_REFUND: 'Sanal POS iadesi (karta)',
   OTHER: 'Diğer',
 });
 
@@ -82,6 +84,7 @@ export const APPROVAL_SELF_DECISION_FORBIDDEN_TYPES = Object.freeze([
   'INVOICE_CANCEL',
   'PAYROLL',
   'LEAVE',
+  'GATEWAY_REFUND',
 ]);
 
 /**

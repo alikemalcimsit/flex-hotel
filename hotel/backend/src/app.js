@@ -44,6 +44,9 @@ import { hrRoutes } from './modules/hr/routes.js';
 import { registerHrSubscribers } from './modules/hr/subscribers.js';
 import { loyaltyRoutes } from './modules/loyalty/routes.js';
 import { kbsRoutes } from './modules/kbs/routes.js';
+import { reviewRoutes } from './modules/reviews/routes.js';
+import { paymentGatewayRoutes, publicPaymentRoutes } from './modules/payment-gateway/routes.js';
+import { registerPaymentGatewaySubscribers } from './modules/payment-gateway/subscribers.js';
 import { invoiceRoutes } from './modules/invoicing/routes.js';
 import { registerInvoiceSubscribers } from './modules/invoicing/subscribers.js';
 import { payrollRoutes } from './modules/payroll/routes.js';
@@ -70,6 +73,7 @@ import { registerFolioSubscribers } from './modules/folios/subscribers.js';
 import { housekeepingRoutes } from './modules/housekeeping/routes.js';
 import { registerHousekeepingSubscribers } from './modules/housekeeping/subscribers.js';
 import { exchangeRateRoutes, paymentRoutes } from './modules/payments/routes.js';
+import { exchangeRateSettingsRoutes } from './modules/exchange-rates/routes.js';
 import { extrasRoutes } from './modules/extras/routes.js';
 import { lostItemRoutes } from './modules/lost-items/routes.js';
 import { reportRoutes } from './modules/reports/routes.js';
@@ -196,6 +200,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   registerReservationSubscribers();
   registerFolioSubscribers();
   registerPaymentSubscribers();
+  registerPaymentGatewaySubscribers();
   registerAgencyBonusSubscribers();
   registerBanquetSubscribers();
   registerPosSubscribers();
@@ -401,6 +406,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   await app.register(folioRoutes, { prefix: '/folios' });
   await app.register(paymentRoutes, { prefix: '/payments' });
   await app.register(exchangeRateRoutes, { prefix: '/exchange-rates' });
+  await app.register(exchangeRateSettingsRoutes, { prefix: '/exchange-rates' });
   await app.register(extrasRoutes, { prefix: '/extras' });
   await app.register(housekeepingRoutes, { prefix: '/housekeeping' });
   await app.register(lostItemRoutes, { prefix: '/lost-items' });
@@ -426,6 +432,8 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   await app.register(hrRoutes, { prefix: '/hr' });
   await app.register(loyaltyRoutes, { prefix: '/loyalty' });
   await app.register(kbsRoutes, { prefix: '/kbs' });
+  await app.register(reviewRoutes, { prefix: '/reviews' });
+  await app.register(paymentGatewayRoutes, { prefix: '/payment-gateway' });
   await app.register(invoiceRoutes, { prefix: '/invoices' });
   await app.register(payrollRoutes, { prefix: '/payroll' });
   await app.register(guestPortalRoutes, { prefix: '/guest-portal' });
@@ -459,6 +467,8 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
     await guestApp.register(publicSurveyRoutes, { prefix: '/public/survey' });
     // Online rezervasyon motoru (modül 32): widget'ın options / quote / reserve uçları.
     await guestApp.register(publicBookingRoutes, { prefix: '/public/booking' });
+    // Sanal POS (modül 50): misafirin ödeme sayfası, sağlayıcının geri dönüşü.
+    await guestApp.register(publicPaymentRoutes, { prefix: '/public/pay' });
   });
 
   app.addHook('onClose', async () => {

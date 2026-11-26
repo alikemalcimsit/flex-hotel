@@ -266,12 +266,12 @@ const stayLabel = (stay) => `${stay.confirmationCode} · oda ${stay.room?.number
 async function latestRates(client, hotelId, businessDate, currencies) {
   // Otel × döviz × gün tekil index'i: döviz başına en son gün tek adımda.
   const rows = await client.$queryRaw`
-    SELECT DISTINCT ON (r."currency") r."currency", r."rate"::text AS "rate", r."date", r."enteredBy", r."updatedAt"
+    SELECT DISTINCT ON (r."currency") r."currency", r."rate"::text AS "rate", r."date", r."enteredBy", r."updatedAt", r."source"::text AS "source", r."bulletinDate"
     FROM "ExchangeRate" r
     WHERE r."hotelId" = ${hotelId} AND r."date" <= ${businessDate}::date
       ${currencies ? Prisma.sql`AND r."currency" = ANY(${currencies}::text[])` : Prisma.empty}
     ORDER BY r."currency", r."date" DESC`;
-  return new Map(rows.map((row) => [row.currency, { rate: row.rate, date: toIsoDay(row.date), enteredBy: row.enteredBy, updatedAt: row.updatedAt }]));
+  return new Map(rows.map((row) => [row.currency, { rate: row.rate, date: toIsoDay(row.date), enteredBy: row.enteredBy, updatedAt: row.updatedAt, source: row.source, bulletinDate: row.bulletinDate ? toIsoDay(row.bulletinDate) : null }]));
 }
 
 /**
@@ -297,9 +297,25 @@ export async function getCurrentRates(hotelId) {
           problem: resolved.error,
           enteredBy: row.enteredBy,
           updatedAt: iso(row.updatedAt),
+          source: row.source,
+          bulletinDate: row.bulletinDate,
         };
       }),
   };
+}
+
+/**
+ * Bir dövizin iş gününe kadar girilmiş son kuru (fatura döviz karşılığı, gösterim; modül 60). Yoksa null.
+ * @param {string} hotelId @param {string} currency @param {string} [day] "YYYY-AA-GG"; boşsa iş günü
+ */
+export async function latestRateFor(hotelId, currency, day) {
+  const businessDate = day ?? (await businessDay(hotelId));
+  return (await latestRates(prisma, hotelId, businessDate, [currency])).get(currency) ?? null;
+}
+
+/** Bütün dövizlerin son kurları (gösterim / widget; modül 60). @param {string} hotelId */
+export async function latestRateMap(hotelId) {
+  return latestRates(prisma, hotelId, await businessDay(hotelId));
 }
 
 /**
@@ -321,17 +337,19 @@ export async function setTodayRates(hotelId, { rates }) {
     await writeWithEvents(async (tx, stage) => {
       const before = await tx.exchangeRate.findMany({
         where: { hotelId, date, currency: { in: rates.map((row) => row.currency) } },
-        select: { id: true, currency: true, rate: true },
+        select: { id: true, currency: true, rate: true, source: true },
       });
       const previous = new Map(before.map((row) => [row.currency, row]));
       const changed = [];
       for (const row of rates) {
         const old = previous.get(row.currency);
-        if (old && sameRate(String(old.rate), row.rate)) continue;
+        // Aynı değer: TCMB'den geldiyse elle onaylanmış sayılır (sonraki çekme ezmesin), elle girilmişse dokunulmaz.
+        if (old && sameRate(String(old.rate), row.rate) && old.source !== 'TCMB') continue;
         const saved = await tx.exchangeRate.upsert({
           where: { hotelId_currency_date: { hotelId, currency: row.currency, date } },
           create: { hotelId, currency: row.currency, date, rate: row.rate, enteredBy: actor },
-          update: { rate: row.rate, enteredBy: actor },
+          // Elle girilen kur TCMB'ninkinin yerine geçer ve sonraki çekmede ezilmez (modül 60).
+          update: { rate: row.rate, enteredBy: actor, source: 'MANUAL', bulletinDate: null },
           select: { id: true },
         });
         await recordAudit(tx, {
@@ -361,7 +379,7 @@ export async function listRateHistory(hotelId, query) {
   const cursor = parseCursor(query.cursor);
   const rows = await prisma.exchangeRate.findMany({
     where: { hotelId, ...(query.currency ? { currency: query.currency } : {}), ...(cursor ? olderThan('date', cursor) : {}) },
-    select: { id: true, currency: true, date: true, rate: true, enteredBy: true, updatedAt: true },
+    select: { id: true, currency: true, date: true, rate: true, enteredBy: true, updatedAt: true, source: true, bulletinDate: true },
     orderBy: [{ date: 'desc' }, { id: 'desc' }],
     take: query.limit + 1,
   });
@@ -375,6 +393,8 @@ export async function listRateHistory(hotelId, query) {
       rate: rateText(String(row.rate)),
       enteredBy: row.enteredBy,
       updatedAt: iso(row.updatedAt),
+      source: row.source,
+      bulletinDate: row.bulletinDate ? toIsoDay(row.bulletinDate) : null,
     })),
     nextCursor: rows.length > query.limit && last ? encodeCursor({ at: last.date, id: last.id }) : null,
   };
@@ -493,7 +513,7 @@ async function paymentLedgerAccount(tx, hotelId, folio, ledgerAccountId) {
  * }} options
  * @returns {Promise<{ paymentId: string, created: boolean, status: string, approvalId: string | null }>}
  */
-async function writePayment(tx, stage, { hotelId, folio, kind, source, input, sourceKey, receivedBy, businessDate, hotel }) {
+async function writePayment(tx, stage, { hotelId, folio, kind, source, input, sourceKey, receivedBy, businessDate, hotel, settled = false, approvalId: presetApprovalId = null }) {
   const existing = await tx.payment.findFirst({ where: { hotelId, sourceKey }, select: { id: true, status: true, approvalId: true } });
   if (existing) return { paymentId: existing.id, created: false, status: existing.status, approvalId: existing.approvalId };
 
@@ -525,9 +545,11 @@ async function writePayment(tx, stage, { hotelId, folio, kind, source, input, so
   }
 
   const ledgerAccount = LEDGER_PAYMENT_METHODS.includes(input.method) ? await paymentLedgerAccount(tx, hotelId, folio, input.ledgerAccountId ?? null) : null;
-  const pending = kind === 'REFUND' || needsLargePaymentApproval(folioAmount, hotel.largePaymentThreshold);
+  // `settled`: para sağlayıcıda tahsil edildi / iade edildi (sanal POS, modül 50) — onaya gidecek bir şey kalmadı (iade onayı önceden alındı).
+  const pending = !settled && (kind === 'REFUND' || needsLargePaymentApproval(folioAmount, hotel.largePaymentThreshold));
   const paymentId = randomUUID();
-  let approvalId = null;
+  // Önceden alınmış onay (sanal POS iadesi): iade satırı onayına bağlı kalır (kısıt `Payment_refund_approved`).
+  let approvalId = presetApprovalId;
   if (pending) {
     const balanceAfter = toMoneyString(toDecimal(money(folio.balance)).minus(toDecimal(folioAmount)));
     const approvalType = kind === 'REFUND' ? 'REFUND' : 'LARGE_PAYMENT';
@@ -684,6 +706,81 @@ export async function receiveStayPayment(hotelId, reservationId, input) {
   } catch (error) {
     rethrowPrismaError(error);
   }
+}
+
+/**
+ * Sanal POS tahsilatı (modül 50): sağlayıcının onayladığı ödeme folyoya `VIRTUAL_POS` olarak düşer. Para bankada olduğundan
+ * büyük ödeme onayına gitmez. Folyo verilmezse konaklamanın ilk açık folyosu (yoksa açılır; giriş öncesi ön ödeme).
+ * Kaynak anahtarı sağlayıcının ödeme numarasıyla: aynı sonuç iki kez gelse de tek ödeme; aynı linke ikinci gerçek ödeme ayrı satır olur.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx @param {Function} stage
+ * @param {{ hotelId: string, reservationId: string, folioId: string | null, sourceKey: string, amount: string, currency: string, reference: string, note: string, settled?: boolean }} input
+ * @returns {Promise<string>} ödeme kimliği
+ */
+export async function recordGatewayPaymentInTx(tx, stage, input) {
+  const [businessDate, hotel] = await Promise.all([businessDay(input.hotelId), getHotelSettings(input.hotelId)]);
+  if (!(await lockReservations(tx, input.hotelId, [input.reservationId])).has(input.reservationId)) throw new NotFoundError('Konaklama bulunamadı');
+  const { sourceKey } = input;
+  const existing = await tx.payment.findFirst({ where: { hotelId: input.hotelId, sourceKey }, select: { id: true } });
+  if (existing) return existing.id;
+  let folioId = input.folioId;
+  if (folioId) {
+    const chosen = await tx.folio.findFirst({ where: { id: folioId, hotelId: input.hotelId, reservationId: input.reservationId, status: 'OPEN' }, select: { id: true } });
+    if (!chosen) folioId = null;
+  }
+  folioId ??= await stayPaymentFolio(tx, stage, { hotelId: input.hotelId, reservationId: input.reservationId, folioId: null, firstOpen: true });
+  await lockFolios(tx, input.hotelId, [folioId]);
+  const folio = await findFolio(tx, input.hotelId, folioId);
+  const outcome = await writePayment(tx, stage, {
+    hotelId: input.hotelId,
+    folio,
+    kind: 'PAYMENT',
+    source: paymentSourceForStay(folio.reservation.status),
+    input: { method: 'VIRTUAL_POS', amount: input.amount, currency: input.currency, reference: input.reference, note: input.note },
+    sourceKey,
+    receivedBy: 'payment-gateway',
+    businessDate,
+    hotel,
+    // Gerçek sağlayıcıda para bankada: onaya gitmez. Test ortamında (`settled: false`) eşik üstü tutar onaya gider.
+    settled: input.settled ?? true,
+  });
+  return outcome.paymentId;
+}
+
+/**
+ * Sanal POS iadesi (modül 50): sağlayıcı iade ettikten sonra ödemenin folyosuna eksi `VIRTUAL_POS` (onay önceden alındı).
+ * Folyo kapandıysa ödeme yine o folyoya yazılamaz; konaklamanın açık folyosuna, yoksa açılan folyoya düşer.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx @param {Function} stage
+ * @param {{ hotelId: string, paymentId: string, refundId: string, approvalId: string, amount: string, reference: string, note: string, decidedBy: string }} input
+ * @returns {Promise<string>}
+ */
+export async function recordGatewayRefundInTx(tx, stage, input) {
+  const [businessDate, hotel] = await Promise.all([businessDay(input.hotelId), getHotelSettings(input.hotelId)]);
+  const sourceKey = `gateway-refund:${input.refundId}`;
+  const existing = await tx.payment.findFirst({ where: { hotelId: input.hotelId, sourceKey }, select: { id: true } });
+  if (existing) return existing.id;
+  const original = await tx.payment.findFirst({ where: { id: input.paymentId, hotelId: input.hotelId }, select: { folioId: true, reservationId: true, currency: true } });
+  if (!original) throw new NotFoundError('İade edilecek ödeme bulunamadı');
+  await lockReservations(tx, input.hotelId, [original.reservationId]);
+  const origin = await tx.folio.findFirst({ where: { id: original.folioId, hotelId: input.hotelId }, select: { id: true, status: true } });
+  const folioId = origin?.status === 'OPEN' ? origin.id : await stayPaymentFolio(tx, stage, { hotelId: input.hotelId, reservationId: original.reservationId, folioId: null, firstOpen: true });
+  await lockFolios(tx, input.hotelId, [folioId]);
+  const folio = await findFolio(tx, input.hotelId, folioId);
+  const outcome = await writePayment(tx, stage, {
+    hotelId: input.hotelId,
+    folio,
+    kind: 'REFUND',
+    source: paymentSourceForStay(folio.reservation.status),
+    input: { method: 'VIRTUAL_POS', amount: input.amount, currency: original.currency, reference: input.reference, note: input.note },
+    sourceKey,
+    receivedBy: input.decidedBy,
+    businessDate,
+    hotel,
+    settled: true,
+    approvalId: input.approvalId,
+  });
+  return outcome.paymentId;
 }
 
 /** Ödeme alınabilen (folyosu açılabilen) konaklama durumları. */

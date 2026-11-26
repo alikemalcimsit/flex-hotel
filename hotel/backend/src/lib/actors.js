@@ -27,6 +27,7 @@ import { webchatGatewayService, webchatTransport } from '../modules/channels/web
 import { whatsappGatewayService } from '../modules/channels/whatsapp.js';
 import { completeCommentary, explainVariance } from '../modules/budget/variance.js';
 import { analysisInput, completeAnalysis, completeInsight, insightInput } from '../modules/surveys/responses.js';
+import { completeReview, reviewInput, setReviewAgentProbe } from '../modules/reviews/analysis.js';
 import { agentReviewInputs, createSuggestions } from '../modules/pricing/yield-service.js';
 import { completeQuestion, failQuestion, handOffQuestion, prepareQuestion, runToolForAgent } from '../modules/report-chat/questions.js';
 import { createLlmDeps } from '../modules/concierge/llm.js';
@@ -207,7 +208,12 @@ const insightAgentService = {
   completeAnalysis,
   insightInput,
   completeInsight,
+  // Yorum sitesi yorumu (modül 54).
+  reviewInput,
+  completeReview,
 };
+// Yorum analiz kuyruğu yalnız ajan kayıtlıyken (sunucuda model anahtarı varken) ister.
+setReviewAgentProbe(async (hotelId) => Boolean(actorRegistry.get('insight-agent')) && (await isActorEnabled(hotelId, 'insight-agent')));
 
 /**
  * Bütçe yorum ajanının servisi (modül 27). Model otelin ana modeli

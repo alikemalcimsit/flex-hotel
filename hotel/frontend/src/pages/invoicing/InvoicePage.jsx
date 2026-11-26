@@ -31,6 +31,8 @@ import { formatDateTime } from '../../lib/timeFormat.js';
 import { useHotelContext } from '../../lib/useHotel.js';
 import { validateWith } from '../../lib/validate.js';
 import { toastError, toastSuccess } from '../../store/toast.js';
+import { useT } from '../../i18n/index.jsx';
+import { ForeignCurrencySelect, ForeignEquivalent, issueErrorText } from './ForeignCurrency.jsx';
 import { LinesEditor } from './LinesEditor.jsx';
 
 const CANCEL_METHOD_LABELS = Object.freeze({ LOCAL: "GİB'e ulaşmadan iptal", INTEGRATOR: 'e-Arşiv entegratörden iptal', PORTAL: 'GİB portalında iptal' });
@@ -45,6 +47,7 @@ export function InvoicePage() {
   const { invoiceId } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const t = useT();
   const can = useCan();
   const canIssue = can(PERMISSIONS.INVOICES_ISSUE);
   const canManage = can(PERMISSIONS.INVOICES_MANAGE);
@@ -64,7 +67,7 @@ export function InvoicePage() {
     },
     onError: (error) => {
       refresh();
-      toastError(error.message);
+      toastError(issueErrorText(t, error, query.data?.invoice));
     },
   });
   const resend = useMutation({
@@ -229,6 +232,7 @@ export function InvoicePage() {
               <dt className="font-semibold text-ink">Ödenecek</dt>
               <dd className="text-right font-semibold tabular-nums">{formatMoney(invoice.total, currency)}</dd>
             </dl>
+            <ForeignEquivalent foreign={invoice.foreign} hotelCurrency={currency} />
           </Card>
         </div>
         <div className="flex flex-col gap-6">
@@ -402,6 +406,7 @@ function DraftEditor({ data, canEditLines, onIssue, issuing, canIssue }) {
   const initialLines = lines.map((line) => ({ description: line.description, quantity: line.quantity, unitCode: line.unitCode, unitAmount: line.unitAmount ?? '', taxCategory: line.taxCategory ?? 'OTHER' }));
   const [buyer, setBuyer] = useState(initialBuyer);
   const [note, setNote] = useState(invoice.note ?? '');
+  const [foreignCurrency, setForeignCurrency] = useState(invoice.foreign?.currency ?? '');
   const [editLines, setEditLines] = useState(initialLines);
   const [errors, setErrors] = useState({});
   const [dirty, setDirty] = useState(false);
@@ -424,7 +429,7 @@ function DraftEditor({ data, canEditLines, onIssue, issuing, canIssue }) {
   });
   function submit(event) {
     event.preventDefault();
-    const body = { expectedUpdatedAt: invoice.updatedAt, buyer, note, ...(canEditLines ? { lines: editLines } : {}) };
+    const body = { expectedUpdatedAt: invoice.updatedAt, buyer, note, foreignCurrency: foreignCurrency || null, ...(canEditLines ? { lines: editLines } : {}) };
     const checked = validateWith(invoiceDraftUpdateSchema, body);
     if (!checked.ok) return setErrors(checked.errors);
     setErrors({});
@@ -506,6 +511,16 @@ function DraftEditor({ data, canEditLines, onIssue, issuing, canIssue }) {
             setDirty(true);
           }}
           error={errors.note}
+          disabled={busy}
+        />
+        <ForeignCurrencySelect
+          value={foreignCurrency}
+          hotelCurrency={invoice.currency}
+          onChange={(value) => {
+            setForeignCurrency(value);
+            setDirty(true);
+          }}
+          error={errors.foreignCurrency}
           disabled={busy}
         />
         <div className="flex flex-wrap items-center gap-2">

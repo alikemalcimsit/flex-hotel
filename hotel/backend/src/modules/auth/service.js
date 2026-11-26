@@ -26,7 +26,7 @@ const DUMMY_PASSWORD_HASH = bcrypt.hashSync('dummy-password-never-matches', 10);
 
 /** Girişte/`/me`'de dönen kullanıcı görünümü — parola hash'i asla sızmaz. */
 export function toUserDto(user) {
-  return { id: user.id, email: user.email, name: user.name, role: user.role, isActive: user.isActive };
+  return { id: user.id, email: user.email, name: user.name, role: user.role, isActive: user.isActive, locale: user.locale ?? 'tr', displayCurrency: user.displayCurrency ?? null };
 }
 
 function newRefreshTokenValue() {
@@ -186,4 +186,21 @@ export async function rotateRefreshToken(oldToken) {
  */
 export async function revokeRefreshToken(token) {
   await prisma.refreshToken.updateMany({ where: { token }, data: { deletedAt: new Date() } });
+}
+
+/**
+ * Kullanıcının arayüz dili ve gösterim para birimi (modül 60). Kendi kaydı; izin gerekmez.
+ * @param {string} hotelId @param {string} userId @param {{ locale?: string, displayCurrency?: string | null }} input
+ */
+export async function updatePreferences(hotelId, userId, input) {
+  const data = {
+    ...(input.locale ? { locale: input.locale } : {}),
+    ...(input.displayCurrency !== undefined ? { displayCurrency: input.displayCurrency ?? null } : {}),
+  };
+  // Tercih kişinin kendisinindir, otelin değil: zincir üyesi başka bir otelde (erişimle) de değiştirebilmeli (modül 63);
+  // `User.hotelId` ana oteldir. O otele erişimin hâlâ sürdüğünü önce `findSessionUser` denetler (erişimi kalkmış oturum
+  // tercih yazamaz).
+  const session = await findSessionUser(hotelId, userId);
+  const updated = await prisma.user.update({ where: { id: userId }, data });
+  return toUserDto({ ...updated, role: session.role });
 }

@@ -35,6 +35,7 @@
         email: 'E-posta', phone: 'Telefon (isteğe bağlı)', notes: 'Not (isteğe bağlı)',
         summary: 'Özet', total: 'Toplam', discount: 'İndirim', book: 'Rezervasyonu tamamla',
         booking: 'Gönderiliyor…', successTitle: 'Rezervasyon isteğiniz alındı',
+        currency: 'Para birimi', approx: 'yaklaşık', payNow: 'Ön ödemeye geç', payNote: 'Rezervasyonunuzu güvenceye almak için ön ödemeyi kartla yapabilirsiniz.',
         successCode: 'Onay kodunuz', successNote: 'Resepsiyon onayladığında e-posta adresinize bilgi verilecek. Bu kodu not alın.',
         error: 'Bir şeyler ters gitti. Lütfen tekrar deneyin.', retry: 'Tekrar dene', newSearch: 'Yeni arama',
       }
@@ -48,6 +49,7 @@
         email: 'E-mail', phone: 'Phone (optional)', notes: 'Notes (optional)',
         summary: 'Summary', total: 'Total', discount: 'Discount', book: 'Complete booking',
         booking: 'Sending…', successTitle: 'Your booking request has been received',
+        currency: 'Currency', approx: 'approx.', payNow: 'Go to prepayment', payNote: 'You can secure your reservation by paying the prepayment by card.',
         successCode: 'Your confirmation code', successNote: 'You will be notified by e-mail once the hotel confirms. Please note this code.',
         error: 'Something went wrong. Please try again.', retry: 'Retry', newSearch: 'New search',
       };
@@ -114,6 +116,7 @@
     '.row{display:flex;gap:10px}.row>div{flex:1}',
     '.cta{border:0;border-radius:10px;background:var(--accent,#0f766e);color:#fff;font-weight:700;padding:12px;cursor:pointer;font-size:15px}',
     '.cta:disabled{opacity:.5;cursor:default}',
+    'a.cta{display:block;text-align:center;text-decoration:none}',
     '.ghost{border:1px solid #d1d5db;border-radius:10px;background:#fff;color:#374151;font-weight:600;padding:10px;cursor:pointer;font-size:14px}',
     '.card{border:1px solid #e5e7eb;border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:6px}',
     '.card.dim{opacity:.55}',
@@ -174,6 +177,7 @@
   /* ─────────────── Durum ve yardımcılar ─────────────── */
 
   var state = {
+    displayCurrency: null,
     options: null,
     search: null, // { checkIn, checkOut, adults, children, boardType, couponCode }
     quote: null,
@@ -205,8 +209,17 @@
     }
     return select;
   }
+  // Tutar otelin para biriminde; misafir başka bir para birimi seçtiyse günün kuruyla yaklaşık karşılık (modül 60).
   function money(value, currency) {
-    return value + ' ' + currency;
+    var text = value + ' ' + currency;
+    var chosen = state.displayCurrency;
+    var rates = (state.options && state.options.currencies) || [];
+    for (var i = 0; i < rates.length; i += 1) {
+      if (rates[i].code === chosen && chosen !== currency && Number(rates[i].rate) > 0) {
+        text += ' (' + TEXT.approx + ' ' + (Number(value) / Number(rates[i].rate)).toFixed(2) + ' ' + chosen + ')';
+      }
+    }
+    return text;
   }
   function isoToday(offsetDays) {
     var date = new Date(Date.now() + (offsetDays || 0) * 86400000);
@@ -298,6 +311,21 @@
     body.appendChild(dates);
     body.appendChild(party);
     body.appendChild(field(TEXT.board, board));
+    var currencies = state.options.currencies || [];
+    if (currencies.length) {
+      var currency = document.createElement('select');
+      [{ code: state.options.hotel.currency }].concat(currencies).forEach(function (item) {
+        var option = document.createElement('option');
+        option.value = item.code;
+        option.textContent = item.code;
+        if (item.code === (state.displayCurrency || state.options.hotel.currency)) option.selected = true;
+        currency.appendChild(option);
+      });
+      currency.addEventListener('change', function () {
+        state.displayCurrency = currency.value === state.options.hotel.currency ? null : currency.value;
+      });
+      body.appendChild(field(TEXT.currency, currency));
+    }
     body.appendChild(field(TEXT.coupon, coupon));
     body.appendChild(error);
     body.appendChild(submit);
@@ -453,6 +481,15 @@
     body.appendChild(el('p', 'muted', TEXT.successCode));
     body.appendChild(el('div', 'big', result.confirmationCode));
     body.appendChild(el('p', 'muted', TEXT.successNote));
+    // Sanal POS (modül 50): ayarda ön ödeme açıksa ödeme sayfasına bağlantı.
+    if (result.payment && result.payment.url && /^https?:\/\//.test(result.payment.url)) {
+      body.appendChild(el('p', 'muted', TEXT.payNote));
+      var pay = el('a', 'cta',  TEXT.payNow + ' · ' + money(result.payment.amount, result.payment.currency));
+      pay.href = result.payment.url;
+      pay.target = '_top';
+      pay.rel = 'noopener';
+      body.appendChild(pay);
+    }
     var again = el('button', 'ghost', TEXT.newSearch);
     again.type = 'button';
     again.addEventListener('click', function () {

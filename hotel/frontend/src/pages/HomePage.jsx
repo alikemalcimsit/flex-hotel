@@ -7,6 +7,7 @@ import { PERMISSIONS, useCan } from '../lib/permissions.js';
 import { socket } from '../lib/socket.js';
 import { useHotelContext } from '../lib/useHotel.js';
 import { visibleSections } from '../layout/navigation.js';
+import { useNavText } from '../i18n/useNavText.js';
 import { useAuthStore } from '../store/auth.js';
 import { DashboardOverview } from './dashboard/DashboardOverview.jsx';
 
@@ -106,6 +107,7 @@ export function HomePage() {
     },
   ];
 
+  const nav = useNavText();
   const shortcutGroups = visibleSections(user?.role, permissions)
     .flatMap((section) => section.items)
     .filter((item) => item.children?.length);
@@ -173,7 +175,7 @@ export function HomePage() {
       {shortcutGroups.map((group) => (
         <section key={group.to} aria-labelledby={`shortcuts-${group.icon}`}>
           <h2 id={`shortcuts-${group.icon}`} className="mb-4 text-lg font-bold text-ink">
-            {group.label}
+            {nav.item(group)}
           </h2>
           <ul className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
             {group.children.map((child) => (
@@ -186,7 +188,7 @@ export function HomePage() {
                     <Icon name={child.icon} className="size-5" />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block font-bold text-ink">{child.label}</span>
+                    <span className="block font-bold text-ink">{nav.child(child, group)}</span>
                     {SHORTCUT_HINTS[child.to] && (
                       <span className="mt-0.5 block text-xs text-ink-muted">{SHORTCUT_HINTS[child.to]}</span>
                     )}

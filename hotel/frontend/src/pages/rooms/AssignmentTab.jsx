@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ASSIGNMENT_VIEW_LABELS, ASSIGNMENT_VIEWS, MAX_BULK_ITEMS, RESERVATION_STATUS_LABELS } from '@hotelos/hotel-contracts';
+import { ASSIGNMENT_VIEWS, MAX_BULK_ITEMS } from '@hotelos/hotel-contracts';
 import { Alert, Badge, Button, Checkbox, Icon, Input, Spinner } from '@hotelos/ui';
 import { BulkResultAlert, useRowSelection } from '../../components/BulkSelection.jsx';
 import { ChoiceChips } from '../../components/ChoiceChips.jsx';
@@ -9,11 +9,13 @@ import { DataTable } from '../../components/DataTable.jsx';
 import { Modal } from '../../components/Modal.jsx';
 import { AssignmentKindBadge, HousekeepingBadge, OccupancyBadge } from '../../components/RoomStateBadges.jsx';
 import { Toolbar } from '../../components/Toolbar.jsx';
+import { useT } from '../../i18n/index.jsx';
 import { api, apiPost, apiPut, withQuery } from '../../lib/api.js';
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 import { useCrudResource } from '../../lib/useCrudResource.js';
 import { formatDate } from '../../lib/format.js';
 import { toastError, toastSuccess } from '../../store/toast.js';
+import { guestsText } from '../plan/planText.jsx';
 
 /** Oda seçme penceresinde bir sayfadaki aday oda. */
 const CANDIDATE_PAGE_SIZE = 8;
@@ -25,6 +27,7 @@ const CANDIDATE_PAGE_SIZE = 8;
  * sebebiyle listelenir.
  */
 export function AssignmentTab() {
+  const t = useT();
   const queryClient = useQueryClient();
   const can = useCan();
   const canOperate = can(PERMISSIONS.ROOMS_OPERATE);
@@ -53,7 +56,7 @@ export function AssignmentTab() {
   const bulkAssign = useMutation({
     mutationFn: (reservationIds) => apiPost('/rooms/assignments/auto-batch', { reservationIds }),
     onSuccess: (data) => {
-      setBulkResult({ title: 'Toplu otomatik atama', data });
+      setBulkResult({ title: t('roomPlan.assignment.bulkAssignTitle'), data });
       clear();
     },
     onError: (error) => toastError(error.message),
@@ -63,7 +66,7 @@ export function AssignmentTab() {
   const bulkNoShow = useMutation({
     mutationFn: ({ items, waiveFee }) => apiPost('/reservations/no-show-batch', { items, waiveFee }),
     onSuccess: (data) => {
-      setBulkResult({ title: 'Gelmedi işaretleme', data });
+      setBulkResult({ title: t('roomPlan.assignment.bulkNoShowTitle'), data });
       setConfirmNoShow(null);
       clear();
     },
@@ -79,9 +82,9 @@ export function AssignmentTab() {
     mutationFn: (reservationId) => apiPost(`/rooms/assignments/${reservationId}/auto`, {}),
     onSuccess: (data) => {
       if (data.assigned) {
-        toastSuccess(`${data.room.number} numaralı oda atandı`);
+        toastSuccess(t('roomPlan.shared.roomAssigned', { room: data.room.number }));
       } else {
-        toastError(data.reason ?? 'Uygun oda bulunamadı');
+        toastError(data.reason ?? t('roomPlan.shared.noRoomFound'));
       }
       refresh();
     },
@@ -92,13 +95,13 @@ export function AssignmentTab() {
     ...((late ? canNoShow : canOperate) ? [selection.column(resource.rows ?? [])] : []),
     {
       key: 'confirmationCode',
-      header: 'Onay kodu',
+      header: t('roomPlan.assignment.colCode'),
       render: (row) => <span className="font-mono text-xs font-semibold">{row.confirmationCode}</span>,
     },
-    { key: 'guestName', header: 'Misafir', render: (row) => row.guestName ?? <span className="text-ink-muted">—</span> },
+    { key: 'guestName', header: t('roomPlan.shared.guest'), render: (row) => row.guestName ?? <span className="text-ink-muted">—</span> },
     {
       key: 'roomType',
-      header: 'Oda tipi',
+      header: t('roomPlan.filter.roomType'),
       render: (row) =>
         row.roomTypeCode ? (
           <span className="whitespace-nowrap">
@@ -111,43 +114,46 @@ export function AssignmentTab() {
     },
     {
       key: 'dates',
-      header: 'Tarihler',
+      header: t('roomPlan.assignment.colDates'),
       render: (row) => (
         <span className="flex flex-col whitespace-nowrap">
           <span>
             {formatDate(row.checkIn)} → {formatDate(row.checkOut)}
           </span>
-          {row.late && <span className="text-xs font-semibold text-sec-strong">{row.stayEnded ? 'Konaklama günleri bitti' : 'Giriş günü geçti'}</span>}
+          {row.late && <span className="text-xs font-semibold text-sec-strong">{row.stayEnded ? t('roomPlan.assignment.stayEnded') : t('roomPlan.assignment.arrivalPassed')}</span>}
         </span>
       ),
     },
     {
       key: 'guests',
-      header: 'Kişi',
+      header: t('roomPlan.assignment.colGuests'),
       render: (row) => `${row.adults}${row.children > 0 ? ` + ${row.children}` : ''}`,
     },
     {
       key: 'status',
-      header: 'Durum',
-      render: (row) => <Badge>{RESERVATION_STATUS_LABELS[row.status] ?? row.status}</Badge>,
+      header: t('roomPlan.assignment.colStatus'),
+      render: (row) => <Badge>{t(`roomPlan.reservationStatus.${row.status}`, row.status)}</Badge>,
     },
   ];
 
   return (
     <div className="flex flex-col gap-5">
       <ChoiceChips
-        label="Görünüm"
-        options={ASSIGNMENT_VIEWS.map((value) => ({ value, label: value === 'LATE' && resource.meta?.lateCount ? `${ASSIGNMENT_VIEW_LABELS[value]} (${resource.meta.lateCount})` : ASSIGNMENT_VIEW_LABELS[value] }))}
+        label={t('roomPlan.assignment.view')}
+        options={ASSIGNMENT_VIEWS.map((value) => {
+          const label = t(`roomPlan.assignmentView.${value}`);
+          return { value, label: value === 'LATE' && resource.meta?.lateCount ? t('roomPlan.assignment.viewWithCount', { label, count: resource.meta.lateCount }) : label };
+        })}
         value={view}
         onChange={setView}
       />
       {!late && resource.meta?.lateCount > 0 && (
-        <Alert tone="warning" action={<Button type="button" size="sm" variant="outline" onClick={() => setView('LATE')}>Gelişi geçmişleri aç</Button>}>
-          {resource.meta.lateCount} rezervasyonun giriş günü geçti ama girişi yapılmadı. Gelmediyse "gelmedi" işaretleyin (tek tek ya da toplu); geç gelecekse oda verin.
+        <Alert tone="warning" action={<Button type="button" size="sm" variant="outline" onClick={() => setView('LATE')}>{t('roomPlan.assignment.openLate')}</Button>}>
+          {t('roomPlan.assignment.lateAlert', { count: resource.meta.lateCount })}
         </Alert>
       )}
       {late && resource.rows?.some((row) => row.stayEnded) && (
-        <p className="text-sm text-ink-muted">Konaklama günleri biten rezervasyona oda verilemez; misafir gelmediyse "gelmedi" işaretleyin, geldiyse rezervasyonun tarihlerini düzeltin.</p>
+        <p className="text-sm text-ink-muted">{t('roomPlan.assignment.stayEndedNote')}</p>
       )}
       {bulkResult && <BulkResultAlert title={bulkResult.title} result={bulkResult.data} labelOf={labelOf} onClose={() => setBulkResult(null)} />}
       <Toolbar
@@ -156,13 +162,13 @@ export function AssignmentTab() {
           (late ? (
             canNoShow && (
               <Button type="button" variant="outline" icon="close" disabled={bulkNoShow.isPending || selection.count > MAX_BULK_ITEMS} onClick={() => setConfirmNoShow({ ids: selection.ids })}>
-                Seçilenleri gelmedi işaretle ({selection.count})
+                {t('roomPlan.assignment.bulkNoShow', { count: selection.count })}
               </Button>
             )
           ) : (
             canOperate && (
               <Button type="button" icon="sparkles" disabled={bulkAssign.isPending || selection.count > MAX_BULK_ITEMS} onClick={() => bulkAssign.mutate(selection.ids)}>
-                {bulkAssign.isPending ? 'Atanıyor…' : `Seçilenlere otomatik ata (${selection.count})`}
+                {bulkAssign.isPending ? t('roomPlan.shared.assigning') : t('roomPlan.assignment.bulkAssign', { count: selection.count })}
               </Button>
             )
           ))
@@ -170,9 +176,9 @@ export function AssignmentTab() {
       >
         <Input
           name="search"
-          label="Ara"
+          label={t('roomPlan.filter.search')}
           type="search"
-          placeholder="Onay kodu veya misafir adı…"
+          placeholder={t('roomPlan.assignment.searchPlaceholder')}
           value={resource.search}
           onChange={(event) => resource.setSearch(event.target.value)}
           className="w-full sm:w-80"
@@ -188,19 +194,19 @@ export function AssignmentTab() {
         error={resource.error}
         onRetry={resource.refetch}
         onPageChange={resource.setPage}
-        emptyTitle={resource.search ? 'Eşleşen rezervasyon yok' : late ? 'Gelişi geçmiş rezervasyon yok' : 'Oda bekleyen rezervasyon yok'}
-        emptyHint={
+        emptyTitle={t(resource.search ? 'roomPlan.assignment.emptySearch' : late ? 'roomPlan.assignment.emptyLate' : 'roomPlan.assignment.emptyUpcoming')}
+        emptyHint={t(
           resource.search
-            ? 'Farklı bir kod veya isim deneyin.'
+            ? 'roomPlan.assignment.emptySearchHint'
             : late
-              ? 'Giriş günü geçip girişi yapılmamış, odası olmayan rezervasyon yok.'
-              : 'Oda atanmamış bekleyen/onaylı rezervasyon bulunmuyor.'
-        }
+              ? 'roomPlan.assignment.emptyLateHint'
+              : 'roomPlan.assignment.emptyUpcomingHint',
+        )}
         rowActions={canOperate || canNoShow ? (row) => (
           <div className="flex justify-end gap-2">
             {late && canNoShow && (
               <Button variant="outline" size="sm" icon="close" onClick={() => setConfirmNoShow({ ids: [row.id] })} disabled={bulkNoShow.isPending}>
-                Gelmedi
+                {t('roomPlan.assignment.noShow')}
               </Button>
             )}
             {canOperate && !row.stayEnded && (
@@ -212,10 +218,10 @@ export function AssignmentTab() {
               onClick={() => autoAssignMutation.mutate(row.id)}
               disabled={autoAssignMutation.isPending}
             >
-              Otomatik ata
+              {t('roomPlan.shared.autoAssign')}
             </Button>
             <Button size="sm" icon="key" onClick={() => setAssigning(row)}>
-              Oda seç
+              {t('roomPlan.assignment.pickRoom')}
             </Button>
             </>
             )}
@@ -248,26 +254,27 @@ export function AssignmentTab() {
 
 /** Gelmedi onayı: ücret politikası (ilk gece) uygulanır ya da gerekçesiz vazgeçilir. */
 function NoShowConfirm({ count, isPending, onConfirm, onClose }) {
+  const t = useT();
   const [waiveFee, setWaiveFee] = useState(false);
   return (
     <Modal
       open
-      title={count > 1 ? `${count} rezervasyonu gelmedi işaretle` : 'Gelmedi işaretle'}
+      title={count > 1 ? t('roomPlan.assignment.noShowTitleMany', { count }) : t('roomPlan.assignment.noShowTitleOne')}
       onClose={isPending ? () => {} : onClose}
       footer={
         <>
           <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>
-            Vazgeç
+            {t('common.cancel')}
           </Button>
           <Button type="button" variant="danger" icon="close" disabled={isPending} onClick={() => onConfirm(waiveFee)}>
-            {isPending ? 'İşleniyor…' : 'Gelmedi işaretle'}
+            {isPending ? t('roomPlan.shared.processing') : t('roomPlan.assignment.noShowConfirm')}
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-3 text-sm text-ink-soft">
-        <p>Rezervasyon "gelmedi" olur, envanter serbest kalır; gelmeme ücreti (ilk gece) politikaya göre yazılır. Her kayıt kendi kuralıyla işlenir; işlenemeyen (bu arada değişmiş, durumu uygun değil) atlanıp listelenir.</p>
-        <Checkbox label="Gelmeme ücretinden vazgeç" checked={waiveFee} onChange={(event) => setWaiveFee(event.target.checked)} />
+        <p>{t('roomPlan.assignment.noShowBody')}</p>
+        <Checkbox label={t('roomPlan.assignment.waiveFee')} checked={waiveFee} onChange={(event) => setWaiveFee(event.target.checked)} />
       </div>
     </Modal>
   );
@@ -279,6 +286,7 @@ function NoShowConfirm({ count, isPending, onConfirm, onClose }) {
  * yetmeyen ya da o tipte overbooking yaratacak odalar hiç listelenmez.
  */
 function AssignRoomModal({ reservation, onClose, onAssigned }) {
+  const t = useT();
   const [includeOtherTypes, setIncludeOtherTypes] = useState(false);
   const [page, setPage] = useState(1);
 
@@ -298,7 +306,7 @@ function AssignRoomModal({ reservation, onClose, onAssigned }) {
   const assignMutation = useMutation({
     mutationFn: (roomId) => apiPut(`/rooms/assignments/${reservation.id}`, { roomId }),
     onSuccess: (data) => {
-      toastSuccess(`${data.roomNumber} numaralı oda atandı`);
+      toastSuccess(t('roomPlan.shared.roomAssigned', { room: data.roomNumber }));
       onAssigned();
     },
     onError: (error) => toastError(error.message),
@@ -311,11 +319,11 @@ function AssignRoomModal({ reservation, onClose, onAssigned }) {
     <Modal
       open
       size="lg"
-      title={`${reservation.confirmationCode} — oda seç`}
+      title={t('roomPlan.assignment.pickTitle', { code: reservation.confirmationCode })}
       onClose={onClose}
       footer={
         <Button variant="outline" onClick={onClose} disabled={assignMutation.isPending}>
-          Kapat
+          {t('common.close')}
         </Button>
       }
     >
@@ -325,23 +333,23 @@ function AssignRoomModal({ reservation, onClose, onAssigned }) {
         </span>
         <div className="min-w-0 text-sm">
           <p className="text-ink">
-            <span className="font-bold">{reservation.guestName ?? 'Misafir'}</span>
+            <span className="font-bold">{reservation.guestName ?? t('roomPlan.shared.guest')}</span>
             <span className="text-ink-muted">
               {' '}
               · {reservation.roomTypeCode} — {reservation.roomTypeName}
             </span>
           </p>
           <p className="mt-0.5 text-xs text-ink-muted">
-            {formatDate(reservation.checkIn)} → {formatDate(reservation.checkOut)} · {reservation.adults} yetişkin
-            {reservation.children > 0 ? ` + ${reservation.children} çocuk` : ''}
+            {formatDate(reservation.checkIn)} → {formatDate(reservation.checkOut)} ·{' '}
+            {guestsText(t, reservation.adults, reservation.children)}
           </p>
         </div>
       </div>
 
       <Checkbox
-        label="Diğer oda tiplerini de göster"
+        label={t('roomPlan.shared.showOtherTypes')}
         name="includeOtherTypes"
-        hint="Kapasitesi yeten ve overbooking yaratmayan diğer tipler, sınıfıyla birlikte listelenir."
+        hint={t('roomPlan.shared.showOtherTypesHint')}
         checked={includeOtherTypes}
         onChange={(event) => {
           setIncludeOtherTypes(event.target.checked);
@@ -350,14 +358,14 @@ function AssignRoomModal({ reservation, onClose, onAssigned }) {
         className="mb-5"
       />
 
-      {candidatesQuery.isPending && <Spinner label="Uygun odalar aranıyor…" className="py-8" />}
+      {candidatesQuery.isPending && <Spinner label={t('roomPlan.shared.searchingRooms')} className="py-8" />}
 
       {candidatesQuery.isError && (
         <Alert
           tone="danger"
           action={
             <Button variant="outline" size="sm" icon="refresh" onClick={() => candidatesQuery.refetch()}>
-              Tekrar dene
+              {t('common.retry')}
             </Button>
           }
         >
@@ -366,10 +374,8 @@ function AssignRoomModal({ reservation, onClose, onAssigned }) {
       )}
 
       {candidatesQuery.data && candidates.length === 0 && (
-        <Alert tone="warning" title="Bu tarihlerde uygun boş oda yok">
-          {includeOtherTypes
-            ? 'Tarihleri değiştirmeyi ya da odalardaki arıza kayıtlarını kontrol etmeyi deneyin.'
-            : 'Diğer oda tiplerini göstererek misafiri başka bir tipe yerleştirebilirsiniz.'}
+        <Alert tone="warning" title={t('roomPlan.shared.noCandidatesTitle')}>
+          {includeOtherTypes ? t('roomPlan.assignment.noCandidatesHint') : t('roomPlan.shared.noCandidatesTryOtherTypes')}
         </Alert>
       )}
 
@@ -385,19 +391,19 @@ function AssignRoomModal({ reservation, onClose, onAssigned }) {
               <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                 <span className="text-lg font-bold tabular-nums text-ink">{room.number}</span>
                 <span className="text-xs font-semibold text-ink-muted">
-                  {room.floor}. kat · {room.roomTypeCode}
+                  {t('roomPlan.shared.floor', { floor: room.floor })} · {room.roomTypeCode}
                 </span>
                 <OccupancyBadge occupancy={room.occupancy} />
                 <HousekeepingBadge status={room.housekeepingStatus} />
                 {room.recommended && (
                   <Badge tone="info" dot={false}>
-                    Önerilen
+                    {t('roomPlan.shared.recommended')}
                   </Badge>
                 )}
                 <AssignmentKindBadge kind={room.kind} />
               </div>
               <Button size="sm" icon="check" onClick={() => assignMutation.mutate(room.id)} disabled={assignMutation.isPending}>
-                {assignMutation.isPending ? 'Atanıyor…' : 'Ata'}
+                {assignMutation.isPending ? t('roomPlan.shared.assigning') : t('roomPlan.shared.assign')}
               </Button>
             </li>
           ))}
@@ -405,17 +411,17 @@ function AssignRoomModal({ reservation, onClose, onAssigned }) {
       )}
 
       {meta && meta.totalPages > 1 && (
-        <nav aria-label="Aday oda sayfaları" className="mt-4 flex items-center justify-between gap-3">
-          <span className="text-xs font-semibold text-ink-muted">{meta.total} uygun oda</span>
+        <nav aria-label={t('roomPlan.shared.candidatePages')} className="mt-4 flex items-center justify-between gap-3">
+          <span className="text-xs font-semibold text-ink-muted">{t('roomPlan.shared.candidateTotal', { count: meta.total })}</span>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" icon="chevronLeft" disabled={page <= 1} onClick={() => setPage(page - 1)}>
-              Önceki
+              {t('roomPlan.shared.prev')}
             </Button>
             <span className="text-sm font-semibold text-ink-soft" aria-live="polite">
               {meta.page} / {meta.totalPages}
             </span>
             <Button variant="outline" size="sm" disabled={page >= meta.totalPages} onClick={() => setPage(page + 1)}>
-              Sonraki
+              {t('roomPlan.shared.next')}
               <Icon name="chevronRight" className="size-3.5" />
             </Button>
           </div>

@@ -4,14 +4,12 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import {
   RESERVATION_COUNT_CAP,
   RESERVATION_SOURCES,
-  RESERVATION_SOURCE_LABELS,
   RESERVATION_STATUSES,
-  RESERVATION_STATUS_LABELS,
   RESERVATION_VIEWS,
-  RESERVATION_VIEW_LABELS,
 } from '@hotelos/hotel-contracts';
 import { Badge, Button, Input, Select } from '@hotelos/ui';
 import { DataTable } from '../../components/DataTable.jsx';
+import { useT } from '../../i18n/index.jsx';
 import { api, withQuery } from '../../lib/api.js';
 import { formatDate, formatMoney } from '../../lib/format.js';
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
@@ -40,14 +38,6 @@ const PARAMS = Object.freeze({
   page: 'sayfa',
 });
 
-const STATUS_OPTIONS = [
-  { value: ALL, label: 'Tüm durumlar' },
-  ...RESERVATION_STATUSES.map((value) => ({ value, label: RESERVATION_STATUS_LABELS[value] })),
-];
-const SOURCE_OPTIONS = [
-  { value: ALL, label: 'Tüm kaynaklar' },
-  ...RESERVATION_SOURCES.map((value) => ({ value, label: RESERVATION_SOURCE_LABELS[value] })),
-];
 const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 /** @param {URLSearchParams} params */
@@ -80,6 +70,9 @@ function readFilters(params) {
  * - Çok büyük listelerde sayım üst sınırlıdır ("2000+"); eskiye arama ile ulaşılır.
  */
 export function ReservationListTab() {
+  const t = useT();
+  const statusOptions = [{ value: ALL, label: t('reservations.list.allStatuses') }, ...RESERVATION_STATUSES.map((value) => ({ value, label: statusLabel(value) }))];
+  const sourceOptions = [{ value: ALL, label: t('reservations.list.allSources') }, ...RESERVATION_SOURCES.map((value) => ({ value, label: sourceLabel(value) }))];
   const can = useCan();
   const canManage = can(PERMISSIONS.RESERVATIONS_MANAGE);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -142,7 +135,7 @@ export function ReservationListTab() {
   const columns = [
     {
       key: 'code',
-      header: 'Onay kodu',
+      header: t('reservations.list.colCode'),
       render: (row) => (
         <Link to={`/rezervasyonlar/${row.id}`} className="font-mono text-xs font-bold text-info-ink underline-offset-2 hover:underline">
           {row.confirmationCode}
@@ -151,49 +144,49 @@ export function ReservationListTab() {
     },
     {
       key: 'guest',
-      header: 'Misafir',
+      header: t('reservations.list.colGuest'),
       render: (row) => (
         <span className="flex flex-col">
           <span className="font-semibold">{row.guest?.name ?? '—'}</span>
-          {row.group && <span className="text-xs text-ink-muted">Grup: {row.group.name}</span>}
+          {row.group && <span className="text-xs text-ink-muted">{t('reservations.detail.groupName', { name: row.group.name })}</span>}
         </span>
       ),
     },
     {
       key: 'stay',
-      header: 'Konaklama',
+      header: t('reservations.list.colStay'),
       render: (row) => (
         <span className="whitespace-nowrap">
           {formatDate(row.checkIn)} – {formatDate(row.checkOut)}
-          <span className="ml-1 text-xs text-ink-muted">({row.nights} gece)</span>
+          <span className="ml-1 text-xs text-ink-muted">{t('reservations.list.nights', { count: row.nights })}</span>
         </span>
       ),
     },
     {
       key: 'room',
-      header: 'Oda',
+      header: t('reservations.list.colRoom'),
       render: (row) => (
         <span className="whitespace-nowrap">
           {row.roomType?.code}
-          {row.room ? <span className="ml-1 font-semibold">· {row.room.number}</span> : <span className="ml-1 text-xs text-ink-muted">· atanmadı</span>}
+          {row.room ? <span className="ml-1 font-semibold">· {row.room.number}</span> : <span className="ml-1 text-xs text-ink-muted">· {t('reservations.list.unassigned')}</span>}
         </span>
       ),
     },
-    { key: 'party', header: 'Kişi', render: (row) => <span className="whitespace-nowrap text-xs">{partyLabel(row.adults, row.children)} · {row.boardType}</span> },
+    { key: 'party', header: t('reservations.list.colParty'), render: (row) => <span className="whitespace-nowrap text-xs">{partyLabel(row.adults, row.children)} · {row.boardType}</span> },
     {
       key: 'total',
-      header: 'Tutar',
+      header: t('reservations.list.colTotal'),
       className: 'text-right',
       render: (row) => <span className="whitespace-nowrap font-semibold">{formatMoney(row.totalPrice, row.currency)}</span>,
     },
     {
       key: 'status',
-      header: 'Durum',
+      header: t('reservations.list.colStatus'),
       render: (row) => <Badge tone={RESERVATION_STATUS_TONES[row.status]}>{statusLabel(row.status)}</Badge>,
     },
     {
       key: 'source',
-      header: 'Kaynak',
+      header: t('reservations.list.colSource'),
       render: (row) => (
         <span className="block text-xs text-ink-muted">
           {sourceLabel(row.source)}
@@ -205,7 +198,7 @@ export function ReservationListTab() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Görünüm">
+      <div className="flex flex-wrap items-center gap-2" role="group" aria-label={t('reservations.list.views')}>
         {RESERVATION_VIEWS.map((view) => (
           <button
             key={view}
@@ -216,52 +209,52 @@ export function ReservationListTab() {
               filters.view === view ? 'border-ink bg-ink text-white' : 'border-line-strong bg-surface text-ink-soft hover:border-ink'
             }`}
           >
-            {RESERVATION_VIEW_LABELS[view]}
+            {t(`reservations.view.${view}`)}
           </button>
         ))}
         {canManage && (
           <Link to="/rezervasyonlar/yeni" className="ml-auto">
-            <Button icon="plus">Yeni rezervasyon</Button>
+            <Button icon="plus">{t('reservations.list.newReservation')}</Button>
           </Link>
         )}
       </div>
 
       <div className="flex flex-wrap items-end gap-3 rounded-card bg-surface p-5 shadow-card">
         <Input
-          label="Ara"
+          label={t('reservations.list.searchLabel')}
           name="q"
           type="search"
-          placeholder="Misafir, onay kodu, telefon, oda no…"
+          placeholder={t('reservations.list.searchPlaceholder')}
           value={searchText}
           onChange={(event) => setSearchText(event.target.value)}
           className="w-full sm:w-72"
         />
         <Select
-          label="Durum"
+          label={t('reservations.list.colStatus')}
           name="durum"
           value={filters.status}
           onChange={(event) => updateParams({ [PARAMS.status]: event.target.value })}
-          options={STATUS_OPTIONS}
+          options={statusOptions}
           className="w-full sm:w-40"
         />
         <Select
-          label="Oda tipi"
+          label={t('reservations.list.roomType')}
           name="tip"
           value={filters.roomTypeId}
           onChange={(event) => updateParams({ [PARAMS.roomTypeId]: event.target.value })}
-          options={[{ value: ALL, label: 'Tüm tipler' }, ...roomTypeOptions]}
+          options={[{ value: ALL, label: t('reservations.list.allRoomTypes') }, ...roomTypeOptions]}
           className="w-full sm:w-48"
         />
         <Select
-          label="Kaynak"
+          label={t('reservations.list.colSource')}
           name="kaynak"
           value={filters.source}
           onChange={(event) => updateParams({ [PARAMS.source]: event.target.value })}
-          options={SOURCE_OPTIONS}
+          options={sourceOptions}
           className="w-full sm:w-44"
         />
         <Input
-          label="Konaklama başlangıcı"
+          label={t('reservations.list.from')}
           name="baslangic"
           type="date"
           value={filters.from}
@@ -269,7 +262,7 @@ export function ReservationListTab() {
           className="w-full sm:w-44"
         />
         <Input
-          label="Konaklama bitişi"
+          label={t('reservations.list.to')}
           name="bitis"
           type="date"
           value={filters.to}
@@ -293,18 +286,17 @@ export function ReservationListTab() {
               });
             }}
           >
-            Filtreleri temizle
+            {t('reservations.list.clearFilters')}
           </Button>
         )}
         <span className="ml-auto self-center">
-          <Badge tone={isLive ? 'success' : 'warning'}>{isLive ? 'Canlı' : 'Canlı değil'}</Badge>
+          <Badge tone={isLive ? 'success' : 'warning'}>{isLive ? t('common.live') : t('common.notLive')}</Badge>
         </span>
       </div>
 
       {meta?.totalCapped && (
         <p className="text-xs text-ink-muted">
-          {RESERVATION_COUNT_CAP}'den fazla kayıt var; yalnızca ilk {RESERVATION_COUNT_CAP} sayıldı. Eski kayıtlar için arama ya da tarih
-          aralığı kullanın.
+          {t('reservations.list.countCapped', { cap: RESERVATION_COUNT_CAP })}
         </p>
       )}
 
@@ -317,12 +309,12 @@ export function ReservationListTab() {
         error={query.error}
         onRetry={() => query.refetch()}
         onPageChange={(page) => updateParams({ [PARAMS.page]: page }, { resetPage: false })}
-        emptyTitle={filtersActive || filters.view !== 'ALL' ? 'Bu görünüme uyan rezervasyon yok' : 'Henüz rezervasyon yok'}
+        emptyTitle={filtersActive || filters.view !== 'ALL' ? t('reservations.list.noMatch') : t('reservations.list.empty')}
         emptyHint={
           filtersActive
-            ? 'Filtreleri temizleyip tekrar bakın.'
+            ? t('reservations.list.noMatchHint')
             : canManage
-              ? '"Yeni rezervasyon" ile ilk rezervasyonu açın.'
+              ? t('reservations.list.emptyHint')
               : undefined
         }
       />

@@ -654,6 +654,8 @@ export const invoiceDraftUpdateSchema = z.object({
   buyer: invoiceBuyerSchema,
   note: text(500, 'Not'),
   lines: manualLines.optional(),
+  /** Döviz karşılığı notu (modül 60): fatura TL kalır; kesilirken günün kuruyla toplamın karşılığı yazılır. Boş = yok. */
+  foreignCurrency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/, 'Para birimi 3 harfli kod').nullish(),
 });
 
 export const invoiceIssueSchema = z.object({ expectedUpdatedAt });

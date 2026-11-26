@@ -7,7 +7,7 @@ import { errorText, useI18n } from '../i18n.jsx';
 
 /**
  * Portalın ana sayfası: karşılama, rezervasyon özeti, online check-in durumu ve konaklamaya göre açılan kutular
- * (hesap, istek, oda servisi, sohbet; dijital anahtar ve kartla ödeme "yakında").
+ * (hesap, istek, oda servisi, sohbet, kartla ödeme; dijital anahtar "yakında").
  */
 export function HomePage() {
   const { token, overview } = usePortal();
@@ -15,6 +15,7 @@ export function HomePage() {
   const navigate = useNavigate();
   const [rsError, setRsError] = useState(null);
   const [rsBusy, setRsBusy] = useState(false);
+  const [payBusy, setPayBusy] = useState(false);
   const { reservation, hotel, checkin, features } = overview;
   const nights = fmt.nights(reservation.checkIn, reservation.checkOut);
 
@@ -28,6 +29,20 @@ export function HomePage() {
       setRsError(errorText(t, error));
     } finally {
       setRsBusy(false);
+    }
+  };
+
+  // Sanal POS (50): açık bakiye için ödeme linki açılır (ya da açık olan kullanılır), ödeme sayfasına gidilir.
+  const payOnline = async () => {
+    setPayBusy(true);
+    setRsError(null);
+    try {
+      const { code } = await guestApi(portalPath(token, '/pay'), { method: 'POST', body: {} });
+      if (code) navigate(`/o/${encodeURIComponent(code)}`);
+    } catch (error) {
+      setRsError(errorText(t, error));
+    } finally {
+      setPayBusy(false);
     }
   };
 
@@ -76,7 +91,7 @@ export function HomePage() {
         {features.survey && <Tile to={features.survey.path.replace(/^\/misafir/, '')} icon="star" title={t('tile.survey')} hint={t('tile.surveyHint')} />}
         {features.chatKey && <Tile icon="message" title={t('tile.chat')} hint={t('tile.chatHint')} />}
         <Tile icon="key" title={t('tile.digitalKey')} hint={t('common.soon')} disabled />
-        <Tile icon="creditCard" title={t('tile.payOnline')} hint={t('common.soon')} disabled />
+        {features.payOnline && <Tile onClick={payOnline} busy={payBusy} icon="creditCard" title={t('tile.payOnline')} hint={t('tile.payOnlineHint')} />}
       </section>
       {rsError && <Alert tone="warning">{rsError}</Alert>}
 

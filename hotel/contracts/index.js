@@ -163,6 +163,7 @@ export * from './ledger.js';
 export * from './hr.js';
 export * from './loyalty.js';
 export * from './kbs.js';
+export * from './payment-gateway.js';
 export * from './invoicing.js';
 export * from './pos.js';
 export * from './room-service.js';
@@ -207,3 +208,5 @@ export {
   userInputSchema,
 } from './users.js';
 export { matrixUpdateSchema } from './roles.js';
+export * from './reviews.js';
+export * from './currency.js';

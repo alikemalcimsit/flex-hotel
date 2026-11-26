@@ -3,12 +3,15 @@ import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Badge, Button, Card, Spinner } from '@hotelos/ui';
 import { api } from '../../lib/api.js';
-import { FOLIO_STATUS_TONES, balanceTone, folioKeys, folioPath, folioStatusLabel } from '../../lib/folios.js';
+import { useT } from '../../i18n/index.jsx';
+import { FOLIO_STATUS_TONES, balanceTone, folioKeys, folioPath } from '../../lib/folios.js';
+import { MoneyText } from '../../components/MoneyText.jsx';
 import { formatMoney } from '../../lib/format.js';
 import { cashKeys } from '../../lib/payments.js';
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 import { FOLIOS_CHANNEL } from '../../lib/socket.js';
 import { useLiveChannel } from '../../lib/useLiveChannel.js';
+import { folioStatusText } from './labels.js';
 import { PaymentDialog } from './PaymentDialogs.jsx';
 
 /** Gelmeden önce: alınan ödeme ön ödemedir (depozito). */
@@ -23,6 +26,7 @@ const ADVANCE_STATUSES = Object.freeze(['PENDING', 'CONFIRMED']);
  * @param {{ reservationId: string }} props
  */
 export function FolioSummaryCard({ reservationId }) {
+  const t = useT();
   const can = useCan();
   const queryClient = useQueryClient();
   const [paying, setPaying] = useState(false);
@@ -40,16 +44,16 @@ export function FolioSummaryCard({ reservationId }) {
 
   return (
     <Card
-      title="Folyo"
+      title={t('folio.summary.title')}
       actions={
         <span className="flex flex-wrap gap-2">
           {canPay && (
             <Button size="sm" icon="wallet" onClick={() => setPaying(true)}>
-              {advance ? 'Ön ödeme al' : 'Ödeme al'}
+              {advance ? t('folio.summary.takeAdvance') : t('folio.summary.takePayment')}
             </Button>
           )}
           <Link to={folioPath(reservationId)}>
-            <Button size="sm" variant="outline" icon="fileText">Folyoyu aç</Button>
+            <Button size="sm" variant="outline" icon="fileText">{t('folio.summary.openFolio')}</Button>
           </Link>
         </span>
       }
@@ -60,7 +64,7 @@ export function FolioSummaryCard({ reservationId }) {
         <p className="text-sm text-sec-strong">{query.error.message}</p>
       ) : data.folios.length === 0 ? (
         <p className="text-sm text-ink-muted">
-          Henüz folyo yok; misafir giriş yapınca açılır.{can(PERMISSIONS.PAYMENT_RECEIVE) && advance ? ' Ön ödeme alınırsa şimdi açılır.' : ''}
+          {can(PERMISSIONS.PAYMENT_RECEIVE) && advance ? t('folio.summary.emptyWithAdvance') : t('folio.summary.empty')}
         </p>
       ) : (
         <ul className="flex flex-col divide-y divide-line text-sm">
@@ -70,9 +74,9 @@ export function FolioSummaryCard({ reservationId }) {
                 {folio.name}
               </Link>
               <span className="flex items-center gap-2">
-                <Badge tone={FOLIO_STATUS_TONES[folio.status]}>{folioStatusLabel(folio.status)}</Badge>
+                <Badge tone={FOLIO_STATUS_TONES[folio.status]}>{folioStatusText(folio.status)}</Badge>
                 <Badge tone={balanceTone(folio.balance)}>
-                  <span className="tabular-nums">{formatMoney(folio.balance, folio.currency)}</span>
+                  <MoneyText value={folio.balance} currency={folio.currency} className="tabular-nums" />
                 </Badge>
               </span>
             </li>
@@ -81,12 +85,12 @@ export function FolioSummaryCard({ reservationId }) {
       )}
       {data?.roomCharges.nights > 0 && (
         <p className="mt-2 text-xs text-warning-ink">
-          {data.roomCharges.nights} oda ücreti kalemi henüz işlenmedi ({formatMoney(data.roomCharges.amount, data.stay.currency)}).
+          {t('folio.summary.unpostedNights', { count: data.roomCharges.nights, amount: formatMoney(data.roomCharges.amount, data.stay.currency) })}
         </p>
       )}
       {data && Number(data.payments?.pendingPayments ?? 0) !== 0 && (
         <p className="mt-2 text-xs text-warning-ink">
-          Onay bekleyen ödeme: {formatMoney(data.payments.pendingPayments, data.stay.currency)} (onaylanınca bakiyeye girer).
+          {t('folio.summary.pendingPayments', { amount: formatMoney(data.payments.pendingPayments, data.stay.currency) })}
         </p>
       )}
       {paying && data && (

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Alert, Badge, Button, Checkbox, Spinner } from '@hotelos/ui';
 import { AssignmentKindBadge, HousekeepingBadge, OccupancyBadge } from '../../components/RoomStateBadges.jsx';
+import { useT } from '../../i18n/index.jsx';
 import { api, withQuery } from '../../lib/api.js';
 
 const PAGE_SIZE = 6;
@@ -15,6 +16,7 @@ const PAGE_SIZE = 6;
  *           onSelect: (room: object) => void, disabled?: boolean }} props
  */
 export function RoomChoice({ reservationId, currentRoomId, selectedId, onSelect, disabled = false }) {
+  const t = useT();
   const [includeOtherTypes, setIncludeOtherTypes] = useState(false);
   const [page, setPage] = useState(1);
   const query = useQuery({
@@ -28,7 +30,7 @@ export function RoomChoice({ reservationId, currentRoomId, selectedId, onSelect,
   return (
     <div className="flex flex-col gap-3">
       <Checkbox
-        label="Diğer oda tiplerini de göster"
+        label={t('frontDesk.roomChoice.showOtherTypes')}
         checked={includeOtherTypes}
         onChange={(event) => {
           setIncludeOtherTypes(event.target.checked);
@@ -36,15 +38,15 @@ export function RoomChoice({ reservationId, currentRoomId, selectedId, onSelect,
         }}
         disabled={disabled}
       />
-      {query.isPending && <Spinner label="Uygun odalar aranıyor…" className="py-4" />}
+      {query.isPending && <Spinner label={t('frontDesk.roomChoice.searching')} className="py-4" />}
       {query.isError && (
-        <Alert tone="danger" action={<Button variant="outline" size="sm" icon="refresh" onClick={() => query.refetch()}>Tekrar dene</Button>}>
+        <Alert tone="danger" action={<Button variant="outline" size="sm" icon="refresh" onClick={() => query.refetch()}>{t('common.retry')}</Button>}>
           {query.error.message}
         </Alert>
       )}
       {query.data && rooms.length === 0 && (
-        <Alert tone="warning" title="Uygun boş oda yok">
-          {includeOtherTypes ? 'Konaklamanın kalan geceleri boyunca boş oda bulunamadı.' : 'Diğer oda tiplerini göstererek deneyin.'}
+        <Alert tone="warning" title={t('frontDesk.roomChoice.noneTitle')}>
+          {includeOtherTypes ? t('frontDesk.roomChoice.noneAllTypes') : t('frontDesk.roomChoice.noneTryOtherTypes')}
         </Alert>
       )}
       {rooms.length > 0 && (
@@ -60,14 +62,14 @@ export function RoomChoice({ reservationId, currentRoomId, selectedId, onSelect,
               >
                 <span className="flex flex-wrap items-center gap-2">
                   <span className="text-base font-bold tabular-nums text-ink">{room.number}</span>
-                  <span className="text-xs text-ink-muted">{room.floor}. kat · {room.roomTypeCode}</span>
+                  <span className="text-xs text-ink-muted">{t('frontDesk.roomChoice.floorType', { floor: room.floor, type: room.roomTypeCode })}</span>
                   <OccupancyBadge occupancy={room.occupancy} />
                   <HousekeepingBadge status={room.housekeepingStatus} />
-                  {room.recommended && <Badge tone="info" dot={false}>Önerilen</Badge>}
+                  {room.recommended && <Badge tone="info" dot={false}>{t('frontDesk.roomChoice.recommended')}</Badge>}
                   <AssignmentKindBadge kind={room.kind} />
                 </span>
                 <Button size="sm" variant={selected ? 'primary' : 'outline'} icon="check" onClick={() => onSelect(room)} disabled={disabled}>
-                  {selected ? 'Seçildi' : 'Seç'}
+                  {selected ? t('frontDesk.roomChoice.selected') : t('frontDesk.roomChoice.select')}
                 </Button>
               </li>
             );
@@ -76,9 +78,9 @@ export function RoomChoice({ reservationId, currentRoomId, selectedId, onSelect,
       )}
       {meta && meta.totalPages > 1 && (
         <div className="flex items-center justify-end gap-2">
-          <Button variant="outline" size="sm" disabled={page <= 1 || disabled} onClick={() => setPage(page - 1)}>Önceki</Button>
+          <Button variant="outline" size="sm" disabled={page <= 1 || disabled} onClick={() => setPage(page - 1)}>{t('frontDesk.roomChoice.previous')}</Button>
           <span className="text-xs font-semibold text-ink-muted">{meta.page} / {meta.totalPages}</span>
-          <Button variant="outline" size="sm" disabled={page >= meta.totalPages || disabled} onClick={() => setPage(page + 1)}>Sonraki</Button>
+          <Button variant="outline" size="sm" disabled={page >= meta.totalPages || disabled} onClick={() => setPage(page + 1)}>{t('frontDesk.roomChoice.next')}</Button>
         </div>
       )}
     </div>

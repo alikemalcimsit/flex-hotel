@@ -37,6 +37,7 @@ Sol menüdeki her sayfa, yolu ve görmek için gereken izin. Bir sayfa menüde y
 | **Kasa** | `/kasa` | şunlardan biri: Kasayı görüntüle; Günlük döviz kurunu gir |
 | ↳ Günlük kasa | `/kasa/gun` | Kasayı görüntüle |
 | ↳ Döviz kurları | `/kasa/kurlar` | üst menüyle aynı |
+| **Sanal POS** | `/sanal-pos` | Sanal POS ödeme linklerini ve işlemlerini görüntüle |
 | **Minibar & çamaşır** | `/ek-hizmetler` | şunlardan biri: Minibar / çamaşır kayıtlarını ve günlük raporu görüntüle; Minibar tüketimi gir; Çamaşır siparişi al, durumunu güncelle; Minibar / çamaşır fiyat listelerini yönet |
 | ↳ Minibar girişi | `/ek-hizmetler/minibar` | Minibar tüketimi gir |
 | ↳ Minibar kayıtları | `/ek-hizmetler/minibar-kayitlari` | Minibar / çamaşır kayıtlarını ve günlük raporu görüntüle |
@@ -79,6 +80,7 @@ Sol menüdeki her sayfa, yolu ve görmek için gereken izin. Bir sayfa menüde y
 | **Mesajlar** | `/mesajlar` | Mesajları görüntüle |
 | **İstekler** | `/istekler` | İstekleri görüntüle |
 | **Anketler** | `/anketler` | Anket cevaplarını, NPS raporunu, takipleri ve AI özetlerini gör |
+| **Yorumlar** | `/yorumlar` | Misafir yorumlarını, AI etiketlerini ve trendi görüntüle |
 | **Spa** | `/spa` | Spa takvimini, randevuları, dersleri ve raporu gör |
 | **Mutfak** | `/mutfak` | Reçeteleri, malzeme kartlarını, maliyet ve kâr marjını görüntüle |
 | ↳ Reçeteler | `/mutfak` | üst menüyle aynı |
@@ -174,7 +176,7 @@ Sol menüdeki her sayfa, yolu ve görmek için gereken izin. Bir sayfa menüde y
 
 ## İzinler ve roller
 
-Sistemde 132 izin var; roller bu izinlerin varsayılan paketleridir. Yönetici (Ayarlar → Kullanıcılar / roller) bir kullanıcıya izin ekleyip çıkarabilir. Aşağıdaki tablo **varsayılan** dağılımdır.
+Sistemde 138 izin var; roller bu izinlerin varsayılan paketleridir. Yönetici (Ayarlar → Kullanıcılar / roller) bir kullanıcıya izin ekleyip çıkarabilir. Aşağıdaki tablo **varsayılan** dağılımdır.
 
 ### Ayarlar
 
@@ -463,6 +465,22 @@ Sistemde 132 izin var; roller bu izinlerin varsayılan paketleridir. Yönetici (
 | `kbs.send` | Hatalı KBS bildirimini tekrar gönder, elle bildirildi olarak işaretle | ✓ | ✓ | ✓ |  |  |  |
 | `kbs.manage` | KBS ayarları (tesis kodu, kullanıcı, parola, zorunlu alanlar) ve bağlantı denemesi | ✓ | ✓ |  |  |  |  |
 
+### Sanal POS
+
+| İzin | Ne yaptırır | Yönetici | Müdür | Ön büro | Kat hizmetleri | Muhasebe | Yiyecek & İçecek |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `payment_gateway.view` | Sanal POS ödeme linklerini ve işlemlerini görüntüle | ✓ | ✓ | ✓ |  | ✓ |  |
+| `payment_gateway.send` | Ödeme linki oluştur, misafire gönder, iptal et | ✓ | ✓ | ✓ |  |  |  |
+| `payment_gateway.setup` | Sanal POS ayarları: sağlayıcı, anahtarlar, widget ön ödemesi | ✓ | ✓ |  |  |  |  |
+
+### Misafir yorumları
+
+| İzin | Ne yaptırır | Yönetici | Müdür | Ön büro | Kat hizmetleri | Muhasebe | Yiyecek & İçecek |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `reviews.view` | Misafir yorumlarını, AI etiketlerini ve trendi görüntüle | ✓ | ✓ | ✓ |  |  |  |
+| `reviews.reply` | Yoruma cevap taslağı yaz, cevaplandı olarak işaretle | ✓ | ✓ | ✓ |  |  |  |
+| `reviews.manage` | Yorum ekle / dosyadan yükle, etiketi düzelt, sil, yeniden analiz et | ✓ | ✓ |  |  |  |  |
+
 ### Misafir portalı ve online check-in
 
 | İzin | Ne yaptırır | Yönetici | Müdür | Ön büro | Kat hizmetleri | Muhasebe | Yiyecek & İçecek |
@@ -661,11 +679,11 @@ Doluluk, kalan gün ve geçen yıl verisinden gerekçeli fiyat önerileri üreti
 
 **Tür:** agent · **Paket:** `@hotelos/insight-agent` · **Kapalıyken iş düşer:** Anket · **Tekrar deneme:** 2 kez (1000 ms artan bekleme)
 
-Misafir anketlerindeki yorumlara duygu ve konu etiketi verir; seçilen dönem için ana temaları, örnek alıntıları ve önerileri yazar. Puanları sistem hesaplar; ajan yalnız metni yorumlar, kişi adı ve iletişim bilgisi görmez.
+Misafir anketlerindeki ve yorum sitelerindeki (Google, Booking.com…) yorumlara duygu, konu ve departman etiketi verir, yorum siteleri için otel adına cevap önerir; seçilen dönem için ana temaları, örnek alıntıları ve önerileri yazar. Puanları sistem hesaplar; ajan yalnız metni yorumlar, kişi adı ve iletişim bilgisi görmez.
 
 | Dinlediği olaylar | Yayınladığı olaylar | Onaya götürdüğü işler |
 | --- | --- | --- |
-| `survey.analysis.requested`, `survey.insight.requested` | `survey.analysis.completed`, `survey.insight.completed` | — |
+| `survey.analysis.requested`, `survey.insight.requested`, `review.analysis.requested` | `survey.analysis.completed`, `survey.insight.completed`, `review.analysis.completed` | — |
 
 ### Rapor ajanı (`report-agent`)
 
@@ -719,7 +737,7 @@ Misafire yazılan cevapları WhatsApp Cloud API ile gönderir, teslim durumunu m
 
 ## Olay kataloğu
 
-Sistem 208 tür olay yayınlar. Olay = "şu oldu" kaydı; aktörler ve ekranlar bunları dinler. Açıklamalar kataloğun kendi yorumlarından alınmıştır (boşsa olayın adı yeterince anlatıyor demektir).
+Sistem 213 tür olay yayınlar. Olay = "şu oldu" kaydı; aktörler ve ekranlar bunları dinler. Açıklamalar kataloğun kendi yorumlarından alınmıştır (boşsa olayın adı yeterince anlatıyor demektir).
 
 ### accounting.*
 
@@ -1031,6 +1049,13 @@ Sistem 208 tür olay yayınlar. Olay = "şu oldu" kaydı; aktörler ve ekranlar 
 | `payment.voided` |  |
 | `payment.void_declined` |  |
 
+### payment_gateway.*
+
+| Olay | Açıklama |
+| --- | --- |
+| `payment_gateway.link.changed` |  |
+| `payment_gateway.settings.changed` |  |
+
 ### payroll.*
 
 | Olay | Açıklama |
@@ -1108,6 +1133,19 @@ Sistem 208 tür olay yayınlar. Olay = "şu oldu" kaydı; aktörler ve ekranlar 
 | `reservation.reinstated` |  |
 | `reservation.requested` | İptal: envanter serbest kalır (bekleme listesi taranır). */ 'reservation.cancelled': reservationStay, /** Misafir gelmedi: envanter serbest kalır. */ 'reservation.no_show': reservationStay, /** İptal / gelmedi geri alındı: envanter yeniden tüketilir. */ 'reservation.reinstated': reservationStay, /** Kanaldan (WhatsApp, web chat, e-posta, OTA) gelen rezervasyon isteği. reservation-worker işler: `reservation.created` ya da `reservation.rejected`. `requestId` isteği yapanın kimliğidir; aynı kimlikle ikinci rezervasyon açılmaz. |
 | `reservation.rejected` | Kanal isteği varsayılan olarak opsiyonludur: personel onaylar. */ status: z.enum(['PENDING', 'CONFIRMED']).default('PENDING'), /** Kanal misafiri zaten tanıyorsa (konuşma bir misafir kartına bağlı) o kart kullanılır; yoksa yeni kart açılır. Modül 8. / guestId: z.string().uuid().nullable().default(null), /** Misafirin girdiği kupon kodu (modül 31; web widget'ı — modül 32 — gönderir). Kupon uymuyorsa ya da dolmuşsa istek reddedilir (`reservation.rejected`). / couponCode: z.string().min(1).max(40).nullable().default(null), }), /** Kanal isteği karşılanamadı (yer yok, kapasite, geçersiz tarih). |
+
+### review.*
+
+| Olay | Açıklama |
+| --- | --- |
+| `review.analysis.requested` |  |
+| `review.analysis.completed` |  |
+
+### reviews.*
+
+| Olay | Açıklama |
+| --- | --- |
+| `reviews.changed` |  |
 
 ### room.*
 
@@ -1292,6 +1330,12 @@ Misafir her durumda "ekibimiz dönecek" bilgisini alır; personelin ziline uyar�
 Kısmi index'li (`Conversation_ai_waiting_idx`): yalnızca AI'da bekleyen
 konuşmalar taranır.
 
+### exchange-rates
+
+Kur işi (modül 60): saatte bir, otomatik çekme açık otellerin iş günü kurları TCMB'den yazılır (gün değişince ve gün kapanınca yeni
+iş gününün kuru da gelir; aynı kur yeniden yazılmaz).
+@param {{ info: Function, error: Function }} logger
+
 ### folios
 
 Aralık sabitleri: `ROOM_CHARGE_CHECK_INTERVAL_MS` = 5 * 60_000
@@ -1401,6 +1445,17 @@ testler ve betikler başlatmaz; çalıştırıcı: `lib/recurring.js`).
 Her iş kendi turunu bitirmeden yeniden başlamaz; hatası log'a düşer, diğer
 işleri durdurmaz.
 
+### payment-gateway
+
+Sanal POS'un zamanlanmış işleri (modül 50).
+
+| İş                         | Sıklık | Neden |
+|----------------------------|--------|-------|
+| Takılan ödemeyi sonuçlandır | 5 dk   | Geri dönüşü gelmeyen "ödeme sürüyor" link sağlayıcıya sorulur |
+| Süresi dolan link          | 15 dk  | Ödenmemiş, süresi geçmiş link "süresi doldu" olur |
+| Folyoya yazılamayan ödeme   | 5 dk   | Alınmış ama yazılamamış ödeme (ör. açık folyo yoktu) yeniden yazılır |
+| Takılan iade               | 15 dk  | 15 dakikadır "iade ediliyor"da kalan iade için zil (sağlayıcıda kontrol) |
+
 ### pos
 
 Aralık sabitleri: `SWEEP_INTERVAL_MS` = 15 * 60_000 · `HOUR_MS` = 3_600_000
@@ -1453,6 +1508,15 @@ Rezervasyon modülünün zamanlanmış işi (yalnızca sunucu sürecinde).
 
 Asıl tetik olaylardır (`subscribers.js`); bu tarama güvenlik ağıdır.
 
+### reviews
+
+Misafir yorumlarının işleri (modül 54).
+
+| İş                     | Sıklık | Neden |
+|------------------------|--------|-------|
+| Yorum analiz kuyruğu   | 1 dk   | Bekleyen yorumlardan en çok 40'ı AI'a gönderilir |
+| Olumsuz konu artışı    | 6 sa   | Son 7 gün ↔ önceki 4 hafta; artışta müdüre zil |
+
 ### sales
 
 Aralık sabitleri: `SWEEP_INTERVAL_MS` = 30 * 60_000
@@ -1490,12 +1554,12 @@ Anketin zamanlanmış işi (yalnızca sunucu sürecinde, modül 55).
 
 ## Veri modeli
 
-Veritabanında 251 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan sayısı ilişkiler hariç yaklaşık değerdir.
+Veritabanında 259 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan sayısı ilişkiler hariç yaklaşık değerdir.
 
 | Tablo | Alan | Açıklama |
 | --- | --- | --- |
 | `Hotel` | 33 |  |
-| `User` | 10 | `hotelId` + `role`: ANA otel ve oradaki rol (giriş ana otele açılır). Başka otellere erişim `UserHotel`'de (modül 63). |
+| `User` | 12 | `hotelId` + `role`: ANA otel ve oradaki rol (giriş ana otele açılır). Başka otellere erişim `UserHotel`'de (modül 63). |
 | `RefreshToken` | 8 |  |
 | `RolePermission` | 6 | Rol → izin matrisi (modül 2 — RBAC). Bir otelin hiç satırı yoksa çözüm koddaki varsayılanlara düşer; matris kaydedilince tüm roller için satır yazılır ve DB kaynak olur. ADMIN satır tutmaz — kod her zaman ADMIN'e tüm izinleri verir. |
 | `EventLog` | 14 |  |
@@ -1543,7 +1607,7 @@ Veritabanında 251 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan
 | `FolioRoute` | 8 | Konaklamanın yönlendirmesi (modül 15): bu tipteki sistem kalemleri (oda ücreti, restoran, minibar) bu folyoya düşer. Yoksa konaklamanın ilk açık folyosu. |
 | `RoomChargeRun` | 11 | Gecenin oda ücretlerinin işlenmesi (modül 15). Zamanlayıcı gün dönünce otel başına bir kez açar (tekil) ve folyo aktörüne haber verir; işlenince tamamlanır. |
 | `Payment` | 32 | Ödeme satırı (modül 17). Silinmez: hatalı giriş iptal kaydıyla (`REVERSAL`, ters tutar), misafire geri verilen para iadeyle (`REFUND`, eksi tutar) düzeltilir. Bakiyeye yalnızca işlenmiş (`POSTED`) satırlar girer. |
-| `ExchangeRate` | 8 | Günlük döviz kuru (modül 17): 1 birim döviz = `rate` × otel para birimi. Otel × döviz × gün tekil; yalnızca iş günü için girilir (aynı gün yeniden girilirse güncellenir, denetim izi eski değeri tutar). Ödeme kendi kurunu saklar: kur sonradan değişse de geçmiş ödeme değişmez. |
+| `ExchangeRate` | 10 | Günlük döviz kuru (modül 17): 1 birim döviz = `rate` × otel para birimi. Otel × döviz × gün tekil; yalnızca iş günü için girilir (aynı gün yeniden girilirse güncellenir, denetim izi eski değeri tutar). Ödeme kendi kurunu saklar: kur sonradan değişse de geçmiş ödeme değişmez. |
 | `MinibarItem` | 12 | Minibar ürünü (modül 19). Fiyat vergi ayarına göre (kalem tipi minibar) dahil / hariç yorumlanır. Kod otel içinde tekil (silinmemişler arasında: kısmi index `MinibarItem_hotelId_code_active_key`). |
 | `MinibarConsumption` | 18 | Odanın minibar sayımı: bir fiş (modül 19). Konaklamaya yazılan fiş `minibar.consumed` olayıyla folyoya gider (`eventId`: folyo kalemlerinin tekrar işleme anahtarı `evt:<eventId>:<sıra>`); kayıp fiş folyoya gitmez. Fiş silinmez, değiştirilmez: düzeltme folyodaki kalem iptaliyle. |
 | `MinibarConsumptionLine` | 8 | Minibar fişinin satırı: ürünün o anki adı ve fiyatı (fiyat sonradan değişse de fiş değişmez). |
@@ -1659,7 +1723,7 @@ Veritabanında 251 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan
 | `JournalEntry` | 21 | Yevmiye fişi: borç toplamı = alacak toplamı. Otomatik fiş kaynak belgeden (kaynak anahtarı tekil: ikinci kez yazılmaz); elle fiş `requestId` ile çift gönderime kapalı. Düzeltme ters kayıtla (iptal edilen fiş VOIDED, ters fiş `reversalOfId`). |
 | `JournalLine` | 11 | Fiş satırı: tek taraf dolu (borç ya da alacak). `date` fişin günüdür (mizan / ekstre taraması fişe dönmeden). |
 | `JournalRule` | 8 | Otomatik fiş kuralı: (kaynak, anahtar) → hesap. Anahtar boş = kaynağın varsayılanı (ör. bütün KDV oranları 391). |
-| `Invoice` | 54 | Fatura (modül 16 çekirdeği + 49). Taslak düzenlenir; kesimde numara (seri + yıl + 9 hane), belge türü (e-Fatura / e-Arşiv), alıcı ve UBL belgesi donar — kesilmiş fatura değişmez, iptal onay kuyruğundan. Folyo ve etkinlik başına en fazla bir geçerli (iptal edilmemiş) fatura: kısmi tekil index'ler migration'da. Alıcının bütün bilgisi `buyer`da (JSON); liste ve arama için ad ve vergi no ayrıca. |
+| `Invoice` | 58 | Fatura (modül 16 çekirdeği + 49). Taslak düzenlenir; kesimde numara (seri + yıl + 9 hane), belge türü (e-Fatura / e-Arşiv), alıcı ve UBL belgesi donar — kesilmiş fatura değişmez, iptal onay kuyruğundan. Folyo ve etkinlik başına en fazla bir geçerli (iptal edilmemiş) fatura: kısmi tekil index'ler migration'da. Alıcının bütün bilgisi `buyer`da (JSON); liste ve arama için ad ve vergi no ayrıca. |
 | `InvoiceLine` | 18 | Fatura satırı: folyo faturasında gelir grubu, etkinlikte kalem, serbest faturada girilen satır. Eksi satır yoktur (ters kayıt grubun içinde, indirim satır iskontosu). |
 | `InvoiceDocument` | 5 | Kesimde donan UBL-TR belgesi (gönderim ve tekrar gönderim bunu kullanır). |
 | `InvoiceLog` | 9 | Faturanın zaman çizelgesi: kesim, sıraya girme, gönderim, GİB cevabı, yeniden deneme, iptal. |
@@ -1745,6 +1809,14 @@ Veritabanında 251 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan
 | `WebhookDelivery` | 18 | Bir olayın bir aboneliğe teslimatı. Aynı olay aynı aboneliğe bir kez yazılır (tekil: outbox olayı yeniden dağıtsa da). Gönderici due kayıtları sahiplenir (`SENDING` + `lockedUntil`; süreç düşerse süre dolunca yeniden alınır), başarısızda artan bekleme ile yeniden dener, deneme hakkı bitince `FAILED`. Gövde incedir (kişisel veri yok). 30 gün saklanır. |
 | `HotelGroup` | 5 | Otel zinciri: birden çok otel tek panelden (pano, rapor, otel geçişi, merkezi kullanıcı yönetimi). Son otel çıkarılınca zincir silinir. |
 | `UserHotel` | 8 | Kişinin ANA OTELİ DIŞINDAKİ bir otele erişimi, o otele özgü rolle. Otel seçici bu erişimler arasında geçirir; rol ve izinler o otelin rol matrisinden. Erişim kişiyi o otelin personel listesine eklemez. Kaldırılınca satır silinir (iz denetim kaydında). |
+| `PaymentGatewaySettings` | 14 | Otelin sanal POS ayarı. Anahtarlar secret-box ile mühürlü (JSON {apiKey, secretKey}); hiçbir cevapta dönmez. |
+| `PaymentLink` | 35 | Misafirin kartla ödeyeceği bağlantı. Tek kez ödenir; başarısız denemeden sonra yeniden denenir. Kart numarası tutulmaz (yalnız sağlayıcının verdiği kart markası ve son dört hane). |
+| `PaymentLinkEvent` | 9 | Linkin izi: oluşturma, gönderim, deneme, sonuç, iade. |
+| `GatewayRefund` | 15 | Karta iade: dört gözle onaylanır, sonra sağlayıcıdan iade edilir ve folyoya eksi ödeme yazılır. |
+| `Review` | 35 | Yorum sitesindeki misafir yorumu ve AI analizi (1:1, aynı satırda). Yazanın adı modele gitmez. |
+| `ReviewImport` | 9 | Dosyadan yükleme (idempotent: kimlik isteğin kimliği). |
+| `ReviewAnomaly` | 8 | Olumsuz konu artışı (haftalık; otel + konu + hafta tekil). |
+| `ExchangeRateSettings` | 10 | Otelin kur ayarı: TCMB'den günlük çekme, hangi kur türü, hangi dövizler. |
 
 ## Modül durumu
 
@@ -1801,17 +1873,17 @@ Geliştirme listesinden (GOREVLER.md) türetilir: işaretli maddeler ve "tamamla
 | 47 | Ön muhasebe | arkadaşın | tamamlandı |
 | 48 | Genel muhasebe | Ali Kemal | tamamlandı |
 | 49 | e-Fatura / e-Arşiv / e-Defter | arkadaşın | kısmi (4/6) |
-| 50 | Sanal POS / ödeme geçidi | Ali Kemal | planlı |
+| 50 | Sanal POS / ödeme geçidi | Ali Kemal | tamamlandı |
 | 51 | Personel & bordro | arkadaşın | tamamlandı |
 | 52 | İK | Ali Kemal | tamamlandı |
 | 53 | Temassız uygulamalar | arkadaşın | tamamlandı |
-| 54 | Misafir yorum entegrasyonu + duygu analizi | Ali Kemal | planlı |
+| 54 | Misafir yorum entegrasyonu + duygu analizi | Ali Kemal | tamamlandı |
 | 55 | Anket & memnuniyet | arkadaşın | tamamlandı |
 | 56 | Sadakat programı | Ali Kemal | tamamlandı |
 | 57 | SPA & spor salonu randevu | arkadaşın | tamamlandı |
 | 58 | Emniyet kimlik bildirimi (KBS) | Ali Kemal | tamamlandı |
 | 59 | Kimlik / pasaport okuma (OCR) | arkadaşın | tamamlandı |
-| 60 | Çoklu dil & çoklu para birimi | Ali Kemal | planlı |
+| 60 | Çoklu dil & çoklu para birimi | Ali Kemal | kısmi (4/5) |
 | 61 | Webhook & açık API | arkadaşın | tamamlandı |
 | 62 | Donanım entegrasyonları | Ali Kemal | planlı |
 | 63 | Multi-tenant zincir konsolu | arkadaşın | tamamlandı |

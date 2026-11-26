@@ -351,6 +351,117 @@ Bildirimin ayrıntısını açın (zildeki uyarıya tıklayın ya da Bildirimler
 - **Çıkışı geri aldıysanız:** gönderilmemiş çıkış iptal olur; gönderilmişse kişi için yeniden **giriş bildirimi** açılır.
 - **Resmî ekrandan elle bildirdiyseniz** o kaydı resmî ekranda da düzeltin; FlexHotel yalnız kendi kuyruğunu düzeltir.
 
+## Sanal POS (online kartla ödeme)
+
+### Sanal POS'ta gerçek para çekiliyor mu?
+
+- **Sağlayıcıya bağlı.** **Sanal POS → Ayarlar**'da (`/sanal-pos/ayarlar`) **Test ortamı (dışarı çıkmaz)** seçiliyse **hayır**: misafir FlexHotel'in taklit ödeme sayfasına gider, kart istenmez, dışarı bir şey gitmez. Ekranın üstünde "Test ortamı — gerçek para çekilmez" yazar. Bu ortamda büyük ödeme eşiği uygulanır (eşik üstü test ödemesi "Onay bekliyor" düşer).
+- **iyzico, Deneme (sandbox):** iyzico'nun deneme ortamı; test kartlarıyla çalışılır, gerçek para çekilmez.
+- **iyzico, Canlı:** **evet**, gerçek karttan gerçek para çekilir. Bunun için otelin iyzico ile **üye iş yeri sözleşmesi** ve canlı anahtarları gerekir.
+- **Dürüst durum:** iyzico bağlantısı iyzico'nun resmî dokümanına ve resmî kütüphanesine göre yazıldı, imza algoritmaları resmî test vektörleriyle sınandı; ama **iyzico sandbox'ında henüz uçtan uca denenmedi** (sandbox anahtarı gerekiyor; `sandbox-merchant.iyzipay.com`'dan ücretsiz). Bugün uçtan uca çalışan Test ortamıdır. İlk deneme adımları: Folyo, kasa ve ek hizmetler → Sanal POS → "iyzico sandbox ile deneme".
+
+### Misafirin kart bilgisi nerede? Biz saklıyor muyuz?
+
+- **Hayır, kart bilgisi otele hiç gelmez.** Misafir kartını iyzico'nun **barındırılan ödeme sayfasında** girer; **3D Secure** (banka SMS şifresi) de orada yapılır. FlexHotel yalnız sonucu, kart markasını ve **son 4 haneyi** (ör. •••• 0008) görür ve saklar.
+- Sunucu sonucu tarayıcıdan değil, iyzico'dan **kendisi** sorar; cevap imzasını, tutarı, para birimini ve sepeti denetler.
+- Misafirden kart numarasını telefonda alıp onun yerine ödemeyin; notlara kart numarası yazmayın.
+
+### Misafir ödedi ama ödeme folyoya düşmedi
+
+Link ayrıntısını açın (**Sanal POS → İşlemler** → satır, `/sanal-pos/linkler/:linkId`) ve duruma bakın:
+
+| Linkin durumu / izi | Anlamı | Ne yapılır |
+| --- | --- | --- |
+| **Ödeme sürüyor** | Sonuç henüz gelmedi (misafirin tarayıcısı dönüşte kapandı, sağlayıcıya ulaşılamadı, iyzico ödemeyi incelemede tutuyor) | Bekleyin: **Sanal POS takılan ödeme** işi 10 dakika sonra sağlayıcıya sorar (5 dakikada bir). Folyoya elle girmeyin |
+| **Ödendi**, izde "folyoya yazılamadı" (`NOT_POSTED`), kritik zil "Online ödeme folyoya yazılamadı" | Para alındı ama açık folyo yoktu (ör. rezervasyon iptal edilmişti) | Engeli kaldırın (rezervasyonu geri alın, folyoyu açılabilir yapın); iş 5 dakikada bir yeniden yazar. Elle girmeyin |
+| "Doğrulanamadı" (`UNVERIFIED`), kritik zil "Online ödeme doğrulanamadı" | iyzico "ödendi" dedi ama imza / tutar / para birimi / sepet tutmadı; folyoya **bilerek** yazılmadı | iyzico panelinden kontrol edin, teknik ekibe haber verin |
+| **Ödeme bekliyor**, son hata "Kart reddedildi" ya da "yarıda kaldı" | Ödeme gerçekleşmedi | Misafir aynı linkten yeniden ödeyebilir |
+| **Ödendi** ve folyo ödemesi bağlı, ama bakiye düşmemiş | Test ortamında tutar büyük ödeme eşiğine takıldı: ödeme "Onay bekliyor" | Yetkili **Onaylar**'dan onaylasın (iyzico ödemelerinde bu olmaz) |
+
+### Misafir iki kez ödedi
+
+- Bir link tek kez ödenir; ödenmiş linkte **Kartla öde** "Bu ödeme zaten yapıldı" der. Dönüş sayfasını yenilemek ikinci ödeme yazmaz.
+- Misafir linki iki sekmede açıp ikisinden de öderse iyzico'da iki ödeme oluşabilir. Sistem ikincisini de folyoya yazar ve uyarı zili çalar: **"Aynı linke ikinci ödeme"**. Folyo fazla ödemeye (eksi bakiye) düşer.
+- **Çözüm:** link ayrıntısından **Karta iade** ile fazla tutarı iade edin (onaya gider). Ayrı bir link için iki kez ödendiyse (iki link), fazla olan linkten iade edin.
+
+### Karta iade nasıl yapılır?
+
+- Link ayrıntısı → **Karta iade** (yalnız **Ödendi** linkte; `payment.refund`: müdür, ön büro, muhasebe). Tutar ve gerekçe yazın. En çok: ödenen − iade edilen − onay bekleyen ("En çok 1000.00 TRY iade edilebilir …").
+- İstek **her zaman onaya gider** (`GATEWAY_REFUND`, "Sanal POS iadesi (karta)"); isteyen kendi isteğini onaylayamaz. Onaylanınca iade iyzico'dan yapılır ve folyoya **eksi Sanal POS** ödemesi yazılır.
+- **İade başarısız** görürseniz mesajı okuyun: "Sonuç belirsiz" yazıyorsa (ağ hatası / zaman aşımı) iade iyzico'da yapılmış olabilir; **yeniden istemeden önce iyzico panelinden kontrol edin**. 15 dakikadır "İade ediliyor"da kalan iade için kritik zil "Karta iade sonuçlanmadı" çalar; yine panelden kontrol edin, yeniden istemeyin.
+- Folyodaki elle "İade" penceresi kartla online alınmış parayı karta geri göndermez; online ödemeyi her zaman **Karta iade** ile iade edin.
+
+### Ödeme linkinin süresi doldu
+
+- Link, ayardaki **Link süresi** kadar (varsayılan 72 saat) geçerlidir; süresi geçince **Sanal POS süre dolumu** işi (15 dakikada bir) linki **Süresi doldu** yapar. Misafir açarsa "Bu ödeme bağlantısının süresi doldu; otelden yenisini isteyin" görür.
+- Süresi dolan link yeniden açılmaz ve iptal edilemez. Rezervasyon ayrıntısındaki **Sanal POS** kartından **yeni link** oluşturup gönderin; isterseniz süreyi o link için uzatın (en çok 720 saat).
+- Misafir "linke tıklayınca ödenemiyor" diyorsa: Sanal POS kapatılmış ya da sağlayıcı / ortam değiştirilmiş olabilir ("Bu ödeme bağlantısıyla şu an ödeme alınamıyor; otelle görüşün"). Ayarı kontrol edip yeni link gönderin.
+
+## Misafir yorumları
+
+### Google / Booking yorumları kendiliğinden gelmiyor mu?
+
+- **Hayır, otomatik çekme yok.** Google yorumlarını okumak Google Business Profile API'siyle olur; bu OAuth ile işletme hesabına bağlanmayı ve Google'ın **erişim onayını** ister. Booking.com'un yorum API'si yalnız Booking'in **bağlantı ortaklarına** açıktır. İkisi de bugün hazır değil.
+- Yorumları **Yorumlar → Dosyadan yükle** (`/yorumlar/liste`) ile Excel / CSV olarak alın: Booking extranet'inin dışa aktarımındaki "Review date", "Guest name", "Positive review", "Negative review", "Review score", "Property reply" ve Google dışa aktarımındaki "Reviewer", "Star rating", "Comment", "Create time" başlıkları kendiliğinden eşleşir. Birkaç yorum için **Yorum ekle** yeter.
+- Her hafta ya da ay "son dönem" dosyasını yükleyebilirsiniz: daha önce girilmiş yorumlar **Zaten var** olarak atlanır.
+
+### Cevap neden platforma gitmiyor?
+
+- Platforma yazmak da aynı API'leri (ve Google / Booking'in onayını) ister; FlexHotel bugün Booking'e ya da Google'a hiçbir şey göndermez.
+- Akış: yorum ayrıntısında önerilen cevabı düzenleyin → **Kopyala** → Booking extranet'inde / Google işletme profilinde yayınlayın → FlexHotel'de **Cevaplandı olarak işaretle**. İşareti personel koyar; sistem "yayınlandı" diye bir şey uydurmaz.
+- Cevabı yayınlamadan önce okuyun: ajan söz vermemek, kişisel veri ve bağlantı yazmamak üzere yönlendirilir (bağlantı, e-posta, telefon kalıpları ayrıca çıkarılır), ama son kontrol sizdedir.
+
+### Yorum "Analiz bekliyor"da kaldı
+
+| Sebep | Nasıl anlaşılır | Ne yapılır |
+| --- | --- | --- |
+| Sunucuda `OPENAI_API_KEY` yok | Ayarlar → AI asistanı anahtarın durumunu söyler; Aktörler panelinde ajan kurulu değil; Yorumlar'da bilgi şeridi | Anahtarı tanımlatın; o zamana kadar **Etiketi düzelt** ile elle etiketleyin |
+| Geri bildirim ajanı bu otelde kapalı | Aktörler panelinde insight-agent kapalı | Ajanı açın; kuyruk bekleyenleri en geç 30 dakika içinde ister |
+| Büyük yükleme yeni girdi | Analiz bekleyen sayısı dakikada ~40 azalıyor | Bekleyin: 500 yorum ~13 dakika |
+
+**Analiz edilemedi** farklıdır: ajan çalıştı ama model seçilmemiş / fiyatı yok, AI otelde kapalı, günlük bütçe doldu ya da model hata verdi. Ayarı düzeltip **Yeniden analiz** deyin. **Metin yok** ise yorumda yalnız puan vardır; analiz edilmez.
+
+### AI yanlış etiketledi
+
+- **Etiketi düzelt** (`reviews.manage`, müdür): duygu, konular (en çok 5), departmanlar (en çok 4). Yorum **elle etiketlendi** olur; geç gelen bir AI sonucu onu ezmez. Trend ve olumsuz konu artışı sonraki turda düzeltilmiş etikete göre sayar.
+- **Yeniden analiz** elle etiketi siler; düzelttiğiniz yorumu yeniden analize göndermeyin.
+- Şikâyet "Diğer" konusuna düşmüşse düzeltin: "Diğer" olumsuz konu artışında sayılmaz.
+
+### Aynı dosyayı iki kez yükledim
+
+- Sorun yok. **İçe aktar**'a iki kez basmak (ya da bağlantı kopup yeniden göndermek) aynı yüklemeyi ikinci kez yazmaz; ikisi aynı anda gelse de ikincisi öncekinin sonucunu döner.
+- Aynı dosyayı yeni bir yükleme olarak açarsanız önizlemede bütün satırlar **Zaten var** ("Bu yorum zaten kayıtlı") görünür ve atlanır. Aynı yorumlar o sırada başka bir yüklemeyle yazılıyorsa "Bu yorum aynı anda başka bir yüklemeyle kaydedildi" diye atlanır.
+- Mükerrer kuralı: **Yorum no** varsa kaynak + yorum no; yoksa kaynak + gün + puan + yazan + başlık + metnin tamamı (büyük / küçük harf ve boşluk fark etmez). Silinen yorum yeniden yüklenebilir.
+
+## Dil ve döviz
+
+### Kur neden dünkü? Bugünün TCMB kuru neden gelmedi?
+
+- **Bilinçli kural.** İş günü için **bir önceki TCMB bülteni** kullanılır ("önceki günün kuru"): 26 Kasım iş gününde 25 Kasım bülteni. TCMB günün kurunu öğleden sonra ilan eder; önceki günün bülteni gün başında bellidir ve gün boyunca değişmez, böylece aynı gün alınan bütün döviz ödemeleri ve faturalar aynı kuru kullanır. Bugünün bülteni yarının iş gününe yazılır.
+- Hafta sonu ve tatilde bülten yoktur: pazartesinin kuru cuma bülteninden gelir. Kartın rozeti bülten gününü gösterir ("TCMB · 27 Kas 2026").
+- **Gün kapatılmadıysa** iş günü hâlâ dündür; kur da dünün iş gününün kurudur. Günü kapatın, sonraki saatlik turda (ya da hemen **TCMB'den şimdi çek** ile) yeni günün kuru gelir.
+- Kur hiç gelmiyorsa: Kasa → Döviz kurları → **TCMB kurları** kartında **TCMB'den otomatik çek** açık mı, **Son çekme** rozeti **Başarısız** mı (mesajı okuyun: "TCMB'den alınamadı: …")? TCMB'ye ulaşılamıyorsa iş her saat yeniden dener; acil ödeme için kuru elle girin.
+
+### Elle girdiğim kur değişti mi? TCMB benim kurumu ezer mi?
+
+- **Hayır.** O iş günü için elle girilmiş kur TCMB çekmesinde atlanır; son çekme mesajında "atlanan: EUR (elle girilmiş)" yazar ve Güncel kurlar'da rozet **Elle** kalır. Çekmeden sonra elle değiştirdiğiniz kur da artık sizindir.
+- TCMB'den gelen kuru değiştirmeden aynı değerle kaydetmek de onu **Elle** yapar ("onayladım"); o gün TCMB'den güncellenmez.
+- Rozet **TCMB** ise kuru siz girmemişsiniz (ya da hiç kaydetmemişsiniz); kur türü değişince TCMB kaynaklı kur güncellenebilir. Kimin neyi ne zaman yazdığı Aktivite → Denetim kaydı'nda (`ExchangeRate`) görünür: elle girişte kullanıcının e-postası, saatlik işte "TCMB", düğmeyle çekmede "TCMB (kullanıcı)".
+- Ertesi iş günü yeni bir kayıttır: kur yine TCMB'den gelir; her gün elle girmek istiyorsanız otomatik çekmeyi kapatın.
+- Geçmiş ödemeler ve kesilmiş faturalar kendi kurunu sakladığı için kur değişikliğinden etkilenmez.
+
+### Fatura dövizle kesilir mi?
+
+- **Hayır.** Fatura her zaman otelin para biriminde (TL) kesilir; e-belgede belge para birimi TRY'dir. Taslakta **Döviz karşılığı** seçilirse toplamın o dövizdeki karşılığı kesim günündeki kurla faturaya **not** olarak yazılır: "Döviz karşılığı: 236,95 EUR (1 EUR = 50,6441 TL, otel kuru, 26.11.2026)". Tam dövizli e-fatura (satırları ve toplamı dövizde) yoktur.
+- Kesim "kur yok" (`FOREIGN_RATE_MISSING`) ya da "3 günden eski" (`FOREIGN_RATE_STALE`) diye durursa o dövizin güncel kurunu girin ya da TCMB'den çekin; veya döviz karşılığını "Yok"a alın. Ayrıntı: Arka ofis → Faturalar → Döviz karşılığı.
+
+### Ekranların bir kısmı neden Türkçe? English seçtim.
+
+- Arayüz çevirisi **kademeli**dir. Bugün İngilizcesi olan ekranlar: menü, giriş ekranı, üst çubuk / kullanıcı menüsü, ön büro (Gelecekler / Gidecekler / İçeridekiler, giriş ve çıkış), rezervasyonlar, oda planı ve odalar, folyo, kasa ve kurlar, fatura taslağındaki döviz alanı. Diğer ekranlar şimdilik Türkçe görünür ve parça parça taşınacak. Bu bir hata değildir; çevirisi henüz yazılmamış metin Türkçeye düşer.
+- Menü maddesi İngilizce ("Reports") ama ekranın içi Türkçe olabilir: menü tümüyle çevrildi, o ekran henüz çevrilmedi.
+- Fatura PDF'i ve e-belge Türkçedir. Misafire giden e-posta / SMS'in dili sizin dilinizden değil, misafirin uyruğundan seçilir.
+- Dil kullanıcıya kayıtlıdır: başka bir bilgisayarda da İngilizce açılır. Türkçeye dönmek için kullanıcı menüsü → **Arayüz dili** → Türkçe.
+
 ## Genel kullanım soruları
 
 **Bir işi kimin yaptığını nasıl bulurum?** Aktivite → Canlı akış (zincir kimliği ile aktör işleri) ve Aktivite → Denetim kaydı (personel işlemleri; kimlik numaraları maskeli). Folyo kalemi, ödeme, fiş, fatura, demirbaş kartı kendi zaman çizelgesini / hareket geçmişini taşır.
@@ -363,7 +474,7 @@ Bildirimin ayrıntısını açın (zildeki uyarıya tıklayın ya da Bildirimler
 
 **Demo verisi nasıl sıfırlanır?** Sistem yöneticisi demo betikleriyle (sunucu tarafı). Canlı otelde demo folyoları canlıya alırken temizlenmeli (yedekle, onayla).
 
-**Canlıya alırken unutulmaması gerekenler (özet):** `OPENAI_API_KEY` (AI için), `SETTINGS_SECRET_KEY` (kanal parolaları), nginx yolları (`/socket.io/`, `/webhooks/`, `/webchat/`, misafir uygulaması `/misafir/`), otel saat dilimi ve para birimi, büyük ödeme eşiği (varsayılan 0 = onay yok), döviz kurları (personel girer), fatura satıcı + faturalama başlangıcı + seriler, muhasebe başlangıç günü + açılış bakiyeleri + tahsilat eşlemesi, bordro işyeri + parametre teyidi, portal adresi, SMS kanalı, Channex hesabı.
+**Canlıya alırken unutulmaması gerekenler (özet):** `OPENAI_API_KEY` (AI için), `SETTINGS_SECRET_KEY` (kanal parolaları), nginx yolları (`/socket.io/`, `/webhooks/`, `/webchat/`, misafir uygulaması `/misafir/`), Sanal POS (iyzico üye iş yeri sözleşmesi, canlı anahtar, sunucunun dış adresi, ödeme yöntemi eşlemesinde Sanal POS → banka), otel saat dilimi ve para birimi, büyük ödeme eşiği (varsayılan 0 = onay yok), döviz kurları (TCMB'den otomatik çekme açık mı, kur türü muhasebeyle seçildi mi; ya da personel elle girer), fatura satıcı + faturalama başlangıcı + seriler, muhasebe başlangıç günü + açılış bakiyeleri + tahsilat eşlemesi, bordro işyeri + parametre teyidi, portal adresi, SMS kanalı, Channex hesabı.
 
 ## Modül durumu tablosu
 
@@ -452,7 +563,7 @@ Durum sözlüğü: **Tamam** = görev listesindeki maddelerin tümü işaretli v
 | 47 | Ön muhasebe | accounting-worker | Tamam | |
 | 48 | Genel muhasebe | accounting-worker | Tamam | Tek Düzen hesap planı, otomatik yevmiye fişleri, günlük gelir fişi, mizan, ekstre, kurallar, dönem kilidi; e-Defter dosyası 49'da |
 | 49 | e-Fatura / e-Arşiv / e-Defter | entegrasyon | Kısmi | Fatura + e-belge akışı tamam; **gerçek entegratör adaptörü yok (test entegratörü)**; **e-Defter dosyası (yevmiye / kebir XML) yok** — veri 48'de hazır |
-| 50 | Sanal POS / ödeme geçidi | entegrasyon | **Planlı** | Portalda "kartla ödeme" pasif bekliyor |
+| 50 | Sanal POS / ödeme geçidi | entegrasyon | Tamam | Ödeme linki (oluştur, gönder, iptal), barındırılan ödeme sayfası (kart otele gelmez), sunucunun sonucu sağlayıcıdan kendisi sorması ve doğrulaması, folyoya `VIRTUAL_POS`, takılan ödeme kurtarma, folyoya yazılamayan ödemenin yeniden yazımı, süre dolumu, dört gözlü karta iade (`GATEWAY_REFUND`), portalda kartla ödeme, widget ön ödemesi, zil (`PAYMENT_GATEWAY`). Sağlayıcılar: Test ortamı ve iyzico (sandbox / canlı). **iyzico sandbox'ta uçtan uca deneme bekliyor**; canlı para için otelin üye iş yeri sözleşmesi gerekir. Provizyon, kart saklama (token) ve ters ibraz 84'te |
 | 51 | Personel & bordro | manuel | Tamam | Gider tarafı 48'de yazılır (tahakkuk fişi) |
 | 52 | İK (izin, mesai, özlük) | manuel | Tamam | İzin talebi → onay (`LEAVE`) → bakiye (4857 md. 53), vardiya çizelgesi, günlük puantaj ve bordroya aktarım (TIMESHEET), özlük belgeleri ve hatırlatma; personel tablosu 51'de ortak. Puantaj cihazı / mobil giriş (76) ve otomatik vardiya planlama (88) yok |
 
@@ -460,8 +571,8 @@ Durum sözlüğü: **Tamam** = görev listesindeki maddelerin tümü işaretli v
 
 | No | Modül | Aktör | Durum | Not |
 | --- | --- | --- | --- | --- |
-| 53 | Temassız (online check-in, portal) | concierge-agent | Kısmi | Portal, online check-in, folyo, QR menü tamam; **kart adımı 50'ye, dijital anahtar 62'ye bağlı (pasif)** |
-| 54 | Misafir yorum entegrasyonu + duygu analizi | insight-agent | **Planlı** | |
+| 53 | Temassız (online check-in, portal) | concierge-agent | Kısmi | Portal, online check-in, folyo, QR menü tamam; portalda kartla ödeme 50 ile açıldı; **dijital anahtar 62'ye bağlı (pasif)** |
+| 54 | Misafir yorum entegrasyonu + duygu analizi | insight-agent | Tamam | **Otomatik çekme yok; elle / dosya** (Google Business Profile API OAuth + erişim onayı, Booking yorum API'si bağlantı ortaklığı ister). Excel / CSV yükleme (Booking ve Google başlıkları kendiliğinden eşleşir, ya hep ya hiç, mükerrer atlanır); AI duygu, −100…100 puan, konu, departman, dil, Türkçe özet, yorumun dilinde önerilen cevap (yazanın adı modele gitmez); elle etiket; cevap kopyalanıp platformda yayınlanır, sistemde "Cevaplandı"; haftalık trend; olumsuz konu artışı zili (`REVIEW`) |
 | 55 | Anket & memnuniyet | notification-worker + insight-agent | Tamam | |
 | 56 | Sadakat programı | loyalty-worker | Tamam | Folyo kapanınca puan (vergi hariç, indirim düşülmüş, seviye çarpanı; acente ödemeli hariç; spa kasası), yeniden açılınca geri alma; açık folyoda puanla indirim (611), iptalde iade; son 12 aya göre seviye ve yükseliş zili (`LOYALTY`); süre dolumu (12 saatlik iş, FIFO); elle düzeltme; misafir birleştirmede hesap birleşir; portal kutusu. Kampanya / bonus puan kuralları, puanla oda satışı ve zincir genelinde ortak hesap yok |
 | 57 | SPA & spor salonu | manuel | Tamam | |
@@ -472,8 +583,8 @@ Durum sözlüğü: **Tamam** = görev listesindeki maddelerin tümü işaretli v
 | --- | --- | --- | --- |
 | 58 | Emniyet kimlik bildirimi (KBS) | Tamam | kbs-worker. Girişte zorunlu alanlar (cinsiyet, doğum tarihi, anne-baba adı, doğum yeri; ayara göre), kişi başına giriş / çıkış / oda değişikliği bildirimi, geri almada iptal ya da kapatma, zincir (çıkış girişi bekler), yeniden deneme ve zil, gecikme zili, elle bildirildi, mutabakat. **Gerçek servis bağlantısı bekliyor:** Emniyet KBS ve Jandarma JKBS adaptörü tesis yetkisi ve servis dokümanıyla yazılacak; bugün yalnız test ortamı (dışarı göndermez) |
 | 59 | Kimlik / pasaport okuma (OCR) | **Tamam** | |
-| 60 | Çoklu dil & çoklu para birimi | **Planlı** | Misafir portalı ve widget metinleri çok dilli hazır; panel Türkçe; döviz yalnız ödemede |
-| 61 | Webhook & açık API | **Planlı** | |
+| 60 | Çoklu dil & çoklu para birimi | Tamam | Kullanıcı başına arayüz dili (tr / en; kullanıcı menüsü ve giriş ekranı) ve gösterim para birimi (yaklaşık karşılık, kayıt otelin para biriminde); TCMB'den otomatik kur (önceki son bülten, kur türü, saatlik iş, şimdi çek, elle girilen ezilmez, 100 birimlik kurlar); faturada döviz karşılığı notu (fatura TL, tam dövizli e-fatura yok); widget'ta döviz seçici ve yaklaşık fiyat. **Arayüz çevirisi ana ekranlarda; kalanlar kademeli** |
+| 61 | Webhook & açık API | — | Tamam | Anahtarlı okuma + rezervasyon yazma, imzalı webhook, OpenAPI 3.1 |
 | 62 | Donanım entegrasyonları | **Planlı** | |
 | 63 | Multi-tenant zincir konsolu | **Planlı** | Veri modeli otel kapsamlı; konsol yok |
 | 64–68 | Apart, yurt, devremülk, marina, klinik | **Planlı** | |
@@ -484,6 +595,6 @@ Tamamı **planlı**dır; kod yok. Başlıklar: 69–74 sağlam zemin (göç sihi
 
 ### Özet sayılar
 
-- 1–68 arası: **53 tamam**, **6 kısmi** (9, 38, 42, 49, 53 ve e-posta bağımlılığıyla 32'nin bildirim adımı), **9 planlı** (50, 54, 60–63, 64–68 dikey paketler tek satırda sayılırsa). 58 (KBS) tamam sayılır ama gerçek Emniyet / Jandarma servis bağlantısını bekler.
-- Otelin **günlük operasyonu** (rezervasyon → giriş → folyo → ödeme → çıkış → fatura → muhasebe; restoran → stok → satın alma; kat hizmetleri, teknik servis, anket, spa) uçtan uca çalışır.
-- **Dış dünyaya bağlanan** parçaların bir kısmı taslaktır: e-posta gönderimi, e-belge entegratörü, online kart ödemesi, KBS (gerçek servis bağlantısı; bugün test ortamı, otel resmî ekrandan elle bildirip işaretler). Ekranlar bunu açıkça söyler; "gönderildi" gibi görünen ama gitmeyen hiçbir şey yoktur.
+- 1–68 arası: **57 tamam**, **6 kısmi** (9, 38, 42, 49, 53 ve e-posta bağımlılığıyla 32'nin bildirim adımı), **5 planlı** (62, 63, 64–68 dikey paketler tek satırda sayılırsa). 58 (KBS) tamam sayılır ama gerçek Emniyet / Jandarma servis bağlantısını bekler; 50 (Sanal POS) tamam sayılır ama iyzico sandbox'ında uçtan uca denemeyi ve canlı için üye iş yeri sözleşmesini bekler; 54 (misafir yorumları) tamam sayılır ama yorumları Google / Booking'den otomatik çekmez, elle ya da dosyayla alır ve cevabı platforma göndermez; 60 (çoklu dil & para birimi) tamam sayılır ama arayüzün İngilizcesi şimdilik ana ekranlardadır (menü, giriş, ön büro, rezervasyon, oda planı, folyo, kasa ve kurlar), diğer ekranlar kademeli çevrilecek; fatura dövizle değil TL kesilir, döviz karşılığı not olarak yazılır.
+- Otelin **günlük operasyonu** (rezervasyon → giriş → folyo → ödeme → çıkış → fatura → muhasebe; restoran → stok → satın alma; kat hizmetleri, teknik servis, anket, misafir yorumları, spa) uçtan uca çalışır.
+- **Dış dünyaya bağlanan** parçaların bir kısmı taslaktır: e-posta gönderimi, e-belge entegratörü, online kart ödemesi (iyzico bağlantısı yazıldı ve imzaları resmî test vektörleriyle sınandı, ama sandbox'ta uçtan uca denenmedi; bugün uçtan uca Test ortamı çalışır), KBS (gerçek servis bağlantısı; bugün test ortamı, otel resmî ekrandan elle bildirip işaretler), misafir yorumları (Google / Booking API bağlantısı yok; elle / dosya, cevap elle yayınlanır). Ekranlar bunu açıkça söyler; "gönderildi" gibi görünen ama gitmeyen hiçbir şey yoktur.

@@ -1,5 +1,6 @@
 import { Badge, Button, Icon, Spinner } from '@hotelos/ui';
 import { paymentVoidError } from '@hotelos/hotel-contracts';
+import { useT } from '../../i18n/index.jsx';
 import { formatDate, formatMoney } from '../../lib/format.js';
 import {
   PAYMENT_METHOD_ICONS,
@@ -26,22 +27,23 @@ import {
  * }} props
  */
 export function FolioPayments({ query, currency, onVoid }) {
+  const t = useT();
   const pages = query.data?.pages ?? [];
   const rows = pages.flatMap((page) => page.payments);
   const first = pages[0];
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
-        <h2 className="text-base font-bold text-ink">Ödemeler</h2>
-        {first?.pending > 0 && <Badge tone="warning">{first.pending} onay bekliyor</Badge>}
-        {first?.pendingVoids > 0 && <Badge tone="warning">{first.pendingVoids} iptal onayı bekliyor</Badge>}
+        <h2 className="text-base font-bold text-ink">{t('folio.payments.title')}</h2>
+        {first?.pending > 0 && <Badge tone="warning">{t('folio.payments.pending', { count: first.pending })}</Badge>}
+        {first?.pendingVoids > 0 && <Badge tone="warning">{t('folio.payments.pendingVoids', { count: first.pendingVoids })}</Badge>}
       </div>
       {query.isPending ? (
         <Spinner className="py-2" />
       ) : query.isError ? (
         <p className="text-sm text-sec-strong">{query.error.message}</p>
       ) : rows.length === 0 ? (
-        <p className="text-sm text-ink-muted">Bu folyoya ödeme işlenmemiş.</p>
+        <p className="text-sm text-ink-muted">{t('folio.payments.empty')}</p>
       ) : (
         <ul className="divide-y divide-line rounded-item border border-line text-sm">
           {rows.map((payment) => (
@@ -50,7 +52,7 @@ export function FolioPayments({ query, currency, onVoid }) {
           {query.hasNextPage && (
             <li className="px-4 py-3 text-center">
               <Button size="sm" variant="outline" icon="arrowDown" onClick={() => query.fetchNextPage()} disabled={query.isFetchingNextPage}>
-                {query.isFetchingNextPage ? 'Yükleniyor…' : 'Daha fazla ödeme'}
+                {query.isFetchingNextPage ? t('common.loading') : t('folio.payments.loadMore')}
               </Button>
             </li>
           )}
@@ -62,6 +64,7 @@ export function FolioPayments({ query, currency, onVoid }) {
 
 /** @param {{ payment: any, currency: string, onVoid?: (payment: object) => void }} props */
 function PaymentRow({ payment, currency, onVoid }) {
+  const t = useT();
   const muted = payment.voided || payment.status === 'DECLINED';
   const foreign = payment.currency !== currency;
   const canVoid = onVoid && !paymentVoidError(payment);
@@ -78,15 +81,15 @@ function PaymentRow({ payment, currency, onVoid }) {
           {payment.status !== 'POSTED' && (
             <Badge tone={PAYMENT_STATUS_TONES[payment.status]} className="ml-2">{paymentStatusLabel(payment.status)}</Badge>
           )}
-          {payment.voided && <Badge tone="neutral" className="ml-2">İptal edildi</Badge>}
-          {payment.voidPending && <Badge tone="warning" className="ml-2">İptal onayı bekliyor</Badge>}
+          {payment.voided && <Badge tone="neutral" className="ml-2">{t('folio.payments.voided')}</Badge>}
+          {payment.voidPending && <Badge tone="warning" className="ml-2">{t('folio.payments.voidPending')}</Badge>}
           <span className="mt-0.5 block text-xs text-ink-muted">
             {formatDate(payment.receivedAt)} · {payment.receivedBy}
             {payment.reference ? ` · ${payment.reference}` : ''}
             {payment.note ? ` · ${payment.note}` : ''}
           </span>
           {payment.voided && payment.voidReason && (
-            <span className="block text-xs text-ink-muted">İptal: {payment.voidReason} · {payment.voidedBy}</span>
+            <span className="block text-xs text-ink-muted">{t('folio.payments.voidLine', { reason: payment.voidReason, user: payment.voidedBy })}</span>
           )}
         </span>
       </span>
@@ -102,7 +105,7 @@ function PaymentRow({ payment, currency, onVoid }) {
         </span>
         {canVoid && (
           <Button size="sm" variant="dangerSoft" icon="close" onClick={() => onVoid(payment)}>
-            İptal iste
+            {t('folio.payments.requestVoid')}
           </Button>
         )}
       </span>

@@ -1,28 +1,23 @@
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { CASH_ORIGINS, CASH_ORIGIN_LABELS, CASH_PAGE_SIZE, PAYMENT_KINDS, PAYMENT_METHODS } from '@hotelos/hotel-contracts';
-import { Alert, Badge, Button, Card, EmptyState, Icon, Input, Select, Spinner } from '@hotelos/ui';
+import { CASH_ORIGINS, CASH_PAGE_SIZE, PAYMENT_KINDS, PAYMENT_METHODS } from '@hotelos/hotel-contracts';
+import { Alert, Badge, Button, Card, EmptyState, Icon, Input, Select } from '@hotelos/ui';
+import { MoneyText } from '../../components/MoneyText.jsx';
 import { QueryFallback } from '../../components/QueryFallback.jsx';
 import { Switch } from '../../components/Switch.jsx';
+import { useT } from '../../i18n/index.jsx';
 import { api, withQuery } from '../../lib/api.js';
 import { eventPath } from '../../lib/banquet.js';
 import { folioPath } from '../../lib/folios.js';
 import { formatDate, formatMoney } from '../../lib/format.js';
 import { checkPath } from '../../lib/pos.js';
 import { appointmentPath } from '../../lib/spa.js';
-import {
-  PAYMENT_METHOD_ICONS,
-  absolute,
-  cashKeys,
-  formatRate,
-  kindLabel,
-  methodLabel,
-  sourceLabel,
-} from '../../lib/payments.js';
+import { PAYMENT_METHOD_ICONS, absolute, cashKeys, kindLabel, methodLabel, originLabel } from '../../lib/payments.js';
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 import { CASH_CHANNEL } from '../../lib/socket.js';
 import { useLiveChannel } from '../../lib/useLiveChannel.js';
+import { Movements } from './CashMovements.jsx';
 
 const OFFLINE_REFRESH_MS = 60_000;
 /**
@@ -30,7 +25,6 @@ const OFFLINE_REFRESH_MS = 60_000;
  * toplam sormasın: iki tazeleme arası en az bu kadar.
  */
 const LIVE_MIN_INTERVAL_MS = 3000;
-const timeFormatter = new Intl.DateTimeFormat('tr-TR', { hour: '2-digit', minute: '2-digit' });
 
 /**
  * Günlük kasa (modül 17): seçilen iş gününün işlenen hareketleri yöntem (ve
@@ -39,6 +33,7 @@ const timeFormatter = new Intl.DateTimeFormat('tr-TR', { hour: '2-digit', minute
  * personelin ödemesi canlı yansır.
  */
 export function CashDayTab() {
+  const t = useT();
   const can = useCan();
   const [params, setParams] = useSearchParams();
   const date = params.get('gun') ?? undefined;
@@ -76,14 +71,14 @@ export function CashDayTab() {
     getNextPageParam: (last) => last.nextCursor ?? undefined,
   });
 
-  if (!summary.data) return <QueryFallback query={summary} errorTitle="Kasa yüklenemedi" />;
+  if (!summary.data) return <QueryFallback query={summary} errorTitle={t('cash.day.loadFailed')} />;
   const data = summary.data;
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-end gap-3">
         <Input
-          label="İş günü"
+          label={t('cash.day.businessDay')}
           type="date"
           value={data.date}
           max={data.businessDate}
@@ -91,13 +86,13 @@ export function CashDayTab() {
           className="w-44"
         />
         {!data.isToday && (
-          <Button variant="outline" icon="calendar" onClick={() => setParam('gun', '')}>Bugün</Button>
+          <Button variant="outline" icon="calendar" onClick={() => setParam('gun', '')}>{t('common.today')}</Button>
         )}
         <label className="flex items-center gap-2 pb-2 text-sm text-ink-soft">
-          <Switch checked={mine} onChange={(next) => setParam('benim', next ? '1' : '')} label="Yalnızca benim aldıklarım" />
-          Yalnızca benim aldıklarım
+          <Switch checked={mine} onChange={(next) => setParam('benim', next ? '1' : '')} label={t('cash.day.onlyMine')} />
+          {t('cash.day.onlyMine')}
         </label>
-        {data.isToday && <Badge tone={isLive ? 'success' : 'warning'} className="mb-2 ml-auto">{isLive ? 'Canlı' : 'Canlı değil'}</Badge>}
+        {data.isToday && <Badge tone={isLive ? 'success' : 'warning'} className="mb-2 ml-auto">{isLive ? t('common.live') : t('common.notLive')}</Badge>}
       </div>
 
       <MethodTotals data={data} />
@@ -105,28 +100,28 @@ export function CashDayTab() {
 
       <section className="flex flex-col gap-3" aria-labelledby="cash-movements">
         <div className="flex flex-wrap items-end justify-between gap-3">
-          <h2 id="cash-movements" className="text-base font-bold text-ink">Hareketler</h2>
+          <h2 id="cash-movements" className="text-base font-bold text-ink">{t('cash.day.movements')}</h2>
           <div className="flex flex-wrap gap-2">
             <Select
               compact
-              label="Yöntem"
+              label={t('cash.day.method')}
               value={method}
               onChange={(event) => setMethod(event.target.value)}
-              options={[{ value: '', label: 'Bütün yöntemler' }, ...PAYMENT_METHODS.map((value) => ({ value, label: methodLabel(value) }))]}
+              options={[{ value: '', label: t('cash.day.allMethods') }, ...PAYMENT_METHODS.map((value) => ({ value, label: methodLabel(value) }))]}
             />
             <Select
               compact
-              label="Tür"
+              label={t('cash.day.kind')}
               value={kind}
               onChange={(event) => setKind(event.target.value)}
-              options={[{ value: '', label: 'Bütün türler' }, ...PAYMENT_KINDS.map((value) => ({ value, label: kindLabel(value) }))]}
+              options={[{ value: '', label: t('cash.day.allKinds') }, ...PAYMENT_KINDS.map((value) => ({ value, label: kindLabel(value) }))]}
             />
             <Select
               compact
-              label="Kaynak"
+              label={t('cash.day.origin')}
               value={origin}
               onChange={(event) => setOrigin(event.target.value)}
-              options={[{ value: '', label: 'Bütün kaynaklar' }, ...CASH_ORIGINS.map((value) => ({ value, label: CASH_ORIGIN_LABELS[value] }))]}
+              options={[{ value: '', label: t('cash.day.allOrigins') }, ...CASH_ORIGINS.map((value) => ({ value, label: originLabel(value) }))]}
             />
           </div>
         </div>
@@ -141,22 +136,24 @@ export function CashDayTab() {
  * @param {{ data: any }} props
  */
 function MethodTotals({ data }) {
+  const t = useT();
   const { currency, total } = data;
+  const scope = data.mine ? t('cash.day.myDrawer') : t('cash.day.allDrawers');
   return (
-    <Card title={`${formatDate(data.date)}${data.isToday ? ' (bugün)' : ''} · ${data.mine ? 'benim kasam' : 'bütün kasa'}`}>
+    <Card title={data.isToday ? t('cash.day.totalsTitleToday', { date: formatDate(data.date), scope }) : t('cash.day.totalsTitle', { date: formatDate(data.date), scope })}>
       {data.methods.length === 0 ? (
-        <EmptyState icon="wallet" title="Bu gün işlenmiş ödeme yok" description="Ödeme alındıkça burada yöntem bazında toplanır." />
+        <EmptyState icon="wallet" title={t('cash.day.emptyTitle')} description={t('cash.day.emptyDescription')} />
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="border-b border-line text-left text-[0.7rem] uppercase tracking-[0.08em] text-ink-muted">
               <tr>
-                <th scope="col" className="px-3 py-2 font-bold">Yöntem</th>
-                <th scope="col" className="px-3 py-2 text-right font-bold">Adet</th>
-                <th scope="col" className="px-3 py-2 text-right font-bold">Tahsilat</th>
-                <th scope="col" className="px-3 py-2 text-right font-bold">İade</th>
-                <th scope="col" className="px-3 py-2 text-right font-bold">İptal</th>
-                <th scope="col" className="px-3 py-2 text-right font-bold">Net</th>
+                <th scope="col" className="px-3 py-2 font-bold">{t('cash.day.method')}</th>
+                <th scope="col" className="px-3 py-2 text-right font-bold">{t('cash.day.count')}</th>
+                <th scope="col" className="px-3 py-2 text-right font-bold">{t('cash.day.received')}</th>
+                <th scope="col" className="px-3 py-2 text-right font-bold">{t('cash.day.refunded')}</th>
+                <th scope="col" className="px-3 py-2 text-right font-bold">{t('cash.day.voided')}</th>
+                <th scope="col" className="px-3 py-2 text-right font-bold">{t('cash.day.net')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
@@ -179,34 +176,34 @@ function MethodTotals({ data }) {
                   <td className="whitespace-nowrap px-3 py-2.5 text-right align-top tabular-nums">{formatMoney(line.received, currency)}</td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-right align-top tabular-nums text-warning-ink">{Number(line.refunded) ? `−${formatMoney(absolute(line.refunded))}` : '—'}</td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-right align-top tabular-nums text-ink-muted">{Number(line.voided) ? formatMoney(line.voided) : '—'}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-right align-top font-bold tabular-nums">{formatMoney(line.net, currency)}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-right align-top font-bold tabular-nums"><MoneyText value={line.net} currency={currency} block /></td>
                 </tr>
               ))}
             </tbody>
             <tfoot className="border-t-2 border-line">
               <tr>
-                <th scope="row" className="px-3 py-2.5 text-left font-bold">Toplam</th>
+                <th scope="row" className="px-3 py-2.5 text-left font-bold">{t('cash.day.total')}</th>
                 <td />
-                <td className="px-3 py-2.5 text-right font-bold tabular-nums">{formatMoney(total.received, currency)}</td>
+                <td className="px-3 py-2.5 text-right font-bold tabular-nums"><MoneyText value={total.received} currency={currency} block /></td>
                 <td className="px-3 py-2.5 text-right font-bold tabular-nums text-warning-ink">{Number(total.refunded) ? `−${formatMoney(absolute(total.refunded))}` : '—'}</td>
                 <td className="px-3 py-2.5 text-right tabular-nums text-ink-muted">{Number(total.voided) ? formatMoney(total.voided) : '—'}</td>
-                <td className="px-3 py-2.5 text-right text-base font-bold tabular-nums">{formatMoney(total.net, currency)}</td>
+                <td className="px-3 py-2.5 text-right text-base font-bold tabular-nums"><MoneyText value={total.net} currency={currency} block /></td>
               </tr>
             </tfoot>
           </table>
           {data.origins && (Number(data.origins.EVENT) !== 0 || Number(data.origins.POS) !== 0 || Number(data.origins.SPA ?? 0) !== 0) && (
             <p className="mt-2 text-sm text-ink-soft">
-              Kaynak:{' '}
+              {t('cash.day.originPrefix')}{' '}
               {CASH_ORIGINS.map((origin, index) => (
                 <span key={origin}>
                   {index > 0 && ' · '}
-                  {CASH_ORIGIN_LABELS[origin]} <strong className="tabular-nums">{formatMoney(data.origins[origin] ?? '0', currency)}</strong>
+                  {originLabel(origin)} <strong className="tabular-nums">{formatMoney(data.origins[origin] ?? '0', currency)}</strong>
                 </span>
               ))}
             </p>
           )}
           <p className="mt-2 text-xs text-ink-muted">
-            İptal: hatalı girişin düzeltmesi (iptal kaydının günü). Dövizde parantez içi folyoya giren karşılık; nakit dövizi çekmecede kendi para biriminde sayın.
+            {t('cash.day.footnote')}
           </p>
         </div>
       )}
@@ -219,22 +216,22 @@ function MethodTotals({ data }) {
  * @param {{ pending: { count: number, items: any[] }, currency: string, canDecide: boolean }} props
  */
 function PendingPayments({ pending, currency, canDecide }) {
+  const t = useT();
   if (pending.count === 0) return null;
   return (
     <Alert
       tone="warning"
-      title={`Onay bekleyen ${pending.count} ödeme / iade`}
+      title={t('cash.day.pendingTitle', { count: pending.count })}
       action={
         canDecide && (
           <Link to="/onaylar/bekleyen">
-            <Button size="sm" variant="outline" icon="checkCheck">Onaylara git</Button>
+            <Button size="sm" variant="outline" icon="checkCheck">{t('cash.day.goToApprovals')}</Button>
           </Link>
         )
       }
     >
       <span className="block">
-        Onaylanınca bakiyeye ve kasa toplamına girer. Onay bekleyen tahsilatın parası çekmecede ayrı tutulmalı; onay bekleyen iade henüz
-        ödenmemeli.
+        {t('cash.day.pendingHint')}
       </span>
       <ul className="mt-2 flex flex-col gap-1">
         {pending.items.map((row) => (
@@ -244,23 +241,23 @@ function PendingPayments({ pending, currency, canDecide }) {
             <span className="text-ink-muted">· {methodLabel(row.method)}</span>
             {row.stay && (
               <Link className="text-info-ink underline-offset-2 hover:underline" to={folioPath(row.stay.id, row.folioId)}>
-                oda {row.stay.roomNumber ?? '—'} · {row.stay.guestName}
+                {t('cash.day.roomGuest', { room: row.stay.roomNumber ?? '—', guest: row.stay.guestName })}
               </Link>
             )}
             {row.event && (
               <Link className="text-info-ink underline-offset-2 hover:underline" to={eventPath(row.event.id, 'odemeler')}>
-                etkinlik {row.event.code} · {row.event.name}
+                {t('cash.day.eventRef', { code: row.event.code, name: row.event.name })}
               </Link>
             )}
             {row.pos && (
               <Link className="text-info-ink underline-offset-2 hover:underline" to={checkPath(row.pos.id)}>
                 {row.pos.outletName} · {row.pos.number}
-                {row.pos.tableName ? ` · masa ${row.pos.tableName}` : ''}
+                {row.pos.tableName ? ` · ${t('cash.day.table', { table: row.pos.tableName })}` : ''}
               </Link>
             )}
             {row.spa && (
               <Link className="text-info-ink underline-offset-2 hover:underline" to={appointmentPath(row.spa.id)}>
-                spa {row.spa.code} · {row.spa.customerName}
+                {t('cash.day.spaRef', { code: row.spa.code, name: row.spa.customerName })}
               </Link>
             )}
             <span className="text-xs text-ink-muted">
@@ -268,127 +265,8 @@ function PendingPayments({ pending, currency, canDecide }) {
             </span>
           </li>
         ))}
-        {pending.count > pending.items.length && <li className="text-xs text-ink-muted">ve {pending.count - pending.items.length} tane daha</li>}
+        {pending.count > pending.items.length && <li className="text-xs text-ink-muted">{t('cash.day.andMore', { count: pending.count - pending.items.length })}</li>}
       </ul>
     </Alert>
-  );
-}
-
-/**
- * Günün hareketleri (son işlenen önce), "daha fazla" ile.
- * @param {{ query: import('@tanstack/react-query').UseInfiniteQueryResult, currency: string }} props
- */
-function Movements({ query, currency }) {
-  if (query.isPending) return <Spinner className="py-6" />;
-  if (query.isError) {
-    return (
-      <Alert tone="danger" title="Hareketler yüklenemedi" action={<Button size="sm" variant="outline" icon="refresh" onClick={() => query.refetch()}>Tekrar dene</Button>}>
-        {query.error.message}
-      </Alert>
-    );
-  }
-  const rows = query.data.pages.flatMap((page) => page.movements);
-  if (rows.length === 0) return <EmptyState icon="list" title="Hareket yok" description="Seçilen gün ve süzgeçte işlenmiş ödeme yok." />;
-  return (
-    <div className="overflow-hidden rounded-card bg-surface shadow-card">
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="border-b border-line bg-surface-muted text-left text-[0.7rem] uppercase tracking-[0.08em] text-ink-muted">
-            <tr>
-              <th scope="col" className="px-4 py-3 font-bold">Saat</th>
-              <th scope="col" className="px-4 py-3 font-bold">Konaklama / etkinlik / adisyon</th>
-              <th scope="col" className="px-4 py-3 font-bold">Yöntem / tür</th>
-              <th scope="col" className="px-4 py-3 text-right font-bold">Tutar</th>
-              <th scope="col" className="px-4 py-3 font-bold">Referans</th>
-              <th scope="col" className="px-4 py-3 font-bold">Alan</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-line">
-            {rows.map((row) => {
-              const negative = Number(row.folioAmount) < 0;
-              return (
-                <tr key={row.id} className={row.voided ? 'bg-surface-muted' : ''}>
-                  <td className="whitespace-nowrap px-4 py-2.5 align-top tabular-nums">{timeFormatter.format(new Date(row.postedAt))}</td>
-                  <td className="px-4 py-2.5 align-top">
-                    {row.spa ? (
-                      <>
-                        <Link className="font-semibold text-info-ink underline-offset-2 hover:underline" to={appointmentPath(row.spa.id)}>
-                          {row.spa.customerName}
-                        </Link>
-                        <span className="block text-xs text-ink-muted">
-                          {CASH_ORIGIN_LABELS.SPA} · {row.spa.code} · {row.spa.serviceName}
-                        </span>
-                      </>
-                    ) : row.pos ? (
-                      <>
-                        <Link className="font-semibold text-info-ink underline-offset-2 hover:underline" to={checkPath(row.pos.id)}>
-                          {row.pos.outletName}
-                          {row.pos.tableName ? ` · masa ${row.pos.tableName}` : ''}
-                        </Link>
-                        <span className="block text-xs text-ink-muted">
-                          {CASH_ORIGIN_LABELS.POS} · {row.pos.number}
-                        </span>
-                      </>
-                    ) : row.event ? (
-                      <>
-                        <Link className="font-semibold text-info-ink underline-offset-2 hover:underline" to={eventPath(row.event.id, 'odemeler')}>
-                          {row.event.name}
-                        </Link>
-                        <span className="block text-xs text-ink-muted">
-                          {CASH_ORIGIN_LABELS.EVENT} · {row.event.code}
-                          {row.event.clientName ? ` · ${row.event.clientName}` : ''}
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        {row.stay ? (
-                          <Link className="font-semibold text-info-ink underline-offset-2 hover:underline" to={folioPath(row.stay.id, row.folioId)}>
-                            oda {row.stay.roomNumber ?? '—'} · {row.stay.guestName}
-                          </Link>
-                        ) : (
-                          '—'
-                        )}
-                        <span className="block text-xs text-ink-muted">
-                          {row.stay?.confirmationCode} · {row.folioName}
-                        </span>
-                      </>
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5 align-top">
-                    <span className="flex items-center gap-1.5">
-                      <Icon name={PAYMENT_METHOD_ICONS[row.method]} className="size-4 text-ink-muted" />
-                      {methodLabel(row.method)}
-                    </span>
-                    <span className="block text-xs text-ink-muted">
-                      {kindLabel(row.kind)}
-                      {row.kind === 'PAYMENT' && row.source && row.source !== 'DESK' ? ` · ${sourceLabel(row.source)}` : ''}
-                      {row.voided ? ' · iptal edildi' : ''}
-                    </span>
-                  </td>
-                  <td className={`whitespace-nowrap px-4 py-2.5 text-right align-top font-bold tabular-nums ${negative ? 'text-warning-ink' : ''} ${row.voided ? 'line-through' : ''}`}>
-                    {negative ? '−' : ''}
-                    {formatMoney(absolute(row.folioAmount), currency)}
-                    {row.currency !== currency && (
-                      <span className="block text-xs font-normal text-ink-muted">
-                        {formatMoney(absolute(row.amount), row.currency)} × {formatRate(row.exchangeRate)}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5 align-top text-xs text-ink-soft">{row.reference ?? '—'}</td>
-                  <td className="px-4 py-2.5 align-top text-xs text-ink-soft">{row.receivedBy}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      {query.hasNextPage && (
-        <div className="border-t border-line px-4 py-3 text-center">
-          <Button size="sm" variant="outline" icon="arrowDown" onClick={() => query.fetchNextPage()} disabled={query.isFetchingNextPage}>
-            {query.isFetchingNextPage ? 'Yükleniyor…' : 'Daha fazla hareket'}
-          </Button>
-        </div>
-      )}
-    </div>
   );
 }

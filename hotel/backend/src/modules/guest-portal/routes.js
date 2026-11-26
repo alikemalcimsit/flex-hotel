@@ -22,6 +22,7 @@ import * as documents from './documents.js';
 import * as invites from './invites.js';
 import * as links from './links.js';
 import * as guest from './public.js';
+import { portalPayment } from '../payment-gateway/integrations.js';
 import * as service from './service.js';
 
 /**
@@ -109,4 +110,6 @@ export async function publicGuestPortalRoutes(app) {
     reply.status(201).send(ok(await guest.createPortalRequest(req.params.token, req.body))),
   );
   app.post('/:token/room-service', { ...limited(GUEST_LIMITS.write), schema: params }, async (req) => ok(await guest.portalRoomService(req.params.token)));
+  // Sanal POS (50): açık bakiye için ödeme sayfası.
+  app.post('/:token/pay', { ...limited(GUEST_LIMITS.write), schema: params }, async (req) => ok(await portalPayment(req.params.token)));
 }
