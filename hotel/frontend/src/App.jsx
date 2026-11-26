@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { Spinner } from '@hotelos/ui';
 import { useAuthStore } from './store/auth.js';
+import { useT } from './i18n/index.jsx';
 import { AppLayout } from './layout/AppLayout.jsx';
 import { ToastHost } from './components/ToastHost.jsx';
 import { LoginPage } from './pages/LoginPage.jsx';
@@ -358,11 +359,12 @@ function RequireTaskScope({ children }) {
 }
 
 export default function App() {
+  const t = useT();
   return (
     <>
       {/* Sayfa parçası inerken kısa bir bekleme göstergesi; yerel ağda göz
           kırpması kadar sürer ama boş ekran bırakmaz. */}
-      <Suspense fallback={<Spinner label="Sayfa yükleniyor…" className="py-20" />}>
+      <Suspense fallback={<Spinner label={t('common.pageLoading')} className="py-20" />}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route

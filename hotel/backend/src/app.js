@@ -73,6 +73,7 @@ import { registerFolioSubscribers } from './modules/folios/subscribers.js';
 import { housekeepingRoutes } from './modules/housekeeping/routes.js';
 import { registerHousekeepingSubscribers } from './modules/housekeeping/subscribers.js';
 import { exchangeRateRoutes, paymentRoutes } from './modules/payments/routes.js';
+import { exchangeRateSettingsRoutes } from './modules/exchange-rates/routes.js';
 import { extrasRoutes } from './modules/extras/routes.js';
 import { lostItemRoutes } from './modules/lost-items/routes.js';
 import { reportRoutes } from './modules/reports/routes.js';
@@ -398,6 +399,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   await app.register(folioRoutes, { prefix: '/folios' });
   await app.register(paymentRoutes, { prefix: '/payments' });
   await app.register(exchangeRateRoutes, { prefix: '/exchange-rates' });
+  await app.register(exchangeRateSettingsRoutes, { prefix: '/exchange-rates' });
   await app.register(extrasRoutes, { prefix: '/extras' });
   await app.register(housekeepingRoutes, { prefix: '/housekeeping' });
   await app.register(lostItemRoutes, { prefix: '/lost-items' });

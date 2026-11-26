@@ -20,11 +20,13 @@ const MANUAL_TASK_PERMISSIONS = Object.freeze([
  * `roles` dolu olan girdiler yalnızca o rollere, `permission` taşıyanlar
  * yalnızca o izne, `anyPermission` taşıyanlar bu izinlerden en az birine sahip
  * kullanıcılara gösterilir (alt sayfalar da kendi izniyle süzülür). İzinler giriş yapan kullanıcının oturumundan gelir (modül 2).
- * `badge` yan menüde sayı rozeti gösterilecek maddeyi işaretler.
+ * `badge` yan menüde sayı rozeti gösterilecek maddeyi işaretler. Bölümün `id`'si çeviri anahtarıdır (`nav.section.<id>`);
+ * etiketler Türkçe kalır, İngilizcesi `src/i18n/en/nav.js`'te yola göre (modül 60).
  * Not: bu görsel bir kısıt; gerçek yetki kontrolü sunucuda.
  */
 export const NAV_SECTIONS = Object.freeze([
   {
+    id: 'general',
     title: 'Genel',
     items: [
       { label: 'Panel', to: '/', icon: 'dashboard', end: true },
@@ -35,6 +37,7 @@ export const NAV_SECTIONS = Object.freeze([
     ],
   },
   {
+    id: 'frontOffice',
     title: 'Ön büro',
     // Odalar ön büro işi: resepsiyon ve kat hizmetleri de görmeli, yalnızca admin değil.
     items: [
@@ -401,6 +404,7 @@ export const NAV_SECTIONS = Object.freeze([
     ],
   },
   {
+    id: 'admin',
     title: 'Yönetim',
     items: [
       {
@@ -557,7 +561,7 @@ function isUnder(pathname, to) {
  * için. Kök (`/`) yalnızca tam eşleşir, yoksa her adresin sahibi olurdu.
  *
  * @param {string} pathname
- * @returns {{ section: string, item: object, child: object | null } | null}
+ * @returns {{ section: { id: string, title: string }, item: object, child: object | null } | null}
  */
 export function findLocation(pathname) {
   for (const section of NAV_SECTIONS) {
@@ -565,7 +569,7 @@ export function findLocation(pathname) {
       const matches = item.end ? pathname === item.to : isUnder(pathname, item.to);
       if (!matches) continue;
       const child = (item.children ?? []).find((entry) => isUnder(pathname, entry.to)) ?? null;
-      return { section: section.title, item, child };
+      return { section, item, child };
     }
   }
   return null;

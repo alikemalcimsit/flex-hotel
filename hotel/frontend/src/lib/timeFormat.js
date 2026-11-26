@@ -6,6 +6,9 @@
  * yüzden bütün biçimlendiriciler saat dilimini açıkça alır.
  */
 
+import { getIntlLocale } from '../i18n/current.js';
+import { tNow } from '../i18n/translate.js';
+
 const MINUTE_MS = 60_000;
 const MINUTES_PER_HOUR = 60;
 const MINUTES_PER_DAY = 24 * MINUTES_PER_HOUR;
@@ -57,14 +60,14 @@ function dayDiff(a, b) {
 /** "14:05" */
 export function formatClock(value, timeZone) {
   const date = toDate(value);
-  return date ? formatter('tr-TR', { timeZone, hour: '2-digit', minute: '2-digit' }).format(date) : '—';
+  return date ? formatter(getIntlLocale(), { timeZone, hour: '2-digit', minute: '2-digit' }).format(date) : '—';
 }
 
 /** "17 Eyl 2026 14:05" */
 export function formatDateTime(value, timeZone) {
   const date = toDate(value);
   if (!date) return '—';
-  return formatter('tr-TR', {
+  return formatter(getIntlLocale(), {
     timeZone,
     day: 'numeric',
     month: 'short',
@@ -87,9 +90,9 @@ export function formatListTime(value, now, timeZone) {
   if (!date) return '';
   const diff = dayDiff(dayKey(date, timeZone), dayKey(now, timeZone));
   if (diff <= 0) return formatClock(date, timeZone);
-  if (diff === 1) return 'Dün';
-  if (diff <= WEEKDAY_RANGE_DAYS) return formatter('tr-TR', { timeZone, weekday: 'short' }).format(date);
-  return formatter('tr-TR', { timeZone, day: 'numeric', month: 'short' }).format(date);
+  if (diff === 1) return tNow('common.yesterday');
+  if (diff <= WEEKDAY_RANGE_DAYS) return formatter(getIntlLocale(), { timeZone, weekday: 'short' }).format(date);
+  return formatter(getIntlLocale(), { timeZone, day: 'numeric', month: 'short' }).format(date);
 }
 
 /**
@@ -105,10 +108,10 @@ export function formatDayHeading(value, now, timeZone) {
   const day = dayKey(date, timeZone);
   const today = dayKey(now, timeZone);
   const diff = dayDiff(day, today);
-  if (diff === 0) return 'Bugün';
-  if (diff === 1) return 'Dün';
+  if (diff === 0) return tNow('common.today');
+  if (diff === 1) return tNow('common.yesterday');
   const sameYear = day.slice(0, 4) === today.slice(0, 4);
-  return formatter('tr-TR', {
+  return formatter(getIntlLocale(), {
     timeZone,
     day: 'numeric',
     month: 'long',
@@ -129,10 +132,10 @@ export function formatScheduled(value, now, timeZone) {
   if (!date) return '—';
   const diff = dayDiff(dayKey(now, timeZone), dayKey(date, timeZone));
   const clock = formatClock(date, timeZone);
-  if (diff === 0) return `Bugün ${clock}`;
-  if (diff === 1) return `Yarın ${clock}`;
-  if (diff === -1) return `Dün ${clock}`;
-  return `${formatter('tr-TR', { timeZone, day: 'numeric', month: 'short' }).format(date)} ${clock}`;
+  if (diff === 0) return `${tNow('common.today')} ${clock}`;
+  if (diff === 1) return `${tNow('common.tomorrow')} ${clock}`;
+  if (diff === -1) return `${tNow('common.yesterday')} ${clock}`;
+  return `${formatter(getIntlLocale(), { timeZone, day: 'numeric', month: 'short' }).format(date)} ${clock}`;
 }
 
 /**

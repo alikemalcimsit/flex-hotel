@@ -1,6 +1,7 @@
 import { loginSchema, refreshSchema } from '@hotelos/hotel-contracts';
 import { requireAuth } from '../../lib/permissions.js';
 import { resolveEffectivePermissions } from '../roles/service.js';
+import { userPreferencesSchema } from '@hotelos/hotel-contracts';
 import * as service from './service.js';
 
 /**
@@ -54,4 +55,10 @@ export async function authRoutes(app) {
     const user = await service.findSessionUser(request.auth.hotelId, request.auth.userId);
     return { success: true, data: { user: service.toUserDto(user), permissions: request.auth.permissions } };
   });
+
+  // Arayüz dili ve gösterim para birimi (modül 60): kullanıcının kendi tercihi.
+  app.patch('/me/preferences', { preValidation: [requireAuth], schema: { body: userPreferencesSchema } }, async (request) => ({
+    success: true,
+    data: { user: await service.updatePreferences(request.auth.hotelId, request.auth.userId, request.body) },
+  }));
 }

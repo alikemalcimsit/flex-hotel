@@ -208,3 +208,4 @@ export {
 } from './users.js';
 export { matrixUpdateSchema } from './roles.js';
 export * from './reviews.js';
+export * from './currency.js';

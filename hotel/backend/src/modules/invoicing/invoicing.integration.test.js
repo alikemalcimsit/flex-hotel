@@ -457,6 +457,30 @@ describe('fatura ve e-belge (entegrasyon)', { skip }, () => {
       assert.equal(core.toIsoDay(reversal.date), core.toIsoDay(entry.date), 'fatura tarihli');
     });
 
+    it('döviz karşılığı (modül 60): fatura TL kalır, kesimde son kurla karşılık notu; kur yoksa kesilmez', async () => {
+      const created = await as(ACCOUNTING, () =>
+        invoices.createDraft(hotelId, contracts.invoiceDraftCreateSchema.parse({ source: 'MANUAL', ledgerAccountId: company.account.id, lines: [{ description: 'Toplantı salonu kirası', quantity: '1', unitAmount: '12000', taxCategory: 'OTHER' }] })),
+      );
+      const setForeign = async (currency) => {
+        const current = await detail(created.invoiceId);
+        await as(ACCOUNTING, () => invoices.updateDraft(hotelId, created.invoiceId, contracts.invoiceDraftUpdateSchema.parse({ expectedUpdatedAt: current.invoice.updatedAt, buyer: { ...current.invoice.buyer, ...ADDRESS }, foreignCurrency: currency })));
+      };
+      await setForeign('GBP');
+      let fresh = await detail(created.invoiceId);
+      assert.deepEqual(fresh.invoice.foreign, { currency: 'GBP', rate: null, total: null, rateDate: null });
+      await rejectsWith(as(ACCOUNTING, () => invoices.issueInvoice(hotelId, created.invoiceId, { expectedUpdatedAt: fresh.invoice.updatedAt })), 'FOREIGN_RATE_MISSING');
+      await as(MANAGER, () => payments.setTodayRates(hotelId, { rates: [{ currency: 'EUR', rate: '50.6441' }] }));
+      await setForeign('EUR');
+      fresh = await detail(created.invoiceId);
+      const issued = await as(ACCOUNTING, () => invoices.issueInvoice(hotelId, created.invoiceId, { expectedUpdatedAt: fresh.invoice.updatedAt }));
+      dispatcher.stopEdocDispatcher();
+      assert.equal(issued.invoice.total, '12000.00', 'fatura TL');
+      assert.deepEqual([issued.invoice.foreign.currency, issued.invoice.foreign.total, issued.invoice.foreign.rate], ['EUR', '236.95', '50.6441']);
+      const document = await db.invoiceDocument.findUnique({ where: { invoiceId: created.invoiceId } });
+      assert.match(document.xml, /Döviz karşılığı: 236,95 EUR \(1 EUR = 50,6441 TL, otel kuru/);
+      assert.match(document.xml, /<cbc:DocumentCurrencyCode>TRY<\/cbc:DocumentCurrencyCode>/);
+    });
+
     it('şahıs carisine fatura: alıcı kişi (ad soyad ayrılır, TC kimlik no karttan), şirket değil', async () => {
       const person = await as(ACCOUNTING, () => accounts.createAccount(hotelId, contracts.ledgerAccountCreateSchema.parse({ type: 'PERSON', name: 'Elif Nur Yılmaz', taxNumber: TC, paymentTermDays: 0 })));
       const created = await as(ACCOUNTING, () =>

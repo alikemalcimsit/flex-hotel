@@ -25,7 +25,7 @@ const DUMMY_PASSWORD_HASH = bcrypt.hashSync('dummy-password-never-matches', 10);
 
 /** Girişte/`/me`'de dönen kullanıcı görünümü — parola hash'i asla sızmaz. */
 export function toUserDto(user) {
-  return { id: user.id, email: user.email, name: user.name, role: user.role, isActive: user.isActive };
+  return { id: user.id, email: user.email, name: user.name, role: user.role, isActive: user.isActive, locale: user.locale ?? 'tr', displayCurrency: user.displayCurrency ?? null };
 }
 
 function newRefreshTokenValue() {
@@ -104,4 +104,18 @@ export async function rotateRefreshToken(oldToken) {
  */
 export async function revokeRefreshToken(token) {
   await prisma.refreshToken.updateMany({ where: { token }, data: { deletedAt: new Date() } });
+}
+
+/**
+ * Kullanıcının arayüz dili ve gösterim para birimi (modül 60). Kendi kaydı; izin gerekmez.
+ * @param {string} hotelId @param {string} userId @param {{ locale?: string, displayCurrency?: string | null }} input
+ */
+export async function updatePreferences(hotelId, userId, input) {
+  const data = {
+    ...(input.locale ? { locale: input.locale } : {}),
+    ...(input.displayCurrency !== undefined ? { displayCurrency: input.displayCurrency ?? null } : {}),
+  };
+  const { count } = await prisma.user.updateMany({ where: { id: userId, hotelId, isActive: true }, data });
+  if (!count) throw new UnauthorizedError();
+  return toUserDto(await findSessionUser(hotelId, userId));
 }

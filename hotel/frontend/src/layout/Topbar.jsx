@@ -2,6 +2,8 @@ import { forwardRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Icon } from '@hotelos/ui';
 import { AlertBell } from './AlertBell.jsx';
+import { useT } from '../i18n/index.jsx';
+import { useNavText } from '../i18n/useNavText.js';
 import { findLocation } from './navigation.js';
 import { UserMenu } from './UserMenu.jsx';
 import { useFullscreen } from './useFullscreen.js';
@@ -41,6 +43,7 @@ const ICON_BUTTON =
  * @param {{ approvals: { count: number, urgent: boolean, label: string } | null }} props
  */
 function ApprovalCounter({ approvals }) {
+  const t = useT();
   if (!approvals || approvals.count <= 0) return null;
   const tone = approvals.urgent
     ? 'border-sec/40 bg-danger-soft text-sec-strong hover:bg-danger-soft/80'
@@ -54,7 +57,7 @@ function ApprovalCounter({ approvals }) {
     >
       <Icon name="checkCheck" className="size-[18px]" />
       <span>{approvals.count}</span>
-      <span className="hidden sm:inline">onay</span>
+      <span className="hidden sm:inline">{t('layout.topbar.approvals')}</span>
     </Link>
   );
 }
@@ -67,8 +70,10 @@ export const Topbar = forwardRef(function Topbar(
   const location = findLocation(pathname);
   const fullscreen = useFullscreen();
 
+  const t = useT();
+  const nav = useNavText();
   const crumbs = location
-    ? [location.section, location.item.label, location.child?.label].filter(Boolean)
+    ? [nav.section(location.section), nav.item(location.item), location.child ? nav.child(location.child, location.item) : null].filter(Boolean)
     : [];
 
   return (
@@ -78,7 +83,7 @@ export const Topbar = forwardRef(function Topbar(
           ref={menuButtonRef}
           type="button"
           onClick={onOpenMobileNav}
-          aria-label="Menüyü aç"
+          aria-label={t('layout.topbar.openMenu')}
           aria-controls="app-sidebar"
           aria-expanded={isMobileNavOpen}
           className={`${ICON_BUTTON} inline-flex xl:hidden`}
@@ -88,8 +93,8 @@ export const Topbar = forwardRef(function Topbar(
         <button
           type="button"
           onClick={onToggleSidebar}
-          aria-label={isSidebarCollapsed ? 'Menüyü genişlet' : 'Menüyü daralt'}
-          title={isSidebarCollapsed ? 'Menüyü genişlet' : 'Menüyü daralt'}
+          aria-label={isSidebarCollapsed ? t('layout.topbar.expandMenu') : t('layout.topbar.collapseMenu')}
+          title={isSidebarCollapsed ? t('layout.topbar.expandMenu') : t('layout.topbar.collapseMenu')}
           aria-controls="app-sidebar"
           aria-expanded={!isSidebarCollapsed}
           className={`${ICON_BUTTON} hidden xl:inline-flex`}
@@ -98,7 +103,7 @@ export const Topbar = forwardRef(function Topbar(
         </button>
 
         {crumbs.length > 0 && (
-          <nav aria-label="Konum" className="min-w-0">
+          <nav aria-label={t('layout.topbar.breadcrumb')} className="min-w-0">
             <ol className="flex items-center gap-2 text-sm">
               {crumbs.map((crumb, index) => {
                 const isLast = index === crumbs.length - 1;
@@ -126,14 +131,14 @@ export const Topbar = forwardRef(function Topbar(
             type="button"
             onClick={fullscreen.toggle}
             aria-pressed={fullscreen.isFullscreen}
-            aria-label="Tam ekran"
-            title={fullscreen.isFullscreen ? 'Tam ekrandan çık' : 'Tam ekran'}
+            aria-label={t('layout.topbar.fullscreen')}
+            title={fullscreen.isFullscreen ? t('layout.topbar.exitFullscreen') : t('layout.topbar.fullscreen')}
             className={`${ICON_BUTTON} hidden sm:inline-flex`}
           >
             <Icon name={fullscreen.isFullscreen ? 'minimize' : 'maximize'} className="size-[18px]" />
           </button>
         )}
-        <UserMenu name={user?.name ?? user?.email ?? 'Kullanıcı'} email={user?.email} roleLabel={roleLabel} onLogout={onLogout} />
+        <UserMenu name={user?.name ?? user?.email ?? t('layout.userMenu.fallbackName')} email={user?.email} roleLabel={roleLabel} onLogout={onLogout} />
       </div>
     </header>
   );

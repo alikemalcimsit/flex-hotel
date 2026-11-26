@@ -61,6 +61,46 @@ Giriş yaptığınızda sistem size bir **oturum anahtarı** (JWT) verir; panel 
 
 Demo otelin kodu `DEMO`'dur; oda tipleri, odalar, sezonlar, vergiler, örnek rezervasyonlar ve 16 hazır bildirim şablonu yüklüdür. Canlı bir otelde bu hesapları silip kendi kullanıcılarınızı açın; şifreler en az 8 karakter olmalıdır.
 
+## Dil ve gösterim para birimi
+
+Her kullanıcı iki tercihi kendisi seçer: **arayüz dili** (Türkçe / English) ve **gösterim para birimi**. İkisi de kullanıcıya kayıtlıdır (bu cihaza değil); başka bilgisayardan girdiğinizde de aynı dil ve para birimiyle açılır. Otelin ayarlarını, kayıtları ve başka kullanıcıların ekranını değiştirmez.
+
+### Nereden değiştirilir
+
+- **Kullanıcı menüsü** (sağ üstte adınız): **Arayüz dili** ve **Gösterim para birimi** seçicileri. Seçtiğiniz anda geçerli olur: sayfa yeniden yüklenmez, ekran yeni dilde yeniden çizilir (yüklü veriler korunur; açık bir formda kaydetmediğiniz yazı kaybolabilir, önce kaydedin). Kaydedilemezse "Tercih kaydedilemedi: …" uyarısı çıkar.
+- **Giriş ekranı:** üstte **Türkçe / English** düğmeleri. Giriş yapmadan dili değiştirir; düğmeye bastıktan sonra giriş yaparsanız seçim hesabınıza da yazılır. Basmadan giriş yaparsanız hesabınızda kayıtlı dil geçerli olur.
+
+**Hangi dil açılır:** önce hesabınızda kayıtlı dil; giriş yapılmamışsa bu cihazda giriş ekranında seçilen dil; o da yoksa tarayıcının dili (İngilizce tarayıcı → English); hiçbiri uymuyorsa Türkçe. Yeni açılan her kullanıcının dili Türkçe başlar.
+
+### Hangi ekranlar İngilizce
+
+Arayüzün İngilizcesi bugün şu ekranlarda var: **menü** (yan menüdeki bütün maddeler ve bölüm başlıkları), **giriş ekranı**, **üst çubuk ve kullanıcı menüsü**, **ön büro** (Gelecekler / Gidecekler / İçeridekiler, giriş ve çıkış pencereleri), **rezervasyonlar**, **oda planı ve odalar**, **folyo**, **kasa ve döviz kurları** (TCMB ayarı dahil) ve **fatura taslağındaki döviz karşılığı alanı**. Diğer ekranlar şimdilik English seçilse de **Türkçe görünür**; parça parça taşınacaklardır. Bir ekranda İngilizcesi henüz yazılmamış tek bir metin varsa o metin Türkçe çıkar, ekran bozulmaz.
+
+Dil seçimi yalnız **personel panelini** etkiler. Misafire giden e-posta / SMS'in dili misafirin uyruğundan seçilir (Yönetim → Bildirimler → Şablonlar); misafir portalı ve web rezervasyon widget'ı misafirin kendi tarayıcı dilinden açılır. Fatura PDF'i ve e-belge Türkçedir.
+
+### Tarih ve sayı biçimi
+
+Dil tarih ve sayı biçimini de değiştirir:
+
+| | Türkçe | English |
+| --- | --- | --- |
+| Tutar | 12.000,00 TRY | 12,000.00 TRY |
+| Tarih | 25 Kas 2026 | 25 Nov 2026 |
+| Tarih ve saat | 25 Kas 2026 14:05 | 25 Nov 2026, 14:05 |
+| Oran | %10 | 10% |
+
+Biçim yalnız görünüştür; kayıtlar ve hesaplar değişmez.
+
+### Gösterim para birimi
+
+Gösterim para birimi seçiliyse (USD, EUR, GBP, CHF, RUB, JPY, SAR, AZN, CNY, DKK, SEK, NOK) otelin para birimindeki tutarların yanında küçük ve soluk bir **yaklaşık karşılık** görünür: **"2.480,00 TRY ≈ 48,97 EUR"**. Karşılık güncel kurla (Kasa → Döviz kurları) hesaplanır; üzerine gelince hangi kurla hesaplandığı yazar ("Yaklaşık karşılık: 1 EUR = 50,6441 TRY (26 Kas 2026)"). Varsayılan "Yalnız otelin para birimi"dir, yani karşılık gösterilmez.
+
+- **Kayıtlar otelin para biriminde kalır.** Folyo, ödeme, kasa, fatura, rapor hep TL'dir; gösterim para birimi yalnız göz kolaylığıdır. Misafire "yaklaşık" diye söyleyin; ödeme alırken döviz ve kur ödeme penceresinde ayrıca seçilir (Folyo, kasa → Ödemeler → Döviz).
+- Karşılık bugün **folyo**, **rezervasyon ayrıntısı** ve **kasa** ekranlarındaki tutarlarda görünür.
+- Karşılık şu durumlarda **sessizce görünmez** (tutarın kendisi her zaman görünür): seçtiğiniz dövizin kuru hiç girilmemiş ya da 3 günden eski; kurları okuma izniniz yok (kasa görüntüleme, ödeme alma, iade ya da kur yönetimi izinlerinden biri gerekir); tutar zaten başka bir dövizde (ör. 200 EUR'luk döviz ödemesi çevrilmez).
+
+**Örnek:** Elif kullanıcı menüsünden Arayüz dili **English**, Gösterim para birimi **EUR** seçti. Menü "Front office", "Reservations", "Cash desk" olarak değişti; folyoda bakiye "2,480.00 TRY ≈ 48.97 EUR" göründü (günün EUR kuru 50,6441). Menüde "Reports" yazdı ama Raporlar ekranının içi Türkçe kaldı (henüz çevrilmedi). Elif ertesi gün başka bir bilgisayardan girdi; panel yine İngilizce ve EUR karşılıklı açıldı.
+
 ## Roller ve yetkiler
 
 FlexHotel'de iki katman vardır: **rol** ve **izin**.
@@ -335,7 +375,7 @@ Otelin "bugün"ü takvimden değil **gün kapanışından** okunur. Gece görevl
 
 ### Para ve vergi
 
-Bütün tutarlar otelin **tek para biriminde** tutulur. Döviz ödemeleri günlük kurla çevrilir (Kasa → Döviz kurları). Vergiler ayarda "fiyata dahil" ya da "hariç" olarak tanımlanır; raporlardaki gelir, ADR ve RevPAR **vergiler hariç** hesaplanır. Rezervasyon ve folyo kalemlerindeki vergi dökümü aynı formülü kullanır; iki ekran arasında fark görmezsiniz.
+Bütün tutarlar otelin **tek para biriminde** tutulur. Döviz ödemeleri günlük kurla çevrilir (Kasa → Döviz kurları; kur elle girilir ya da TCMB'den otomatik çekilir). Kullanıcı menüsündeki **gösterim para birimi** tutarların yanına yalnız yaklaşık karşılık ekler, kaydı değiştirmez (yukarıda "Dil ve gösterim para birimi"). Vergiler ayarda "fiyata dahil" ya da "hariç" olarak tanımlanır; raporlardaki gelir, ADR ve RevPAR **vergiler hariç** hesaplanır. Rezervasyon ve folyo kalemlerindeki vergi dökümü aynı formülü kullanır; iki ekran arasında fark görmezsiniz.
 
 **Örnek:** Oda fiyatı 2.000 TL, KDV %10 ve konaklama vergisi %2 "fiyata dahil". Rezervasyon ekranındaki vergi dökümü net 1.785,71 + KDV 178,57 + konaklama vergisi 35,71 = 2.000,00 gösterir. Gelir raporunda o gecenin "oda geliri" 1.785,71'dir; misafirin ödediği 2.000'dir. Bir Alman misafir 100 € nakit ödedi; Kasa → Döviz kurları'ndaki günün kuruyla (ör. 38,20) 3.820,00 TL olarak kasaya işlendi; raporlar hep TL'dir.
 

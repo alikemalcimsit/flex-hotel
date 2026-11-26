@@ -266,12 +266,12 @@ const stayLabel = (stay) => `${stay.confirmationCode} · oda ${stay.room?.number
 async function latestRates(client, hotelId, businessDate, currencies) {
   // Otel × döviz × gün tekil index'i: döviz başına en son gün tek adımda.
   const rows = await client.$queryRaw`
-    SELECT DISTINCT ON (r."currency") r."currency", r."rate"::text AS "rate", r."date", r."enteredBy", r."updatedAt"
+    SELECT DISTINCT ON (r."currency") r."currency", r."rate"::text AS "rate", r."date", r."enteredBy", r."updatedAt", r."source"::text AS "source", r."bulletinDate"
     FROM "ExchangeRate" r
     WHERE r."hotelId" = ${hotelId} AND r."date" <= ${businessDate}::date
       ${currencies ? Prisma.sql`AND r."currency" = ANY(${currencies}::text[])` : Prisma.empty}
     ORDER BY r."currency", r."date" DESC`;
-  return new Map(rows.map((row) => [row.currency, { rate: row.rate, date: toIsoDay(row.date), enteredBy: row.enteredBy, updatedAt: row.updatedAt }]));
+  return new Map(rows.map((row) => [row.currency, { rate: row.rate, date: toIsoDay(row.date), enteredBy: row.enteredBy, updatedAt: row.updatedAt, source: row.source, bulletinDate: row.bulletinDate ? toIsoDay(row.bulletinDate) : null }]));
 }
 
 /**
@@ -297,9 +297,25 @@ export async function getCurrentRates(hotelId) {
           problem: resolved.error,
           enteredBy: row.enteredBy,
           updatedAt: iso(row.updatedAt),
+          source: row.source,
+          bulletinDate: row.bulletinDate,
         };
       }),
   };
+}
+
+/**
+ * Bir dövizin iş gününe kadar girilmiş son kuru (fatura döviz karşılığı, gösterim; modül 60). Yoksa null.
+ * @param {string} hotelId @param {string} currency @param {string} [day] "YYYY-AA-GG"; boşsa iş günü
+ */
+export async function latestRateFor(hotelId, currency, day) {
+  const businessDate = day ?? (await businessDay(hotelId));
+  return (await latestRates(prisma, hotelId, businessDate, [currency])).get(currency) ?? null;
+}
+
+/** Bütün dövizlerin son kurları (gösterim / widget; modül 60). @param {string} hotelId */
+export async function latestRateMap(hotelId) {
+  return latestRates(prisma, hotelId, await businessDay(hotelId));
 }
 
 /**
@@ -321,17 +337,19 @@ export async function setTodayRates(hotelId, { rates }) {
     await writeWithEvents(async (tx, stage) => {
       const before = await tx.exchangeRate.findMany({
         where: { hotelId, date, currency: { in: rates.map((row) => row.currency) } },
-        select: { id: true, currency: true, rate: true },
+        select: { id: true, currency: true, rate: true, source: true },
       });
       const previous = new Map(before.map((row) => [row.currency, row]));
       const changed = [];
       for (const row of rates) {
         const old = previous.get(row.currency);
-        if (old && sameRate(String(old.rate), row.rate)) continue;
+        // Aynı değer: TCMB'den geldiyse elle onaylanmış sayılır (sonraki çekme ezmesin), elle girilmişse dokunulmaz.
+        if (old && sameRate(String(old.rate), row.rate) && old.source !== 'TCMB') continue;
         const saved = await tx.exchangeRate.upsert({
           where: { hotelId_currency_date: { hotelId, currency: row.currency, date } },
           create: { hotelId, currency: row.currency, date, rate: row.rate, enteredBy: actor },
-          update: { rate: row.rate, enteredBy: actor },
+          // Elle girilen kur TCMB'ninkinin yerine geçer ve sonraki çekmede ezilmez (modül 60).
+          update: { rate: row.rate, enteredBy: actor, source: 'MANUAL', bulletinDate: null },
           select: { id: true },
         });
         await recordAudit(tx, {
@@ -361,7 +379,7 @@ export async function listRateHistory(hotelId, query) {
   const cursor = parseCursor(query.cursor);
   const rows = await prisma.exchangeRate.findMany({
     where: { hotelId, ...(query.currency ? { currency: query.currency } : {}), ...(cursor ? olderThan('date', cursor) : {}) },
-    select: { id: true, currency: true, date: true, rate: true, enteredBy: true, updatedAt: true },
+    select: { id: true, currency: true, date: true, rate: true, enteredBy: true, updatedAt: true, source: true, bulletinDate: true },
     orderBy: [{ date: 'desc' }, { id: 'desc' }],
     take: query.limit + 1,
   });
@@ -375,6 +393,8 @@ export async function listRateHistory(hotelId, query) {
       rate: rateText(String(row.rate)),
       enteredBy: row.enteredBy,
       updatedAt: iso(row.updatedAt),
+      source: row.source,
+      bulletinDate: row.bulletinDate ? toIsoDay(row.bulletinDate) : null,
     })),
     nextCursor: rows.length > query.limit && last ? encodeCursor({ at: last.date, id: last.id }) : null,
   };

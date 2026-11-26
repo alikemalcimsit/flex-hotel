@@ -1317,6 +1317,12 @@ Misafir her durumda "ekibimiz dönecek" bilgisini alır; personelin ziline uyar�
 Kısmi index'li (`Conversation_ai_waiting_idx`): yalnızca AI'da bekleyen
 konuşmalar taranır.
 
+### exchange-rates
+
+Kur işi (modül 60): saatte bir, otomatik çekme açık otellerin iş günü kurları TCMB'den yazılır (gün değişince ve gün kapanınca yeni
+iş gününün kuru da gelir; aynı kur yeniden yazılmaz).
+@param {{ info: Function, error: Function }} logger
+
 ### folios
 
 Aralık sabitleri: `ROOM_CHARGE_CHECK_INTERVAL_MS` = 5 * 60_000
@@ -1535,12 +1541,12 @@ Anketin zamanlanmış işi (yalnızca sunucu sürecinde, modül 55).
 
 ## Veri modeli
 
-Veritabanında 256 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan sayısı ilişkiler hariç yaklaşık değerdir.
+Veritabanında 257 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan sayısı ilişkiler hariç yaklaşık değerdir.
 
 | Tablo | Alan | Açıklama |
 | --- | --- | --- |
 | `Hotel` | 32 |  |
-| `User` | 10 |  |
+| `User` | 12 |  |
 | `RefreshToken` | 8 |  |
 | `RolePermission` | 6 | Rol → izin matrisi (modül 2 — RBAC). Bir otelin hiç satırı yoksa çözüm koddaki varsayılanlara düşer; matris kaydedilince tüm roller için satır yazılır ve DB kaynak olur. ADMIN satır tutmaz — kod her zaman ADMIN'e tüm izinleri verir. |
 | `EventLog` | 14 |  |
@@ -1588,7 +1594,7 @@ Veritabanında 256 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan
 | `FolioRoute` | 8 | Konaklamanın yönlendirmesi (modül 15): bu tipteki sistem kalemleri (oda ücreti, restoran, minibar) bu folyoya düşer. Yoksa konaklamanın ilk açık folyosu. |
 | `RoomChargeRun` | 11 | Gecenin oda ücretlerinin işlenmesi (modül 15). Zamanlayıcı gün dönünce otel başına bir kez açar (tekil) ve folyo aktörüne haber verir; işlenince tamamlanır. |
 | `Payment` | 32 | Ödeme satırı (modül 17). Silinmez: hatalı giriş iptal kaydıyla (`REVERSAL`, ters tutar), misafire geri verilen para iadeyle (`REFUND`, eksi tutar) düzeltilir. Bakiyeye yalnızca işlenmiş (`POSTED`) satırlar girer. |
-| `ExchangeRate` | 8 | Günlük döviz kuru (modül 17): 1 birim döviz = `rate` × otel para birimi. Otel × döviz × gün tekil; yalnızca iş günü için girilir (aynı gün yeniden girilirse güncellenir, denetim izi eski değeri tutar). Ödeme kendi kurunu saklar: kur sonradan değişse de geçmiş ödeme değişmez. |
+| `ExchangeRate` | 10 | Günlük döviz kuru (modül 17): 1 birim döviz = `rate` × otel para birimi. Otel × döviz × gün tekil; yalnızca iş günü için girilir (aynı gün yeniden girilirse güncellenir, denetim izi eski değeri tutar). Ödeme kendi kurunu saklar: kur sonradan değişse de geçmiş ödeme değişmez. |
 | `MinibarItem` | 12 | Minibar ürünü (modül 19). Fiyat vergi ayarına göre (kalem tipi minibar) dahil / hariç yorumlanır. Kod otel içinde tekil (silinmemişler arasında: kısmi index `MinibarItem_hotelId_code_active_key`). |
 | `MinibarConsumption` | 18 | Odanın minibar sayımı: bir fiş (modül 19). Konaklamaya yazılan fiş `minibar.consumed` olayıyla folyoya gider (`eventId`: folyo kalemlerinin tekrar işleme anahtarı `evt:<eventId>:<sıra>`); kayıp fiş folyoya gitmez. Fiş silinmez, değiştirilmez: düzeltme folyodaki kalem iptaliyle. |
 | `MinibarConsumptionLine` | 8 | Minibar fişinin satırı: ürünün o anki adı ve fiyatı (fiyat sonradan değişse de fiş değişmez). |
@@ -1704,7 +1710,7 @@ Veritabanında 256 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan
 | `JournalEntry` | 21 | Yevmiye fişi: borç toplamı = alacak toplamı. Otomatik fiş kaynak belgeden (kaynak anahtarı tekil: ikinci kez yazılmaz); elle fiş `requestId` ile çift gönderime kapalı. Düzeltme ters kayıtla (iptal edilen fiş VOIDED, ters fiş `reversalOfId`). |
 | `JournalLine` | 11 | Fiş satırı: tek taraf dolu (borç ya da alacak). `date` fişin günüdür (mizan / ekstre taraması fişe dönmeden). |
 | `JournalRule` | 8 | Otomatik fiş kuralı: (kaynak, anahtar) → hesap. Anahtar boş = kaynağın varsayılanı (ör. bütün KDV oranları 391). |
-| `Invoice` | 54 | Fatura (modül 16 çekirdeği + 49). Taslak düzenlenir; kesimde numara (seri + yıl + 9 hane), belge türü (e-Fatura / e-Arşiv), alıcı ve UBL belgesi donar — kesilmiş fatura değişmez, iptal onay kuyruğundan. Folyo ve etkinlik başına en fazla bir geçerli (iptal edilmemiş) fatura: kısmi tekil index'ler migration'da. Alıcının bütün bilgisi `buyer`da (JSON); liste ve arama için ad ve vergi no ayrıca. |
+| `Invoice` | 58 | Fatura (modül 16 çekirdeği + 49). Taslak düzenlenir; kesimde numara (seri + yıl + 9 hane), belge türü (e-Fatura / e-Arşiv), alıcı ve UBL belgesi donar — kesilmiş fatura değişmez, iptal onay kuyruğundan. Folyo ve etkinlik başına en fazla bir geçerli (iptal edilmemiş) fatura: kısmi tekil index'ler migration'da. Alıcının bütün bilgisi `buyer`da (JSON); liste ve arama için ad ve vergi no ayrıca. |
 | `InvoiceLine` | 18 | Fatura satırı: folyo faturasında gelir grubu, etkinlikte kalem, serbest faturada girilen satır. Eksi satır yoktur (ters kayıt grubun içinde, indirim satır iskontosu). |
 | `InvoiceDocument` | 5 | Kesimde donan UBL-TR belgesi (gönderim ve tekrar gönderim bunu kullanır). |
 | `InvoiceLog` | 9 | Faturanın zaman çizelgesi: kesim, sıraya girme, gönderim, GİB cevabı, yeniden deneme, iptal. |
@@ -1795,6 +1801,7 @@ Veritabanında 256 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan
 | `Review` | 35 | Yorum sitesindeki misafir yorumu ve AI analizi (1:1, aynı satırda). Yazanın adı modele gitmez. |
 | `ReviewImport` | 9 | Dosyadan yükleme (idempotent: kimlik isteğin kimliği). |
 | `ReviewAnomaly` | 8 | Olumsuz konu artışı (haftalık; otel + konu + hafta tekil). |
+| `ExchangeRateSettings` | 10 | Otelin kur ayarı: TCMB'den günlük çekme, hangi kur türü, hangi dövizler. |
 
 ## Modül durumu
 
@@ -1861,7 +1868,7 @@ Geliştirme listesinden (GOREVLER.md) türetilir: işaretli maddeler ve "tamamla
 | 57 | SPA & spor salonu randevu | arkadaşın | tamamlandı |
 | 58 | Emniyet kimlik bildirimi (KBS) | Ali Kemal | tamamlandı |
 | 59 | Kimlik / pasaport okuma (OCR) | arkadaşın | tamamlandı |
-| 60 | Çoklu dil & çoklu para birimi | Ali Kemal | planlı |
+| 60 | Çoklu dil & çoklu para birimi | Ali Kemal | kısmi (4/5) |
 | 61 | Webhook & açık API | arkadaşın | tamamlandı |
 | 62 | Donanım entegrasyonları | Ali Kemal | planlı |
 | 63 | Multi-tenant zincir konsolu | arkadaşın | planlı |

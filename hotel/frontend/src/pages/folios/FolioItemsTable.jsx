@@ -1,8 +1,10 @@
 import { Link } from 'react-router-dom';
 import { folioItemActionError } from '@hotelos/hotel-contracts';
 import { Alert, Badge, Button, EmptyState, Spinner } from '@hotelos/ui';
-import { amountClass, folioPath, itemSourceLabel, itemTypeLabel } from '../../lib/folios.js';
+import { useT } from '../../i18n/index.jsx';
+import { amountClass, folioPath } from '../../lib/folios.js';
 import { formatDate, formatMoney, formatPercent } from '../../lib/format.js';
+import { itemSourceText, itemTypeText } from './labels.js';
 
 /**
  * Folyo dökümü: kalemler işlenme sırasıyla (imleçli, "daha fazla").
@@ -24,17 +26,18 @@ import { formatDate, formatMoney, formatPercent } from '../../lib/format.js';
  * }} props
  */
 export function FolioItemsTable({ query, currency, selectable, selected, onToggle, onToggleAll, onVoid }) {
-  if (query.isPending) return <Spinner label="Kalemler yükleniyor…" className="py-10" />;
+  const t = useT();
+  if (query.isPending) return <Spinner label={t('folio.items.loading')} className="py-10" />;
   if (query.isError) {
     return (
-      <Alert tone="danger" title="Kalemler yüklenemedi" action={<Button size="sm" variant="outline" icon="refresh" onClick={() => query.refetch()}>Tekrar dene</Button>}>
+      <Alert tone="danger" title={t('folio.items.loadFailed')} action={<Button size="sm" variant="outline" icon="refresh" onClick={() => query.refetch()}>{t('common.retry')}</Button>}>
         {query.error.message}
       </Alert>
     );
   }
   const items = query.data.pages.flatMap((page) => page.items);
   if (items.length === 0) {
-    return <EmptyState icon="fileText" title="Bu folyoda kalem yok" description="Oda ücretleri her gece işlenir; harcamayı “Harcama ekle” ile girin." />;
+    return <EmptyState icon="fileText" title={t('folio.items.emptyTitle')} description={t('folio.items.emptyDescription')} />;
   }
   const movable = items.filter((item) => !folioItemActionError(item, 'transfer')).map((item) => item.id);
   const allSelected = movable.length > 0 && movable.every((id) => selected.has(id));
@@ -49,7 +52,7 @@ export function FolioItemsTable({ query, currency, selectable, selected, onToggl
                 <th scope="col" className="w-10 px-4 py-3">
                   <input
                     type="checkbox"
-                    aria-label="Taşınabilir kalemlerin hepsini seç"
+                    aria-label={t('folio.items.selectAll')}
                     checked={allSelected}
                     disabled={movable.length === 0}
                     onChange={() => onToggleAll(allSelected ? [] : movable)}
@@ -57,12 +60,12 @@ export function FolioItemsTable({ query, currency, selectable, selected, onToggl
                   />
                 </th>
               )}
-              <th scope="col" className="whitespace-nowrap px-4 py-3 font-bold">Tarih</th>
-              <th scope="col" className="px-4 py-3 font-bold">Açıklama</th>
-              <th scope="col" className="whitespace-nowrap px-4 py-3 text-right font-bold">Adet × birim</th>
-              <th scope="col" className="whitespace-nowrap px-4 py-3 font-bold">Vergi</th>
-              <th scope="col" className="whitespace-nowrap px-4 py-3 text-right font-bold">Tutar</th>
-              {onVoid && <th scope="col" className="px-4 py-3 text-right font-bold"><span className="sr-only">İşlem</span></th>}
+              <th scope="col" className="whitespace-nowrap px-4 py-3 font-bold">{t('folio.items.date')}</th>
+              <th scope="col" className="px-4 py-3 font-bold">{t('folio.items.description')}</th>
+              <th scope="col" className="whitespace-nowrap px-4 py-3 text-right font-bold">{t('folio.items.quantityUnit')}</th>
+              <th scope="col" className="whitespace-nowrap px-4 py-3 font-bold">{t('folio.items.tax')}</th>
+              <th scope="col" className="whitespace-nowrap px-4 py-3 text-right font-bold">{t('folio.items.amount')}</th>
+              {onVoid && <th scope="col" className="px-4 py-3 text-right font-bold"><span className="sr-only">{t('folio.items.action')}</span></th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
@@ -75,7 +78,7 @@ export function FolioItemsTable({ query, currency, selectable, selected, onToggl
                     <td className="px-4 py-3 align-top">
                       <input
                         type="checkbox"
-                        aria-label={`${item.description} seç`}
+                        aria-label={t('folio.items.selectItem', { description: item.description })}
                         checked={selected.has(item.id)}
                         disabled={Boolean(blocked)}
                         title={blocked ?? undefined}
@@ -88,20 +91,28 @@ export function FolioItemsTable({ query, currency, selectable, selected, onToggl
                   <td className="px-4 py-3 align-top">
                     <span className={`block font-semibold ${item.voided ? 'line-through' : ''}`}>{item.description}</span>
                     <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-ink-muted">
-                      <span>{itemTypeLabel(item.type)} · {itemSourceLabel(item.source)} · {item.postedBy}</span>
-                      {item.voidPending && <Badge tone="warning">İptal onayı bekliyor</Badge>}
-                      {item.voided && <Badge tone="neutral">İptal edildi{item.voidedBy ? ` · ${item.voidedBy}` : ''}</Badge>}
+                      <span>{itemTypeText(item.type)} · {itemSourceText(item.source)} · {item.postedBy}</span>
+                      {item.voidPending && <Badge tone="warning">{t('folio.items.voidPending')}</Badge>}
+                      {item.voided && <Badge tone="neutral">{item.voidedBy ? t('folio.items.voidedBy', { user: item.voidedBy }) : t('folio.items.voided')}</Badge>}
                     </span>
-                    {item.voided && item.voidReason && <span className="mt-0.5 block text-xs text-ink-muted">Gerekçe: {item.voidReason}</span>}
+                    {item.voided && item.voidReason && <span className="mt-0.5 block text-xs text-ink-muted">{t('folio.items.voidReason', { reason: item.voidReason })}</span>}
                     {item.origin && (
                       <span className="mt-0.5 block text-xs text-info-ink">
-                        Kaynak: <Link className="underline-offset-2 hover:underline" to={folioPath(item.origin.reservationId)}>oda {item.origin.roomNumber ?? '—'} · {item.origin.guestName}</Link>
+                        {t('folio.items.originPrefix')}{' '}
+                        <Link className="underline-offset-2 hover:underline" to={folioPath(item.origin.reservationId)}>
+                          {t('folio.items.roomGuest', { room: item.origin.roomNumber ?? '—', guest: item.origin.guestName })}
+                        </Link>
                       </span>
                     )}
                     {item.transferredFrom && (
                       <span className="mt-0.5 block text-xs text-ink-muted">
-                        {item.transferredFrom.name}
-                        {item.transferredFrom.reservationId !== item.reservationId && item.transferredFrom.roomNumber ? ` (oda ${item.transferredFrom.roomNumber})` : ''} folyosundan aktarıldı · {item.transferredBy}
+                        {t('folio.items.transferredFrom', {
+                          folio:
+                            item.transferredFrom.reservationId !== item.reservationId && item.transferredFrom.roomNumber
+                              ? t('folio.items.folioInRoom', { name: item.transferredFrom.name, room: item.transferredFrom.roomNumber })
+                              : item.transferredFrom.name,
+                          user: item.transferredBy,
+                        })}
                       </span>
                     )}
                   </td>
@@ -113,7 +124,7 @@ export function FolioItemsTable({ query, currency, selectable, selected, onToggl
                       ? '—'
                       : item.taxLines.map((tax) => (
                           <span key={`${tax.name}-${tax.rate}-${tax.included}`} className="block whitespace-nowrap">
-                            {tax.name} {formatPercent(tax.rate)} {tax.included ? 'dahil' : '+'} {formatMoney(tax.amount)}
+                            {tax.name} {formatPercent(tax.rate)} {tax.included ? t('folio.items.taxIncluded') : '+'} {formatMoney(tax.amount)}
                           </span>
                         ))}
                   </td>
@@ -124,7 +135,7 @@ export function FolioItemsTable({ query, currency, selectable, selected, onToggl
                     <td className="px-4 py-3 text-right align-top">
                       {!voidBlocked && (
                         <Button size="sm" variant="dangerSoft" icon="close" onClick={() => onVoid(item)}>
-                          İptal iste
+                          {t('folio.items.requestVoid')}
                         </Button>
                       )}
                     </td>
@@ -138,7 +149,7 @@ export function FolioItemsTable({ query, currency, selectable, selected, onToggl
       {query.hasNextPage && (
         <div className="border-t border-line px-4 py-3 text-center">
           <Button size="sm" variant="outline" icon="arrowDown" onClick={() => query.fetchNextPage()} disabled={query.isFetchingNextPage}>
-            {query.isFetchingNextPage ? 'Yükleniyor…' : 'Daha fazla kalem'}
+            {query.isFetchingNextPage ? t('common.loading') : t('folio.items.loadMore')}
           </Button>
         </div>
       )}

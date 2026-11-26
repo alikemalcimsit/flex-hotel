@@ -1,0 +1,27 @@
+import { APP_LOCALE_LABELS, ROLE_LABELS } from '@hotelos/hotel-contracts';
+import { fromLabels } from '../keys.js';
+
+/** Kabuk: yan menü, üst çubuk, kullanıcı menüsü, tercihler. Anahtarlar `layout.` ile başlar. */
+export default Object.freeze({
+  ...fromLabels('layout.role.', ROLE_LABELS),
+  ...fromLabels('layout.locale.', APP_LOCALE_LABELS),
+  'layout.skipToContent': 'İçeriğe geç',
+  'layout.sidebar.label': 'Yan menü',
+  'layout.sidebar.mainNav': 'Ana menü',
+  'layout.sidebar.home': 'FlexHotel — panel ana sayfası',
+  'layout.sidebar.close': 'Menüyü kapat',
+  'layout.sidebar.hotelCode': 'Kod: {code}',
+  'layout.topbar.openMenu': 'Menüyü aç',
+  'layout.topbar.expandMenu': 'Menüyü genişlet',
+  'layout.topbar.collapseMenu': 'Menüyü daralt',
+  'layout.topbar.breadcrumb': 'Konum',
+  'layout.topbar.fullscreen': 'Tam ekran',
+  'layout.topbar.exitFullscreen': 'Tam ekrandan çık',
+  'layout.topbar.approvals': 'onay',
+  'layout.userMenu.fallbackName': 'Kullanıcı',
+  'layout.prefs.language': 'Arayüz dili',
+  'layout.prefs.displayCurrency': 'Gösterim para birimi',
+  'layout.prefs.displayCurrencyNone': 'Yalnız otelin para birimi',
+  'layout.prefs.displayCurrencyHint': 'Tutarların yanında güncel kurdan yaklaşık karşılık gösterilir.',
+  'layout.prefs.saveFailed': 'Tercih kaydedilemedi: {message}',
+});

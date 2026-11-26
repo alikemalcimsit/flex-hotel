@@ -3,9 +3,11 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Alert, Badge, Button, Checkbox, Icon, Spinner } from '@hotelos/ui';
 import { Modal } from '../../components/Modal.jsx';
 import { AssignmentKindBadge, HousekeepingBadge, OccupancyBadge } from '../../components/RoomStateBadges.jsx';
+import { useT } from '../../i18n/index.jsx';
 import { api, withQuery } from '../../lib/api.js';
 import { formatDate } from '../../lib/format.js';
 import { MoveReasonField } from './MoveReasonField.jsx';
+import { guestsText, richText } from './planText.jsx';
 
 /** Bir sayfada listelenecek aday oda sayısı. */
 const CANDIDATE_PAGE_SIZE = 8;
@@ -27,6 +29,7 @@ const CANDIDATE_PAGE_SIZE = 8;
  * }} props
  */
 export function MoveRoomDialog({ reservation, isMoving, onPick, onClose }) {
+  const t = useT();
   const [includeOtherTypes, setIncludeOtherTypes] = useState(false);
   const [page, setPage] = useState(1);
   const [reason, setReason] = useState('');
@@ -54,11 +57,13 @@ export function MoveRoomDialog({ reservation, isMoving, onPick, onClose }) {
     <Modal
       open
       size="lg"
-      title={`${reservation.confirmationCode} — ${reservation.room ? 'oda değiştir' : 'oda ata'}`}
+      title={t(reservation.room ? 'roomPlan.moveRoom.titleChange' : 'roomPlan.moveRoom.titleAssign', {
+        code: reservation.confirmationCode,
+      })}
       onClose={onClose}
       footer={
         <Button variant="outline" onClick={onClose} disabled={isMoving}>
-          Kapat
+          {t('common.close')}
         </Button>
       }
     >
@@ -68,24 +73,25 @@ export function MoveRoomDialog({ reservation, isMoving, onPick, onClose }) {
         </span>
         <div className="min-w-0 text-sm">
           <p className="text-ink">
-            <span className="font-bold">{reservation.guest ? `${reservation.guest.firstName} ${reservation.guest.lastName}` : 'Misafir'}</span>
+            <span className="font-bold">{reservation.guest ? `${reservation.guest.firstName} ${reservation.guest.lastName}` : t('roomPlan.shared.guest')}</span>
             <span className="text-ink-muted">
               {' '}
               · {reservation.roomType.code} — {reservation.roomType.name}
             </span>
           </p>
           <p className="mt-0.5 text-xs text-ink-muted">
-            {formatDate(reservation.checkIn)} → {formatDate(reservation.checkOut)} · {reservation.adults} yetişkin
-            {reservation.children > 0 ? ` + ${reservation.children} çocuk` : ''}
-            {reservation.room ? ` · şu an ${reservation.room.number}` : ''}
+            {formatDate(reservation.checkIn)} → {formatDate(reservation.checkOut)} ·{' '}
+            {guestsText(t, reservation.adults, reservation.children)}
+            {reservation.room ? ` · ${t('roomPlan.moveRoom.currentRoom', { room: reservation.room.number })}` : ''}
           </p>
         </div>
       </div>
 
       {inHouse && (
-        <Alert tone="warning" className="mb-5" title="Misafir odada">
-          Oda değişince {reservation.room?.number} numaralı oda boş ve <strong>kirli</strong> olarak işaretlenir, yeni oda
-          dolu sayılır. Misafirin eşyalarının taşındığından emin olun.
+        <Alert tone="warning" className="mb-5" title={t('roomPlan.moveRoom.inHouseTitle')}>
+          {richText(t('roomPlan.moveRoom.inHouseBody', { room: reservation.room?.number }), {
+            dirty: <strong>{t('roomPlan.moveRoom.dirty')}</strong>,
+          })}
         </Alert>
       )}
 
@@ -96,9 +102,9 @@ export function MoveRoomDialog({ reservation, isMoving, onPick, onClose }) {
       )}
 
       <Checkbox
-        label="Diğer oda tiplerini de göster"
+        label={t('roomPlan.shared.showOtherTypes')}
         name="includeOtherTypes"
-        hint="Kapasitesi yeten ve overbooking yaratmayan diğer tipler, sınıfıyla birlikte listelenir."
+        hint={t('roomPlan.shared.showOtherTypesHint')}
         checked={includeOtherTypes}
         onChange={(event) => {
           setIncludeOtherTypes(event.target.checked);
@@ -107,14 +113,14 @@ export function MoveRoomDialog({ reservation, isMoving, onPick, onClose }) {
         className="mb-5"
       />
 
-      {query.isPending && <Spinner label="Uygun odalar aranıyor…" className="py-8" />}
+      {query.isPending && <Spinner label={t('roomPlan.shared.searchingRooms')} className="py-8" />}
 
       {query.isError && (
         <Alert
           tone="danger"
           action={
             <Button variant="outline" size="sm" icon="refresh" onClick={() => query.refetch()}>
-              Tekrar dene
+              {t('common.retry')}
             </Button>
           }
         >
@@ -123,10 +129,10 @@ export function MoveRoomDialog({ reservation, isMoving, onPick, onClose }) {
       )}
 
       {query.data && candidates.length === 0 && (
-        <Alert tone="warning" title="Bu tarihlerde uygun boş oda yok">
+        <Alert tone="warning" title={t('roomPlan.shared.noCandidatesTitle')}>
           {includeOtherTypes
-            ? `${inHouse ? 'Kalan geceler' : 'Konaklamanın tamamı'} boyunca boş olan bir oda gerekiyor. Tarihleri ya da odalardaki arıza kayıtlarını kontrol edin.`
-            : 'Diğer oda tiplerini göstererek misafiri başka bir tipe yerleştirebilirsiniz.'}
+            ? t(inHouse ? 'roomPlan.moveRoom.noCandidatesRemaining' : 'roomPlan.moveRoom.noCandidatesWhole')
+            : t('roomPlan.shared.noCandidatesTryOtherTypes')}
         </Alert>
       )}
 
@@ -142,19 +148,23 @@ export function MoveRoomDialog({ reservation, isMoving, onPick, onClose }) {
               <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                 <span className="text-lg font-bold tabular-nums text-ink">{room.number}</span>
                 <span className="text-xs font-semibold text-ink-muted">
-                  {room.floor}. kat · {room.roomTypeCode}
+                  {t('roomPlan.shared.floor', { floor: room.floor })} · {room.roomTypeCode}
                 </span>
                 <OccupancyBadge occupancy={room.occupancy} />
                 <HousekeepingBadge status={room.housekeepingStatus} />
                 {room.recommended && (
                   <Badge tone="info" dot={false}>
-                    Önerilen
+                    {t('roomPlan.shared.recommended')}
                   </Badge>
                 )}
                 <AssignmentKindBadge kind={room.kind} />
               </div>
               <Button size="sm" icon="check" onClick={() => onPick(room, reason.trim())} disabled={isMoving}>
-                {isMoving ? 'İşleniyor…' : reservation.room ? 'Buraya taşı' : 'Ata'}
+                {isMoving
+                  ? t('roomPlan.shared.processing')
+                  : reservation.room
+                    ? t('roomPlan.moveRoom.moveHere')
+                    : t('roomPlan.shared.assign')}
               </Button>
             </li>
           ))}
@@ -162,17 +172,17 @@ export function MoveRoomDialog({ reservation, isMoving, onPick, onClose }) {
       )}
 
       {meta && meta.totalPages > 1 && (
-        <nav aria-label="Aday oda sayfaları" className="mt-4 flex items-center justify-between gap-3">
-          <span className="text-xs font-semibold text-ink-muted">{meta.total} uygun oda</span>
+        <nav aria-label={t('roomPlan.shared.candidatePages')} className="mt-4 flex items-center justify-between gap-3">
+          <span className="text-xs font-semibold text-ink-muted">{t('roomPlan.shared.candidateTotal', { count: meta.total })}</span>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" icon="chevronLeft" disabled={page <= 1} onClick={() => setPage(page - 1)}>
-              Önceki
+              {t('roomPlan.shared.prev')}
             </Button>
             <span className="text-sm font-semibold text-ink-soft" aria-live="polite">
               {meta.page} / {meta.totalPages}
             </span>
             <Button variant="outline" size="sm" disabled={page >= meta.totalPages} onClick={() => setPage(page + 1)}>
-              Sonraki
+              {t('roomPlan.shared.next')}
               <Icon name="chevronRight" className="size-3.5" />
             </Button>
           </div>

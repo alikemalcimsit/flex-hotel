@@ -1,4 +1,4 @@
-import { RESERVATION_STATUS_LABELS, ROOM_BLOCK_TYPE_LABELS } from '@hotelos/hotel-contracts';
+import { getIntlLocale } from '../../i18n/current.js';
 
 /**
  * Oda planının görsel dili — ızgara, lejant ve çekmece aynı kaynaktan beslenir.
@@ -16,26 +16,26 @@ export const RESERVATION_TONES = Object.freeze({
   PENDING: {
     bar: 'border border-dashed border-warning/70 bg-warning-soft text-warning-ink',
     swatch: 'border border-dashed border-warning/70 bg-warning-soft',
-    label: RESERVATION_STATUS_LABELS.PENDING,
-    hint: 'Onay bekliyor — gelmeyebilir',
+    labelKey: 'roomPlan.reservationStatus.PENDING',
+    hintKey: 'roomPlan.statusHint.PENDING',
   },
   CONFIRMED: {
     bar: 'bg-ink text-white',
     swatch: 'bg-ink',
-    label: RESERVATION_STATUS_LABELS.CONFIRMED,
-    hint: 'Onaylı, henüz gelmedi',
+    labelKey: 'roomPlan.reservationStatus.CONFIRMED',
+    hintKey: 'roomPlan.statusHint.CONFIRMED',
   },
   CHECKED_IN: {
     bar: 'bg-success text-white',
     swatch: 'bg-success',
-    label: RESERVATION_STATUS_LABELS.CHECKED_IN,
-    hint: 'Misafir odada',
+    labelKey: 'roomPlan.reservationStatus.CHECKED_IN',
+    hintKey: 'roomPlan.statusHint.CHECKED_IN',
   },
   CHECKED_OUT: {
     bar: 'bg-black/[0.06] text-ink-muted',
     swatch: 'bg-black/[0.06]',
-    label: RESERVATION_STATUS_LABELS.CHECKED_OUT,
-    hint: 'Çıkış yapıldı',
+    labelKey: 'roomPlan.reservationStatus.CHECKED_OUT',
+    hintKey: 'roomPlan.statusHint.CHECKED_OUT',
   },
 });
 
@@ -43,14 +43,14 @@ export const BLOCK_TONES = Object.freeze({
   OUT_OF_ORDER: {
     bar: 'bg-danger-soft text-danger-ink ring-1 ring-inset ring-danger-line',
     swatch: 'bg-danger-soft ring-1 ring-inset ring-danger-line',
-    label: ROOM_BLOCK_TYPE_LABELS.OUT_OF_ORDER,
-    hint: 'Satıştan düşer',
+    labelKey: 'roomPlan.blockType.OUT_OF_ORDER',
+    hintKey: 'roomPlan.blockHint.OUT_OF_ORDER',
   },
   OUT_OF_SERVICE: {
     bar: 'bg-black/[0.05] text-ink-soft ring-1 ring-inset ring-line-strong',
     swatch: 'bg-black/[0.05] ring-1 ring-inset ring-line-strong',
-    label: ROOM_BLOCK_TYPE_LABELS.OUT_OF_SERVICE,
-    hint: 'Satılabilir ama misafire verilemez',
+    labelKey: 'roomPlan.blockType.OUT_OF_SERVICE',
+    hintKey: 'roomPlan.blockHint.OUT_OF_SERVICE',
   },
 });
 
@@ -67,19 +67,30 @@ export function occupancyTone(pct) {
   return 'text-ink-soft';
 }
 
-const weekdayFormatter = new Intl.DateTimeFormat('tr-TR', { weekday: 'short', timeZone: 'UTC' });
-const dayMonthFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' });
+/** Dil başına bir kez kurulan gün biçimlendiricileri (arayüz dili: tr-TR / en-GB). */
+const dayFormatters = new Map();
+
+function formattersFor(locale) {
+  if (!dayFormatters.has(locale)) {
+    dayFormatters.set(locale, {
+      weekday: new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: 'UTC' }),
+      dayMonth: new Intl.DateTimeFormat(locale, { day: '2-digit', month: '2-digit', timeZone: 'UTC' }),
+    });
+  }
+  return dayFormatters.get(locale);
+}
 
 /**
- * Izgara başlığındaki gün etiketi. Gün hassasiyetli metinler saat dilimi
+ * Izgara başlığındaki gün etiketi (etkin arayüz dilinde). Gün hassasiyetli metinler saat dilimi
  * taşımaz; UTC ile basılmazsa UTC'nin gerisindeki bölgede bir gün kayar.
  * @param {string} isoDay
  */
 export function dayLabel(isoDay) {
   const date = new Date(`${isoDay}T00:00:00.000Z`);
+  const formatters = formattersFor(getIntlLocale());
   return {
-    weekday: weekdayFormatter.format(date),
-    dayMonth: dayMonthFormatter.format(date),
+    weekday: formatters.weekday.format(date),
+    dayMonth: formatters.dayMonth.format(date),
     isWeekend: [0, 6].includes(date.getUTCDay()),
   };
 }

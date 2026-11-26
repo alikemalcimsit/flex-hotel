@@ -1,5 +1,7 @@
 import { Badge, Button, Icon } from '@hotelos/ui';
+import { useT } from '../../i18n/index.jsx';
 import { formatDate } from '../../lib/format.js';
+import { countText, guestsText } from './planText.jsx';
 import { RESERVATION_TONES } from './planTheme.js';
 
 /**
@@ -33,29 +35,30 @@ export function UnassignedStrip({
   onAutoAssign,
   isAssigning,
 }) {
+  const t = useT();
   const items = data?.items ?? [];
 
   if (items.length === 0) {
     return (
       <div className="flex items-center gap-2 rounded-card bg-surface px-5 py-3.5 text-sm text-ink-muted shadow-card">
         <Icon name="checkCircle" className="size-4 shrink-0 text-success" />
-        Bu tarih aralığında oda bekleyen rezervasyon yok.
+        {t('roomPlan.unassigned.none')}
       </div>
     );
   }
 
   return (
-    <section aria-label="Oda bekleyen rezervasyonlar" className="rounded-card bg-surface p-4 shadow-card">
+    <section aria-label={t('roomPlan.unassigned.aria')} className="rounded-card bg-surface p-4 shadow-card">
       <header className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 text-sm font-bold text-ink">
           <Icon name="inbox" className="size-4 text-sec" />
-          Oda bekleyenler
+          {t('roomPlan.unassigned.title')}
           <Badge tone="warning" dot={false}>
             {data.total}
           </Badge>
         </h2>
         <p className="text-xs text-ink-muted">
-          {canOperate ? 'Kartı bir odanın satırına sürükleyin ya da tıklayıp oda seçin.' : 'Atama için yetkiniz yok.'}
+          {canOperate ? t('roomPlan.unassigned.dragHint') : t('roomPlan.unassigned.noPermission')}
         </p>
       </header>
 
@@ -96,11 +99,14 @@ export function UnassignedStrip({
                   <span className="truncate text-sm font-bold text-ink">{item.guestName ?? item.confirmationCode}</span>
                 </span>
                 <span className="mt-0.5 block text-xs text-ink-muted">
-                  {formatDate(item.checkIn)} → {formatDate(item.checkOut)} · {item.nights} gece
+                  {t('roomPlan.unassigned.dates', {
+                    checkIn: formatDate(item.checkIn),
+                    checkOut: formatDate(item.checkOut),
+                    nights: countText(t, 'roomPlan.shared.nights', item.nights),
+                  })}
                 </span>
                 <span className="block text-xs text-ink-muted">
-                  {item.roomTypeCode} · {item.adults} yetişkin
-                  {item.children > 0 ? ` + ${item.children} çocuk` : ''}
+                  {item.roomTypeCode} · {guestsText(t, item.adults, item.children)}
                 </span>
               </button>
 
@@ -113,7 +119,7 @@ export function UnassignedStrip({
                   disabled={isAssigning}
                   onClick={() => onAutoAssign(item.id)}
                 >
-                  Otomatik ata
+                  {t('roomPlan.shared.autoAssign')}
                 </Button>
               )}
             </div>
@@ -123,7 +129,7 @@ export function UnassignedStrip({
 
       {data.shown < data.total && (
         <p className="mt-2 text-xs text-ink-muted">
-          {data.total} kayıttan {data.shown} tanesi gösteriliyor; kalanlar için Odalar → Oda atama ekranını kullanın.
+          {t('roomPlan.unassigned.more', { total: data.total, shown: data.shown })}
         </p>
       )}
     </section>

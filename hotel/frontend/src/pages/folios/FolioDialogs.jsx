@@ -4,7 +4,6 @@ import {
   FOLIO_DISCOUNT_CATEGORIES,
   FOLIO_POSTABLE_TYPES,
   FOLIO_REASON_MAX,
-  TAX_APPLIES_TO_LABELS,
   FOLIO_PAYER_NAME_MAX,
   chargePreviewSchema,
   postChargeSchema,
@@ -15,23 +14,25 @@ import {
 import { Alert, Button, Input, Select, Spinner, Textarea } from '@hotelos/ui';
 import { ChoiceChips } from '../../components/ChoiceChips.jsx';
 import { Modal } from '../../components/Modal.jsx';
+import { useT } from '../../i18n/index.jsx';
 import { apiPatch, apiPost } from '../../lib/api.js';
-import { folioKeys, itemTypeLabel } from '../../lib/folios.js';
+import { folioKeys } from '../../lib/folios.js';
 import { formatMoney, formatPercent } from '../../lib/format.js';
 import { newRequestId } from '../../lib/reservations.js';
 import { validateWith } from '../../lib/validate.js';
 import { toastSuccess } from '../../store/toast.js';
+import { itemTypeText } from './labels.js';
 
 const PREVIEW_DEBOUNCE_MS = 350;
 
-/** Tipe göre hazır açıklamalar (tek dokunuş). */
+/** Tipe göre hazır açıklamalar (tek dokunuş); metin `folio.quick.<anahtar>` sözlükte. */
 const QUICK_DESCRIPTIONS = Object.freeze({
-  FNB: ['Restoran', 'Oda servisi', 'Bar'],
-  MINIBAR: ['Minibar'],
-  LAUNDRY: ['Çamaşır yıkama', 'Ütü'],
-  SPA: ['Masaj', 'Hamam'],
-  OTHER: ['Otopark', 'Havalimanı transferi', 'Ekstra yatak'],
-  DISCOUNT: ['Şikâyet indirimi', 'Sadakat indirimi', 'Yönetim ikramı'],
+  FNB: ['restaurant', 'roomService', 'bar'],
+  MINIBAR: ['minibar'],
+  LAUNDRY: ['laundry', 'ironing'],
+  SPA: ['massage', 'hammam'],
+  OTHER: ['parking', 'airportTransfer', 'extraBed'],
+  DISCOUNT: ['complaintDiscount', 'loyaltyDiscount', 'managementComp'],
 });
 
 /**
@@ -46,6 +47,7 @@ const QUICK_DESCRIPTIONS = Object.freeze({
  * @param {{ folio: { id: string, name: string, currency: string }, canDiscount: boolean, onClose: () => void, onDone: () => void }} props
  */
 export function PostChargeDialog({ folio, canDiscount, onClose, onDone }) {
+  const t = useT();
   const [requestId] = useState(newRequestId);
   const [type, setType] = useState('FNB');
   const [discountCategory, setDiscountCategory] = useState('ROOM');
@@ -77,7 +79,7 @@ export function PostChargeDialog({ folio, canDiscount, onClose, onDone }) {
   const mutation = useMutation({
     mutationFn: (body) => apiPost(`/folios/${folio.id}/charges`, body),
     onSuccess: (result) => {
-      toastSuccess(result.created ? `${result.item.description} işlendi` : 'Bu harcama zaten işlenmişti; ikinci kez yazılmadı');
+      toastSuccess(result.created ? t('folio.charge.posted', { description: result.item.description }) : t('folio.charge.duplicate'));
       onDone();
       onClose();
     },
@@ -112,20 +114,20 @@ export function PostChargeDialog({ folio, canDiscount, onClose, onDone }) {
     <Modal
       open
       size="md"
-      title={`Harcama ekle — ${folio.name}`}
+      title={t('folio.charge.title', { name: folio.name })}
       onClose={busy ? () => {} : onClose}
       footer={
         <>
-          <Button variant="outline" onClick={onClose} disabled={busy}>Vazgeç</Button>
+          <Button variant="outline" onClick={onClose} disabled={busy}>{t('common.cancel')}</Button>
           <Button type="submit" form="post-charge-form" icon="plus" disabled={busy}>
-            {busy ? 'İşleniyor…' : discount ? 'İndirimi işle' : 'Harcamayı işle'}
+            {busy ? t('folio.stay.posting') : discount ? t('folio.charge.submitDiscount') : t('folio.charge.submit')}
           </Button>
         </>
       }
     >
       <form id="post-charge-form" onSubmit={submit} className="flex flex-col gap-4" noValidate>
-        {serverError && <Alert tone="danger" title="İşlenmedi">{serverError.message}</Alert>}
-        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Harcama tipi">
+        {serverError && <Alert tone="danger" title={t('folio.charge.failed')}>{serverError.message}</Alert>}
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label={t('folio.charge.type')}>
           {types.map((value) => (
             <button
               key={value}
@@ -140,33 +142,39 @@ export function PostChargeDialog({ folio, canDiscount, onClose, onDone }) {
                 type === value ? 'border-ink bg-ink text-white' : 'border-line-strong bg-surface text-ink-soft hover:border-ink'
               }`}
             >
-              {itemTypeLabel(value)}
+              {itemTypeText(value)}
             </button>
           ))}
         </div>
         {discount && (
           <Select
-            label="Hangi gelirden indirim"
+            label={t('folio.charge.discountCategory')}
             value={discountCategory}
             onChange={(event) => setDiscountCategory(event.target.value)}
-            options={FOLIO_DISCOUNT_CATEGORIES.map((value) => ({ value, label: TAX_APPLIES_TO_LABELS[value] }))}
+            options={FOLIO_DISCOUNT_CATEGORIES.map((value) => ({ value, label: itemTypeText(value) }))}
             error={errors.discountCategory}
             disabled={busy}
           />
         )}
-        <ChoiceChips label="Hazır açıklamalar" options={QUICK_DESCRIPTIONS[type].map((value) => ({ value, label: value }))} value={description} onChange={setDescription} disabled={busy} />
-        <Input label="Açıklama" value={description} maxLength={200} onChange={(event) => setDescription(event.target.value)} error={errors.description} disabled={busy} autoFocus />
+        <ChoiceChips
+          label={t('folio.charge.quickDescriptions')}
+          options={QUICK_DESCRIPTIONS[type].map((key) => t(`folio.quick.${key}`)).map((value) => ({ value, label: value }))}
+          value={description}
+          onChange={setDescription}
+          disabled={busy}
+        />
+        <Input label={t('folio.charge.description')} value={description} maxLength={200} onChange={(event) => setDescription(event.target.value)} error={errors.description} disabled={busy} autoFocus />
         <div className="grid grid-cols-2 gap-3">
           <Input
-            label={discount ? 'İndirim tutarı' : 'Birim fiyat'}
+            label={discount ? t('folio.charge.discountAmount') : t('folio.charge.unitPrice')}
             inputMode="decimal"
-            placeholder="ör. 250 ya da 250,50"
+            placeholder={t('folio.charge.amountPlaceholder')}
             value={amount}
             onChange={(event) => setAmount(event.target.value)}
             error={errors.amount}
             disabled={busy}
           />
-          <Input label="Adet" type="number" min={1} max={999} value={quantity} onChange={(event) => setQuantity(event.target.value)} error={errors.quantity} disabled={busy} />
+          <Input label={t('folio.charge.quantity')} type="number" min={1} max={999} value={quantity} onChange={(event) => setQuantity(event.target.value)} error={errors.quantity} disabled={busy} />
         </div>
         <ChargePreview query={preview} enabled={previewValid} currency={folio.currency} />
       </form>
@@ -179,21 +187,22 @@ export function PostChargeDialog({ folio, canDiscount, onClose, onDone }) {
  * @param {{ query: any, enabled: boolean, currency: string }} props
  */
 function ChargePreview({ query, enabled, currency }) {
+  const t = useT();
   if (!enabled) {
-    return <p className="rounded-item bg-surface-muted px-4 py-3 text-xs text-ink-muted">Tutarı girince vergi dökümü ve folyoya yazılacak toplam burada görünür.</p>;
+    return <p className="rounded-item bg-surface-muted px-4 py-3 text-xs text-ink-muted">{t('folio.preview.hint')}</p>;
   }
-  if (query.isPending) return <Spinner label="Vergi hesaplanıyor…" className="py-2" />;
-  if (query.isError) return <p className="text-xs text-sec-strong">Önizleme alınamadı: {query.error.message}</p>;
+  if (query.isPending) return <Spinner label={t('folio.preview.calculating')} className="py-2" />;
+  if (query.isError) return <p className="text-xs text-sec-strong">{t('folio.preview.failed', { message: query.error.message })}</p>;
   const line = query.data;
   return (
     <dl className="grid grid-cols-2 gap-y-1 rounded-item bg-surface-muted px-4 py-3 text-sm">
-      <dt className="text-ink-muted">Net</dt>
+      <dt className="text-ink-muted">{t('folio.totals.net')}</dt>
       <dd className="text-right tabular-nums">{formatMoney(line.netAmount, currency)}</dd>
       {line.taxLines.map((tax) => (
-        <FragmentRow key={`${tax.name}-${tax.rate}-${tax.included}`} label={`${tax.name} ${formatPercent(tax.rate)} ${tax.included ? '(dahil)' : '(eklenir)'}`} value={formatMoney(tax.amount, currency)} />
+        <FragmentRow key={`${tax.name}-${tax.rate}-${tax.included}`} label={t(tax.included ? 'folio.preview.taxIncluded' : 'folio.preview.taxAdded', { name: tax.name, rate: formatPercent(tax.rate) })} value={formatMoney(tax.amount, currency)} />
       ))}
-      {line.taxLines.length === 0 && <FragmentRow label="Vergi" value="Bu kalem tipine vergi tanımlı değil" />}
-      <dt className="font-bold text-ink">Folyoya yazılacak</dt>
+      {line.taxLines.length === 0 && <FragmentRow label={t('folio.totals.tax')} value={t('folio.preview.noTax')} />}
+      <dt className="font-bold text-ink">{t('folio.preview.total')}</dt>
       <dd className="text-right font-bold tabular-nums">{formatMoney(line.total, currency)}</dd>
     </dl>
   );
@@ -209,7 +218,8 @@ function FragmentRow({ label, value }) {
   );
 }
 
-const VOID_REASONS = Object.freeze(['Yanlış odaya işlendi', 'Yanlış tutar', 'Misafir itiraz etti', 'İkram']);
+/** Hazır iptal gerekçeleri; metin `folio.voidReason.<anahtar>` sözlükte. */
+const VOID_REASONS = Object.freeze(['wrongRoom', 'wrongAmount', 'guestDispute', 'complimentary']);
 
 /**
  * Kalem iptali isteği: ikinci bir yetkilinin onayına gider (isteyen kendi
@@ -218,12 +228,13 @@ const VOID_REASONS = Object.freeze(['Yanlış odaya işlendi', 'Yanlış tutar',
  * @param {{ folio: { id: string }, item: { id: string, description: string, total: string, quantity: number }, currency: string, onClose: () => void, onDone: () => void }} props
  */
 export function VoidItemDialog({ folio, item, currency, onClose, onDone }) {
+  const t = useT();
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
   const mutation = useMutation({
     mutationFn: (body) => apiPost(`/folios/${folio.id}/items/${item.id}/void`, body),
     onSuccess: () => {
-      toastSuccess('İptal isteği onaya gönderildi; başka bir yetkili onaylayınca işlenir');
+      toastSuccess(t('folio.void.sent'));
       onDone();
       onClose();
     },
@@ -235,7 +246,7 @@ export function VoidItemDialog({ folio, item, currency, onClose, onDone }) {
     event.preventDefault();
     const result = validateWith(voidRequestSchema, { reason });
     if (!result.ok) {
-      setError(result.errors.reason ?? 'Gerekçe yazın');
+      setError(result.errors.reason ?? t('folio.reasonRequired'));
       return;
     }
     mutation.mutate(result.data);
@@ -245,23 +256,29 @@ export function VoidItemDialog({ folio, item, currency, onClose, onDone }) {
     <Modal
       open
       size="sm"
-      title="Kalem iptali iste"
+      title={t('folio.void.title')}
       onClose={busy ? () => {} : onClose}
       footer={
         <>
-          <Button variant="outline" onClick={onClose} disabled={busy}>Vazgeç</Button>
+          <Button variant="outline" onClick={onClose} disabled={busy}>{t('common.cancel')}</Button>
           <Button type="submit" form="void-item-form" variant="danger" icon="send" disabled={busy}>
-            {busy ? 'Gönderiliyor…' : 'Onaya gönder'}
+            {busy ? t('folio.sending') : t('folio.sendForApproval')}
           </Button>
         </>
       }
     >
       <form id="void-item-form" onSubmit={submit} className="flex flex-col gap-4" noValidate>
         <Alert tone="info" title={`${item.description} · ${formatMoney(item.total, currency)}`}>
-          Kalem silinmez: onaylanınca eksi tutarlı iptal kaydı işlenir, ikisi de dökümde görünür. Kendi isteğinizi onaylayamazsınız.
+          {t('folio.void.hint')}
         </Alert>
-        <ChoiceChips label="Hazır gerekçeler" options={VOID_REASONS.map((value) => ({ value, label: value }))} value={reason} onChange={setReason} disabled={busy} />
-        <Textarea label="Gerekçe" rows={3} maxLength={FOLIO_REASON_MAX} value={reason} onChange={(event) => setReason(event.target.value)} error={error} disabled={busy} autoFocus />
+        <ChoiceChips
+          label={t('folio.quickReasons')}
+          options={VOID_REASONS.map((key) => t(`folio.voidReason.${key}`)).map((value) => ({ value, label: value }))}
+          value={reason}
+          onChange={setReason}
+          disabled={busy}
+        />
+        <Textarea label={t('folio.reason')} rows={3} maxLength={FOLIO_REASON_MAX} value={reason} onChange={(event) => setReason(event.target.value)} error={error} disabled={busy} autoFocus />
       </form>
     </Modal>
   );
@@ -272,12 +289,13 @@ export function VoidItemDialog({ folio, item, currency, onClose, onDone }) {
  * @param {{ folio: { id: string, name: string }, onClose: () => void, onDone: () => void }} props
  */
 export function ReopenFolioDialog({ folio, onClose, onDone }) {
+  const t = useT();
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
   const mutation = useMutation({
     mutationFn: (body) => apiPost(`/folios/${folio.id}/reopen`, body),
     onSuccess: () => {
-      toastSuccess(`${folio.name} yeniden açıldı`);
+      toastSuccess(t('folio.reopen.done', { name: folio.name }));
       onDone();
       onClose();
     },
@@ -289,7 +307,7 @@ export function ReopenFolioDialog({ folio, onClose, onDone }) {
     event.preventDefault();
     const result = validateWith(reopenFolioSchema, { reason });
     if (!result.ok) {
-      setError(result.errors.reason ?? 'Gerekçe yazın');
+      setError(result.errors.reason ?? t('folio.reasonRequired'));
       return;
     }
     mutation.mutate(result.data);
@@ -299,23 +317,23 @@ export function ReopenFolioDialog({ folio, onClose, onDone }) {
     <Modal
       open
       size="sm"
-      title={`Yeniden aç — ${folio.name}`}
+      title={t('folio.reopen.title', { name: folio.name })}
       onClose={busy ? () => {} : onClose}
       footer={
         <>
-          <Button variant="outline" onClick={onClose} disabled={busy}>Vazgeç</Button>
+          <Button variant="outline" onClick={onClose} disabled={busy}>{t('common.cancel')}</Button>
           <Button type="submit" form="reopen-folio-form" icon="rotateCcw" disabled={busy}>
-            {busy ? 'Açılıyor…' : 'Yeniden aç'}
+            {busy ? t('folio.stay.opening') : t('folio.panel.reopen')}
           </Button>
         </>
       }
     >
       <form id="reopen-folio-form" onSubmit={submit} className="flex flex-col gap-4" noValidate>
         <Textarea
-          label="Gerekçe"
+          label={t('folio.reason')}
           rows={3}
           maxLength={FOLIO_REASON_MAX}
-          placeholder="ör. Çıkıştan sonra gelen minibar fişi"
+          placeholder={t('folio.reopen.placeholder')}
           value={reason}
           onChange={(event) => setReason(event.target.value)}
           error={error}
@@ -332,12 +350,13 @@ export function ReopenFolioDialog({ folio, onClose, onDone }) {
  * @param {{ folio: { id: string, name: string, payerName: string | null }, onClose: () => void, onDone: () => void }} props
  */
 export function EditPayerDialog({ folio, onClose, onDone }) {
+  const t = useT();
   const [payerName, setPayerName] = useState(folio.payerName ?? '');
   const [error, setError] = useState('');
   const mutation = useMutation({
     mutationFn: (body) => apiPatch(`/folios/${folio.id}`, body),
     onSuccess: () => {
-      toastSuccess('Ödeyen kaydedildi');
+      toastSuccess(t('folio.payer.saved'));
       onDone();
       onClose();
     },
@@ -349,7 +368,7 @@ export function EditPayerDialog({ folio, onClose, onDone }) {
     event.preventDefault();
     const result = validateWith(updateFolioSchema, { payerName });
     if (!result.ok) {
-      setError(result.errors.payerName ?? 'Geçersiz ad');
+      setError(result.errors.payerName ?? t('folio.payer.invalid'));
       return;
     }
     mutation.mutate(result.data);
@@ -359,21 +378,21 @@ export function EditPayerDialog({ folio, onClose, onDone }) {
     <Modal
       open
       size="sm"
-      title={`Ödeyen — ${folio.name}`}
+      title={t('folio.payer.title', { name: folio.name })}
       onClose={busy ? () => {} : onClose}
       footer={
         <>
-          <Button variant="outline" onClick={onClose} disabled={busy}>Vazgeç</Button>
+          <Button variant="outline" onClick={onClose} disabled={busy}>{t('common.cancel')}</Button>
           <Button type="submit" form="payer-form" icon="check" disabled={busy}>
-            {busy ? 'Kaydediliyor…' : 'Kaydet'}
+            {busy ? t('common.saving') : t('common.save')}
           </Button>
         </>
       }
     >
       <form id="payer-form" onSubmit={submit} className="flex flex-col gap-3" noValidate>
         <Input
-          label="Ödeyen"
-          placeholder="Boş bırakılırsa misafir"
+          label={t('folio.payer.label')}
+          placeholder={t('folio.payer.placeholder')}
           maxLength={FOLIO_PAYER_NAME_MAX}
           value={payerName}
           onChange={(event) => setPayerName(event.target.value)}

@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query';
-import { BOARD_TYPES, BOARD_TYPE_LABELS, reservationUpdatePreviewSchema, updateReservationSchema } from '@hotelos/hotel-contracts';
+import { BOARD_TYPES, reservationUpdatePreviewSchema, updateReservationSchema } from '@hotelos/hotel-contracts';
 import { Alert, Badge, Button, Input, Select, Textarea } from '@hotelos/ui';
 import { AgencyPicker } from '../../components/AgencyPicker.jsx';
 import { CouponField } from '../../components/CouponField.jsx';
 import { Modal } from '../../components/Modal.jsx';
 import { agencyIssueText } from '../../lib/agencies.js';
+import { useT } from '../../i18n/index.jsx';
 import { apiPatch, apiPost } from '../../lib/api.js';
 import { formatMoney } from '../../lib/format.js';
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
@@ -14,8 +15,8 @@ import { useHotelToday } from '../../lib/useHotel.js';
 import { validateWith } from '../../lib/validate.js';
 import { toastSuccess } from '../../store/toast.js';
 import { useRoomTypes } from '../rooms/useRoomTypes.js';
+import { boardLong } from './reservationTheme.js';
 
-const BOARD_OPTIONS = BOARD_TYPES.map((value) => ({ value, label: BOARD_TYPE_LABELS[value] }));
 const QUOTE_DEBOUNCE_MS = 250;
 
 /** İndirim kararının tonu (bkz. sunucu `discountMessage`). */
@@ -41,6 +42,8 @@ const OUTCOME_TONES = Object.freeze({ KEPT: 'info', REVOKED: 'warning', REMOVED:
  * @param {{ reservation: object, onClose: () => void, onSaved: (updated: object) => void, onError: (error: Error) => void }} props
  */
 export function EditReservationDialog({ reservation, onClose, onSaved, onError }) {
+  const t = useT();
+  const boardOptions = BOARD_TYPES.map((value) => ({ value, label: boardLong(value) }));
   const can = useCan();
   const canOverridePrice = can(PERMISSIONS.RESERVATIONS_PRICE_OVERRIDE);
   const { today } = useHotelToday();
@@ -148,7 +151,7 @@ export function EditReservationDialog({ reservation, onClose, onSaved, onError }
   const mutation = useMutation({
     mutationFn: (body) => apiPatch(`/reservations/${reservation.id}`, body),
     onSuccess: (updated) => {
-      toastSuccess('Rezervasyon güncellendi');
+      toastSuccess(t('reservations.edit.saved'));
       onSaved(updated);
     },
     onError: (error) => {
@@ -190,87 +193,89 @@ export function EditReservationDialog({ reservation, onClose, onSaved, onError }
     <Modal
       open
       size="lg"
-      title={`Düzenle — ${reservation.confirmationCode}`}
+      title={t('reservations.edit.title', { code: reservation.confirmationCode })}
       onClose={busy ? () => {} : onClose}
       footer={
         <>
-          <Button variant="outline" onClick={onClose} disabled={busy}>Vazgeç</Button>
+          <Button variant="outline" onClick={onClose} disabled={busy}>{t('common.cancel')}</Button>
           <Button type="submit" form="edit-reservation-form" icon="check" disabled={busy}>
-            {busy ? 'Kaydediliyor…' : 'Kaydet'}
+            {busy ? t('common.saving') : t('common.save')}
           </Button>
         </>
       }
     >
       <form id="edit-reservation-form" onSubmit={submit} className="flex flex-col gap-4" noValidate>
         {inHouse && (
-          <Alert tone="info" title="Misafir içeride">
-            Giriş tarihi ve oda tipi değiştirilemez; çıkış tarihini uzatıp kısaltabilirsiniz. Oda değişikliği için oda planını kullanın.
+          <Alert tone="info" title={t('reservations.detail.inHouseTitle')}>
+            {t('reservations.edit.inHouseHint')}
           </Alert>
         )}
         <div className="flex flex-wrap gap-3">
-          <Input label="Giriş" type="date" min={inHouse ? undefined : today} value={form.checkIn} onChange={set('checkIn')} disabled={busy || inHouse} error={errors.checkIn} className="w-full sm:w-44" />
-          <Input label="Çıkış" type="date" min={addDaysIso(form.checkIn || today, 1)} value={form.checkOut} onChange={set('checkOut')} disabled={busy} error={errors.checkOut} className="w-full sm:w-44" />
-          <Select label="Oda tipi" value={form.roomTypeId} onChange={set('roomTypeId')} options={roomTypeOptions} disabled={busy || inHouse} error={errors.roomTypeId} className="w-full sm:w-64" />
+          <Input label={t('reservations.form.checkIn')} type="date" min={inHouse ? undefined : today} value={form.checkIn} onChange={set('checkIn')} disabled={busy || inHouse} error={errors.checkIn} className="w-full sm:w-44" />
+          <Input label={t('reservations.form.checkOut')} type="date" min={addDaysIso(form.checkIn || today, 1)} value={form.checkOut} onChange={set('checkOut')} disabled={busy} error={errors.checkOut} className="w-full sm:w-44" />
+          <Select label={t('reservations.form.roomType')} value={form.roomTypeId} onChange={set('roomTypeId')} options={roomTypeOptions} disabled={busy || inHouse} error={errors.roomTypeId} className="w-full sm:w-64" />
         </div>
         {(!inHouse || agency) && (
           <div className="flex flex-col gap-2">
-            <AgencyPicker value={agency} onChange={setAgency} error={errors.agencyId} disabled={busy || inHouse} label="Acente (isteğe bağlı)" />
+            <AgencyPicker value={agency} onChange={setAgency} error={errors.agencyId} disabled={busy || inHouse} label={t('reservations.form.agencyOptional')} />
             {agencyChanged && (
               <p className="text-xs text-ink-muted">
                 {agency
-                  ? 'Kaynak "Acente" olur; geceler yeni acentenin kontratıyla yeniden fiyatlanır (fiyatı elle girilmişse fiyat kalır).'
-                  : 'Acente kaldırılınca kaynak "Resepsiyon" olur; geceler otelin sistem fiyatıyla yeniden hesaplanır (fiyatı elle girilmişse fiyat kalır).'}
+                  ? t('reservations.edit.agencySet')
+                  : t('reservations.edit.agencyRemoved')}
               </p>
             )}
           </div>
         )}
         <div className="flex flex-wrap gap-3">
-          <Input label="Yetişkin" type="number" min={1} max={20} value={form.adults} onChange={set('adults')} disabled={busy} error={errors.adults} className="w-28" />
-          <Input label="Çocuk" type="number" min={0} max={20} value={form.children} onChange={set('children')} disabled={busy} error={errors.children} className="w-28" />
-          <Select label="Pansiyon" value={form.boardType} onChange={set('boardType')} options={BOARD_OPTIONS} disabled={busy} className="w-full sm:w-64" />
+          <Input label={t('reservations.form.adults')} type="number" min={1} max={20} value={form.adults} onChange={set('adults')} disabled={busy} error={errors.adults} className="w-28" />
+          <Input label={t('reservations.form.children')} type="number" min={0} max={20} value={form.children} onChange={set('children')} disabled={busy} error={errors.children} className="w-28" />
+          <Select label={t('reservations.form.board')} value={form.boardType} onChange={set('boardType')} options={boardOptions} disabled={busy} className="w-full sm:w-64" />
         </div>
 
         {availabilityNeeded && stayValid && (
           <div className="rounded-item border border-line bg-canvas p-3 text-sm">
-            {quote.isPending && 'Müsaitlik denetleniyor…'}
+            {quote.isPending && t('reservations.form.checkingAvailability')}
             {quote.isError && <span className="text-sec-strong">{quote.error.message}</span>}
             {typeQuote && (
               <span className="flex flex-wrap items-center gap-2">
                 <Badge tone={typeQuote.available > 0 ? 'success' : 'danger'}>
-                  {typeQuote.available > 0 ? `${stayChanged ? 'Yeni' : 'Bu'} tarihlerde ${typeQuote.available} boş` : `${stayChanged ? 'Yeni' : 'Bu'} tarihlerde yer yok`}
+                  {typeQuote.available > 0
+                    ? t(stayChanged ? 'reservations.edit.availableNew' : 'reservations.edit.availableSame', { count: typeQuote.available })
+                    : t(stayChanged ? 'reservations.edit.noAvailabilityNew' : 'reservations.edit.noAvailabilitySame')}
                 </Badge>
                 {typeQuote.agency && !typeQuote.agency.sellable && (
                   <span className="font-semibold text-sec-strong">{agencyIssueText(typeQuote.agency.issue, canOverridePrice)}</span>
                 )}
-                {reservation.room && <span className="text-ink-muted">· Oda yeni tarihlere uymazsa ataması kaldırılır.</span>}
+                {reservation.room && <span className="text-ink-muted">· {t('reservations.edit.roomMayUnassign')}</span>}
               </span>
             )}
           </div>
         )}
 
         <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1 text-sm font-bold text-ink">İndirim</legend>
+          <legend className="mb-1 text-sm font-bold text-ink">{t('reservations.edit.discount')}</legend>
           {promotion ? (
             <div className={`flex flex-wrap items-center justify-between gap-2 rounded-item border p-2.5 text-sm ${discount?.mode === 'REMOVE' ? 'border-line opacity-60' : 'border-line-strong'}`}>
               <span className="min-w-0">
                 <span className="font-semibold text-ink">{promotion.name}</span>
-                {promotion.couponCode && <span className="ml-2 font-mono text-xs text-ink-muted">Kupon {promotion.couponCode}</span>}
+                {promotion.couponCode && <span className="ml-2 font-mono text-xs text-ink-muted">{t('reservations.edit.coupon', { code: promotion.couponCode })}</span>}
                 <span className="ml-2 text-success-ink">−{formatMoney(reservation.discountTotal, currency)}</span>
               </span>
               {!discountClosed &&
                 (discount?.mode === 'REMOVE' ? (
-                  <Button size="sm" variant="ghost" icon="rotateCcw" onClick={() => setDiscount(null)} disabled={busy}>Vazgeç</Button>
+                  <Button size="sm" variant="ghost" icon="rotateCcw" onClick={() => setDiscount(null)} disabled={busy}>{t('common.cancel')}</Button>
                 ) : (
-                  <Button size="sm" variant="outline" icon="close" onClick={() => setDiscount({ mode: 'REMOVE' })} disabled={busy}>İndirimi kaldır</Button>
+                  <Button size="sm" variant="outline" icon="close" onClick={() => setDiscount({ mode: 'REMOVE' })} disabled={busy}>{t('reservations.edit.removeDiscount')}</Button>
                 ))}
             </div>
           ) : (
-            <p className="text-xs text-ink-muted">Bu rezervasyonda indirim yok.</p>
+            <p className="text-xs text-ink-muted">{t('reservations.edit.noDiscount')}</p>
           )}
           {discountClosed ? (
             promotion && (
               <p className="text-xs text-warning-ink">
-                {agency ? 'Acente satışında promosyon uygulanmaz: kaydedince indirim kalkar.' : 'Elle fiyatta promosyon uygulanmaz: kaydedince indirim kalkar.'}
+                {agency ? t('reservations.edit.agencyNoPromotion') : t('reservations.edit.manualNoPromotion')}
               </p>
             )
           ) : (
@@ -289,7 +294,7 @@ export function EditReservationDialog({ reservation, onClose, onSaved, onError }
                 checking={discount?.mode === 'COUPON' && preview.isFetching}
                 error={couponError}
                 disabled={busy}
-                label={promotion ? 'Kupon (daha avantajlıysa mevcut indirimin yerine geçer)' : 'Kupon ekle'}
+                label={promotion ? t('reservations.edit.couponReplace') : t('reservations.edit.addCoupon')}
               />
             )
           )}
@@ -297,20 +302,21 @@ export function EditReservationDialog({ reservation, onClose, onSaved, onError }
 
         {priceChanges && (
           <div className="rounded-item border border-line bg-canvas p-3 text-sm" aria-live="polite">
-            {preview.isFetching && !plan && 'Yeni fiyat hesaplanıyor…'}
+            {preview.isFetching && !plan && t('reservations.edit.calculating')}
             {preview.isError && !previewFieldErrors['discount.code'] && <span className="text-sec-strong">{preview.error.message}</span>}
             {plan && (
               <div className="flex flex-col gap-2">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <span className="font-semibold">Yeni toplam</span>
+                  <span className="font-semibold">{t('reservations.edit.newTotal')}</span>
                   <span className="text-lg font-bold">{formatMoney(plan.after.total, currency)}</span>
                 </div>
                 <p className="text-xs text-ink-muted">
-                  Şu an {formatMoney(plan.before.total, currency)}
-                  {plan.after.discountTotal !== '0.00' && ` · indirim −${formatMoney(plan.after.discountTotal, currency)}${plan.after.promotion ? ` (${plan.after.promotion.name})` : ''}`}
+                  {t('reservations.edit.currentTotal', { amount: formatMoney(plan.before.total, currency) })}
+                  {plan.after.discountTotal !== '0.00' &&
+                    ` · ${t('reservations.edit.discountAmount', { amount: formatMoney(plan.after.discountTotal, currency) })}${plan.after.promotion ? ` (${plan.after.promotion.name})` : ''}`}
                 </p>
                 {plan.discount && (
-                  <Alert tone={OUTCOME_TONES[plan.discount.outcome] ?? 'info'} title="İndirim">
+                  <Alert tone={OUTCOME_TONES[plan.discount.outcome] ?? 'info'} title={t('reservations.edit.discount')}>
                     {plan.discount.message}
                   </Alert>
                 )}
@@ -320,26 +326,26 @@ export function EditReservationDialog({ reservation, onClose, onSaved, onError }
         )}
 
         <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1 text-sm font-bold text-ink">Fiyat</legend>
+          <legend className="mb-1 text-sm font-bold text-ink">{t('reservations.detail.priceCard')}</legend>
           {decisionRequired && (
-            <Alert tone="warning" title="Fiyat kararı gerekli">
-              Bu rezervasyonun fiyatı elle girilmişti. Yeni konaklama için sistem fiyatını seçin ya da yeni elle fiyat girin.
+            <Alert tone="warning" title={t('reservations.edit.decisionTitle')}>
+              {t('reservations.edit.decisionText')}
             </Alert>
           )}
-          <PriceOption checked={priceMode === 'KEEP'} onChange={() => setPriceMode('KEEP')} disabled={busy} label="Anlaşılan fiyatı koru" hint={agencyChanged || (agency && boardChanged) ? 'Acente ya da pansiyon değiştiği için geceler yeni kaynağın fiyatıyla yeniden hesaplanır; fiyatı elle girilmiş rezervasyonda fiyat kalır.' : 'Değişmeyen geceler eski fiyatında kalır; eklenen geceler güncel fiyatla hesaplanır. Oda tipi değişirse tüm geceler yeni tipin fiyatıyla.'} />
-          <PriceOption checked={priceMode === 'CALCULATED'} onChange={() => setPriceMode('CALCULATED')} disabled={busy} label={agency ? 'Güncel kontrat fiyatıyla yeniden hesapla' : 'Güncel sistem fiyatıyla yeniden hesapla'} hint={inHouse ? 'İçerideki misafirin geçmiş geceleri değişmez.' : agency ? `Tüm geceler ${agency.name} kontratının bugünkü fiyatıyla.` : 'Tüm geceler bugünkü taban fiyat ve sezon çarpanıyla.'} />
+          <PriceOption checked={priceMode === 'KEEP'} onChange={() => setPriceMode('KEEP')} disabled={busy} label={t('reservations.edit.keepPrice')} hint={agencyChanged || (agency && boardChanged) ? t('reservations.edit.keepPriceAgencyHint') : t('reservations.edit.keepPriceHint')} />
+          <PriceOption checked={priceMode === 'CALCULATED'} onChange={() => setPriceMode('CALCULATED')} disabled={busy} label={agency ? t('reservations.edit.recalcContract') : t('reservations.edit.recalcSystem')} hint={inHouse ? t('reservations.edit.recalcInHouseHint') : agency ? t('reservations.edit.recalcContractHint', { agency: agency.name }) : t('reservations.edit.recalcSystemHint')} />
           {canOverridePrice && (
-            <PriceOption checked={priceMode === 'MANUAL'} onChange={() => setPriceMode('MANUAL')} disabled={busy} label="Elle fiyat gir" hint="Toplam gecelere eşit bölünür; gerekçe denetim izine yazılır." />
+            <PriceOption checked={priceMode === 'MANUAL'} onChange={() => setPriceMode('MANUAL')} disabled={busy} label={t('reservations.edit.manualPrice')} hint={t('reservations.edit.manualPriceHint')} />
           )}
           {priceMode === 'MANUAL' && (
             <div className="flex flex-wrap gap-3 pl-6">
-              <Input label={`Toplam (${reservation.currency})`} inputMode="decimal" value={manual.total} onChange={(e) => setManual((c) => ({ ...c, total: e.target.value }))} error={errors['price.total']} disabled={busy} className="w-40" />
-              <Input label="Gerekçe" value={manual.note} onChange={(e) => setManual((c) => ({ ...c, note: e.target.value }))} error={errors['price.note']} disabled={busy} className="w-full sm:w-72" />
+              <Input label={t('reservations.form.totalWithCurrency', { currency: reservation.currency })} inputMode="decimal" value={manual.total} onChange={(e) => setManual((c) => ({ ...c, total: e.target.value }))} error={errors['price.total']} disabled={busy} className="w-40" />
+              <Input label={t('reservations.form.justification')} value={manual.note} onChange={(e) => setManual((c) => ({ ...c, note: e.target.value }))} error={errors['price.note']} disabled={busy} className="w-full sm:w-72" />
             </div>
           )}
         </fieldset>
 
-        <Textarea label="Not" rows={3} maxLength={2000} value={form.notes} onChange={set('notes')} disabled={busy} error={errors.notes} />
+        <Textarea label={t('reservations.form.notes')} rows={3} maxLength={2000} value={form.notes} onChange={set('notes')} disabled={busy} error={errors.notes} />
       </form>
     </Modal>
   );

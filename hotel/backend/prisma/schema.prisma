@@ -967,19 +967,23 @@ model Hotel {
   reviews                Review[]
   reviewImports          ReviewImport[]
   reviewAnomalies        ReviewAnomaly[]
+  exchangeRateSettings   ExchangeRateSettings?
 }
 
 model User {
-  id           String    @id @default(uuid())
-  hotelId      String
-  email        String    @unique
-  passwordHash String
-  name         String
-  role         UserRole  @default(FRONT_DESK)
-  isActive     Boolean   @default(true)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  deletedAt    DateTime?
+  id              String    @id @default(uuid())
+  hotelId         String
+  email           String    @unique
+  passwordHash    String
+  name            String
+  role            UserRole  @default(FRONT_DESK)
+  isActive        Boolean   @default(true)
+  /// Arayüz dili ve tutarların yanında gösterilecek para birimi (modül 60).
+  locale          String    @default("tr")
+  displayCurrency String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
 
   hotel         Hotel          @relation(fields: [hotelId], references: [id])
   refreshTokens RefreshToken[]
@@ -2714,14 +2718,18 @@ model Payment {
 /// girilirse güncellenir, denetim izi eski değeri tutar). Ödeme kendi kurunu
 /// saklar: kur sonradan değişse de geçmiş ödeme değişmez.
 model ExchangeRate {
-  id        String   @id @default(uuid())
-  hotelId   String
-  currency  String
-  date      DateTime @db.Date
-  rate      Decimal  @db.Decimal(12, 6)
-  enteredBy String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String             @id @default(uuid())
+  hotelId      String
+  currency     String
+  date         DateTime           @db.Date
+  rate         Decimal            @db.Decimal(12, 6)
+  enteredBy    String
+  /// Kaynağı (modül 60): personel girdi ya da TCMB'den çekildi. Elle girilen kur TCMB'ninkiyle ezilmez.
+  source       ExchangeRateSource @default(MANUAL)
+  /// TCMB bülteninin günü (iş gününden önceki son bülten).
+  bulletinDate DateTime?          @db.Date
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
 
   hotel Hotel @relation(fields: [hotelId], references: [id])
 
@@ -6650,6 +6658,11 @@ model Invoice {
   ledgerAccountId   String?
   guestId           String?
   currency          String
+  /// Döviz karşılığı (modül 60): fatura TL kesilir, tutarın döviz karşılığı kur ve günüyle not olarak yazılır.
+  foreignCurrency   String?
+  foreignRate       Decimal?             @db.Decimal(12, 6)
+  foreignTotal      Decimal?             @db.Decimal(14, 2)
+  foreignRateDate   DateTime?            @db.Date
   exchangeRate      Decimal?             @db.Decimal(12, 6)
   issueDate         DateTime?            @db.Date
   issuedAt          DateTime?
@@ -9618,4 +9631,36 @@ model ReviewAnomaly {
 
   @@unique([hotelId, topic, weekStart])
   @@index([hotelId, createdAt])
+}
+
+/**
+ * ══════════════════ Çoklu dil ve para birimi (modül 60) ══════════════════
+ */
+
+enum ExchangeRateSource {
+  MANUAL
+  TCMB
+}
+
+enum ExchangeRateKind {
+  FOREX_BUYING
+  FOREX_SELLING
+  BANKNOTE_BUYING
+  BANKNOTE_SELLING
+}
+
+/// Otelin kur ayarı: TCMB'den günlük çekme, hangi kur türü, hangi dövizler.
+model ExchangeRateSettings {
+  hotelId     String           @id
+  autoFetch   Boolean          @default(false)
+  rateKind    ExchangeRateKind @default(FOREX_BUYING)
+  currencies  String[]         @default(["USD", "EUR", "GBP"])
+  lastFetchAt DateTime?
+  lastFetchOk Boolean?
+  lastMessage String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  updatedBy   String?
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
 }

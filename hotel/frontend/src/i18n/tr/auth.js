@@ -1,0 +1,23 @@
+/** Giriş ekranı ve oturum. Anahtarlar `auth.` ile başlar. */
+export default Object.freeze({
+  'auth.login.headline': 'Otel operasyonunuz',
+  'auth.login.headlineAccent': 'tek panelde.',
+  'auth.login.highlight.rooms.title': 'Oda envanteri',
+  'auth.login.highlight.rooms.text': 'Doluluk, kat hizmeti ve arıza kayıtları tek listede.',
+  'auth.login.highlight.availability.title': 'Müsaitlik takvimi',
+  'auth.login.highlight.availability.text': 'Oda tipi bazında gün gün boş oda görünümü.',
+  'auth.login.highlight.assignment.title': 'Oda atama',
+  'auth.login.highlight.assignment.text': 'Bekleyen rezervasyonlara önerili veya otomatik atama.',
+  'auth.login.footer': 'FlexAI · FlexHotel yönetim paneli',
+  'auth.login.title': 'Giriş yap',
+  'auth.login.subtitle': 'Devam etmek için hesabınızla oturum açın.',
+  'auth.login.email': 'E-posta',
+  'auth.login.emailPlaceholder': 'ornek@otel.com',
+  'auth.login.password': 'Şifre',
+  'auth.login.showPassword': 'Şifreyi göster',
+  'auth.login.hidePassword': 'Şifreyi gizle',
+  'auth.login.submit': 'Giriş yap',
+  'auth.login.submitting': 'Giriş yapılıyor…',
+  'auth.login.failed': 'Giriş yapılamadı',
+  'auth.logout': 'Çıkış yap',
+});

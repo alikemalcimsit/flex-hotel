@@ -19,6 +19,7 @@ import {
 import { Alert, Button, Icon, Input, Select, Spinner, Textarea } from '@hotelos/ui';
 import { ChoiceChips } from '../../components/ChoiceChips.jsx';
 import { Modal } from '../../components/Modal.jsx';
+import { useT } from '../../i18n/index.jsx';
 import { api, apiPost } from '../../lib/api.js';
 import { formatDate, formatMoney } from '../../lib/format.js';
 import { PAYMENT_METHOD_ICONS, absolute, cashKeys, formatRate, kindLabel, methodLabel } from '../../lib/payments.js';
@@ -29,8 +30,9 @@ import { LedgerAccountField } from '../accounting/LedgerAccountField.jsx';
 
 const QUOTE_DEBOUNCE_MS = 350;
 
-const REFUND_REASONS = Object.freeze(['Teminat iadesi', 'Fazla ödeme', 'Erken ayrılış', 'Hizmet iptali']);
-const VOID_REASONS = Object.freeze(['Yanlış tutar girildi', 'Yanlış folyoya girildi', 'Çift giriş', 'Yanlış yöntem']);
+/** Hazır gerekçeler; metin `folio.refundReason.<anahtar>` / `folio.paymentVoidReason.<anahtar>` sözlükte. */
+const REFUND_REASONS = Object.freeze(['depositReturn', 'overpayment', 'earlyDeparture', 'serviceCancelled']);
+const VOID_REASONS = Object.freeze(['wrongAmount', 'wrongFolio', 'duplicate', 'wrongMethod']);
 
 /**
  * Ödeme al / iade iste (modül 17).
@@ -50,6 +52,7 @@ const VOID_REASONS = Object.freeze(['Yanlış tutar girildi', 'Yanlış folyoya 
  * }} props
  */
 export function PaymentDialog({ mode, target, onClose, onDone }) {
+  const t = useT();
   const refund = mode === 'refund';
   const [requestId] = useState(newRequestId);
   const methods = refund ? REFUND_METHODS : PAYMENT_METHODS;
@@ -95,10 +98,14 @@ export function PaymentDialog({ mode, target, onClose, onDone }) {
       return apiPost(`/payments/stays/${target.reservationId}`, body);
     },
     onSuccess: (result) => {
-      if (!result.created) toastSuccess('Bu işlem zaten kaydedilmişti; ikinci kez yazılmadı');
+      if (!result.created) toastSuccess(t('folio.payment.duplicate'));
       else if (result.payment.status === 'PENDING') {
-        toastSuccess(`${kindLabel(result.payment.kind)} onaya gönderildi; başka bir yetkili onaylayınca bakiyeye girer`);
-      } else toastSuccess(`${methodLabel(result.payment.method)} ödeme işlendi: ${formatMoney(absolute(result.payment.folioAmount), target.currency)}`);
+        toastSuccess(t('folio.payment.sentForApproval', { kind: kindLabel(result.payment.kind) }));
+      } else {
+        toastSuccess(
+          t('folio.payment.posted', { method: methodLabel(result.payment.method), amount: formatMoney(absolute(result.payment.folioAmount), target.currency) }),
+        );
+      }
       onDone(result);
       onClose();
     },
@@ -135,14 +142,14 @@ export function PaymentDialog({ mode, target, onClose, onDone }) {
       return;
     }
     if (foreign && !shownRate) {
-      setErrors({ currency: quote.data?.problem ?? 'Kur bekleniyor; birazdan tekrar deneyin' });
+      setErrors({ currency: quote.data?.problem ?? t('folio.payment.rateWaiting') });
       return;
     }
     setErrors({});
     mutation.mutate(body);
   }
 
-  const title = refund ? `İade — ${target.name}` : target.advance ? `Ön ödeme al — ${target.name}` : `Ödeme al — ${target.name}`;
+  const title = t(refund ? 'folio.payment.titleRefund' : target.advance ? 'folio.payment.titleAdvance' : 'folio.payment.title', { name: target.name });
   const referenceRequired = PAYMENT_REFERENCE_REQUIRED_METHODS.includes(method);
 
   return (
@@ -153,24 +160,30 @@ export function PaymentDialog({ mode, target, onClose, onDone }) {
       onClose={busy ? () => {} : onClose}
       footer={
         <>
-          <Button variant="outline" onClick={onClose} disabled={busy}>Vazgeç</Button>
+          <Button variant="outline" onClick={onClose} disabled={busy}>{t('common.cancel')}</Button>
           <Button type="submit" form="payment-form" icon={refund ? 'rotateCcw' : 'wallet'} disabled={busy}>
-            {busy ? 'Kaydediliyor…' : refund ? 'İadeyi onaya gönder' : quote.data?.requiresApproval ? 'Onaya gönder' : 'Ödemeyi işle'}
+            {busy
+              ? t('common.saving')
+              : refund
+                ? t('folio.payment.submitRefund')
+                : quote.data?.requiresApproval
+                  ? t('folio.sendForApproval')
+                  : t('folio.payment.submit')}
           </Button>
         </>
       }
     >
       <form id="payment-form" onSubmit={submit} className="flex flex-col gap-4" noValidate>
         {serverError && (
-          <Alert tone={serverError.code === 'RATE_CHANGED' ? 'warning' : 'danger'} title={serverError.code === 'RATE_CHANGED' ? 'Kur değişti' : 'Kaydedilmedi'}>
+          <Alert tone={serverError.code === 'RATE_CHANGED' ? 'warning' : 'danger'} title={serverError.code === 'RATE_CHANGED' ? t('folio.payment.rateChanged') : t('common.notSaved')}>
             {serverError.message}
           </Alert>
         )}
         <BalanceLine mode={mode} target={target} />
 
         <div className="flex flex-col gap-1.5">
-          <span className="text-sm font-semibold text-ink">{refund ? 'İade yöntemi' : 'Ödeme yöntemi'}</span>
-          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Yöntem">
+          <span className="text-sm font-semibold text-ink">{refund ? t('folio.payment.refundMethod') : t('folio.payment.method')}</span>
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label={t('folio.payment.methodGroup')}>
             {methods.map((value) => (
               <button
                 key={value}
@@ -191,9 +204,9 @@ export function PaymentDialog({ mode, target, onClose, onDone }) {
 
         <div className="grid grid-cols-[1fr_8rem] gap-3">
           <Input
-            label={refund ? 'İade tutarı' : 'Tutar'}
+            label={refund ? t('folio.payment.refundAmount') : t('folio.payment.amount')}
             inputMode="decimal"
-            placeholder="ör. 2500 ya da 2500,50"
+            placeholder={t('folio.payment.amountPlaceholder')}
             value={amount}
             onChange={(event) => setAmount(event.target.value)}
             error={errors.amount}
@@ -201,7 +214,7 @@ export function PaymentDialog({ mode, target, onClose, onDone }) {
             autoFocus
           />
           <Select
-            label="Para birimi"
+            label={t('folio.payment.currency')}
             value={currency}
             onChange={(event) => setCurrency(event.target.value)}
             options={currencies.map((value) => ({ value, label: value }))}
@@ -209,16 +222,16 @@ export function PaymentDialog({ mode, target, onClose, onDone }) {
             disabled={busy || !foreignAllowed || currencies.length < 2}
           />
         </div>
-        {!foreignAllowed && usableRates.length > 0 && <p className="-mt-2 text-xs text-ink-muted">Döviz yalnızca nakit ya da havaleyle alınır.</p>}
+        {!foreignAllowed && usableRates.length > 0 && <p className="-mt-2 text-xs text-ink-muted">{t('folio.payment.foreignMethodsOnly')}</p>}
         {foreignAllowed && rates.isSuccess && usableRates.length === 0 && (
-          <p className="-mt-2 text-xs text-ink-muted">Döviz almak için önce günün kurunu girin (Kasa → Kurlar).</p>
+          <p className="-mt-2 text-xs text-ink-muted">{t('folio.payment.noRates')}</p>
         )}
 
         <Input
-          label={PAYMENT_REFERENCE_LABELS[method]}
+          label={t(`folio.paymentReference.${method}`, PAYMENT_REFERENCE_LABELS[method])}
           value={reference}
           maxLength={PAYMENT_REFERENCE_MAX}
-          placeholder={referenceRequired ? 'Kart numarası değil; slip / dekont numarası' : ''}
+          placeholder={referenceRequired ? t('folio.payment.referencePlaceholder') : ''}
           onChange={(event) => setReference(event.target.value)}
           error={errors.reference}
           disabled={busy}
@@ -229,7 +242,7 @@ export function PaymentDialog({ mode, target, onClose, onDone }) {
             value={ledgerAccount}
             onChange={setLedgerAccount}
             currency={target.currency}
-            hint="Boş bırakılırsa rezervasyonun acentesinin carisine yazılır; acentesiz rezervasyonda cari seçin."
+            hint={t('folio.payment.ledgerHint')}
             error={errors.ledgerAccountId}
             disabled={busy}
           />
@@ -237,11 +250,17 @@ export function PaymentDialog({ mode, target, onClose, onDone }) {
 
         {refund ? (
           <>
-            <ChoiceChips label="Hazır gerekçeler" options={REFUND_REASONS.map((value) => ({ value, label: value }))} value={reason} onChange={setReason} disabled={busy} />
-            <Textarea label="Gerekçe" rows={2} value={reason} maxLength={PAYMENT_REASON_MAX} onChange={(event) => setReason(event.target.value)} error={errors.reason} disabled={busy} />
+            <ChoiceChips
+              label={t('folio.quickReasons')}
+              options={REFUND_REASONS.map((key) => t(`folio.refundReason.${key}`)).map((value) => ({ value, label: value }))}
+              value={reason}
+              onChange={setReason}
+              disabled={busy}
+            />
+            <Textarea label={t('folio.reason')} rows={2} value={reason} maxLength={PAYMENT_REASON_MAX} onChange={(event) => setReason(event.target.value)} error={errors.reason} disabled={busy} />
           </>
         ) : (
-          <Input label="Not (isteğe bağlı)" value={note} maxLength={PAYMENT_NOTE_MAX} onChange={(event) => setNote(event.target.value)} error={errors.note} disabled={busy} />
+          <Input label={t('folio.payment.note')} value={note} maxLength={PAYMENT_NOTE_MAX} onChange={(event) => setNote(event.target.value)} error={errors.note} disabled={busy} />
         )}
 
         <QuotePreview query={quote} enabled={quoteValid} refund={refund} folioCurrency={target.currency} />
@@ -265,15 +284,16 @@ function suggestedAmount(mode, target) {
 
 /** @param {{ mode: 'payment' | 'refund', target: { balance?: string | null, refundable?: string | null, currency: string } }} props */
 function BalanceLine({ mode, target }) {
+  const t = useT();
   if (target.balance === undefined || target.balance === null) return null;
   const balance = Number(target.balance);
   return (
     <dl className="grid grid-cols-2 gap-y-1 rounded-item bg-surface-muted px-4 py-3 text-sm">
-      <dt className="text-ink-muted">{balance < 0 ? 'Misafirin alacağı' : 'Bakiye (borç)'}</dt>
+      <dt className="text-ink-muted">{balance < 0 ? t('folio.payment.guestCredit') : t('folio.payment.balanceDue')}</dt>
       <dd className="text-right font-bold tabular-nums">{formatMoney(absolute(target.balance), target.currency)}</dd>
       {mode === 'refund' && target.refundable !== undefined && target.refundable !== null && (
         <>
-          <dt className="text-ink-muted">En fazla iade</dt>
+          <dt className="text-ink-muted">{t('folio.payment.maxRefund')}</dt>
           <dd className="text-right tabular-nums">{formatMoney(target.refundable, target.currency)}</dd>
         </>
       )}
@@ -286,31 +306,31 @@ function BalanceLine({ mode, target }) {
  * @param {{ query: any, enabled: boolean, refund: boolean, folioCurrency: string }} props
  */
 function QuotePreview({ query, enabled, refund, folioCurrency }) {
+  const t = useT();
   if (!enabled) {
-    return <p className="rounded-item bg-surface-muted px-4 py-3 text-xs text-ink-muted">Tutarı girince folyoya girecek tutar ve onay durumu burada görünür.</p>;
+    return <p className="rounded-item bg-surface-muted px-4 py-3 text-xs text-ink-muted">{t('folio.quote.hint')}</p>;
   }
-  if (query.isPending) return <Spinner label="Hesaplanıyor…" className="py-2" />;
-  if (query.isError) return <p className="text-xs text-sec-strong">Önizleme alınamadı: {query.error.message}</p>;
+  if (query.isPending) return <Spinner label={t('folio.quote.calculating')} className="py-2" />;
+  if (query.isError) return <p className="text-xs text-sec-strong">{t('folio.preview.failed', { message: query.error.message })}</p>;
   const data = query.data;
-  if (data.problem) return <Alert tone="warning" title="Bu para biriminde ödeme alınamıyor">{data.problem}</Alert>;
+  if (data.problem) return <Alert tone="warning" title={t('folio.quote.currencyUnavailable')}>{data.problem}</Alert>;
   return (
     <div className="flex flex-col gap-2">
       <dl className="grid grid-cols-2 gap-y-1 rounded-item bg-surface-muted px-4 py-3 text-sm">
         {data.rate && (
           <>
-            <dt className="text-ink-muted">Kur ({formatDate(data.rateDate)})</dt>
+            <dt className="text-ink-muted">{t('folio.quote.rate', { date: formatDate(data.rateDate) })}</dt>
             <dd className="text-right tabular-nums">1 {data.currency} = {formatRate(data.rate)} {folioCurrency}</dd>
           </>
         )}
-        <dt className="font-bold text-ink">{refund ? 'Folyodan düşecek ödeme' : 'Folyoya girecek'}</dt>
+        <dt className="font-bold text-ink">{refund ? t('folio.quote.refundTotal') : t('folio.quote.total')}</dt>
         <dd className="text-right font-bold tabular-nums">{formatMoney(absolute(data.folioAmount), folioCurrency)}</dd>
       </dl>
       {refund ? (
-        <p className="text-xs text-ink-muted">İade her zaman ikinci bir yetkilinin onayına gider; onaylanınca kasadan çıkar. Kendi isteğinizi onaylayamazsınız.</p>
+        <p className="text-xs text-ink-muted">{t('folio.quote.refundHint')}</p>
       ) : data.requiresApproval ? (
-        <Alert tone="warning" title="Bu ödeme onaya gidecek">
-          Tutar büyük ödeme eşiğine ({formatMoney(data.threshold, folioCurrency)}) eşit ya da üstünde. İkinci bir yetkili onaylayana kadar
-          bakiyeye ve kasaya girmez.
+        <Alert tone="warning" title={t('folio.quote.approvalTitle')}>
+          {t('folio.quote.approvalBody', { threshold: formatMoney(data.threshold, folioCurrency) })}
         </Alert>
       ) : null}
     </div>
@@ -324,12 +344,13 @@ function QuotePreview({ query, enabled, refund, folioCurrency }) {
  * @param {{ payment: { id: string, kind: string, method: string, amount: string, currency: string, folioAmount: string }, folioCurrency: string, onClose: () => void, onDone: () => void }} props
  */
 export function VoidPaymentDialog({ payment, folioCurrency, onClose, onDone }) {
+  const t = useT();
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
   const mutation = useMutation({
     mutationFn: (body) => apiPost(`/payments/${payment.id}/void`, body),
     onSuccess: () => {
-      toastSuccess('İptal isteği onaya gönderildi; başka bir yetkili onaylayınca işlenir');
+      toastSuccess(t('folio.void.sent'));
       onDone();
       onClose();
     },
@@ -341,7 +362,7 @@ export function VoidPaymentDialog({ payment, folioCurrency, onClose, onDone }) {
     event.preventDefault();
     const result = validateWith(paymentVoidSchema, { reason });
     if (!result.ok) {
-      setError(result.errors.reason ?? 'Gerekçe geçersiz');
+      setError(result.errors.reason ?? t('folio.reasonInvalid'));
       return;
     }
     setError('');
@@ -353,13 +374,13 @@ export function VoidPaymentDialog({ payment, folioCurrency, onClose, onDone }) {
     <Modal
       open
       size="sm"
-      title="Ödeme iptali iste"
+      title={t('folio.paymentVoid.title')}
       onClose={busy ? () => {} : onClose}
       footer={
         <>
-          <Button variant="outline" onClick={onClose} disabled={busy}>Vazgeç</Button>
+          <Button variant="outline" onClick={onClose} disabled={busy}>{t('common.cancel')}</Button>
           <Button type="submit" form="void-payment-form" variant="danger" icon="rotateCcw" disabled={busy}>
-            {busy ? 'Gönderiliyor…' : 'İptali onaya gönder'}
+            {busy ? t('folio.sending') : t('folio.paymentVoid.submit')}
           </Button>
         </>
       }
@@ -372,10 +393,16 @@ export function VoidPaymentDialog({ payment, folioCurrency, onClose, onDone }) {
           {foreign && ` (${formatMoney(absolute(payment.folioAmount), folioCurrency)})`}
         </p>
         <p className="text-xs text-ink-muted">
-          Hatalı girişi düzeltir: onaylanınca ters tutarlı bir iptal kaydı işlenir, ödeme silinmez. Misafire para geri veriliyorsa iade kullanın.
+          {t('folio.paymentVoid.hint')}
         </p>
-        <ChoiceChips label="Hazır gerekçeler" options={VOID_REASONS.map((value) => ({ value, label: value }))} value={reason} onChange={setReason} disabled={busy} />
-        <Textarea label="Gerekçe" rows={2} value={reason} maxLength={PAYMENT_REASON_MAX} onChange={(event) => setReason(event.target.value)} error={error} disabled={busy} />
+        <ChoiceChips
+          label={t('folio.quickReasons')}
+          options={VOID_REASONS.map((key) => t(`folio.paymentVoidReason.${key}`)).map((value) => ({ value, label: value }))}
+          value={reason}
+          onChange={setReason}
+          disabled={busy}
+        />
+        <Textarea label={t('folio.reason')} rows={2} value={reason} maxLength={PAYMENT_REASON_MAX} onChange={(event) => setReason(event.target.value)} error={error} disabled={busy} />
       </form>
     </Modal>
   );

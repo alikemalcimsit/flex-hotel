@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Alert, Button } from '@hotelos/ui';
 import { Modal } from '../../components/Modal.jsx';
+import { useT } from '../../i18n/index.jsx';
 import { MoveReasonField } from './MoveReasonField.jsx';
+import { richText } from './planText.jsx';
 
 /**
  * Sürükle-bırakla içerideki misafiri taşımadan önce onay (sebep ile).
@@ -19,30 +21,31 @@ import { MoveReasonField } from './MoveReasonField.jsx';
  * }} props
  */
 export function MoveConfirmDialog({ move, isPending, error, onConfirm, onClose }) {
+  const t = useT();
   const [reason, setReason] = useState('');
 
   return (
     <Modal
       open
       size="sm"
-      title="İçerideki misafir taşınacak"
+      title={t('roomPlan.moveConfirm.title')}
       onClose={isPending ? () => {} : onClose}
       footer={
         <>
           <Button variant="outline" onClick={onClose} disabled={isPending}>
-            Vazgeç
+            {t('common.cancel')}
           </Button>
           <Button icon="key" onClick={() => onConfirm(reason.trim())} disabled={isPending}>
-            {isPending ? 'Taşınıyor…' : 'Taşı'}
+            {isPending ? t('roomPlan.moveConfirm.moving') : t('roomPlan.moveConfirm.move')}
           </Button>
         </>
       }
     >
       <p className="text-sm leading-relaxed text-ink-soft">
-        <strong className="text-ink">{move.guestName ?? 'Misafir'}</strong> {move.roomNumber} numaralı odadan{' '}
-        <strong className="text-ink">{move.room.number}</strong> numaralı odaya taşınacak. {move.roomNumber} numaralı
-        oda boş ve kirli olarak işaretlenecek; bu geceden itibaren {move.room.number} dolu sayılacak. Önceki geceler
-        geçmişte {move.roomNumber} odasında kalır.
+        {richText(t('roomPlan.moveConfirm.body', { from: move.roomNumber, to: move.room.number }), {
+          guest: <strong className="text-ink">{move.guestName ?? t('roomPlan.shared.guest')}</strong>,
+          toRoom: <strong className="text-ink">{move.room.number}</strong>,
+        })}
       </p>
 
       <div className="mt-5">

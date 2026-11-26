@@ -52,6 +52,8 @@ import {
 } from './shared.js';
 import { buyerFromAccount, composeInvoice, eventDefaultBuyer, eventSource, folioDefaultBuyer, folioSource, manualCharges } from './sources.js';
 import { lookupTaxpayer } from './taxpayers.js';
+import { EXCHANGE_RATE_STALE_DAYS, convertFromHotelCurrency } from '@hotelos/hotel-contracts';
+import { latestRateFor } from '../payments/service.js';
 import { buildUblInvoice } from './ubl.js';
 
 /**
@@ -464,7 +466,7 @@ export async function updateDraft(hotelId, invoiceId, input) {
     if (invoice.status !== 'DRAFT') throw new ConflictError('Kesilmiş fatura değiştirilemez (iptal edip yeniden kesin)', 'INVOICE_NOT_DRAFT');
     if (invoice.updatedAt.getTime() !== new Date(input.expectedUpdatedAt).getTime()) throw new StaleWriteError();
     /** @type {any} */
-    const data = { buyer: input.buyer, ...buyerColumns(input.buyer), note: input.note ?? null };
+    const data = { buyer: input.buyer, ...buyerColumns(input.buyer), note: input.note ?? null, ...(input.foreignCurrency !== undefined ? { foreignCurrency: input.foreignCurrency && input.foreignCurrency !== (await hotelContext(hotelId)).currency ? input.foreignCurrency : null } : {}) };
     if (input.lines) {
       if (!linesEditable(invoice, invoice.event)) throw new ValidationError('Bu faturanın satırları kaynağından gelir; düzenlenemez', { field: 'lines' });
       const composed = composeInvoice({ source: invoice.source, charges: await manualCharges(tx, hotelId, input.lines), taxCodes: await loadTaxCodeMap(tx, hotelId) });
@@ -584,6 +586,9 @@ async function issueDraft(hotelId, invoiceId, input) {
     const notes = [];
     if (invoice.note) notes.push(invoice.note);
     if (invoice.serviceFrom && invoice.serviceTo) notes.push(`Hizmet dönemi: ${dotted(/** @type {string} */ (day(invoice.serviceFrom)))} – ${dotted(/** @type {string} */ (day(invoice.serviceTo)))}`);
+    // Döviz karşılığı (modül 60): fatura TL kalır; toplamın karşılığı kesim gününe kadar girilmiş son kurla not olarak yazılır.
+    const foreign = invoice.foreignCurrency ? await foreignEquivalent(hotelId, invoice.foreignCurrency, composed.totals.payable, issueDate) : null;
+    if (foreign) notes.push(foreign.note);
     if (settings.footerNote) notes.push(settings.footerNote);
     if (settings.bankInfo) notes.push(settings.bankInfo);
     const xml = buildUblInvoice({
@@ -615,6 +620,7 @@ async function issueDraft(hotelId, invoiceId, input) {
         issuedBy: actor,
         ...buyerColumns(buyer),
         ...totalColumns(composed.totals),
+        ...(foreign ? { foreignRate: foreign.rate, foreignTotal: foreign.total, foreignRateDate: dateOnly(foreign.rateDate) } : {}),
         receiverAlias,
         edocState: 'QUEUED',
         edocProvider: provider.name,
@@ -920,4 +926,26 @@ export async function createFolioInvoiceDraft(hotelId, folioId) {
   if (existing) return { created: false, skipped: `Faturası kesilmiş: ${existing.number}` };
   const result = await createDraft(hotelId, { source: 'FOLIO', folioId }, { system: true });
   return { created: result.created, invoiceId: result.invoiceId, ...(result.created ? {} : { skipped: 'Taslağı zaten var' }) };
+}
+
+/**
+ * Toplamın döviz karşılığı ve faturaya yazılacak not (modül 60). Kur yoksa kesim durur (yanlış karşılık yazılmasın).
+ * @param {string} hotelId @param {string} currency @param {string} payable @param {string} issueDate
+ */
+async function foreignEquivalent(hotelId, currency, payable, issueDate) {
+  const latest = await latestRateFor(hotelId, currency, issueDate);
+  // Eski kur sessizce yazılmasın (ödemedeki eşikle aynı).
+  if (latest && (new Date(`${issueDate}T00:00:00Z`).getTime() - new Date(`${latest.date}T00:00:00Z`).getTime()) / 86_400_000 > EXCHANGE_RATE_STALE_DAYS) {
+    throw new ConflictError(`${currency} kuru ${latest.date.split('-').reverse().join('.')} tarihli (${EXCHANGE_RATE_STALE_DAYS} günden eski); güncel kuru girin ya da TCMB'den çekin.`, 'FOREIGN_RATE_STALE');
+  }
+  if (!latest) throw new ConflictError(`${currency} kuru girilmemiş; döviz karşılığı yazılamaz. Kurlar ekranından girin ya da TCMB'den çekin, ya da döviz karşılığını kaldırın.`, 'FOREIGN_RATE_MISSING');
+  const total = convertFromHotelCurrency(payable, latest.rate);
+  const tr = (value, digits = 2) => Number(value).toLocaleString('tr-TR', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  const source = latest.source === 'TCMB' ? 'TCMB' : 'otel kuru';
+  return {
+    rate: Number(latest.rate).toFixed(6),
+    total,
+    rateDate: latest.date,
+    note: `Döviz karşılığı: ${tr(total)} ${currency} (1 ${currency} = ${Number(latest.rate).toLocaleString('tr-TR', { minimumFractionDigits: 4, maximumFractionDigits: 6 })} TL, ${source}, ${latest.date.split('-').reverse().join('.')})`,
+  };
 }

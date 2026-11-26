@@ -48,6 +48,19 @@ export const useAuthStore = create((set, get) => ({
     set(next);
   },
 
+  /**
+   * Oturumdaki kullanıcıyı yeni bir kopyayla günceller (ör. dil / gösterim para birimi tercihi — modül 60);
+   * token'lar ve izinler aynı kalır. Oturum yoksa bir şey yapmaz.
+   * @param {Record<string, unknown>} patch
+   */
+  updateUser: (patch) => {
+    const { user, permissions, accessToken, refreshToken } = get();
+    if (!user) return;
+    const next = { user: { ...user, ...patch }, permissions, accessToken, refreshToken };
+    persist(next);
+    set(next);
+  },
+
   logout: () => {
     const { refreshToken } = get();
     // Sunucuda refresh token'ı iptal et (best-effort — ağ hatası oturumu yine kapatır).

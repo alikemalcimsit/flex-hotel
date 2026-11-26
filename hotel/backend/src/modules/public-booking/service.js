@@ -4,6 +4,9 @@ import { webchatChannelByKey } from '../channels/service.js';
 import { createFromChannelRequest, quoteReservation } from '../reservations/service.js';
 import { getActiveRoomTypes, getHotelSettings } from '../settings/service.js';
 import { widgetPrepaymentLink } from '../payment-gateway/integrations.js';
+import { latestRateMap } from '../payments/service.js';
+import { EXCHANGE_RATE_STALE_DAYS } from '@hotelos/hotel-contracts';
+import { prisma } from '../../db.js';
 import { trimQuoteForPublic } from './rules.js';
 
 /**
@@ -49,9 +52,14 @@ export function assertBookingOrigin(channel, originHeader) {
  * @param {{ hotelId: string, settings?: object }} channel
  */
 export async function publicOptions(channel) {
-  const [hotel, roomTypes] = await Promise.all([getHotelSettings(channel.hotelId), getActiveRoomTypes(channel.hotelId)]);
+  const [hotel, roomTypes, rates, rateSettings] = await Promise.all([getHotelSettings(channel.hotelId), getActiveRoomTypes(channel.hotelId), latestRateMap(channel.hotelId), prisma.exchangeRateSettings.findUnique({ where: { hotelId: channel.hotelId }, select: { currencies: true } })]);
   return {
     hotel: { name: hotel.name, currency: hotel.currency, checkInTime: hotel.checkInTime, checkOutTime: hotel.checkOutTime },
+    // Döviz gösterimi (modül 60): misafir fiyatın yaklaşık karşılığını görür; rezervasyon otelin para biriminde.
+    // Yalnız güncel kurlar (ödemedeki eşik) ve kur ayarındaki dövizler (ayar yoksa girilmiş hepsi).
+    currencies: [...rates.entries()]
+      .filter(([code, row]) => code !== hotel.currency && (!rateSettings || rateSettings.currencies.includes(code)) && (Date.now() - new Date(`${row.date}T00:00:00Z`).getTime()) / 86_400_000 <= EXCHANGE_RATE_STALE_DAYS + 1)
+      .map(([code, row]) => ({ code, rate: Number(row.rate).toFixed(6), date: row.date })),
     roomTypes: roomTypes.map((type) => ({
       id: type.id,
       code: type.code,

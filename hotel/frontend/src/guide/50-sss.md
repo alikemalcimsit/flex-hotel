@@ -433,6 +433,35 @@ Link ayrıntısını açın (**Sanal POS → İşlemler** → satır, `/sanal-po
 - Aynı dosyayı yeni bir yükleme olarak açarsanız önizlemede bütün satırlar **Zaten var** ("Bu yorum zaten kayıtlı") görünür ve atlanır. Aynı yorumlar o sırada başka bir yüklemeyle yazılıyorsa "Bu yorum aynı anda başka bir yüklemeyle kaydedildi" diye atlanır.
 - Mükerrer kuralı: **Yorum no** varsa kaynak + yorum no; yoksa kaynak + gün + puan + yazan + başlık + metnin tamamı (büyük / küçük harf ve boşluk fark etmez). Silinen yorum yeniden yüklenebilir.
 
+## Dil ve döviz
+
+### Kur neden dünkü? Bugünün TCMB kuru neden gelmedi?
+
+- **Bilinçli kural.** İş günü için **bir önceki TCMB bülteni** kullanılır ("önceki günün kuru"): 26 Kasım iş gününde 25 Kasım bülteni. TCMB günün kurunu öğleden sonra ilan eder; önceki günün bülteni gün başında bellidir ve gün boyunca değişmez, böylece aynı gün alınan bütün döviz ödemeleri ve faturalar aynı kuru kullanır. Bugünün bülteni yarının iş gününe yazılır.
+- Hafta sonu ve tatilde bülten yoktur: pazartesinin kuru cuma bülteninden gelir. Kartın rozeti bülten gününü gösterir ("TCMB · 27 Kas 2026").
+- **Gün kapatılmadıysa** iş günü hâlâ dündür; kur da dünün iş gününün kurudur. Günü kapatın, sonraki saatlik turda (ya da hemen **TCMB'den şimdi çek** ile) yeni günün kuru gelir.
+- Kur hiç gelmiyorsa: Kasa → Döviz kurları → **TCMB kurları** kartında **TCMB'den otomatik çek** açık mı, **Son çekme** rozeti **Başarısız** mı (mesajı okuyun: "TCMB'den alınamadı: …")? TCMB'ye ulaşılamıyorsa iş her saat yeniden dener; acil ödeme için kuru elle girin.
+
+### Elle girdiğim kur değişti mi? TCMB benim kurumu ezer mi?
+
+- **Hayır.** O iş günü için elle girilmiş kur TCMB çekmesinde atlanır; son çekme mesajında "atlanan: EUR (elle girilmiş)" yazar ve Güncel kurlar'da rozet **Elle** kalır. Çekmeden sonra elle değiştirdiğiniz kur da artık sizindir.
+- TCMB'den gelen kuru değiştirmeden aynı değerle kaydetmek de onu **Elle** yapar ("onayladım"); o gün TCMB'den güncellenmez.
+- Rozet **TCMB** ise kuru siz girmemişsiniz (ya da hiç kaydetmemişsiniz); kur türü değişince TCMB kaynaklı kur güncellenebilir. Kimin neyi ne zaman yazdığı Aktivite → Denetim kaydı'nda (`ExchangeRate`) görünür: elle girişte kullanıcının e-postası, saatlik işte "TCMB", düğmeyle çekmede "TCMB (kullanıcı)".
+- Ertesi iş günü yeni bir kayıttır: kur yine TCMB'den gelir; her gün elle girmek istiyorsanız otomatik çekmeyi kapatın.
+- Geçmiş ödemeler ve kesilmiş faturalar kendi kurunu sakladığı için kur değişikliğinden etkilenmez.
+
+### Fatura dövizle kesilir mi?
+
+- **Hayır.** Fatura her zaman otelin para biriminde (TL) kesilir; e-belgede belge para birimi TRY'dir. Taslakta **Döviz karşılığı** seçilirse toplamın o dövizdeki karşılığı kesim günündeki kurla faturaya **not** olarak yazılır: "Döviz karşılığı: 236,95 EUR (1 EUR = 50,6441 TL, otel kuru, 26.11.2026)". Tam dövizli e-fatura (satırları ve toplamı dövizde) yoktur.
+- Kesim "kur yok" (`FOREIGN_RATE_MISSING`) ya da "3 günden eski" (`FOREIGN_RATE_STALE`) diye durursa o dövizin güncel kurunu girin ya da TCMB'den çekin; veya döviz karşılığını "Yok"a alın. Ayrıntı: Arka ofis → Faturalar → Döviz karşılığı.
+
+### Ekranların bir kısmı neden Türkçe? English seçtim.
+
+- Arayüz çevirisi **kademeli**dir. Bugün İngilizcesi olan ekranlar: menü, giriş ekranı, üst çubuk / kullanıcı menüsü, ön büro (Gelecekler / Gidecekler / İçeridekiler, giriş ve çıkış), rezervasyonlar, oda planı ve odalar, folyo, kasa ve kurlar, fatura taslağındaki döviz alanı. Diğer ekranlar şimdilik Türkçe görünür ve parça parça taşınacak. Bu bir hata değildir; çevirisi henüz yazılmamış metin Türkçeye düşer.
+- Menü maddesi İngilizce ("Reports") ama ekranın içi Türkçe olabilir: menü tümüyle çevrildi, o ekran henüz çevrilmedi.
+- Fatura PDF'i ve e-belge Türkçedir. Misafire giden e-posta / SMS'in dili sizin dilinizden değil, misafirin uyruğundan seçilir.
+- Dil kullanıcıya kayıtlıdır: başka bir bilgisayarda da İngilizce açılır. Türkçeye dönmek için kullanıcı menüsü → **Arayüz dili** → Türkçe.
+
 ## Genel kullanım soruları
 
 **Bir işi kimin yaptığını nasıl bulurum?** Aktivite → Canlı akış (zincir kimliği ile aktör işleri) ve Aktivite → Denetim kaydı (personel işlemleri; kimlik numaraları maskeli). Folyo kalemi, ödeme, fiş, fatura, demirbaş kartı kendi zaman çizelgesini / hareket geçmişini taşır.
@@ -445,7 +474,7 @@ Link ayrıntısını açın (**Sanal POS → İşlemler** → satır, `/sanal-po
 
 **Demo verisi nasıl sıfırlanır?** Sistem yöneticisi demo betikleriyle (sunucu tarafı). Canlı otelde demo folyoları canlıya alırken temizlenmeli (yedekle, onayla).
 
-**Canlıya alırken unutulmaması gerekenler (özet):** `OPENAI_API_KEY` (AI için), `SETTINGS_SECRET_KEY` (kanal parolaları), nginx yolları (`/socket.io/`, `/webhooks/`, `/webchat/`, misafir uygulaması `/misafir/`), Sanal POS (iyzico üye iş yeri sözleşmesi, canlı anahtar, sunucunun dış adresi, ödeme yöntemi eşlemesinde Sanal POS → banka), otel saat dilimi ve para birimi, büyük ödeme eşiği (varsayılan 0 = onay yok), döviz kurları (personel girer), fatura satıcı + faturalama başlangıcı + seriler, muhasebe başlangıç günü + açılış bakiyeleri + tahsilat eşlemesi, bordro işyeri + parametre teyidi, portal adresi, SMS kanalı, Channex hesabı.
+**Canlıya alırken unutulmaması gerekenler (özet):** `OPENAI_API_KEY` (AI için), `SETTINGS_SECRET_KEY` (kanal parolaları), nginx yolları (`/socket.io/`, `/webhooks/`, `/webchat/`, misafir uygulaması `/misafir/`), Sanal POS (iyzico üye iş yeri sözleşmesi, canlı anahtar, sunucunun dış adresi, ödeme yöntemi eşlemesinde Sanal POS → banka), otel saat dilimi ve para birimi, büyük ödeme eşiği (varsayılan 0 = onay yok), döviz kurları (TCMB'den otomatik çekme açık mı, kur türü muhasebeyle seçildi mi; ya da personel elle girer), fatura satıcı + faturalama başlangıcı + seriler, muhasebe başlangıç günü + açılış bakiyeleri + tahsilat eşlemesi, bordro işyeri + parametre teyidi, portal adresi, SMS kanalı, Channex hesabı.
 
 ## Modül durumu tablosu
 
@@ -554,7 +583,7 @@ Durum sözlüğü: **Tamam** = görev listesindeki maddelerin tümü işaretli v
 | --- | --- | --- | --- |
 | 58 | Emniyet kimlik bildirimi (KBS) | Tamam | kbs-worker. Girişte zorunlu alanlar (cinsiyet, doğum tarihi, anne-baba adı, doğum yeri; ayara göre), kişi başına giriş / çıkış / oda değişikliği bildirimi, geri almada iptal ya da kapatma, zincir (çıkış girişi bekler), yeniden deneme ve zil, gecikme zili, elle bildirildi, mutabakat. **Gerçek servis bağlantısı bekliyor:** Emniyet KBS ve Jandarma JKBS adaptörü tesis yetkisi ve servis dokümanıyla yazılacak; bugün yalnız test ortamı (dışarı göndermez) |
 | 59 | Kimlik / pasaport okuma (OCR) | **Tamam** | |
-| 60 | Çoklu dil & çoklu para birimi | **Planlı** | Misafir portalı ve widget metinleri çok dilli hazır; panel Türkçe; döviz yalnız ödemede |
+| 60 | Çoklu dil & çoklu para birimi | Tamam | Kullanıcı başına arayüz dili (tr / en; kullanıcı menüsü ve giriş ekranı) ve gösterim para birimi (yaklaşık karşılık, kayıt otelin para biriminde); TCMB'den otomatik kur (önceki son bülten, kur türü, saatlik iş, şimdi çek, elle girilen ezilmez, 100 birimlik kurlar); faturada döviz karşılığı notu (fatura TL, tam dövizli e-fatura yok); widget'ta döviz seçici ve yaklaşık fiyat. **Arayüz çevirisi ana ekranlarda; kalanlar kademeli** |
 | 61 | Webhook & açık API | — | Tamam | Anahtarlı okuma + rezervasyon yazma, imzalı webhook, OpenAPI 3.1 |
 | 62 | Donanım entegrasyonları | **Planlı** | |
 | 63 | Multi-tenant zincir konsolu | **Planlı** | Veri modeli otel kapsamlı; konsol yok |
@@ -566,6 +595,6 @@ Tamamı **planlı**dır; kod yok. Başlıklar: 69–74 sağlam zemin (göç sihi
 
 ### Özet sayılar
 
-- 1–68 arası: **56 tamam**, **6 kısmi** (9, 38, 42, 49, 53 ve e-posta bağımlılığıyla 32'nin bildirim adımı), **6 planlı** (60, 62, 63, 64–68 dikey paketler tek satırda sayılırsa). 58 (KBS) tamam sayılır ama gerçek Emniyet / Jandarma servis bağlantısını bekler; 50 (Sanal POS) tamam sayılır ama iyzico sandbox'ında uçtan uca denemeyi ve canlı için üye iş yeri sözleşmesini bekler; 54 (misafir yorumları) tamam sayılır ama yorumları Google / Booking'den otomatik çekmez, elle ya da dosyayla alır ve cevabı platforma göndermez.
+- 1–68 arası: **57 tamam**, **6 kısmi** (9, 38, 42, 49, 53 ve e-posta bağımlılığıyla 32'nin bildirim adımı), **5 planlı** (62, 63, 64–68 dikey paketler tek satırda sayılırsa). 58 (KBS) tamam sayılır ama gerçek Emniyet / Jandarma servis bağlantısını bekler; 50 (Sanal POS) tamam sayılır ama iyzico sandbox'ında uçtan uca denemeyi ve canlı için üye iş yeri sözleşmesini bekler; 54 (misafir yorumları) tamam sayılır ama yorumları Google / Booking'den otomatik çekmez, elle ya da dosyayla alır ve cevabı platforma göndermez; 60 (çoklu dil & para birimi) tamam sayılır ama arayüzün İngilizcesi şimdilik ana ekranlardadır (menü, giriş, ön büro, rezervasyon, oda planı, folyo, kasa ve kurlar), diğer ekranlar kademeli çevrilecek; fatura dövizle değil TL kesilir, döviz karşılığı not olarak yazılır.
 - Otelin **günlük operasyonu** (rezervasyon → giriş → folyo → ödeme → çıkış → fatura → muhasebe; restoran → stok → satın alma; kat hizmetleri, teknik servis, anket, misafir yorumları, spa) uçtan uca çalışır.
 - **Dış dünyaya bağlanan** parçaların bir kısmı taslaktır: e-posta gönderimi, e-belge entegratörü, online kart ödemesi (iyzico bağlantısı yazıldı ve imzaları resmî test vektörleriyle sınandı, ama sandbox'ta uçtan uca denenmedi; bugün uçtan uca Test ortamı çalışır), KBS (gerçek servis bağlantısı; bugün test ortamı, otel resmî ekrandan elle bildirip işaretler), misafir yorumları (Google / Booking API bağlantısı yok; elle / dosya, cevap elle yayınlanır). Ekranlar bunu açıkça söyler; "gönderildi" gibi görünen ama gitmeyen hiçbir şey yoktur.

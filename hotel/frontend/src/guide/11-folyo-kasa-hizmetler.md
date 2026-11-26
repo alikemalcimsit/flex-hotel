@@ -244,7 +244,7 @@ Ayarlar → Genel parametreler → **Ödeme onayı** eşiği (0 = onay yok; vars
 
 ### Döviz
 
-**Örnek:** Misafir 200 EUR nakit öder; günün kuru 1 EUR = 36,50 TL. Folyoya 7.300,00 TL girer; ödeme satırı "200,00 EUR × 36,50" yazar ve kendi kurunu saklar — kur tablosu sonradan değişse ödeme değişmez. Kasa raporunda nakit EUR kendi para biriminde (200 EUR) sayılır. Kur 3 günden eskiyse ödeme alınamaz: önce Kasa → Döviz kurları'ndan günün kurunu girin.
+**Örnek:** Misafir 200 EUR nakit öder; günün kuru 1 EUR = 36,50 TL. Folyoya 7.300,00 TL girer; ödeme satırı "200,00 EUR × 36,50" yazar ve kendi kurunu saklar — kur tablosu sonradan değişse ödeme değişmez. Kasa raporunda nakit EUR kendi para biriminde (200 EUR) sayılır. Kur 3 günden eskiyse ödeme alınamaz: önce Kasa → Döviz kurları'ndan günün kurunu girin (ya da TCMB'den çekin; aşağıda "TCMB'den otomatik kur").
 
 ### İade
 
@@ -284,7 +284,74 @@ Kasa canlıdır; yoğun saatte seyrek tazelenir.
 
 ### Döviz kurları
 
-"Bugünün kurları" kartına döviz ve kur girilir (1 birim döviz = kur × otel parası). Yalnızca **iş günü** için girilir; aynı gün yeniden kaydederseniz üzerine yazar. "Güncel kurlar" her dövizin geçerli kurunu ve yaşını gösterir; "Geçmiş" döviz süzgeciyle eski girişler. Kur girilmeden dövizli ödeme alınamaz. Gece kapanışı sırasında da girilebilir.
+"Bugünün kurları" kartına döviz ve kur girilir (1 birim döviz = kur × otel parası). Yalnızca **iş günü** için girilir; aynı gün yeniden kaydederseniz üzerine yazar. "Güncel kurlar" her dövizin geçerli kurunu, **kaynağını** ve yaşını gösterir; "Geçmiş" döviz süzgeciyle eski girişler. Kur girilmeden dövizli ödeme alınamaz. Gece kapanışı sırasında da girilebilir. Kur elle girilebileceği gibi **TCMB'den otomatik** de gelebilir (aşağıda); ikisi aynı tabloya yazılır, ödeme ve fatura hangisi olursa olsun iş gününe kadar girilmiş son kuru kullanır.
+
+**Rozetler (Güncel kurlar ve Geçmiş):**
+
+| Rozet | Anlamı |
+| --- | --- |
+| **Elle** (gri) | Kuru personel girdi (ya da TCMB'den geleni elle onayladı). TCMB çekmesi bu kuru değiştirmez. |
+| **TCMB · 25 Kas 2026** (mavi) | Kur TCMB'den çekildi; tarih, kurun alındığı **bültenin günü**dür (iş günü değil). |
+| **Bugün** (yeşil) | Kur bu iş günü için girilmiş. |
+| **Bugün girilmedi** (sarı) | Son kur önceki bir günün; 3 günü geçmediği için ödemede hâlâ kullanılır. |
+| **Güncel değil** (kırmızı) | Son kur 3 günden eski; bu dövizle ödeme alınmaz, faturaya döviz karşılığı yazılmaz. |
+
+### TCMB'den otomatik kur
+
+**Nerede:** Kasa → Döviz kurları (`/kasa/kurlar`) → **TCMB kurları** kartı. **Yetki:** kartı görmek kasa görüntüleme; ayarı değiştirmek ve "TCMB'den şimdi çek" **kur yönetimi** (müdür, muhasebe). Kur yönetimi izni olup kasayı göremeyen kullanıcı kartta yalnız **TCMB'den şimdi çek** düğmesini görür.
+
+**Ne yapar:** Türkiye Cumhuriyet Merkez Bankası'nın herkese açık günlük kur bültenini (gösterge niteliğindeki kurlar) okur ve seçili dövizlerin kurunu iş günü için kur tablosuna **TCMB** kaynağıyla yazar. Personelin her sabah kur girmesine gerek kalmaz; elle giriş her zaman mümkün kalır.
+
+**Kural — hangi bülten:** iş günü B'nin kuru, **B'den önceki son TCMB bültenidir** ("önceki günün kuru"). 26 Kasım perşembe iş gününde 25 Kasım çarşamba bülteni kullanılır. Hafta sonu ve resmî tatilde TCMB bülten yayımlamaz; o zaman geriye doğru bakılır: pazartesinin kuru cuma bülteninden gelir, cuma tatilse perşembeden. En çok 10 gün geriye bakılır (uzun bayram); o sürede hiç bülten yoksa çekme "bülten bulunamadı" diye başarısız olur. İş günü gün kapanışıyla ilerlediği için (bkz. Gün kapanış) gün kapatılmadıysa kur da bir önceki iş gününün kuru olarak kalır.
+
+**Neden gün içinde değişmez:** TCMB o günün kurlarını öğleden sonra ilan eder; bugünün bülteni beklenseydi sabah alınan dövizle öğleden sonra alınan döviz farklı kurdan işlenirdi. Önceki günün bülteni gün başında bellidir ve gün boyunca değişmez: aynı gün kasadaki bütün döviz ödemeleri, gösterim karşılıkları ve faturadaki döviz karşılığı aynı kurla hesaplanır.
+
+**Ayarlar (kartın formu):**
+
+| Alan | Anlamı |
+| --- | --- |
+| **TCMB'den otomatik çek** | Açıksa saatlik iş kurları kendiliğinden yazar. Kapalıyken (varsayılan) yalnız "TCMB'den şimdi çek" ile çekilir. |
+| **Kur türü** | Bültendeki dört kurdan hangisi: **Döviz alış** (varsayılan), **Döviz satış**, **Efektif alış**, **Efektif satış**. Döviz kurları banka hesabındaki döviz, efektif kurlar nakit (banknot) içindir. Muhasebecinizle birlikte seçin; değiştirince o günün TCMB kaynaklı kurları sonraki çekmede yeni türe göre güncellenir (elle girilenlere dokunulmaz). |
+| **Çekilecek dövizler** | Çipler: USD, EUR, GBP, CHF, RUB, JPY, SAR, AZN, CNY, DKK, SEK, NOK (varsayılan USD, EUR, GBP). En az 1, en çok 20; aynı döviz iki kez seçilemez. Otelin kendi para birimi seçilse de kayıtta çıkarılır. Bu liste web widget'ındaki döviz seçicinin de listesidir. |
+| Alt satır | "Varsayılan ayar (henüz kaydedilmedi)." ya da "Son değişiklik 26 Kas 2026 · mudur@otel.com" |
+
+**Saatlik iş:** otomatik çekme açık her otel için **saatte bir** çalışır (sunucu açılışından birkaç saniye sonra ilk tur). Yeni iş gününün kuru gün kapanışından sonraki ilk turda gelir; aynı kur yeniden yazılmaz, yani saatte bir çalışması kayıtları çoğaltmaz. TCMB'ye ulaşılamazsa sonraki saatte kendiliğinden yeniden dener. Birden çok otel aynı bülteni ister; bülten tur başına bir kez indirilir. Ayrıntı: Arka planda ne oluyor → Zamanlanmış işler → **TCMB kur işi**.
+
+**TCMB'den şimdi çek:** kartın sağ üstündeki düğme. Saati beklemeden aynı çekmeyi hemen yapar (otomatik çekme kapalı olsa da çalışır): gün kapanışından hemen sonra, kur türünü ya da döviz listesini değiştirdikten sonra ya da başarısız bir çekmeden sonra kullanın. Sonuç bildirim olarak görünür: başarılıysa yeşil "TCMB 25.11.2026 bülteni, döviz alış: USD, EUR, GBP Yazılan: USD, EUR, GBP", başarısızsa kırmızı. Denetim izinde çekmeyi yapan "TCMB (mudur@otel.com)" olarak, saatlik işin yazdığı "TCMB" olarak görünür.
+
+**Son çekme durumu:** kartın üstünde "Son çekme: 26 Kas 2026 09:00" + **Başarılı** (yeşil) ya da **Başarısız** (kırmızı) rozeti ve altında son mesaj, ör. "TCMB 25.11.2026 bülteni, döviz alış: USD, EUR · atlanan: XAU (bültende yok)" ya da "TCMB'den alınamadı: TCMB cevap vermedi (HTTP 503)". Hiç çekilmediyse "Henüz TCMB'den kur çekilmedi." Mesaj hem saatlik işin hem düğmenin son sonucudur. Çekme sonucu ayarın sürüm damgasını değiştirmez: form açıkken arka planda çekme olsa da kaydederken "bu arada değişti" demez.
+
+**Elle girişin önceliği:**
+
+- **Elle girilen kur ezilmez.** Bir dövizin o iş günü için elle girilmiş kuru varsa TCMB çekmesi onu atlar ve mesajda "atlanan: EUR (elle girilmiş)" yazar. Bu, çekmeden **sonra** elle girilen kur için de geçerlidir: TCMB'nin yazdığı kuru "Bugünün kurları" kartından değiştirip kaydederseniz satır **Elle** olur ve o gün bir daha TCMB'den güncellenmez.
+- **Aynı değeri kaydetmek onaylamaktır.** TCMB'den gelen kuru hiç değiştirmeden aynı değerle kaydederseniz kur aynı kalır ama kaynağı **Elle** olur: "bu kuru ben onayladım" demektir; kur türü sonradan değişse de o gün TCMB ona dokunmaz.
+- O gün için TCMB'ye geri dönmek yoktur; elle kayıt yalnız o iş gününün kaydıdır. Ertesi iş günü kur yine TCMB'den gelir.
+- Elle girilen kur da ödemede ve faturada TCMB kuru gibi kullanılır; faturadaki döviz notunda kaynağı "otel kuru" yazar.
+
+**JPY gibi 100 birimlik kurlar:** TCMB bazı dövizleri 100 birim için verir (bültende `Unit` 100; ör. Japon yeni). FlexHotel kuru birime böler ve **1 birim** için yazar: 25.11.2026 bülteninde 100 JPY = 31,6512 TL (döviz alış) yazar; kayıtta 1 JPY = 0,316512 TL olur. Kur tablosundaki her kur 1 birim içindir; elle girerken de 1 birimin kurunu yazın.
+
+**Bültende olmayan döviz:** ekrandaki çiplerin hepsi TCMB bülteninde vardır. Listeye başka yoldan (ör. ekran dışından, doğrudan sunucuya kaydedilmiş bir ayar) bültende olmayan bir kod girmişse (ör. XAU altın) o döviz atlanır ("atlanan: XAU (bültende yok)"); diğerleri yazılır. O dövizin kurunu elle girin.
+
+**Örnekler (25.11.2026 gerçek TCMB bülteni; USD: döviz alış 50,5531, döviz satış 50,6441, efektif alış 50,5177, efektif satış 50,7201; EUR döviz alış 55,2971, döviz satış 55,3967):**
+
+| Ne yapıldı | Ne olur | Ekranda |
+| --- | --- | --- |
+| Ayar kaydedilir: otomatik çek açık, kur türü **Döviz satış**, dövizler USD, EUR, TRY, XAU (XAU ve TRY ekrandaki çiplerde yok; ayar doğrudan sunucuya gönderilmiş) | Otelin para birimi TRY çıkarılır | Dövizler: USD, EUR, XAU |
+| 26 Kasım iş günü, "TCMB'den şimdi çek" | 25.11 bülteni okunur; USD **50,6441**, EUR 55,3967 (döviz satış) yazılır; XAU atlanır | Yeşil: "TCMB 25.11.2026 bülteni, döviz satış: USD, EUR · atlanan: XAU (bültende yok)". Güncel kurlar: USD 50,6441 **TCMB · 25 Kas 2026**, **Bugün** |
+| Önceki iş günü tatil (bülten yok) | Tatil atlanır, ondan önceki son bülten kullanılır | Rozetteki bülten günü iki gün öncesini gösterir |
+| Pazartesi 30 Kasım iş günü | 29 ve 28 Kasım hafta sonu atlanır, 27 Kasım cuma bülteni | **TCMB · 27 Kas 2026** |
+| Kur türü **Döviz alış**'a çevrilip "şimdi çek" | O günün TCMB kaynaklı USD'si 50,5531 olarak güncellenir | USD 50,5531 **TCMB** |
+| Müdür EUR'yu elle **51,0000** girer; sonra saatlik iş çalışır | EUR atlanır, USD aynı kur olduğu için yeniden yazılmaz | Mesaj: "… değişiklik yok · atlanan: EUR (elle girilmiş)". EUR 51,0000 **Elle**, USD **TCMB** |
+| TCMB'ye ulaşılamadı (bağlantı zaman aşımı) | Hiçbir kur değişmez; son çekme başarısız yazılır, sonraki saatte yeniden denenir | **Başarısız** rozeti, "TCMB'den alınamadı: bağlantı zaman aşımı". Mevcut kurlar 3 günü geçmedikçe ödeme alınmaya devam eder |
+| Ön büro kullanıcısı "şimdi çek" ister | Kur yönetimi izni yok | Düğme görünmez; adresle denenirse "yetkiniz yok" (403) |
+| JPY seçili, döviz alış | Bültende 100 JPY = 31,6512 | Kayıt 1 JPY = 0,316512 |
+
+**Dikkat:**
+
+- TCMB kuru **gösterge** niteliğindedir; bankanızın ya da döviz bürosunun kuru farklıdır. Kasaya nakit döviz alırken farklı bir kur kullanmak istiyorsanız o günün kurunu elle girin; elle giriş TCMB'ninkini geçer.
+- Otomatik çekme kapalıyken TCMB kuru kendiliğinden gelmez; ya açın ya her gün "şimdi çek" deyin ya da elle girin. Hiçbiri yapılmazsa 3 gün sonra dövizli ödeme alınamaz.
+- Geçmiş ödemeler ve kesilmiş faturalar kendi kurunu saklar; kur tablosundaki değişiklik onları etkilemez.
+
 
 ### Vardiya devri
 

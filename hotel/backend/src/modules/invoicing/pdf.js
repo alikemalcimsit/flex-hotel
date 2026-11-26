@@ -200,6 +200,10 @@ function draw(w, { detail, settings, hotelName, timezone }) {
   const notes = [
     invoice.note,
     invoice.serviceFrom && invoice.serviceTo ? `Hizmet dönemi: ${dayText(invoice.serviceFrom)} – ${dayText(invoice.serviceTo)}` : null,
+    // Döviz karşılığı (modül 60): görünümdeki `foreign` (kesilmiş faturada kur ve karşılık).
+    invoice.foreign?.total && invoice.foreign?.rate
+      ? `Döviz karşılığı: ${Number(invoice.foreign.total).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${invoice.foreign.currency} (1 ${invoice.foreign.currency} = ${Number(invoice.foreign.rate).toLocaleString('tr-TR', { minimumFractionDigits: 4, maximumFractionDigits: 6 })} TL${invoice.foreign.rateDate ? `, ${dayText(invoice.foreign.rateDate)}` : ''})`
+      : null,
     settings?.footerNote,
     settings?.bankInfo,
     invoice.documentType === 'E_ARSIV' ? 'e-Arşiv izni kapsamında elektronik ortamda iletilmiştir.' : null,

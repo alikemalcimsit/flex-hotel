@@ -1,10 +1,11 @@
 import { useCallback, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { BOARD_TYPES, BOARD_TYPE_LABELS, closeWaitlistSchema, createWaitlistSchema } from '@hotelos/hotel-contracts';
+import { BOARD_TYPES, closeWaitlistSchema, createWaitlistSchema } from '@hotelos/hotel-contracts';
 import { Alert, Badge, Button, Input, Select, Textarea } from '@hotelos/ui';
 import { DataTable } from '../../components/DataTable.jsx';
 import { Modal } from '../../components/Modal.jsx';
+import { useT } from '../../i18n/index.jsx';
 import { api, apiPost, withQuery } from '../../lib/api.js';
 import { formatDate } from '../../lib/format.js';
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
@@ -15,11 +16,10 @@ import { useLiveChannel } from '../../lib/useLiveChannel.js';
 import { validateWith } from '../../lib/validate.js';
 import { toastError, toastSuccess } from '../../store/toast.js';
 import { useRoomTypes } from '../rooms/useRoomTypes.js';
-import { WAITLIST_STATUS_TONES, partyLabel, waitlistStatusLabel } from './reservationTheme.js';
+import { WAITLIST_STATUS_TONES, boardLong, partyLabel, waitlistStatusLabel } from './reservationTheme.js';
 
 const PAGE_SIZE = 25;
 const OFFLINE_REFRESH_MS = 60_000;
-const BOARD_OPTIONS = BOARD_TYPES.map((value) => ({ value, label: BOARD_TYPE_LABELS[value] }));
 
 /**
  * Bekleme listesi (modül 4): yer yokken misafir listeye alınır. İptal,
@@ -33,6 +33,7 @@ const BOARD_OPTIONS = BOARD_TYPES.map((value) => ({ value, label: BOARD_TYPE_LAB
  * (`?kayit=`) ilgili satırı vurgular.
  */
 export function WaitlistTab() {
+  const t = useT();
   const can = useCan();
   const canManage = can(PERMISSIONS.RESERVATIONS_MANAGE);
   const queryClient = useQueryClient();
@@ -69,7 +70,7 @@ export function WaitlistTab() {
   const columns = [
     {
       key: 'name',
-      header: 'Misafir',
+      header: t('reservations.waitlist.colGuest'),
       render: (row) => (
         <span className={`flex flex-col ${row.id === highlight ? 'font-bold' : ''}`}>
           <span className="font-semibold">{row.name}</span>
@@ -79,17 +80,17 @@ export function WaitlistTab() {
     },
     {
       key: 'stay',
-      header: 'İstenen',
+      header: t('reservations.waitlist.colRequested'),
       render: (row) => (
         <span className="flex flex-col">
-          <span className="whitespace-nowrap">{formatDate(row.checkIn)} – {formatDate(row.checkOut)} ({row.nights} gece)</span>
+          <span className="whitespace-nowrap">{formatDate(row.checkIn)} – {formatDate(row.checkOut)} {t('reservations.list.nights', { count: row.nights })}</span>
           <span className="text-xs text-ink-muted">{row.roomType.code} · {partyLabel(row.adults, row.children)} · {row.boardType}</span>
         </span>
       ),
     },
     {
       key: 'status',
-      header: 'Durum',
+      header: t('reservations.waitlist.colStatus'),
       render: (row) => (
         <span className="flex flex-col gap-1">
           <Badge tone={WAITLIST_STATUS_TONES[row.status]}>{waitlistStatusLabel(row.status)}</Badge>
@@ -102,8 +103,8 @@ export function WaitlistTab() {
         </span>
       ),
     },
-    { key: 'notes', header: 'Not', render: (row) => <span className="line-clamp-2 text-xs text-ink-muted">{row.notes ?? '—'}</span> },
-    { key: 'created', header: 'Eklenen', render: (row) => <span className="text-xs text-ink-muted">{formatDate(row.createdAt)} · {row.createdBy}</span> },
+    { key: 'notes', header: t('reservations.waitlist.colNotes'), render: (row) => <span className="line-clamp-2 text-xs text-ink-muted">{row.notes ?? '—'}</span> },
+    { key: 'created', header: t('reservations.waitlist.colCreated'), render: (row) => <span className="text-xs text-ink-muted">{formatDate(row.createdAt)} · {row.createdBy}</span> },
   ];
 
   const available = query.data?.meta?.available ?? 0;
@@ -112,11 +113,11 @@ export function WaitlistTab() {
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center gap-2">
         {[
-          [false, 'Açık kayıtlar'],
-          [true, 'Kapananlar'],
+          [false, t('reservations.waitlist.openTab')],
+          [true, t('reservations.waitlist.closedTab')],
         ].map(([closed, label]) => (
           <button
-            key={label}
+            key={String(closed)}
             type="button"
             aria-pressed={showClosed === closed}
             onClick={() => setParam({ durum: closed ? 'kapali' : null, sayfa: null })}
@@ -127,17 +128,17 @@ export function WaitlistTab() {
             {label}
           </button>
         ))}
-        <Badge tone={isLive ? 'success' : 'warning'} className="ml-2">{isLive ? 'Canlı' : 'Canlı değil'}</Badge>
+        <Badge tone={isLive ? 'success' : 'warning'} className="ml-2">{isLive ? t('common.live') : t('common.notLive')}</Badge>
         {canManage && (
           <Button className="ml-auto" icon="plus" onClick={() => setAdding(true)}>
-            Listeye al
+            {t('reservations.waitlist.add')}
           </Button>
         )}
       </div>
 
       {!showClosed && available > 0 && (
-        <Alert tone="success" title={`${available} kayıt için yer açıldı`}>
-          Misafiri arayıp "Rezervasyona çevir" ile açın. Yer yeniden dolarsa kayıt kendiliğinden "yer bekliyor"a döner.
+        <Alert tone="success" title={t('reservations.waitlist.availableTitle', { count: available })}>
+          {t('reservations.waitlist.availableHint')}
         </Alert>
       )}
 
@@ -150,19 +151,19 @@ export function WaitlistTab() {
         error={query.error}
         onRetry={() => query.refetch()}
         onPageChange={(next) => setParam({ sayfa: next })}
-        emptyTitle={showClosed ? 'Kapanmış kayıt yok' : 'Bekleme listesi boş'}
-        emptyHint={showClosed ? undefined : 'Yer olmadığında yeni rezervasyon formundan ya da "Listeye al" ile misafiri ekleyin.'}
+        emptyTitle={showClosed ? t('reservations.waitlist.noClosed') : t('reservations.waitlist.empty')}
+        emptyHint={showClosed ? undefined : t('reservations.waitlist.emptyHint')}
         rowActions={
           canManage && !showClosed
             ? (row) => (
                 <span className="flex justify-end gap-2">
                   <Link to={`/rezervasyonlar/yeni?bekleme=${row.id}`}>
                     <Button size="sm" variant={row.status === 'AVAILABLE' ? 'primary' : 'outline'} icon="bookOpen">
-                      Rezervasyona çevir
+                      {t('reservations.waitlist.convert')}
                     </Button>
                   </Link>
                   <Button size="sm" variant="ghost" icon="close" onClick={() => setClosing(row)}>
-                    Kapat
+                    {t('common.close')}
                   </Button>
                 </span>
               )
@@ -196,6 +197,8 @@ export function WaitlistTab() {
 
 /** @param {{ onClose: () => void, onAdded: (entry: object) => void }} props */
 function AddWaitlistDialog({ onClose, onAdded }) {
+  const t = useT();
+  const boardOptions = BOARD_TYPES.map((value) => ({ value, label: boardLong(value) }));
   const { today } = useHotelToday();
   const hotel = useHotelContext().data;
   const { options: roomTypeOptions } = useRoomTypes();
@@ -218,7 +221,7 @@ function AddWaitlistDialog({ onClose, onAdded }) {
   const mutation = useMutation({
     mutationFn: (body) => apiPost('/reservations/waitlist', body),
     onSuccess: (entry) => {
-      toastSuccess(entry.status === 'AVAILABLE' ? 'Listeye alındı — bu tarihlerde şu an yer var, doğrudan rezervasyon açabilirsiniz' : 'Listeye alındı; yer açılınca zil haber verecek');
+      toastSuccess(entry.status === 'AVAILABLE' ? t('reservations.waitlist.addedAvailable') : t('reservations.waitlist.added'));
       onAdded(entry);
     },
     onError: (error) => {
@@ -244,33 +247,33 @@ function AddWaitlistDialog({ onClose, onAdded }) {
     <Modal
       open
       size="lg"
-      title="Bekleme listesine al"
+      title={t('reservations.waitlist.addTitle')}
       onClose={busy ? () => {} : onClose}
       footer={
         <>
-          <Button variant="outline" onClick={onClose} disabled={busy}>Vazgeç</Button>
-          <Button type="submit" form="add-waitlist-form" icon="check" disabled={busy}>{busy ? 'Ekleniyor…' : 'Listeye al'}</Button>
+          <Button variant="outline" onClick={onClose} disabled={busy}>{t('common.cancel')}</Button>
+          <Button type="submit" form="add-waitlist-form" icon="check" disabled={busy}>{busy ? t('reservations.waitlist.adding') : t('reservations.waitlist.add')}</Button>
         </>
       }
     >
       <form id="add-waitlist-form" onSubmit={submit} className="flex flex-col gap-4" noValidate>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Input label="Ad" value={form.firstName} onChange={set('firstName')} error={errors.firstName} disabled={busy} />
-          <Input label="Soyad" value={form.lastName} onChange={set('lastName')} error={errors.lastName} disabled={busy} />
-          <Input label="Telefon" type="tel" value={form.phone} onChange={set('phone')} error={errors.phone} disabled={busy} />
-          <Input label="E-posta" type="email" value={form.email} onChange={set('email')} error={errors.email} disabled={busy} />
+          <Input label={t('reservations.guestPicker.firstName')} value={form.firstName} onChange={set('firstName')} error={errors.firstName} disabled={busy} />
+          <Input label={t('reservations.guestPicker.lastName')} value={form.lastName} onChange={set('lastName')} error={errors.lastName} disabled={busy} />
+          <Input label={t('reservations.guestPicker.phone')} type="tel" value={form.phone} onChange={set('phone')} error={errors.phone} disabled={busy} />
+          <Input label={t('reservations.guestPicker.email')} type="email" value={form.email} onChange={set('email')} error={errors.email} disabled={busy} />
         </div>
         <div className="flex flex-wrap gap-3">
-          <Input label="Giriş" type="date" min={today} value={form.checkIn} onChange={set('checkIn')} error={errors.checkIn} disabled={busy} className="w-full sm:w-44" />
-          <Input label="Çıkış" type="date" min={addDaysIso(form.checkIn || today, 1)} value={form.checkOut} onChange={set('checkOut')} error={errors.checkOut} disabled={busy} className="w-full sm:w-44" />
-          <Select label="Oda tipi" value={form.roomTypeId} onChange={set('roomTypeId')} options={[{ value: '', label: 'Seçin' }, ...roomTypeOptions]} error={errors.roomTypeId} disabled={busy} className="w-full sm:w-64" />
+          <Input label={t('reservations.form.checkIn')} type="date" min={today} value={form.checkIn} onChange={set('checkIn')} error={errors.checkIn} disabled={busy} className="w-full sm:w-44" />
+          <Input label={t('reservations.form.checkOut')} type="date" min={addDaysIso(form.checkIn || today, 1)} value={form.checkOut} onChange={set('checkOut')} error={errors.checkOut} disabled={busy} className="w-full sm:w-44" />
+          <Select label={t('reservations.form.roomType')} value={form.roomTypeId} onChange={set('roomTypeId')} options={[{ value: '', label: t('reservations.form.choose') }, ...roomTypeOptions]} error={errors.roomTypeId} disabled={busy} className="w-full sm:w-64" />
         </div>
         <div className="flex flex-wrap gap-3">
-          <Input label="Yetişkin" type="number" min={1} max={20} value={form.adults} onChange={set('adults')} error={errors.adults} disabled={busy} className="w-28" />
-          <Input label="Çocuk" type="number" min={0} max={20} value={form.children} onChange={set('children')} error={errors.children} disabled={busy} className="w-28" />
-          <Select label="Pansiyon" value={form.boardType} onChange={set('boardType')} options={BOARD_OPTIONS} disabled={busy} className="w-full sm:w-64" />
+          <Input label={t('reservations.form.adults')} type="number" min={1} max={20} value={form.adults} onChange={set('adults')} error={errors.adults} disabled={busy} className="w-28" />
+          <Input label={t('reservations.form.children')} type="number" min={0} max={20} value={form.children} onChange={set('children')} error={errors.children} disabled={busy} className="w-28" />
+          <Select label={t('reservations.form.board')} value={form.boardType} onChange={set('boardType')} options={boardOptions} disabled={busy} className="w-full sm:w-64" />
         </div>
-        <Textarea label="Not" rows={2} maxLength={2000} value={form.notes} onChange={set('notes')} disabled={busy} />
+        <Textarea label={t('reservations.waitlist.colNotes')} rows={2} maxLength={2000} value={form.notes} onChange={set('notes')} disabled={busy} />
       </form>
     </Modal>
   );
@@ -278,12 +281,13 @@ function AddWaitlistDialog({ onClose, onAdded }) {
 
 /** @param {{ entry: object, onClose: () => void, onClosed: () => void }} props */
 function CloseWaitlistDialog({ entry, onClose, onClosed }) {
+  const t = useT();
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
   const mutation = useMutation({
     mutationFn: (body) => apiPost(`/reservations/waitlist/${entry.id}/close`, body),
     onSuccess: () => {
-      toastSuccess('Kayıt kapatıldı');
+      toastSuccess(t('reservations.waitlist.closed'));
       onClosed();
     },
     onError: (failure) => {
@@ -296,7 +300,7 @@ function CloseWaitlistDialog({ entry, onClose, onClosed }) {
     event.preventDefault();
     const result = validateWith(closeWaitlistSchema, { reason });
     if (!result.ok) {
-      setError(result.errors.reason ?? 'Sebep yazın');
+      setError(result.errors.reason ?? t('reservations.cancel.reasonRequired'));
       return;
     }
     mutation.mutate(result.data);
@@ -307,17 +311,17 @@ function CloseWaitlistDialog({ entry, onClose, onClosed }) {
     <Modal
       open
       size="sm"
-      title={`Kaydı kapat — ${entry.name}`}
+      title={t('reservations.waitlist.closeTitle', { name: entry.name })}
       onClose={busy ? () => {} : onClose}
       footer={
         <>
-          <Button variant="outline" onClick={onClose} disabled={busy}>Vazgeç</Button>
-          <Button type="submit" form="close-waitlist-form" variant="danger" icon="close" disabled={busy}>{busy ? 'Kapatılıyor…' : 'Kapat'}</Button>
+          <Button variant="outline" onClick={onClose} disabled={busy}>{t('common.cancel')}</Button>
+          <Button type="submit" form="close-waitlist-form" variant="danger" icon="close" disabled={busy}>{busy ? t('reservations.waitlist.closing') : t('common.close')}</Button>
         </>
       }
     >
       <form id="close-waitlist-form" onSubmit={submit} noValidate>
-        <Textarea label="Sebep" rows={2} maxLength={300} placeholder="Misafir vazgeçti, başka otelde kaldı…" value={reason} onChange={(e) => setReason(e.target.value)} error={error} disabled={busy} autoFocus />
+        <Textarea label={t('reservations.waitlist.reason')} rows={2} maxLength={300} placeholder={t('reservations.waitlist.reasonPlaceholder')} value={reason} onChange={(e) => setReason(e.target.value)} error={error} disabled={busy} autoFocus />
       </form>
     </Modal>
   );

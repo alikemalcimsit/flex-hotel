@@ -4,22 +4,17 @@ import { revertStaySchema } from '@hotelos/hotel-contracts';
 import { Alert, Button, Textarea } from '@hotelos/ui';
 import { ChoiceChips } from '../../components/ChoiceChips.jsx';
 import { Modal } from '../../components/Modal.jsx';
+import { useT } from '../../i18n/index.jsx';
 import { apiPost } from '../../lib/api.js';
 import { frontDeskKeys } from '../../lib/front-desk.js';
 import { reservationKeys } from '../../lib/reservations.js';
 import { validateWith } from '../../lib/validate.js';
 import { toastSuccess } from '../../store/toast.js';
 
+/** Hazır sebepler: çip etiketi `…Label`, seçilince yazılan metin (denetim izine giden) etkin dilde. */
 const REASONS = Object.freeze({
-  checkIn: [
-    { value: 'Yanlış misafire giriş yapıldı', label: 'Yanlış misafir' },
-    { value: 'Yanlış odaya giriş yapıldı', label: 'Yanlış oda' },
-    { value: 'Misafir odaya çıkmadan vazgeçti', label: 'Misafir vazgeçti' },
-  ],
-  checkOut: [
-    { value: 'Misafir henüz ayrılmamış', label: 'Misafir ayrılmamış' },
-    { value: 'Yanlış odanın çıkışı yapıldı', label: 'Yanlış oda' },
-  ],
+  checkIn: ['checkInWrongGuest', 'checkInWrongRoom', 'checkInGuestCancelled'],
+  checkOut: ['checkOutNotLeft', 'checkOutWrongRoom'],
 });
 
 /**
@@ -30,16 +25,18 @@ const REASONS = Object.freeze({
  *           room: { number: string } | null, depositMethod?: string | null }, onClose: () => void }} props
  */
 export function RevertStayDialog({ kind, stay, onClose }) {
+  const t = useT();
   const queryClient = useQueryClient();
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
   const [serverError, setServerError] = useState(null);
   const isCheckIn = kind === 'checkIn';
+  const reasonOptions = REASONS[kind].map((id) => ({ value: t(`frontDesk.revert.reason.${id}`), label: t(`frontDesk.revert.reason.${id}Label`) }));
 
   const mutation = useMutation({
     mutationFn: (body) => apiPost(`/front-desk/stays/${stay.id}/${isCheckIn ? 'check-in' : 'check-out'}/revert`, body),
     onSuccess: () => {
-      toastSuccess(isCheckIn ? 'Giriş geri alındı; oda yeniden boş' : 'Çıkış geri alındı; misafir yeniden içeride');
+      toastSuccess(isCheckIn ? t('frontDesk.revert.doneCheckIn') : t('frontDesk.revert.doneCheckOut'));
       queryClient.invalidateQueries({ queryKey: frontDeskKeys.all });
       queryClient.invalidateQueries({ queryKey: reservationKeys.all });
       onClose();
@@ -58,7 +55,7 @@ export function RevertStayDialog({ kind, stay, onClose }) {
     const body = { expectedUpdatedAt: stay.updatedAt, reason };
     const result = validateWith(revertStaySchema, body);
     if (!result.ok) {
-      setError(result.errors.reason ?? 'Sebep yazın');
+      setError(result.errors.reason ?? t('frontDesk.revert.reasonRequired'));
       return;
     }
     setError('');
@@ -70,34 +67,33 @@ export function RevertStayDialog({ kind, stay, onClose }) {
     <Modal
       open
       size="sm"
-      title={`${isCheckIn ? 'Girişi' : 'Çıkışı'} geri al — ${stay.confirmationCode}`}
+      title={t(isCheckIn ? 'frontDesk.revert.titleCheckIn' : 'frontDesk.revert.titleCheckOut', { code: stay.confirmationCode })}
       onClose={busy ? () => {} : onClose}
       footer={
         <>
-          <Button variant="outline" onClick={onClose} disabled={busy}>Vazgeç</Button>
+          <Button variant="outline" onClick={onClose} disabled={busy}>{t('common.cancel')}</Button>
           <Button type="submit" form="revert-stay-form" variant="danger" icon="rotateCcw" disabled={busy}>
-            {busy ? 'Geri alınıyor…' : 'Geri al'}
+            {busy ? t('frontDesk.revert.busy') : t('frontDesk.revert.submit')}
           </Button>
         </>
       }
     >
       <form id="revert-stay-form" onSubmit={submit} className="flex flex-col gap-4" noValidate>
-        <Alert tone="warning" title={isCheckIn ? 'Misafir içeride sayılmayacak' : 'Misafir yeniden içeride sayılacak'}>
-          {stay.guest.name}
-          {stay.room ? `, oda ${stay.room.number}` : ''}.{' '}
+        <Alert tone="warning" title={isCheckIn ? t('frontDesk.revert.warnCheckIn') : t('frontDesk.revert.warnCheckOut')}>
+          {stay.room ? t('frontDesk.revert.guestRoom', { name: stay.guest.name, room: stay.room.number }) : t('frontDesk.revert.guest', { name: stay.guest.name })}{' '}
           {isCheckIn
-            ? `Rezervasyon onaylıya döner, oda boşalır. ${
+            ? `${t('frontDesk.revert.checkInBody')} ${
                 stay.depositMethod === 'CARD_PREAUTH'
-                  ? 'Kart provizyonunu iptal edin.'
+                  ? t('frontDesk.revert.checkInPreauth')
                   : stay.depositMethod
-                    ? 'Girişte işlenen teminat ödemesi iptal kaydıyla düşer: parayı misafire geri verin (yeniden girişte teminat yeniden alınır).'
+                    ? t('frontDesk.revert.checkInDeposit')
                     : ''
               }`
-            : 'Çıkışta bırakılan geceler geri gelmez; misafir kalacaksa rezervasyonu uzatın.'}
+            : t('frontDesk.revert.checkOutBody')}
         </Alert>
-        {serverError && <Alert tone="danger" title="Geri alınamadı">{serverError.message}</Alert>}
-        <ChoiceChips label="Hazır sebepler" options={REASONS[kind]} value={reason} onChange={setReason} disabled={busy} />
-        <Textarea label="Sebep" rows={2} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} error={error} disabled={busy} autoFocus />
+        {serverError && <Alert tone="danger" title={t('frontDesk.revert.failed')}>{serverError.message}</Alert>}
+        <ChoiceChips label={t('frontDesk.revert.presets')} options={reasonOptions} value={reason} onChange={setReason} disabled={busy} />
+        <Textarea label={t('frontDesk.revert.reasonField')} rows={2} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} error={error} disabled={busy} autoFocus />
       </form>
     </Modal>
   );

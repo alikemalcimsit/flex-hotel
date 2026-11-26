@@ -4339,11 +4339,26 @@ olay kataloğu, zamanlanmış işler, tablolar, modül durumu; elle düzenlenmez
 
 ### 60. Çoklu dil & çoklu para birimi — Ali Kemal
 **Gün sonu:** Arayüz TR / EN arasında geçiyor; fiyatlar seçilen para biriminde görünüyor; günlük kur otomatik geliyor.
-- [ ] Frontend: i18n altyapısı (çeviri dosyaları, dil seçici, tarih / sayı formatı)
-- [ ] Tüm mevcut ekranların metinlerini çeviri anahtarına taşıma
-- [ ] Backend: ExchangeRate günlük çekme (TCMB), kur geçmişi
-- [ ] Ekran: Para birimi seçici; fiyat gösterimlerinde dönüşüm
-- [ ] Fatura ve widget'ta döviz desteği
+- [x] Frontend: i18n altyapısı (alan alan sözlükler `src/i18n/{tr,en}`, dil seçici, tarih / sayı formatı dile duyarlı)
+- [ ] Tüm mevcut ekranların metinlerini çeviri anahtarına taşıma — **kısmi (kullanıcı kararı):** menü, giriş, üst çubuk, ön büro, rezervasyon, oda planı / odalar, folyo, kasa ve kurlar taşındı; kalanlar kademeli
+- [x] Backend: ExchangeRate günlük çekme (TCMB), kur geçmişi (kaynak + bülten günü)
+- [x] Ekran: Para birimi seçici (kullanıcı tercihi); fiyat gösterimlerinde yaklaşık karşılık (`MoneyText`)
+- [x] Fatura ve widget'ta döviz desteği (fatura TL + döviz karşılığı notu; widget döviz seçici, yaklaşık fiyat, ön ödeme bağlantısı)
+
+> **📌 Modül 60 tamamlandı (27 Kasım 2026 — Ali Kemal; çeviri kapsamı kullanıcı kararıyla "altyapı + ana ekranlar").**
+> **TCMB:** herkese açık XML (`/kurlar/YYYYAA/GGAAYYYY.xml`, biçim gerçek bültenle doğrulandı); iş günü B'nin kuru = B'den önceki son
+> bülten (hafta sonu atlanır, tatilde 404 → geriye; en çok 10 gün), ayardaki kur türü (döviz / efektif alış / satış), birim (JPY 100)
+> bölünür. Saatlik iş + "şimdi çek"; elle girilen kur ezilmez (koşullu yazım), TCMB'den gelen değeri elle aynısıyla kaydetmek onaylar.
+> Çekme sonucu ayarın sürümünü değiştirmez; bir otelin hatası işi durdurmaz; bülten tur başına bir kez iner.
+> **Fatura:** TL kesilir; taslakta seçilen dövizin karşılığı kesimde kesim gününe kadarki son kurla (en çok 3 gün eski) hesaplanır,
+> UBL notuna ve PDF'e yazılır (`FOREIGN_RATE_MISSING` / `FOREIGN_RATE_STALE`). Tam dövizli e-fatura (DocumentCurrencyCode ≠ TRY) yok.
+> **Widget:** güncel kurlu ve kur ayarındaki dövizler; misafir seçer, fiyatın yanında "yaklaşık" karşılık; rezervasyon otelin para
+> biriminde; modül 50'nin ön ödeme bağlantısı widget'ta gösterilir. **Kullanıcı:** `locale` (tr / en) ve `displayCurrency`;
+> `PATCH /auth/me/preferences`. Migration `20261127120000_i18n_currency`.
+>
+> **Test:** sözleşme 3 (bülten günleri, kur, karşılık, şemalar), TCMB okuyucu 2 (gerçek bülten, arşiv adresi, tatil, HTTP hatası),
+> entegrasyon 2 (çekme kuralları, elle öncelik, ulaşılamama, ayar sürümü; tercih, widget dövizleri) + fatura döviz karşılığı 1; ön yüz
+> sözlük eşitliği testi.
 
 ### 61. Webhook & açık API — arkadaşın
 **Gün sonu:** Dış sistemler API key ile bağlanıyor; istedikleri event'i kendi URL'lerine alıyor; dokümantasyon sayfası var.

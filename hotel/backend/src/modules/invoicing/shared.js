@@ -86,6 +86,10 @@ export function addInvoiceLog(client, { hotelId, invoiceId, kind, state = null, 
 
 /** Liste satırı alanları (alıcının bütün bilgisi ve satırlar ayrıntıda). */
 export const INVOICE_LIST_SELECT = Object.freeze({
+  foreignCurrency: true,
+  foreignRate: true,
+  foreignTotal: true,
+  foreignRateDate: true,
   id: true,
   source: true,
   status: true,
@@ -128,6 +132,8 @@ export const invoiceListView = (row) => ({
   eventId: row.eventId,
   ledgerAccountId: row.ledgerAccountId,
   currency: row.currency,
+  // Döviz karşılığı (modül 60): taslakta seçilen para birimi; kesilince kur ve karşılık.
+  foreign: row.foreignCurrency ? { currency: row.foreignCurrency, rate: row.foreignRate === null || row.foreignRate === undefined ? null : String(row.foreignRate), total: row.foreignTotal === null || row.foreignTotal === undefined ? null : Number(row.foreignTotal).toFixed(2), rateDate: day(row.foreignRateDate ?? null) } : null,
   issueDate: day(row.issueDate),
   issuedAt: iso(row.issuedAt),
   serviceFrom: day(row.serviceFrom),

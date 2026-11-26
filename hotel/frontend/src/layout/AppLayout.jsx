@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { useT } from '../i18n/index.jsx';
 import { useManualTaskBadge } from '../lib/actors.js';
 import { useApprovalBadge } from '../lib/approvals.js';
 import { useFrontOfficeBadges } from '../lib/frontOffice.js';
@@ -28,6 +29,7 @@ const DOCUMENT_TITLE = 'FlexHotel';
  */
 export function AppLayout() {
   const user = useAuthStore((s) => s.user);
+  const t = useT();
   const permissions = useAuthStore((s) => s.permissions);
   const logout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
@@ -92,7 +94,7 @@ export function AppLayout() {
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[70] focus:rounded-control focus:bg-ink focus:px-4 focus:py-2.5 focus:text-sm focus:font-bold focus:text-white"
       >
-        İçeriğe geç
+        {t('layout.skipToContent')}
       </a>
 
       {isDrawerOpen && (
@@ -101,7 +103,7 @@ export function AppLayout() {
 
       <aside
         id="app-sidebar"
-        aria-label="Yan menü"
+        aria-label={t('layout.sidebar.label')}
         inert={!isDesktop && !isMobileNavOpen}
         className={`fixed inset-y-0 left-0 z-50 w-[17.5rem] transition-[transform,width] duration-300 ease-out xl:z-30 xl:translate-x-0 ${
           isCollapsed ? 'xl:w-[5.5rem]' : 'xl:w-[17.5rem]'
@@ -131,7 +133,7 @@ export function AppLayout() {
         <Topbar
           ref={menuButtonRef}
           user={user}
-          roleLabel={ROLE_LABELS[user?.role]}
+          roleLabel={user?.role ? t(`layout.role.${user.role}`, ROLE_LABELS[user.role]) : undefined}
           approvals={approvals}
           isSidebarCollapsed={isSidebarCollapsed}
           isMobileNavOpen={isDrawerOpen}

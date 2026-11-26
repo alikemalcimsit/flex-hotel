@@ -5,13 +5,15 @@ import { FOLIO_LIST_VIEWS, FOLIO_LIST_VIEW_LABELS, RESERVATION_COUNT_CAP } from 
 import { Alert, Badge, Button, Input } from '@hotelos/ui';
 import { DataTable } from '../../components/DataTable.jsx';
 import { PageHeader } from '../../components/PageHeader.jsx';
+import { useT } from '../../i18n/index.jsx';
 import { api, apiPost, withQuery } from '../../lib/api.js';
-import { FOLIO_STATUS_TONES, balanceTone, folioKeys, folioPath, folioStatusLabel } from '../../lib/folios.js';
+import { FOLIO_STATUS_TONES, balanceTone, folioKeys, folioPath } from '../../lib/folios.js';
 import { formatDate, formatMoney } from '../../lib/format.js';
 import { PERMISSIONS, useCan } from '../../lib/permissions.js';
 import { FOLIOS_CHANNEL } from '../../lib/socket.js';
 import { useLiveChannel } from '../../lib/useLiveChannel.js';
 import { toastError, toastSuccess } from '../../store/toast.js';
+import { folioStatusText } from './labels.js';
 
 /** Canlı tazeleme seyreltme aralığı (liste otelin her folyo haberinde değişir). */
 const LIVE_MIN_INTERVAL_MS = 2000;
@@ -20,13 +22,6 @@ const OFFLINE_REFRESH_MS = 60_000;
 const SEARCH_DEBOUNCE_MS = 300;
 
 const PARAMS = Object.freeze({ view: 'gorunum', search: 'q', page: 'sayfa' });
-
-const EMPTY_TITLES = Object.freeze({
-  IN_HOUSE: 'İçeride misafir yok ya da folyoları henüz açılmadı',
-  OPEN_BALANCE: 'Bakiyesi açık kalan konaklama yok',
-  OPEN: 'Açık folyo yok',
-  CLOSED: 'Kapanmış folyo yok',
-});
 
 /** @param {URLSearchParams} params */
 function readFilters(params) {
@@ -51,6 +46,7 @@ function readFilters(params) {
  *   basmak güvenli: işlenmiş gece yeniden işlenmez).
  */
 export function FoliosPage() {
+  const t = useT();
   const [searchParams, setSearchParams] = useSearchParams();
   const filters = readFilters(searchParams);
 
@@ -95,12 +91,12 @@ export function FoliosPage() {
   const columns = [
     {
       key: 'room',
-      header: 'Oda',
+      header: t('folio.list.room'),
       render: (row) => <span className="font-bold tabular-nums">{row.stay.room?.number ?? '—'}</span>,
     },
     {
       key: 'guest',
-      header: 'Misafir',
+      header: t('folio.list.guest'),
       render: (row) => (
         <span className="flex flex-col">
           <Link to={folioPath(row.stay.id, row.id)} className="font-semibold text-info-ink underline-offset-2 hover:underline">
@@ -112,17 +108,17 @@ export function FoliosPage() {
     },
     {
       key: 'folio',
-      header: 'Folyo',
+      header: t('folio.list.folio'),
       render: (row) => (
         <span className="flex flex-wrap items-center gap-1.5">
           <span className="whitespace-nowrap">{row.name}</span>
-          <Badge tone={FOLIO_STATUS_TONES[row.status]}>{folioStatusLabel(row.status)}</Badge>
+          <Badge tone={FOLIO_STATUS_TONES[row.status]}>{folioStatusText(row.status)}</Badge>
         </span>
       ),
     },
     {
       key: 'stay',
-      header: 'Konaklama',
+      header: t('folio.list.stay'),
       render: (row) => (
         <span className="whitespace-nowrap text-xs">
           {formatDate(row.stay.checkIn)} – {formatDate(row.stay.checkOut)}
@@ -131,19 +127,19 @@ export function FoliosPage() {
     },
     {
       key: 'charges',
-      header: 'Harcama',
+      header: t('folio.list.charges'),
       className: 'text-right',
       render: (row) => <span className="whitespace-nowrap tabular-nums">{formatMoney(row.chargesTotal, row.currency)}</span>,
     },
     {
       key: 'paid',
-      header: 'Ödenen',
+      header: t('folio.list.paid'),
       className: 'text-right',
       render: (row) => <span className="whitespace-nowrap tabular-nums">{formatMoney(row.paymentsTotal, row.currency)}</span>,
     },
     {
       key: 'balance',
-      header: 'Bakiye',
+      header: t('folio.list.balance'),
       className: 'text-right',
       render: (row) => (
         <Badge tone={balanceTone(row.balance)}>
@@ -156,13 +152,13 @@ export function FoliosPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="Folyolar"
-        description="Konaklamaların hesabı: oda ücretleri, harcamalar, ödemeler. Harcama işleyin, folyoyu bölün ya da birleştirin; kalem iptali ikinci bir yetkilinin onayına gider."
+        title={t('folio.list.title')}
+        description={t('folio.list.description')}
       />
       <RoomChargeStrip />
 
       <div className="flex flex-wrap items-end gap-3 rounded-card bg-surface p-5 shadow-card">
-        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Görünüm">
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label={t('folio.list.view')}>
           {FOLIO_LIST_VIEWS.map((view) => (
             <button
               key={view}
@@ -173,27 +169,27 @@ export function FoliosPage() {
                 filters.view === view ? 'border-ink bg-ink text-white' : 'border-line-strong bg-surface text-ink-soft hover:border-ink'
               }`}
             >
-              {FOLIO_LIST_VIEW_LABELS[view]}
+              {t(`folio.listView.${view}`, FOLIO_LIST_VIEW_LABELS[view])}
             </button>
           ))}
         </div>
         <Input
-          label="Ara"
+          label={t('folio.list.search')}
           name="q"
           type="search"
-          placeholder="Misafir, onay kodu, oda no, şirket…"
+          placeholder={t('folio.list.searchPlaceholder')}
           value={searchText}
           onChange={(event) => setSearchText(event.target.value)}
           className="w-full sm:ml-auto sm:w-72"
         />
         <span className="self-center">
-          <Badge tone={isLive ? 'success' : 'warning'}>{isLive ? 'Canlı' : 'Canlı değil'}</Badge>
+          <Badge tone={isLive ? 'success' : 'warning'}>{isLive ? t('common.live') : t('common.notLive')}</Badge>
         </span>
       </div>
 
       {meta?.totalCapped && (
         <p className="text-xs text-ink-muted">
-          {RESERVATION_COUNT_CAP}'den fazla folyo var; yalnızca ilk {RESERVATION_COUNT_CAP} sayıldı. Eskilere arama ile ulaşın.
+          {t('folio.list.capped', { cap: RESERVATION_COUNT_CAP })}
         </p>
       )}
 
@@ -206,12 +202,12 @@ export function FoliosPage() {
         error={query.error}
         onRetry={() => query.refetch()}
         onPageChange={(page) => updateParams({ [PARAMS.page]: page }, { resetPage: false })}
-        emptyTitle={filters.search ? 'Aramaya uyan folyo yok' : EMPTY_TITLES[filters.view]}
+        emptyTitle={filters.search ? t('folio.list.emptySearch') : t(`folio.list.empty.${filters.view}`)}
         emptyHint={
           filters.search
-            ? 'Başka bir ad, oda numarası ya da onay kodu deneyin.'
+            ? t('folio.list.emptySearchHint')
             : filters.view === 'IN_HOUSE'
-              ? 'Folyo misafir giriş yapınca açılır; oda ücretleri her gece işlenir.'
+              ? t('folio.list.emptyInHouseHint')
               : undefined
         }
       />
@@ -224,6 +220,7 @@ export function FoliosPage() {
  * (aktör kapalı, sunucu gece kapalıydı) yetkili tek düğmeyle işler.
  */
 function RoomChargeStrip() {
+  const t = useT();
   const can = useCan();
   const canPost = can(PERMISSIONS.FOLIO_POST);
   const queryClient = useQueryClient();
@@ -233,8 +230,8 @@ function RoomChargeStrip() {
     onSuccess: (summary) => {
       toastSuccess(
         summary.items
-          ? `${formatDate(summary.night)} gecesine kadar ${summary.items} oda ücreti kalemi işlendi (${formatMoney(summary.total)})`
-          : 'İşlenecek oda ücreti yoktu; bütün geceler işlenmiş',
+          ? t('folio.roomCharges.posted', { date: formatDate(summary.night), count: summary.items, amount: formatMoney(summary.total) })
+          : t('folio.roomCharges.nothingToPost'),
       );
       queryClient.invalidateQueries({ queryKey: folioKeys.all });
     },
@@ -244,7 +241,7 @@ function RoomChargeStrip() {
   if (status.isPending) return null;
   if (status.isError) {
     return (
-      <Alert tone="warning" title="Oda ücreti durumu okunamadı" action={<Button size="sm" variant="outline" icon="refresh" onClick={() => status.refetch()}>Tekrar dene</Button>}>
+      <Alert tone="warning" title={t('folio.roomCharges.loadFailed')} action={<Button size="sm" variant="outline" icon="refresh" onClick={() => status.refetch()}>{t('common.retry')}</Button>}>
         {status.error.message}
       </Alert>
     );
@@ -253,27 +250,26 @@ function RoomChargeStrip() {
   const { lastRun, dueNight, missingStays, missingNights, currency } = status.data;
   const runButton = canPost && (
     <Button size="sm" icon="refresh" onClick={() => run.mutate()} disabled={run.isPending}>
-      {run.isPending ? 'İşleniyor…' : 'Oda ücretlerini işle'}
+      {run.isPending ? t('folio.stay.posting') : t('folio.roomCharges.run')}
     </Button>
   );
 
   if (missingNights > 0) {
     return (
-      <Alert tone="warning" title={`${missingStays} konaklamanın ${missingNights} gecesi folyoya işlenmedi`} action={runButton}>
-        {formatDate(dueNight)} gecesine kadar olan oda ücretleri eksik. Folyo aktörü kapalıysa ya da sunucu gece çalışmadıysa buradan işleyin;
-        işlenmiş gece yeniden işlenmez.
+      <Alert tone="warning" title={t('folio.roomCharges.missingTitle', { stays: missingStays, nights: missingNights })} action={runButton}>
+        {t('folio.roomCharges.missingBody', { date: formatDate(dueNight) })}
       </Alert>
     );
   }
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-card border border-line bg-surface-muted px-5 py-3 text-sm">
-      <Badge tone="success">Oda ücretleri güncel</Badge>
+      <Badge tone="success">{t('folio.roomCharges.upToDate')}</Badge>
       <span className="text-ink-soft">
         {!lastRun
-          ? 'Henüz gece çalışması yapılmadı.'
+          ? t('folio.roomCharges.neverRun')
           : lastRun.items
-            ? `Son çalışma: ${formatDate(lastRun.night)} gecesi · ${lastRun.stays} konaklamaya ${lastRun.items} kalem · ${formatMoney(lastRun.total, currency)}`
-            : `Son çalışma: ${formatDate(lastRun.night)} gecesi · işlenecek yeni gece yoktu (hepsi işlenmişti)`}
+            ? t('folio.roomCharges.lastRun', { date: formatDate(lastRun.night), stays: lastRun.stays, count: lastRun.items, amount: formatMoney(lastRun.total, currency) })
+            : t('folio.roomCharges.lastRunEmpty', { date: formatDate(lastRun.night) })}
       </span>
     </div>
   );
