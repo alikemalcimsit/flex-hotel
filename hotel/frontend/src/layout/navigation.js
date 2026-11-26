@@ -450,6 +450,17 @@ export const NAV_SECTIONS = Object.freeze([
         icon: 'upload',
         anyPermission: [PERMISSIONS.GUESTS_MANAGE, PERMISSIONS.SETTINGS_MANAGE],
       },
+      // Entegrasyon (modül 61): dış sistemlerin API anahtarları ve webhook abonelikleri.
+      {
+        label: 'Entegrasyon',
+        to: '/entegrasyonlar',
+        icon: 'link',
+        permission: PERMISSIONS.INTEGRATIONS_VIEW,
+        children: [
+          { label: 'Uygulamalar', to: '/entegrasyonlar/uygulamalar', icon: 'server' },
+          { label: 'Webhook teslimatları', to: '/entegrasyonlar/teslimatlar', icon: 'send' },
+        ],
+      },
       {
         label: 'Aktörler',
         to: '/aktorler',

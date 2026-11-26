@@ -545,6 +545,7 @@ export const STAFF_ALERT_KINDS = Object.freeze([
   'HR',
   'LOYALTY',
   'KBS',
+  'INTEGRATION',
 ]);
 
 export const STAFF_ALERT_KIND_LABELS = Object.freeze({
@@ -576,6 +577,7 @@ export const STAFF_ALERT_KIND_LABELS = Object.freeze({
   HR: 'İK (izin talebi / kararı, süresi dolacak belge)',
   LOYALTY: 'Sadakat (seviye yükseldi, puanın süresi doluyor)',
   KBS: 'KBS kimlik bildirimi (gönderilemedi, gecikti)',
+  INTEGRATION: 'Webhook aboneliği kapandı (entegrasyon)',
 });
 
 export const STAFF_ALERT_SEVERITIES = Object.freeze(['INFO', 'WARNING', 'CRITICAL']);

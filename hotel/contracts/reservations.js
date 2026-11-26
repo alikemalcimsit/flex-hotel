@@ -17,7 +17,7 @@ const DAY_MS = 86_400_000;
 /* ─────────────── Kaynak, durum, görünüm ─────────────── */
 
 /** Prisma `ReservationSource` ile birebir. */
-export const RESERVATION_SOURCES = Object.freeze(['UI', 'PHONE', 'EMAIL', 'AGENCY', 'WEBCHAT', 'WHATSAPP', 'WIDGET', 'OTA']);
+export const RESERVATION_SOURCES = Object.freeze(['UI', 'PHONE', 'EMAIL', 'AGENCY', 'WEBCHAT', 'WHATSAPP', 'WIDGET', 'OTA', 'API']);
 
 export const RESERVATION_SOURCE_LABELS = Object.freeze({
   UI: 'Resepsiyon (yüz yüze)',
@@ -28,6 +28,7 @@ export const RESERVATION_SOURCE_LABELS = Object.freeze({
   WHATSAPP: 'WhatsApp',
   WIDGET: 'Web sitesi',
   OTA: 'Online kanal (OTA)',
+  API: 'Dış sistem (API)',
 });
 
 /** Personelin elle açarken seçebildiği kaynaklar (kanal kaynakları aktörden gelir). */

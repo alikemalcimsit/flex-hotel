@@ -72,6 +72,7 @@ const { resetGuestPortalDemo, seedGuestPortalDemo } = await import('./demo-guest
 const { resetSurveyDemo, seedSurveyDemo } = await import('./demo-surveys.mjs');
 const { resetSpaDemo, seedSpaDemo } = await import('./demo-spa.mjs');
 const { resetAliDemo, seedAliDemo } = await import('./demo-ali.mjs');
+const { resetIntegrationDemo, seedIntegrationDemo } = await import('./demo-integrations.mjs');
 
 const HISTORY_DAYS = 400;
 const FUTURE_DAYS = 75;
@@ -110,6 +111,8 @@ if (process.argv.includes('--reset')) {
       // Ali'nin modülleri (18–46): stok hareketi / sayım, paket sipariş, kontenjan, misafir tercihi / notu, zimmet
       // demo kayıtlara kısıtlı bağlı — dokunulmazsa sıfırlama yarıda kalır. En önce.
       await resetAliDemo(tx, hotelId, ACTOR);
+      // Açık API (modül 61): rezervasyonun uygulama bağı demo uygulamaya kısıtlı bağlı — rezervasyonlardan önce çözülür.
+      await resetIntegrationDemo(tx, hotelId, ACTOR);
       // Demo misafir portalı (modül 53): bağlantı, online check-in ve belgeleri rezervasyona kısıtlı bağlı — en önce.
       portalFiles = await resetGuestPortalDemo(tx, hotelId);
       // Demo spa (modül 57): randevular, kasa ve oda yazımları rezervasyona / misafire kısıtlı bağlı — rezervasyondan önce.
@@ -1012,6 +1015,14 @@ try {
   console.error(`Ali modülleri adımı tamamlanamadı: ${error.message}`);
 }
 
+// ── Açık API ve webhook (modül 61): örnek uygulamalar, anahtarlar, duraklatılmış abonelik, teslimat geçmişi, API rezervasyonları ──
+let integrationSummary = null;
+try {
+  integrationSummary = await seedIntegrationDemo({ prisma, contracts, hotelId, today, actor: ACTOR, codePrefix: CODE_PREFIX });
+} catch (error) {
+  console.error(`Entegrasyon adımı tamamlanamadı: ${error.message}`);
+}
+
 // Odaların anlık durumu: içeride kimse varsa dolu, boşların bir kısmı kirli.
 const inHouse = new Set(reservations.filter((entry) => entry.row.status === 'CHECKED_IN').map((entry) => entry.row.roomId));
 await prisma.room.updateMany({ where: { hotelId, id: { in: [...inHouse] } }, data: { occupancy: 'OCCUPIED' } });
@@ -1086,6 +1097,9 @@ console.log(
       : '') +
     (aliSummary
       ? ` Ali modülleri: ${aliSummary.tickets} arıza kaydı, ${aliSummary.plans} bakım planı, ${aliSummary.preferences} tercih, ${aliSummary.notes} not, ${aliSummary.packages} paket, ${aliSummary.ratePlans} fiyat planı, ${aliSummary.leads} fırsat (${aliSummary.quotes} teklif), ${aliSummary.assets} demirbaş${aliSummary.depreciation ? `, amortisman ${aliSummary.depreciation}'e kadar` : ''}${aliSummary.skipped.length ? `; atlanan: ${aliSummary.skipped.join(' | ')}` : ''}.`
+      : '') +
+    (integrationSummary
+      ? ` Entegrasyon: ${integrationSummary.clients} uygulama, ${integrationSummary.keys} anahtar, ${integrationSummary.webhooks} abonelik, ${integrationSummary.deliveries} teslimat, ${integrationSummary.reservations} API rezervasyonu${integrationSummary.skipped.length ? `; atlanan: ${integrationSummary.skipped.join(' | ')}` : ''}.`
       : ''),
 );
 await prisma.$disconnect();

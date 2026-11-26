@@ -36,7 +36,8 @@ const MAX_ACTOR_LENGTH = 120;
  * kontrolde sessizce engelleniyordu.
  */
 export const CORS_METHODS = Object.freeze(['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE']);
-export const CORS_ALLOWED_HEADERS = Object.freeze(['Content-Type', 'Authorization', 'x-actor', 'x-correlation-id']);
+// Idempotency-Key: açık API'de rezervasyon açarken (modül 61; doküman sayfasının "Dene" düğmesi tarayıcıdan gönderir).
+export const CORS_ALLOWED_HEADERS = Object.freeze(['Content-Type', 'Authorization', 'x-actor', 'x-correlation-id', 'Idempotency-Key']);
 
 const isProduction = () => process.env.NODE_ENV === 'production';
 

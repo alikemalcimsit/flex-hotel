@@ -726,6 +726,8 @@ async function insertReservations(tx, stage, { hotelId, hotel, input, guest, roo
         // Acente adına açılan rezervasyonun kaynağı her zaman "Acente"dir (raporlar buna dayanır).
         source: agencySale ? 'AGENCY' : input.source,
         agencyId: agencySale?.agency.id ?? null,
+        // Açık API ile açıldıysa uygulama (modül 61): yalnız o uygulama değiştirip iptal edebilir.
+        apiClientId: input.apiClientId ?? null,
         // Komisyon oranı açılışta kopyalanır: kart sonradan değişse de bu rezervasyon etkilenmez.
         agencyCommissionPct: agencySale?.commissionPct ?? null,
         // Promosyon (modül 31): koşullarıyla kopyalanır; geceler indirimli.

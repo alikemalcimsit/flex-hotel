@@ -234,6 +234,48 @@ Açarken de gerekçe isteğe bağlıdır. Kanal aktörü açılınca kanallarda 
 - Arka plan sırası süreç içidir; birden fazla sunucu çalışıyorsa panel isteğin düştüğü sunucununkini gösterir.
 - Ajan başına ayrı bütçe yoktur; bütçe otel geneli USD'dir (Ayarlar → AI asistanı).
 
+## Entegrasyon (açık API ve webhook)
+
+**Nerede:** Yönetim → **Entegrasyon**, `/entegrasyonlar`. İki sekme: **Uygulamalar** (`/entegrasyonlar/uygulamalar`) ve **Webhook teslimatları** (`/entegrasyonlar/teslimatlar`). Sağ üstteki **API dokümanı** düğmesi geliştiriciler için Swagger sayfasını (`/api-docs/`) yeni sekmede açar. Müdür ekranları görür; uygulama açmak, anahtar oluşturmak, abonelik kurmak ve yeniden göndermek yöneticinindir (otelin verisini dışarı açmak yönetim kararıdır).
+
+**Ne yapar:** Otelin dışındaki bir sistem — kurumsal CRM, şirketlerin seyahat aracı, acente yazılımı, kendi web siteniz — otele **API anahtarıyla** bağlanır: müsaitliği ve fiyatı okur, rezervasyonları okur, rezervasyon açar / değiştirir / iptal eder, misafir kartlarını okur. Ayrıca seçtiği olayları (rezervasyon açıldı, giriş yapıldı, ödeme alındı, fatura kesildi…) kendi adresine **webhook** olarak alır; "bir şey değişti mi" diye sürekli sormak zorunda kalmaz.
+
+### Kavramlar
+
+- **Uygulama:** bağlanan dış sistemin kaydı. Her sistem için ayrı uygulama açılır; anahtarı sızan uygulama tek başına kapatılır. Uygulamada iki ayar vardır: **hız sınırı** (bütün anahtarlarının dakikadaki toplam isteği) ve **API'den açılan rezervasyon** (opsiyonlu — resepsiyon kesinleştirir — ya da doğrudan kesin).
+- **API anahtarı:** `fhk_…` ile başlayan uzun metin. **Yalnızca oluşturulduğu an bir kez gösterilir**; sistem anahtarın kendisini saklamaz, yalnız tanımak için başındaki öneki gösterir. Kaybolursa iptal edilip yenisi açılır.
+- **Kapsam:** anahtarın yapabildiği. *Müsaitlik ve fiyat*, *Rezervasyonları okuma*, *Rezervasyon açma / değiştirme / iptal*, *Misafir kartlarını okuma*. Yazma kapsamı okumayı ve müsaitliği de ister (form kendisi ekler). Kimlik belgesi bilgisi (TC / pasaport numarası, doğum tarihi) **hiçbir kapsamla** dışarı verilmez.
+- **Webhook aboneliği:** HTTPS adres + seçilen olaylar. Her teslimat imzalıdır; alıcı imzayı **imza sırrıyla** doğrular. Sır da yalnız bir kez gösterilir.
+
+### Adım adım: bir CRM'i bağlamak
+
+1. **Uygulamalar** → **Yeni uygulama**: ad ("Kurumsal CRM"), teknik iletişim e-postası, hız sınırı (varsayılan dakikada 120), API'den açılan rezervasyonun durumu.
+2. Uygulama kartında **Yeni anahtar**: ad ("Üretim sunucusu"), kapsamlar, geçerlilik (süresiz ya da 30–365 gün). **Anahtarı oluştur** deyince anahtar bir kez görünür: **Kopyala** ile alın ve CRM'in yöneticisine güvenli yoldan iletin. Kopyalamadan kapatmaya çalışırsanız ekran bir kez daha uyarır.
+3. İsterseniz **Yeni abonelik**: CRM'in verdiği HTTPS adres ve olaylar. İmza sırrı bir kez görünür; CRM'e iletin.
+4. **Deneme gönder** ile adrese imzalı bir deneme olayı gider; sonucu **Webhook teslimatları** sekmesinde görürsünüz (alıcının cevap kodu ve süresi).
+
+### Rezervasyon kuralları
+
+API'den açılan rezervasyon paneldekiyle **aynı kuralla** açılır: fiyat otelin fiyat motorundan gelir (dışarıdan fiyat verilemez), müsaitlik kilitli denetlenir, yer yoksa açılmaz (onaya gönderilmez), iptal cezası otelin politikasındandır ve API ile silinemez. Kaynağı **Dış sistem (API)** görünür; işlem kaydında kişi yerine "api:Kurumsal CRM (fhk_…)" yazar. Bir uygulama **yalnızca kendi açtığı** rezervasyonu değiştirip iptal edebilir; personelin ya da başka uygulamanın açtığını okuyabilir ama değiştiremez, personelin iç notunu göremez. Misafirin iletişim bilgisi başka adlı bir kartla aynıysa dış sisteme o kart gösterilmez, yeni kart açılır (gerekirse resepsiyon kartları birleştirir).
+
+### Webhook teslimatları
+
+Liste en yeni önce; süzgeç: uygulama, durum, olay. Satıra basınca giden gövde, denemeler ve alıcının cevabının başı görünür. Durumlar: **Sırada**, **Gönderiliyor**, **Yeniden denenecek**, **Teslim edildi**, **Teslim edilemedi**. Başarısız teslimat 1 dk, 5 dk, 30 dk, 2 sa, 6 sa, 12 sa ve 24 sa sonra yeniden denenir (toplam 8 deneme, ~45 saat); alıcı "sonra gel" derse (`Retry-After`) ona uyulur. Bitmiş bir teslimat **Yeniden gönder** ile aynı olay kimliğiyle tekrar sıraya alınır. Kayıtlar 30 gün saklanır.
+
+### Arka planda
+
+- Bir iş olayı olunca (rezervasyon, giriş, ödeme…) sistem yalnız onu isteyen açık aboneliklere teslimat yazar ve gönderici birkaç yüz milisaniye içinde gönderir; personelin işlemi alıcının cevabını **beklemez**.
+- Gövde incedir: kimlikler, durum, tarih ve tutar gider; misafirin adı, telefonu, e-postası gitmez. Ayrıntıyı isteyen API'den çeker (anahtarının kapsamı varsa). Yanlış adrese giden bir olay kişisel veri sızdırmaz.
+- Alıcı uzun süre cevap vermezse — art arda en az 20 başarısız deneme **ve** 72 saattir hiç başarı yok — abonelik kendiliğinden **Hatalar yüzünden kapandı** olur ve entegrasyon yetkilisinin ziline uyarı düşer. Alıcı düzelince abonelikten **Yeniden aç** deyin; bekleyen olaylar o zaman gönderilir.
+- **Sırrı yenile**: yeni sır bir kez gösterilir; eski sır 24 saat boyunca ikinci imza olarak gönderilmeye devam eder, alıcı bu sürede yeni sırra geçer, teslimat kesilmez.
+
+### Dikkat
+
+- Adres yalnız **https** olabilir; `localhost`, `10.x`, `192.168.x`, bulut meta-veri adresi gibi iç ağ adresleri hem kayıtta hem gönderim anında reddedilir (adı dış görünüp iç ağa çözülen adresler dahil). Yönlendirme takip edilmez.
+- Uygulamayı **Kapat** anahtarlarını hemen durdurur (403) ve webhook göndermez; **Sil** geri alınmaz (anahtarlar iptal, abonelikler silinir).
+- *Misafir kartlarını okuma* kapsamı kişisel veri açar: dış sistemle KVKK kapsamında veri işleme sözleşmeniz olmalı.
+- Anahtarı e-posta gövdesine, mesajlaşma grubuna yazmayın. Sızdığından şüphelenirseniz hemen **İptal et** — en geç bir dakika içinde reddedilir.
+
 ## Ayarlar
 
 **Nerede:** Yönetim → Ayarlar, `/ayarlar`. Menüde **yalnızca Yönetici** görür. Alt sekmeler: Otel bilgileri, Oda tipleri, Vergiler, Sezonlar, Fiyat planları, Paketler, Dinamik fiyat, Genel parametreler, Kullanıcılar, Roller & İzinler, AI asistanı, Mesaj kanalları.

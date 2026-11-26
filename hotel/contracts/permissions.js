@@ -258,6 +258,11 @@ export const PERMISSIONS = Object.freeze({
   /** Kanal bağlamak / düzenlemek / senkrona almak, eşleştirme, stop-sale, elle senkron. */
   CHANNEL_MANAGER_MANAGE: 'channel_manager.manage',
 
+  /** Açık API ve webhook (modül 61): uygulamalar, anahtarların listesi (sır değil), abonelikler, teslimat logu. */
+  INTEGRATIONS_VIEW: 'integrations.view',
+  /** Uygulama aç / kapat, API anahtarı oluştur / iptal et, webhook aboneliği kur / değiştir, teslimatı yeniden gönder. */
+  INTEGRATIONS_MANAGE: 'integrations.manage',
+
   /** Aktör paneli (modül 12): aktörlerin durumu, bildirgesi, LLM harcaması. */
   ACTORS_VIEW: 'actors.view',
   /** Aktörü bu otelde açmak / kapatmak (kapalı aktörün işi personele düşer). */
@@ -422,6 +427,8 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.SPA_SETUP]: 'Spa hizmetleri, terapistler, odalar, bloklar, ders programı ve ayarlar',
   [PERMISSIONS.CHANNEL_MANAGER_VIEW]: 'Kanalları, senkron logunu ve kanal rezervasyonlarını görüntüle',
   [PERMISSIONS.CHANNEL_MANAGER_MANAGE]: 'Kanal bağla, eşleştir, stop-sale koy, elle senkronla',
+  [PERMISSIONS.INTEGRATIONS_VIEW]: 'API uygulamalarını, anahtar listesini, webhook aboneliklerini ve teslimat logunu görüntüle',
+  [PERMISSIONS.INTEGRATIONS_MANAGE]: 'API uygulaması ve anahtarı oluştur / iptal et, webhook aboneliği kur, teslimatı yeniden gönder',
   [PERMISSIONS.ACTORS_VIEW]: 'Aktör panelini görüntüle',
   [PERMISSIONS.ACTORS_MANAGE]: 'Aktörleri aç / kapat',
 });
@@ -546,6 +553,7 @@ export const PERMISSION_GROUPS = Object.freeze([
     label: 'Kanal yönetimi',
     permissions: [PERMISSIONS.CHANNEL_MANAGER_VIEW, PERMISSIONS.CHANNEL_MANAGER_MANAGE],
   },
+  { key: 'integrations', label: 'Entegrasyon (API ve webhook)', permissions: [PERMISSIONS.INTEGRATIONS_VIEW, PERMISSIONS.INTEGRATIONS_MANAGE] },
   { key: 'monitoring', label: 'İzleme', permissions: [PERMISSIONS.ACTIVITY_VIEW, PERMISSIONS.AUDIT_VIEW] },
   { key: 'actors', label: 'Aktörler', permissions: [PERMISSIONS.ACTORS_VIEW, PERMISSIONS.ACTORS_MANAGE] },
 ]);
@@ -653,6 +661,8 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     // Hangi kanalda hangi fiyattan satılacağı ticari karar: müdürün.
     PERMISSIONS.CHANNEL_MANAGER_VIEW,
     PERMISSIONS.CHANNEL_MANAGER_MANAGE,
+    // Dış sistem bağlantıları (modül 61): müdür görür; anahtar açmak / abonelik kurmak (otelin verisini dışarı açmak) yöneticinin.
+    PERMISSIONS.INTEGRATIONS_VIEW,
     // Acente hedef primi ticari söz: kuralı ve hak edişi müdür hazırlar; onayı (dört göz) başka
     // bir yetkili verir. Ödeme işaretini muhasebe yapar ama müdür de yapabilir (küçük otel).
     PERMISSIONS.AGENCY_BONUS_VIEW,
