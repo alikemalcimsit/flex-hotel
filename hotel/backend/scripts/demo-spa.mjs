@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { CODE_PREFIX } from './demo-config.mjs';
 
 /**
  * Spa ve spor salonu demo verisi (modül 57; `demo-data.mjs` çağırır).
@@ -271,7 +272,7 @@ export async function seedSpaDemo({ prisma, core, contracts, hotelId, today, act
   // ── Konaklamalar: içerideki demo misafirleri (giriş günüyle) ──
   const stays = (
     await prisma.reservation.findMany({
-      where: { hotelId, status: 'CHECKED_IN', roomId: { not: null }, confirmationCode: { startsWith: 'DMO-' } },
+      where: { hotelId, status: 'CHECKED_IN', roomId: { not: null }, confirmationCode: { startsWith: CODE_PREFIX } },
       select: { id: true, checkIn: true, checkOut: true },
       orderBy: { checkIn: 'asc' },
       take: 400,

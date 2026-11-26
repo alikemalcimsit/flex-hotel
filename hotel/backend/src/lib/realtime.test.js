@@ -347,6 +347,7 @@ function fakeSocket(auth) {
 
 describe('registerSocketHandlers', () => {
   const USER_ID = '99999999-9999-4999-8999-999999999999';
+  const OTHER_HOTEL = '88888888-8888-4888-8888-888888888888';
 
   function connect(auth, overrides = {}) {
     let onConnection;
@@ -356,9 +357,12 @@ describe('registerSocketHandlers', () => {
       },
     };
     realtime.registerSocketHandlers(io, {
-      resolveHotelId: async () => HOTEL_ID,
-      findStaff: async (hotelId, email) => (email === 'kat@test.local' ? { id: USER_ID, role: 'HOUSEKEEPING' } : null),
-      permissionsForRole: (role) => (role === 'HOUSEKEEPING' ? ['rooms.view'] : []),
+      // Token → kimlik: geçerli token o otelin kişisi ve o otelin matrisinden izinleri (modül 63: otel token'dan).
+      authenticate: async (token) => {
+        if (token === 'kat-token') return { hotelId: HOTEL_ID, userId: USER_ID, permissions: ['rooms.view'] };
+        if (token === 'zincir-token') return { hotelId: OTHER_HOTEL, userId: USER_ID, permissions: [] };
+        return null;
+      },
       logger: { error() {} },
       ...overrides,
     });
@@ -368,7 +372,7 @@ describe('registerSocketHandlers', () => {
   }
 
   it('personel kişi ve izin odalarına katılır; bağlantı anındaki abonelik kaybolmaz', async () => {
-    const socket = connect({ actor: 'Kat@Test.local' });
+    const socket = connect({ token: 'kat-token' });
     const acks = [];
     await socket.trigger(
       'subscribe',
@@ -392,15 +396,25 @@ describe('registerSocketHandlers', () => {
     assert.equal(socket.rooms.has(`hotel:${HOTEL_ID}:ch:${realtime.REQUESTS_CHANNEL}`), false);
   });
 
-  it('kimliği bilinmeyen bağlantı yalnızca otel odasına katılır', async () => {
-    const socket = connect({ actor: 'yabanci@test.local' });
+  it('otel token’dan gelir: zincirde başka otelin token’ı o otelin odalarına katılır', async () => {
+    const socket = connect({ token: 'zincir-token' });
     await socket.trigger('subscribe', [realtime.INVENTORY_CHANNEL]);
-    assert.deepEqual([...socket.rooms].sort(), [`hotel:${HOTEL_ID}`, `hotel:${HOTEL_ID}:ch:${realtime.INVENTORY_CHANNEL}`].sort());
-    assert.equal(socket.emitted[0].payload.userId, null);
+    assert.deepEqual([...socket.rooms].sort(), [`hotel:${OTHER_HOTEL}`, `hotel:${OTHER_HOTEL}:ch:${realtime.INVENTORY_CHANNEL}`, `hotel:${OTHER_HOTEL}:user:${USER_ID}`].sort());
   });
 
-  it('bağlam kurulamazsa "canlı değil" bildirilir, abonelik reddedilir', async () => {
-    const socket = connect({}, { resolveHotelId: async () => { throw new Error('otel yok'); } });
+  it('token’sız / geçersiz token’lı bağlantı hiçbir odaya katılmaz (başka otelin haberi sızmaz); eski istemcinin e-postası kimlik sayılmaz', async () => {
+    for (const auth of [{}, { token: 'bozuk' }, { actor: 'kat@test.local' }]) {
+      const socket = connect(auth);
+      const acks = [];
+      await socket.trigger('subscribe', [realtime.INVENTORY_CHANNEL], (ack) => acks.push(ack));
+      assert.deepEqual(acks, [{ ok: false, channels: [] }], JSON.stringify(auth));
+      assert.equal(socket.rooms.size, 0);
+      assert.deepEqual(socket.emitted[0].payload, { hotelId: null, userId: null, spreadMs: 0 });
+    }
+  });
+
+  it('kimlik çözülürken hata olursa "canlı değil" bildirilir, abonelik reddedilir', async () => {
+    const socket = connect({ token: 'kat-token' }, { authenticate: async () => { throw new Error('veritabanı yok'); } });
     const acks = [];
     await socket.trigger('subscribe', [realtime.INVENTORY_CHANNEL], (ack) => acks.push(ack));
     assert.deepEqual(acks, [{ ok: false, channels: [] }]);

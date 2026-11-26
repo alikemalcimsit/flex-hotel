@@ -8,6 +8,7 @@ import { PERMISSIONS } from '../../lib/permissions.js';
 import { writeWithEvents } from '../../lib/write.js';
 import { raiseStaffAlert } from '../notifications/staff-alerts.js';
 import { shiftCash, varianceNeedsAlert } from './rules.js';
+import { peopleInHotelWhere } from '../../lib/staff.js';
 import { dateOnly, day, hotelContext, iso, loadPosSettings, money, optionalMoney, prisma } from './shared.js';
 
 /**
@@ -369,7 +370,7 @@ export async function openShiftWaiters(hotelId) {
   });
   // Adlar tek sorguda (garson başına sorgu yok).
   const staff = rows.length
-    ? await prismaUnfiltered.user.findMany({ where: { hotelId, email: { in: rows.map((row) => row.waiterEmail) } }, select: { email: true, name: true } })
+    ? await prismaUnfiltered.user.findMany({ where: { email: { in: rows.map((row) => row.waiterEmail) }, ...peopleInHotelWhere(hotelId) }, select: { email: true, name: true } })
     : [];
   const names = new Map(staff.map((user) => [user.email.toLowerCase(), user.name]));
   return {

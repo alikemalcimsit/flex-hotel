@@ -3,9 +3,11 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useT } from '../i18n/index.jsx';
 import { useManualTaskBadge } from '../lib/actors.js';
 import { useApprovalBadge } from '../lib/approvals.js';
+import { consumeSwitchFlag } from '../lib/chain.js';
 import { useFrontOfficeBadges } from '../lib/frontOffice.js';
 import { useHotelContext } from '../lib/useHotel.js';
 import { useAuthStore } from '../store/auth.js';
+import { toastError } from '../store/toast.js';
 import { useUiStore } from '../store/ui.js';
 import { ROLE_LABELS } from './navigation.js';
 import { Sidebar } from './Sidebar.jsx';
@@ -32,6 +34,7 @@ export function AppLayout() {
   const t = useT();
   const permissions = useAuthStore((s) => s.permissions);
   const logout = useAuthStore((s) => s.logout);
+  const sessionHotel = useAuthStore((s) => s.hotel);
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
@@ -54,6 +57,18 @@ export function AppLayout() {
   useEffect(() => () => {
     document.title = DOCUMENT_TITLE;
   }, []);
+
+  // Oturumun oteli seçici dışında değiştiyse (bu oteldeki erişim kaldırıldı, sunucu ana otele döndürdü) söyle ve ana
+  // sayfaya dön: açık sayfanın kaydı yeni otelde yok.
+  const lastHotelRef = useRef(sessionHotel);
+  useEffect(() => {
+    const previous = lastHotelRef.current;
+    lastHotelRef.current = sessionHotel;
+    if (!previous || !sessionHotel || previous.id === sessionHotel.id) return;
+    if (consumeSwitchFlag()) return;
+    toastError(t('layout.hotelSwitcher.accessRemoved', { previous: previous.name, home: sessionHotel.name }));
+    navigate('/');
+  }, [sessionHotel, navigate, t]);
 
   const isCollapsed = isDesktop && isSidebarCollapsed;
   const isDrawerOpen = !isDesktop && isMobileNavOpen;

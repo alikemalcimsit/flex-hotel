@@ -85,11 +85,35 @@ export async function createUser(hotelId, { email, name, role, password, isActiv
 async function assertNotLastAdmin(tx, hotelId, before, nextRole, nextActive) {
   const losesAdmin = before.role === ADMIN_ROLE && (!nextActive || nextRole !== ADMIN_ROLE);
   if (!losesAdmin) return;
+  // Zincirde erişimle yönetici olanlar da sayılır (modül 63): sihirbazla açılan otelin yöneticisi erişimle gelir.
   const otherAdmins = await tx.user.count({
-    where: { hotelId, role: ADMIN_ROLE, isActive: true, id: { not: before.id } },
+    where: { isActive: true, id: { not: before.id }, OR: [{ hotelId, role: ADMIN_ROLE }, { hotels: { some: { hotelId, role: ADMIN_ROLE } } }] },
   });
   if (otherAdmins === 0) {
     throw new ValidationError('Son aktif yöneticiyi pasife alamaz ya da rolünü değiştiremezsiniz', { field: 'role' });
+  }
+}
+
+/**
+ * Pasife alınan kişi zincirde başka otellerin (erişimle) yöneticisi olabilir: pasife alma bütün erişimlerini de kapatır.
+ * O otellerden birinde başka aktif yönetici yoksa otel yöneticisiz kalırdı (sihirbazla açılan otelin ilk yöneticisi
+ * erişimle gelir) → reddedilir. İki toplu sorgu, otel başına sorgu yok.
+ *
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} userId
+ */
+async function assertNotLastChainAdmin(tx, userId) {
+  const adminOf = await tx.userHotel.findMany({ where: { userId, role: ADMIN_ROLE, hotel: { deletedAt: null } }, select: { hotelId: true, hotel: { select: { name: true } } } });
+  if (adminOf.length === 0) return;
+  const hotelIds = adminOf.map((row) => row.hotelId);
+  const [home, viaAccess] = await Promise.all([
+    tx.user.groupBy({ by: ['hotelId'], where: { hotelId: { in: hotelIds }, role: ADMIN_ROLE, isActive: true, id: { not: userId } }, _count: { _all: true } }),
+    tx.userHotel.groupBy({ by: ['hotelId'], where: { hotelId: { in: hotelIds }, role: ADMIN_ROLE, userId: { not: userId }, user: { isActive: true } }, _count: { _all: true } }),
+  ]);
+  const covered = new Set([...home, ...viaAccess].filter((row) => row._count._all > 0).map((row) => row.hotelId));
+  const orphaned = adminOf.filter((row) => !covered.has(row.hotelId)).map((row) => row.hotel.name);
+  if (orphaned.length > 0) {
+    throw new ValidationError(`Bu kişi ${orphaned.join(', ')} otelinin tek yöneticisi (zincir erişimiyle); önce oraya başka bir yönetici atayın`, { field: 'isActive' });
   }
 }
 
@@ -104,6 +128,7 @@ export async function updateUser(hotelId, id, { email, name, role, isActive, exp
     if (!before) throw new NotFoundError('Kullanıcı bulunamadı');
 
     await assertNotLastAdmin(tx, hotelId, before, role, isActive);
+    if (before.isActive && !isActive) await assertNotLastChainAdmin(tx, id);
 
     try {
       await updateWithVersionCheck(

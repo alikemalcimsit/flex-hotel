@@ -38,11 +38,13 @@ const queryClient = new QueryClient({
  * Oturum kapanınca ya da başka biri girince önbellek boşalır. Resepsiyon
  * bilgisayarı ortak kullanılır: önceki kişinin misafir listesi, folyosu ya da
  * kayıp eşya fotoğrafları bir sonraki kişiye (izni olmasa da) bir an bile
- * görünmemeli.
+ * görünmemeli. Zincirde otel değişince de (modül 63) boşalır: sorgu anahtarları
+ * oteli taşımaz, A otelinin listesi B otelinde görünmesin.
  */
-let cachedFor = useAuthStore.getState().user?.email ?? null;
+const cacheOwner = (state) => `${state.user?.email ?? ''}|${state.hotel?.id ?? ''}`;
+let cachedFor = cacheOwner(useAuthStore.getState());
 useAuthStore.subscribe((state) => {
-  const actor = state.user?.email ?? null;
+  const actor = cacheOwner(state);
   if (actor === cachedFor) return;
   cachedFor = actor;
   queryClient.clear();

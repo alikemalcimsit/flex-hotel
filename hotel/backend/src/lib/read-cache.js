@@ -72,6 +72,11 @@ export function createReadCache({ ttlMs, maxEntries, now = Date.now }) {
       return promise;
     },
 
+    /** Tek anahtarı düşürür (değişen kaydın önbelleği hemen tazelensin). @param {string} key */
+    delete(key) {
+      entries.delete(key);
+    },
+
     clear() {
       entries.clear();
     },

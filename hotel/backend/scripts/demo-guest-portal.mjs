@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { saveFile } from '../src/lib/file-storage.js';
 import { documentKeys, signatureKey } from '../src/modules/guest-portal/documents.js';
+import { CODE_PREFIX } from './demo-config.mjs';
 
 /**
  * Demo misafir portalı ve online check-in (modül 53; `demo-data.mjs` çağırır).
@@ -15,7 +16,6 @@ import { documentKeys, signatureKey } from '../src/modules/guest-portal/document
  */
 
 const ASSETS = path.join(import.meta.dirname, 'assets');
-const CODE_PREFIX = 'DMO-';
 const DAY_MS = 86_400_000;
 const REVIEWER = 'admin@hotel.local';
 

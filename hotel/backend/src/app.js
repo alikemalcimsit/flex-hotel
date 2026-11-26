@@ -87,11 +87,13 @@ import { guestRoutes } from './modules/guests/routes.js';
 import { reportCacheStats } from './modules/reports/service.js';
 import { registerPaymentSubscribers } from './modules/payments/subscribers.js';
 import { authRoutes } from './modules/auth/routes.js';
+import { chainRoutes } from './modules/chain/routes.js';
 import { messagingChannelRoutes, webchatWidgetRoutes, webhookRoutes } from './modules/channels/routes.js';
 import { publicBookingRoutes } from './modules/public-booking/routes.js';
 import { webchatOrigins } from './modules/channels/service.js';
 import { conciergeRoutes } from './modules/concierge/routes.js';
 import { roleRoutes } from './modules/roles/routes.js';
+import { sessionRole } from './lib/memberships.js';
 import { resolveEffectivePermissions } from './modules/roles/service.js';
 import { userRoutes } from './modules/users/routes.js';
 import { guestRequestRoutes } from './modules/guest-requests/routes.js';
@@ -289,12 +291,17 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
 
     try {
       const payload = await request.jwtVerify();
+      // Zincir (modül 63): ana otel dışındaki otelin token'ı her istekte erişimle doğrulanır, rol token'dan değil
+      // erişimden okunur — erişim kaldırılınca ya da rolü değişince hemen etkili (önbellekli, değişiklikte silinir).
+      const role = await sessionRole(payload);
+      if (!role) throw new Error('Bu otele erişim yok');
       request.auth = {
         userId: payload.userId,
         email: payload.email,
         hotelId: payload.hotelId,
-        role: payload.role,
-        permissions: await resolveEffectivePermissions(payload.hotelId, payload.role),
+        homeHotelId: payload.homeHotelId ?? payload.hotelId,
+        role,
+        permissions: await resolveEffectivePermissions(payload.hotelId, role),
       };
       context.actor = payload.email;
     } catch {
@@ -437,6 +444,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   await app.register(manualTaskRoutes, { prefix: '/manual-tasks' });
   // Açık API ve webhook yönetimi (modül 61): panel uçları + dış sistemlerin anahtarla bağlandığı `/v1`.
   await app.register(integrationRoutes, { prefix: '/integrations' });
+  await app.register(chainRoutes, { prefix: '/chain' });
   await app.register(publicApiRoutes);
   await app.register(conciergeRoutes, { prefix: '/ai' });
   await app.register(messagingChannelRoutes, { prefix: '/messaging-channels' });

@@ -262,6 +262,12 @@ const IntegrationsPage = lazy(() => import('./pages/integrations/IntegrationsPag
 const ApiClientsTab = lazy(() => import('./pages/integrations/ApiClientsTab.jsx').then((m) => ({ default: m.ApiClientsTab })));
 const ApiClientPage = lazy(() => import('./pages/integrations/ApiClientPage.jsx').then((m) => ({ default: m.ApiClientPage })));
 const DeliveriesTab = lazy(() => import('./pages/integrations/DeliveriesTab.jsx').then((m) => ({ default: m.DeliveriesTab })));
+// Zincir konsolu (modül 63): zincir panosu ve raporu, oteller (yeni otel sihirbazı), merkezi kullanıcı yönetimi.
+const HotelChainPage = lazy(() => import('./pages/chain/ChainPage.jsx').then((m) => ({ default: m.ChainPage })));
+const ChainDashboardTab = lazy(() => import('./pages/chain/ChainDashboardTab.jsx').then((m) => ({ default: m.ChainDashboardTab })));
+const ChainReportTab = lazy(() => import('./pages/chain/ChainReportTab.jsx').then((m) => ({ default: m.ChainReportTab })));
+const ChainHotelsTab = lazy(() => import('./pages/chain/ChainHotelsTab.jsx').then((m) => ({ default: m.ChainHotelsTab })));
+const ChainUsersTab = lazy(() => import('./pages/chain/ChainUsersTab.jsx').then((m) => ({ default: m.ChainUsersTab })));
 const ChannelSettingsTab = lazy(() => import('./pages/channels/ChannelSettingsTab.jsx').then((m) => ({ default: m.ChannelSettingsTab })));
 const ChannelMappingTab = lazy(() => import('./pages/channels/ChannelMappingTab.jsx').then((m) => ({ default: m.ChannelMappingTab })));
 const ChannelStopSaleTab = lazy(() => import('./pages/channels/ChannelStopSaleTab.jsx').then((m) => ({ default: m.ChannelStopSaleTab })));
@@ -398,6 +404,27 @@ export default function App() {
               <Route index element={<Navigate to="/entegrasyonlar/uygulamalar" replace />} />
               <Route path="uygulamalar" element={<ApiClientsTab />} />
               <Route path="teslimatlar" element={<DeliveriesTab />} />
+            </Route>
+            <Route
+              path="zincir"
+              element={
+                <RequirePermission permission={PERMISSIONS.CHAIN_VIEW}>
+                  <HotelChainPage />
+                </RequirePermission>
+              }
+            >
+              <Route index element={<Navigate to="/zincir/pano" replace />} />
+              <Route path="pano" element={<ChainDashboardTab />} />
+              <Route path="rapor" element={<ChainReportTab />} />
+              <Route path="oteller" element={<ChainHotelsTab />} />
+              <Route
+                path="kullanicilar"
+                element={
+                  <RequirePermission permission={PERMISSIONS.CHAIN_USERS}>
+                    <ChainUsersTab />
+                  </RequirePermission>
+                }
+              />
             </Route>
             <Route
               path="entegrasyonlar/uygulamalar/:clientId"

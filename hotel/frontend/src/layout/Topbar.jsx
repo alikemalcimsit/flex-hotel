@@ -2,6 +2,7 @@ import { forwardRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Icon } from '@hotelos/ui';
 import { AlertBell } from './AlertBell.jsx';
+import { HotelSwitcher } from './HotelSwitcher.jsx';
 import { useT } from '../i18n/index.jsx';
 import { useNavText } from '../i18n/useNavText.js';
 import { findLocation } from './navigation.js';
@@ -123,7 +124,8 @@ export const Topbar = forwardRef(function Topbar(
         )}
       </div>
 
-      <div className="flex shrink-0 items-center gap-3">
+      <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+        <HotelSwitcher />
         <ApprovalCounter approvals={approvals} />
         <AlertBell />
         {fullscreen.isSupported && (

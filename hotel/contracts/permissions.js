@@ -277,6 +277,16 @@ export const PERMISSIONS = Object.freeze({
   /** Uygulama aç / kapat, API anahtarı oluştur / iptal et, webhook aboneliği kur / değiştir, teslimatı yeniden gönder. */
   INTEGRATIONS_MANAGE: 'integrations.manage',
 
+  /**
+   * Zincir konsolu (modül 63): zincir panosu ve raporu, zincirin otel listesi. Rakamlar yalnız kişinin O OTELDE de bu
+   * izni taşıdığı otellerden gelir (izin her otelin kendi matrisinden).
+   */
+  CHAIN_VIEW: 'chain.view',
+  /** Zincir kurma / adlandırma, yeni otel sihirbazı, var olan oteli zincire ekleme / çıkarma (o otelde yöneticilik de gerekir). */
+  CHAIN_MANAGE: 'chain.manage',
+  /** Merkezi kullanıcı yönetimi: zincirin kişileri, otel erişimi verme / kaldırma (hedef otelde kullanıcı yönetme izni de gerekir). */
+  CHAIN_USERS: 'chain.users',
+
   /** Aktör paneli (modül 12): aktörlerin durumu, bildirgesi, LLM harcaması. */
   ACTORS_VIEW: 'actors.view',
   /** Aktörü bu otelde açmak / kapatmak (kapalı aktörün işi personele düşer). */
@@ -449,6 +459,9 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.CHANNEL_MANAGER_MANAGE]: 'Kanal bağla, eşleştir, stop-sale koy, elle senkronla',
   [PERMISSIONS.INTEGRATIONS_VIEW]: 'API uygulamalarını, anahtar listesini, webhook aboneliklerini ve teslimat logunu görüntüle',
   [PERMISSIONS.INTEGRATIONS_MANAGE]: 'API uygulaması ve anahtarı oluştur / iptal et, webhook aboneliği kur, teslimatı yeniden gönder',
+  [PERMISSIONS.CHAIN_VIEW]: 'Zincir panosunu, zincir raporunu ve zincirin otellerini görüntüle',
+  [PERMISSIONS.CHAIN_MANAGE]: 'Zincir kur, yeni otel aç (ayar kopyasıyla), oteli zincire ekle / çıkar',
+  [PERMISSIONS.CHAIN_USERS]: 'Zincirin kullanıcılarını yönet: otel erişimi ver / kaldır, zincirden kullanıcı aç',
   [PERMISSIONS.ACTORS_VIEW]: 'Aktör panelini görüntüle',
   [PERMISSIONS.ACTORS_MANAGE]: 'Aktörleri aç / kapat',
 });
@@ -576,6 +589,7 @@ export const PERMISSION_GROUPS = Object.freeze([
     permissions: [PERMISSIONS.CHANNEL_MANAGER_VIEW, PERMISSIONS.CHANNEL_MANAGER_MANAGE],
   },
   { key: 'integrations', label: 'Entegrasyon (API ve webhook)', permissions: [PERMISSIONS.INTEGRATIONS_VIEW, PERMISSIONS.INTEGRATIONS_MANAGE] },
+  { key: 'chain', label: 'Zincir', permissions: [PERMISSIONS.CHAIN_VIEW, PERMISSIONS.CHAIN_MANAGE, PERMISSIONS.CHAIN_USERS] },
   { key: 'monitoring', label: 'İzleme', permissions: [PERMISSIONS.ACTIVITY_VIEW, PERMISSIONS.AUDIT_VIEW] },
   { key: 'actors', label: 'Aktörler', permissions: [PERMISSIONS.ACTORS_VIEW, PERMISSIONS.ACTORS_MANAGE] },
 ]);
@@ -691,6 +705,9 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.CHANNEL_MANAGER_MANAGE,
     // Dış sistem bağlantıları (modül 61): müdür görür; anahtar açmak / abonelik kurmak (otelin verisini dışarı açmak) yöneticinin.
     PERMISSIONS.INTEGRATIONS_VIEW,
+    // Zincir (modül 63): müdür kendi otelinin ve erişimi olan otellerin zincir rakamlarını görür; otel açmak / kişilere
+    // otel erişimi vermek yöneticinin.
+    PERMISSIONS.CHAIN_VIEW,
     // Acente hedef primi ticari söz: kuralı ve hak edişi müdür hazırlar; onayı (dört göz) başka
     // bir yetkili verir. Ödeme işaretini muhasebe yapar ama müdür de yapabilir (küçük otel).
     PERMISSIONS.AGENCY_BONUS_VIEW,
