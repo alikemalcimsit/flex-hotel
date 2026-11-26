@@ -328,6 +328,21 @@ export const NAV_SECTIONS = Object.freeze([
           { label: 'Ayarlar', to: '/bordro/ayarlar', icon: 'settings' },
         ],
       },
+      // İK (modül 52): izinler, vardiya çizelgesi, günlük puantaj, özlük belgeleri.
+      {
+        label: 'İK',
+        to: '/ik',
+        icon: 'calendar',
+        permission: PERMISSIONS.HR_VIEW,
+        children: [
+          { label: 'İzinler', to: '/ik/izinler', icon: 'sun' },
+          { label: 'Vardiya', to: '/ik/vardiya', icon: 'clock' },
+          { label: 'Puantaj', to: '/ik/puantaj', icon: 'checkCheck' },
+          { label: 'Belgeler', to: '/ik/belgeler', icon: 'fileText' },
+        ],
+      },
+      // Kendi izinlerim (modül 52): her personel; İK yetkisi olmayan yalnız bunu görür.
+      { label: 'İzinlerim', to: '/ik/benim', icon: 'sun', permission: PERMISSIONS.HR_SELF },
       // Ön muhasebe (modül 47): cariler, kasa / banka, çek / senet, fişler.
       {
         label: 'Ön muhasebe',

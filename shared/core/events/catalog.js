@@ -543,6 +543,7 @@ export const EVENT_CATALOG = Object.freeze({
       'SALES_FOLLOW_UP',
       'ASSET',
       'STOCK',
+      'HR',
     ]),
     userId: z.string().uuid().nullable(),
     permission: z.string().nullable(),
@@ -1038,6 +1039,20 @@ export const EVENT_CATALOG = Object.freeze({
   }),
   /** Ekran olayı: bordro ayarı, parametre seti, kalem, departman, servis payı, avans, icra / nafaka, teşvik ya da puantaj değişti. */
   'payroll.settings.changed': hotelScoped.extend({ area: z.string().min(1).max(40) }),
+
+  /* ── İK (modül 52) ── */
+
+  /** İş olayı: izin talebi açıldı / onaylandı / reddedildi / iptal edildi (88 işgücü planlama ve 76 mobil dinler). */
+  'hr.leave.changed': hotelScoped.extend({
+    leaveId: z.string().uuid(),
+    employeeId: z.string().uuid(),
+    type: z.string().min(1).max(20),
+    change: z.enum(['REQUESTED', 'APPROVED', 'REJECTED', 'CANCELLED']),
+    startDate: isoDay,
+    endDate: isoDay,
+  }),
+  /** Ekran olayı: vardiya çizelgesi, günlük puantaj, bordroya aktarım, özlük belgesi ya da İK ayarı değişti. */
+  'hr.changed': hotelScoped.extend({ area: z.enum(['SHIFTS', 'TIMESHEETS', 'ATTENDANCE_EXPORT', 'DOCUMENTS', 'SETTINGS', 'LEAVE_BALANCE']) }),
 
   /* ── Temassız uygulamalar (modül 53) ── */
   /** Online check-in gönderildi / onaylandı / düzeltme istendi / giriş yapıldı / belgeleri silindi. Kişisel veri taşımaz. */
@@ -1608,6 +1623,9 @@ export const INVOICE_EVENTS = Object.freeze(['invoice.changed', 'invoice.setting
 
 /** Personel ve bordro (modül 51): ekranlar bunlarla tazelenir (`payroll.changed` kanalı). */
 export const PAYROLL_EVENTS = Object.freeze(['employee.changed', 'payroll.run.changed', 'payroll.settings.changed']);
+
+/** İK (modül 52): izin, vardiya, puantaj, belge ekranları (`hr.changed` kanalı). */
+export const HR_EVENTS = Object.freeze(['hr.leave.changed', 'hr.changed', 'employee.changed']);
 
 /** Misafir portalı ve online check-in (modül 53): ekranlar bunlarla tazelenir (`guest-portal.changed` kanalı). */
 export const GUEST_PORTAL_EVENTS = Object.freeze(['online_checkin.changed', 'guest_portal.link.changed', 'guest_portal.settings.changed']);

@@ -206,6 +206,8 @@ export const EVENT_LABELS = Object.freeze({
   'payroll.run.changed': 'Bordro değişti (hesap, onay, ödeme)',
   'payroll.run.approved': 'Bordro onaylandı (iş olayı)',
   'payroll.settings.changed': 'Bordro ayarı / parametre / puantaj / kesinti değişti',
+  'hr.leave.changed': 'İzin talebi açıldı / onaylandı / reddedildi / iptal edildi',
+  'hr.changed': 'İK değişti (vardiya, puantaj, bordroya aktarım, belge, ayar)',
   'online_checkin.changed': 'Online check-in değişti (gönderildi, onaylandı, düzeltme, giriş)',
   'guest_portal.link.changed': 'Misafir portalı bağlantısı verildi / iptal edildi / davet gönderildi',
   'guest_portal.settings.changed': 'Misafir portalı ayarı değişti',

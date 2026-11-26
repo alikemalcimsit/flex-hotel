@@ -40,6 +40,7 @@ Olay adları aile aile gruplanır; birkaç örnek:
 | Rapor | soru soruldu / cevaplandı, kayıtlı rapor değişti, rapor tanımı değişti, veri yüklemesi tamamlandı | Rapor asistanı, tasarımcı, Excel yükleme |
 | Kanal | kanal rezervasyonu alındı / değişti, fiyat değişti | Kanal yönetimi |
 | Muhasebe, fatura, bordro | muhasebe kaydı işlendi, fatura kesildi / iptal edildi, bordro onaylandı / değişti | Muhasebe aktörü, fatura, bordro |
+| İK | izin talebi açıldı / onaylandı / reddedildi / iptal edildi (`hr.leave.changed`); İK değişti — vardiya, puantaj, bordroya aktarım, belge, ayar, bakiye düzeltmesi (`hr.changed`) | İK servisi ve onay kararı dinleyicisi |
 
 ### Outbox: olay kaybolmaz
 
@@ -292,6 +293,7 @@ Para izini ya da kapasiteyi değiştiren riskli işler kendi kendine yapılmaz. 
 | Ödeme fişi | Eşik üstü ödeme fişi (ön muhasebe ayarındaki eşik) | Ön muhasebe → fiş | Aynı | Evet |
 | Fatura iptali | Kesilmiş faturanın iptali | Faturalar | Aynı | Evet |
 | Bordro onayı | Hesaplanan bordronun onayı | Bordro → onaya gönder | Aynı | Evet |
+| İzin talebi (`LEAVE`) | Personelin izin talebi ya da İK'nın personel adına girdiği izin (İK ayarında izin onayı açıksa); **süresiz bekler** | İzinlerim → İzin talebi; İK → İzinler → İzin gir | Aynı | Evet |
 | Diğer | Serbest | — | Aynı | Hayır |
 
 **Dört göz kuralı:** "Evet" yazan türlerde isteyen kişi **kendi isteğini onaylayamaz**; ekranda düğme kilitlenir ve sebebi yazar. Reddederek geri çekebilir. Sebep basittir: nakit alınmış bir ödemeyi iptal edip farkı cebe atmak ya da kendine iade yazmak klasik kasa açığıdır; büyük ödemede yazım hatası (10.000 yerine 100.000) misafiri "ödendi" diye çıkarır.
@@ -306,6 +308,8 @@ Para izini ya da kapasiteyi değiştiren riskli işler kendi kendine yapılmaz. 
 6. **İz.** Açılış ve karar denetim izine (karar veren kişiyle), aktör tarafı aktivite akışına yazılır ("onaya gönderildi", "onay reddedildi", "iade yapıldı").
 
 *Örnek:* Resepsiyonist Mehmet 16:20'de 1.250 TL iade isteği açtı. Müdür Zeynep'in zili çaldı. Zeynep 16:35'te detayı açtı: gerekçe "misafir erken ayrıldı, 1 gece iade", ilgili folyo bağlantısı, son karar anı ertesi gün 16:20. "Onayla" dedi, not yazdı. Ödeme modülünün dinleyicisi iadeyi yazdı; Mehmet'in ziline "İstediğim onayın sonucu: onaylandı" düştü; muhasebe aktörü iadeyi kasadan çıkış olarak işledi. Mehmet kendi isteğini açsaydı "Onayla" düğmesi kilitli olurdu.
+
+*Örnek (izin talebi):* Resepsiyonist Ayşe İzinlerim'den 3 günlük yıllık izin istedi. İzin "Onay bekliyor" açıldı, onay kuyruğuna `LEAVE` ("İzin talebi") türünde iş düştü (süresiz), İK izni olanların ziline `HR` türünde "İzin talebi: Ayşe Demir" uyarısı gitti. Ayşe kendi talebini onaylayamaz. Müdür Burak onaylayınca İK modülünün dinleyicisi `approval.granted`'ı yakaladı, yıllık izin bakiyesini **yeniden denetledi** (bu arada bakiye değiştiyse izni reddeder), izni "Onaylandı" yaptı, `hr.leave.changed` yayınladı ve Ayşe'nin ziline "İzniniz onaylandı" düştü; açık İK ekranları `hr.changed` kanalından tazelendi. Ayşe talebi kararlanmadan iptal etseydi onay işi "süresi doldu" olarak kapanırdı.
 
 Aktör kayıttan kalkmışsa (paket kaldırıldı, ad değişti) onaylanan iş kaybolmaz: **"Onay kuyruğu"** modülünde "Onaylanan iş elle yapılacak: …" görevi açılır.
 
@@ -402,13 +406,14 @@ Olaylar sistemin ana tetikleyicisidir; zamanlanmış işler **güvenlik ağı** 
 | Restoran POS | POS süpürmesi | 15 dk | 16 saati geçen açık vardiya ve 8 saati geçen açık adisyon için şef garsona uyarı (bir kez) |
 | Restoran POS | Oda servisi süpürmesi | 1 dk | Zamanı gelen planlı siparişi mutfağa düşürür; konaklaması biten siparişi iptal eder; kabul bekleyen / geciken sipariş ve toplanmayan tepsi uyarıları |
 | Demirbaş | Garanti zili | 6 sa | Garantisi uyarı penceresine giren kartlar için zil (kart başına bir kez; aynı günün kartları tek zilde) |
+| İK | Özlük belgesi hatırlatması | 12 sa | Süresi İK ayarındaki gün (varsayılan 30) içinde dolacak / dolmuş belgeler için `hr.manage` sahiplerine tek özet zil (`HR`); aynı belge 7 günde bir |
 | Faturalar | E-belge gönderimi | 30 sn | Sıradaki e-Fatura / e-Arşiv belgelerini entegratöre gönderir, durumunu izler |
 
 *Örnek:* Sunucu bakım için pazar 03:00–05:00 arası kapalıydı. Açılışta: outbox tarayıcısı dağıtılmamış 3 olayı dağıttı; oda ücreti işi cumartesi gecesini (zaten kapatılmıştı) kontrol etti, eksik yoktu; konaklayan temizliği pazar sabahının görevlerini açtı; bekleyen mesajlar işi 03:12'de personelin yazdığı ama gönderilemeyen WhatsApp cevabını gönderdi. Kimse bir şey yapmadı.
 
 ## Canlı kanallar: ekranlar nasıl kendiliğinden yenilenir
 
-Sunucu, bir şey değiştiğinde panellere socket üzerinden **yalnızca haber** gönderir ("bu otelde envanter değişti", "onaylar değişti", "manuel görevler değişti", "mesajlar değişti", "genel muhasebe değişti" — `ledger.changed`); veri göndermez. Haber yalnızca o kanala abone olan — yani ilgili ekranı açık tutan — panellere gider; otelin tamamına yayın yapılmaz. Panel haberi alınca kendi sorgusunu tazeler (bazı ekranlarda en sık 10–15 saniyede bir).
+Sunucu, bir şey değiştiğinde panellere socket üzerinden **yalnızca haber** gönderir ("bu otelde envanter değişti", "onaylar değişti", "manuel görevler değişti", "mesajlar değişti", "genel muhasebe değişti" — `ledger.changed`, "İK değişti" — `hr.changed`); veri göndermez. Haber yalnızca o kanala abone olan — yani ilgili ekranı açık tutan — panellere gider; otelin tamamına yayın yapılmaz. Panel haberi alınca kendi sorgusunu tazeler (bazı ekranlarda en sık 10–15 saniyede bir).
 
 Zil haberi kişiye (`kullanıcı`) ya da izne (`perm`) gider; rozet sunucudan bir kez gelir, sonra haberle artar. Aktivite akışı 500 ms'de bir toplu "yeni satır kimlikleri" alır; içerik HTTP'den okunur (socket kimliği şimdilik istemcinin söylediği e-postadır, bu yüzden socket'ten içerik taşınmaz).
 
@@ -482,6 +487,8 @@ Bu yolculukta personel üç kez dokundu: online check-in onayı, giriş ve çık
 | Sürüm damgası | Aynı kaydı iki kişinin aynı anda ezmesini engelleyen koruma |
 | Denetim kaydı | Kişilerin yaptığı değişikliklerin eski / yeni değerle defteri |
 | Aktivite akışı | Aktörlerin işlerinin defteri |
+| İzin bakiyesi | Personelin yıllık ücretli izin hakkı (4857 md. 53: işe giriş yıl dönümlerinde 14 / 20 / 26 gün; 18 yaş altı ve 50 yaş üstüne en az 20) + elle düzeltmeler − onaylı yıllık izinler; iş günüyle |
+| Puantaj (günlük) | Bir personelin bir günü: geldi / gelmedi / izinli / hafta tatili / resmî tatil, giriş-çıkış, mola, çalışılan ve norm üstü dakika; ay sonunda bordroya aktarılır (kaynak TIMESHEET) |
 
 ## Sık sorulanlar
 

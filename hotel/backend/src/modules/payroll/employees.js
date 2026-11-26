@@ -265,11 +265,11 @@ export async function updateEmployee(hotelId, employeeId, input, { withPay = fal
 export async function deleteEmployee(hotelId, employeeId) {
   await writeWithEvents(async (tx, stage) => {
     await lockEmployees(tx, hotelId, [employeeId]);
-    const row = await tx.employee.findFirst({ where: { id: employeeId, hotelId }, select: { id: true, code: true, firstName: true, lastName: true, nationalId: true, _count: { select: { entries: true, advances: true, garnishments: true, items: true } } } });
+    const row = await tx.employee.findFirst({ where: { id: employeeId, hotelId }, select: { id: true, code: true, firstName: true, lastName: true, nationalId: true, _count: { select: { entries: true, advances: true, garnishments: true, items: true, leaves: true, documents: true, timesheets: true } } } });
     if (!row) throw new NotFoundError('Personel bulunamadı');
-    const used = row._count.entries + row._count.advances + row._count.garnishments + row._count.items;
+    const used = row._count.entries + row._count.advances + row._count.garnishments + row._count.items + row._count.leaves + row._count.documents + row._count.timesheets;
     const ledger = await tx.ledgerAccount.findFirst({ where: { hotelId, employeeId }, select: { id: true } });
-    if (used > 0 || ledger) throw new ConflictError('Bordrosu, avansı, kesintisi ya da carisi olan personel silinmez; işten çıkışını yapın', 'EMPLOYEE_IN_USE');
+    if (used > 0 || ledger) throw new ConflictError('Bordrosu, avansı, kesintisi, carisi, izni, puantajı ya da özlük belgesi olan personel silinmez; işten çıkışını yapın', 'EMPLOYEE_IN_USE');
     await tx.employee.delete({ where: { id: employeeId } });
     await recordAudit(tx, { hotelId, entity: 'Employee', entityId: employeeId, action: 'DELETE', before: { code: row.code, name: employeeFullName(row), nationalId: maskIdNumber(row.nationalId) } });
     await stage('employee.changed', { hotelId, employeeId, change: 'DELETED' });

@@ -176,6 +176,37 @@ Sorun giderirken üç ekranı yanınızda tutun:
 - **Sebep:** VUK kuralları: kaydedilmiş yıl kilitlidir; alış / tutar / ömür / açılış değişmez; elden çıkarma kaydedilen son yıldan sonra olmalı; yalnız son yıl geri alınır ve o yıldan sonra elden çıkarılan kart varsa alınamaz.
 - **Çözüm:** Demirbaş → Amortisman → son yılı **Geri al**, düzeltin, yeniden **Kaydet**.
 
+## İK (izin, vardiya, puantaj, özlük)
+
+### İzin bakiyem neden 28 gün? / Bakiyem yanlış görünüyor
+
+- **Cevap:** Yıllık izin hakkı 4857 sayılı İş Kanunu md. 53'e göre **her tamamlanan hizmet yılında**, işe giriş gününüzün yıl dönümünde doğar: 1–5 yıl için yılda 14 gün, 5'ten çok 15'ten az yıl için 20, 15 yıl ve üstü için 26; 18 yaşından küçük ve 50 yaşından büyük çalışana en az 20. 15.01.2024'te işe giren biri 15.01.2025'te 14, 15.01.2026'da 14 gün daha kazanır → **28**. Bakiye = hak + İK'nın elle düzeltmeleri − onaylı yıllık izinleriniz (ileri tarihli onaylı izinler de düşer); onay bekleyen talepler "kullanılabilir"den düşer. İlk yılınız dolmadan hak yoktur. Rakam beklediğinizden farklıysa İK'dan personel kartınızdaki **işe giriş** ve **doğum tarihini** kontrol etmesini, önceki sistemden devreden izni **düzeltme** olarak girmesini isteyin (İK → İzin bakiyeleri → satır → ayrıntı penceresinde hak kayıtları ve düzeltmeler yıl yıl görünür).
+
+### Yarım gün izin alabilir miyim?
+
+- **Cevap:** İzin talebi gün bazındadır; başlangıç ve bitiş günü seçilir, yarım gün seçeneği yoktur. Yarım gün için İK, İzin bakiyeleri → **Düzeltme ekle** ile `-0,5` gün ve gerekçe ("05.12 öğleden sonra izin") girer; puantajda o gün **Geldi** ve gerçek giriş / çıkış saatleriyle yazılır. Düzeltme bir ondalık kabul eder (`-1,5`, `2,5`).
+
+### Raporu (istirahat) kim girer?
+
+- **Cevap:** **İK** girer: İK → İzinler (`/ik/izinler`) → **İzin gir** → personel, tür "Rapor (istirahat)", rapordaki başlangıç ve bitiş. Rapor **takvim günüyle** sayılır (hafta tatili düşmez), yıllık izin bakiyesinden düşmez, bordroya **eksik gün** (SGK kodu 01) olarak gider. İK ayarında izin onayı açıksa rapor da onay kuyruğuna gider ve İK kendi girdiğini onaylayamaz; kapalıysa doğrudan onaylıdır. Raporun taranmış hâlini Belgeler'e yükleyebilirsiniz. Personel teknik olarak İzinlerim'den rapor talebi de açabilir, ama belge İK'ya gelmeden onaylanmamalıdır.
+
+### Vardiya uyarısı kaydı engeller mi?
+
+- **Cevap:** **Hayır**, iki vardiya arasında 11 saatten az dinlenme ve haftalık normun (varsayılan 45 saat) aşılması yalnız **uyarıdır**: kayıt yazılır, çip ve satır toplamı sarı olur, çizelgenin üstünde "Çizelgede uyarı var" kutusu çıkar. Otelcilikte denkleştirme yaygın olduğu için karar yöneticiye bırakılmıştır. **Engelleyen tek kural çakışmadır**: aynı personelin iki vardiyası üst üste binemez (`SHIFT_OVERLAP`, ör. 22:00–06:00 gece vardiyasından sonra ertesi gün 05:00'te başlayan vardiya). Vardiya ayrıca sıfır ya da 16 saatten uzun olamaz.
+
+### Puantaj bordroya nasıl gider? Onaylı ayda ne olur?
+
+- **Cevap:** Kendiliğinden gitmez. Ay sonunda İK → Puantaj (`/ik/puantaj`) → **Bordroya aktar** → ay seçilir. Her personel için eksik gün (gelmedi + rapor / ücretsiz / doğum izni), eksik gün nedeni (tek neden kodu ya da karışıksa 12), çalışılan gün, fazla çalışma saati, bayram ve hafta tatili çalışması hesaplanıp Bordro → Puantaj ve kalemler satırına **kaynak TIMESHEET** ile yazılır; o ayın elle girilmiş satırının yerine geçer. Hesaplanmış bordro varsa "yeniden hesaplanmalı" olur: **Hesapla**'ya yeniden basın. Ayın bordrosu **onayda ya da onaylıysa** ay kilitlidir: aktarım, o ayın puantaj yazımı ve o aya dokunan onaylı izin iptali "ay kilitli" (`PAYROLL_MONTH_LOCKED`) ile reddedilir. Düzeltme fark bordrosuyla yapılır (Bordro → fark bordrosu, kalem olarak).
+
+### Özlük belgesi yükleyemiyorum
+
+- **Belirti:** "Dosya çok büyük (en fazla 5 MB)", "Dosya PDF, JPEG, PNG ya da WebP olmalı", "Dosya türü bildirilenle uyuşmuyor".
+- **Sebep / çözüm:** Dosya en fazla **5 MB** ve yalnız **PDF, JPEG, PNG, WebP** olabilir. Sunucu türü dosyanın içinden okur; uzantısı değiştirilmiş dosya (ör. `.png` adı verilmiş PDF) reddedilir. iPhone'un HEIC fotoğrafını JPEG olarak paylaşın / kaydedin, Word belgesini PDF'e çevirin, büyük taramayı düşük çözünürlükte yeniden tarayın ya da sıkıştırın. Yükleme için `hr.manage` gerekir. Dosya hazır değilse belgeyi dosyasız kaydedip (tür, bitiş tarihi) süre takibini başlatabilirsiniz.
+
+### "Kullanıcı hesabınız bir personel kartına bağlı değil"
+
+- **Cevap:** İzinlerim sayfası oturumdaki kullanıcının personel kartını bulamadı. İK, Personel → kartınızda **Kullanıcı hesabı** alanına kullanıcınızı bağlamalı. Bağdan sonra sayfayı yenileyin.
+
 ## Stok ve satın alma
 
 ### Stok eksiye düştü
@@ -352,7 +383,7 @@ Durum sözlüğü: **Tamam** = görev listesindeki maddelerin tümü işaretli v
 | 49 | e-Fatura / e-Arşiv / e-Defter | entegrasyon | Kısmi | Fatura + e-belge akışı tamam; **gerçek entegratör adaptörü yok (test entegratörü)**; **e-Defter dosyası (yevmiye / kebir XML) yok** — veri 48'de hazır |
 | 50 | Sanal POS / ödeme geçidi | entegrasyon | **Planlı** | Portalda "kartla ödeme" pasif bekliyor |
 | 51 | Personel & bordro | manuel | Tamam | Gider tarafı 48'de yazılır (tahakkuk fişi) |
-| 52 | İK (izin, mesai, özlük) | manuel | **Planlı** | Personel tablosu 51'de ortak |
+| 52 | İK (izin, mesai, özlük) | manuel | Tamam | İzin talebi → onay (`LEAVE`) → bakiye (4857 md. 53), vardiya çizelgesi, günlük puantaj ve bordroya aktarım (TIMESHEET), özlük belgeleri ve hatırlatma; personel tablosu 51'de ortak. Puantaj cihazı / mobil giriş (76) ve otomatik vardiya planlama (88) yok |
 
 ### 8. Misafir deneyimi
 
@@ -382,6 +413,6 @@ Tamamı **planlı**dır; kod yok. Başlıklar: 69–74 sağlam zemin (göç sihi
 
 ### Özet sayılar
 
-- 1–68 arası: **50 tamam**, **6 kısmi** (9, 38, 42, 49, 53 ve e-posta bağımlılığıyla 32'nin bildirim adımı), **12 planlı** (50, 52, 54, 56, 58–63, 64–68 dikey paketler tek satırda sayılırsa).
+- 1–68 arası: **51 tamam**, **6 kısmi** (9, 38, 42, 49, 53 ve e-posta bağımlılığıyla 32'nin bildirim adımı), **11 planlı** (50, 54, 56, 58–63, 64–68 dikey paketler tek satırda sayılırsa).
 - Otelin **günlük operasyonu** (rezervasyon → giriş → folyo → ödeme → çıkış → fatura → muhasebe; restoran → stok → satın alma; kat hizmetleri, teknik servis, anket, spa) uçtan uca çalışır.
 - **Dış dünyaya bağlanan** parçaların bir kısmı taslaktır: e-posta gönderimi, e-belge entegratörü, online kart ödemesi, KBS. Ekranlar bunu açıkça söyler; "gönderildi" gibi görünen ama gitmeyen hiçbir şey yoktur.

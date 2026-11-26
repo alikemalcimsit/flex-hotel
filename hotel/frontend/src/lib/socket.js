@@ -93,6 +93,8 @@ export const INVOICES_CHANNEL = 'invoices.changed';
 export const CHANNEL_MANAGER_CHANNEL = 'channel-manager.changed';
 /** Personel ve bordro (modül 51): personel kartı, puantaj, kalemler, bordro hesabı / onayı / ödemesi, ayarlar. */
 export const PAYROLL_CHANNEL = 'payroll.changed';
+/** İK (modül 52): izin talebi / kararı, vardiya çizelgesi, puantaj, özlük belgeleri, ayar. */
+export const HR_CHANNEL = 'hr.changed';
 /** Misafir portalı ve online check-in (modül 53): gönderim, onay, düzeltme, giriş, bağlantı, ayar. */
 export const GUEST_PORTAL_CHANNEL = 'guest-portal.changed';
 /** Anket ve memnuniyet (modül 55): cevap, takip, AI etiketi / özeti, tasarım, ayar. */

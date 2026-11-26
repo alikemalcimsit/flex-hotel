@@ -249,6 +249,8 @@ enum StaffAlertKind {
   ASSET
   /// Modül 44: minimum altına düşen malzeme için stok talebi açıldı (satın alma yetkilisine).
   STOCK
+  /// Modül 52: izin talebi / kararı, süresi dolacak özlük belgesi.
+  HR
 }
 
 /// Rezervasyon fiyatının kaynağı (modül 4): sistem hesabı ya da yetkili
@@ -915,6 +917,12 @@ model Hotel {
   glAccounts             GlAccount[]
   journalEntries         JournalEntry[]
   journalRules           JournalRule[]
+  leaves                 Leave[]
+  leaveAdjustments       LeaveAdjustment[]
+  shifts                 Shift[]
+  timesheets             Timesheet[]
+  employeeDocuments      EmployeeDocument[]
+  hrSettings             HrSettings?
   assetCategories        AssetCategory[]
   assetAreas             AssetArea[]
   assets                 Asset[]
@@ -1143,6 +1151,7 @@ model Approval {
   spaPayments        SpaPayment[]
   posAdjustments     PosAdjustment[]
   accountingVouchers AccountingVoucher[]
+  leaves             Leave[]
 
   // Bekleyenler (eskiden yeniye) ve geçmiş (yeni karar önce), imleçli.
   @@index([hotelId, status, createdAt, id])
@@ -6917,6 +6926,7 @@ model Department {
 
   hotel     Hotel      @relation(fields: [hotelId], references: [id])
   employees Employee[]
+  shifts    Shift[]
 
   @@unique([hotelId, code])
 }
@@ -6959,20 +6969,26 @@ model Employee {
   createdAt           DateTime              @default(now())
   updatedAt           DateTime              @updatedAt
 
-  hotel         Hotel                @relation(fields: [hotelId], references: [id])
-  department    Department           @relation(fields: [departmentId], references: [id], onDelete: Restrict)
-  user          User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
-  ledgerAccount LedgerAccount?
-  incentives    EmployeeIncentive[]
-  advances      EmployeeAdvance[]
-  garnishments  Garnishment[]
-  attendances   PayrollAttendance[]
-  items         PayrollItem[]
-  termination   EmployeeTermination?
-  entries       PayrollEntry[]
-  openings      PayrollOpening[]
+  hotel            Hotel                @relation(fields: [hotelId], references: [id])
+  department       Department           @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  user             User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
+  ledgerAccount    LedgerAccount?
+  incentives       EmployeeIncentive[]
+  advances         EmployeeAdvance[]
+  garnishments     Garnishment[]
+  attendances      PayrollAttendance[]
+  items            PayrollItem[]
+  termination      EmployeeTermination?
+  entries          PayrollEntry[]
+  openings         PayrollOpening[]
   /// Zimmetindeki demirbaşlar (modül 46).
-  assets        Asset[]
+  assets           Asset[]
+  /// İK (modül 52): izinler, bakiye düzeltmeleri, vardiyalar, günlük puantaj, özlük belgeleri.
+  leaves           Leave[]
+  leaveAdjustments LeaveAdjustment[]
+  shifts           Shift[]
+  timesheets       Timesheet[]
+  documents        EmployeeDocument[]
 
   @@unique([hotelId, code])
   @@index([hotelId, status, lastName, firstName])
@@ -7150,6 +7166,212 @@ model PayrollAttendance {
 
   @@unique([employeeId, year, month])
   @@index([hotelId, year, month])
+}
+
+// ═══════════════════════ İK (modül 52) ═══════════════════════
+
+enum LeaveType {
+  ANNUAL
+  SICK
+  UNPAID
+  MATERNITY
+  PATERNITY
+  MARRIAGE
+  BEREAVEMENT
+  ADMINISTRATIVE
+  OTHER
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+/// Vardiyanın kaynağı: elle çizelge ya da işgücü planlayıcısının (88) önerisi.
+enum ShiftSource {
+  MANUAL
+  PLANNER
+}
+
+/// Günlük puantaj durumu: geldi, gelmedi, izinli, hafta tatili, resmî tatil.
+enum TimesheetStatus {
+  PRESENT
+  ABSENT
+  LEAVE
+  REST
+  HOLIDAY
+}
+
+/// Puantaj kaydının kaynağı: elle, kart / cihaz, personel telefonu (76).
+enum TimesheetSource {
+  MANUAL
+  DEVICE
+  MOBILE
+}
+
+enum EmployeeDocumentType {
+  ID_COPY
+  CONTRACT
+  HEALTH_REPORT
+  HYGIENE_CERTIFICATE
+  CRIMINAL_RECORD
+  DIPLOMA
+  CERTIFICATE
+  RESIDENCE_PERMIT
+  WORK_PERMIT
+  SGK_ENTRY
+  OTHER
+}
+
+/// İzin: talep → onay (LEAVE onay türü, dört göz) → onaylı; iptal edilebilir. `days` iş günü (hafta tatili ve resmî tatil sayılmaz).
+model Leave {
+  id           String      @id @default(uuid())
+  hotelId      String
+  employeeId   String
+  type         LeaveType
+  status       LeaveStatus @default(PENDING)
+  startDate    DateTime    @db.Date
+  endDate      DateTime    @db.Date
+  days         Decimal     @db.Decimal(5, 1)
+  reason       String?
+  requestedBy  String
+  requestedAt  DateTime    @default(now())
+  approvalId   String?     @unique
+  decidedBy    String?
+  decidedAt    DateTime?
+  decisionNote String?
+  cancelledBy  String?
+  cancelledAt  DateTime?
+  cancelReason String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  hotel      Hotel       @relation(fields: [hotelId], references: [id])
+  employee   Employee    @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  approval   Approval?   @relation(fields: [approvalId], references: [id], onDelete: Restrict)
+  timesheets Timesheet[]
+
+  @@index([hotelId, employeeId, startDate])
+  @@index([hotelId, status, startDate])
+  @@index([hotelId, startDate, endDate])
+}
+
+/// Elle izin bakiyesi düzeltmesi: devir izin, ek izin, kesinti (artı / eksi gün).
+model LeaveAdjustment {
+  id          String   @id @default(uuid())
+  hotelId     String
+  employeeId  String
+  days        Decimal  @db.Decimal(5, 1)
+  effectiveOn DateTime @db.Date
+  reason      String
+  createdBy   String
+  createdAt   DateTime @default(now())
+
+  hotel    Hotel    @relation(fields: [hotelId], references: [id])
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([hotelId, employeeId, effectiveOn])
+}
+
+/// Vardiya: personel × gün × saat aralığı (gece vardiyası ertesi güne taşar: bitiş < başlangıç).
+model Shift {
+  id           String      @id @default(uuid())
+  hotelId      String
+  employeeId   String
+  departmentId String
+  date         DateTime    @db.Date
+  startTime    String
+  endTime      String
+  breakMinutes Int         @default(0)
+  note         String?
+  source       ShiftSource @default(MANUAL)
+  createdBy    String
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  hotel      Hotel      @relation(fields: [hotelId], references: [id])
+  employee   Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+
+  @@unique([employeeId, date, startTime])
+  @@index([hotelId, date, departmentId])
+  @@index([hotelId, employeeId, date])
+}
+
+/// Günlük puantaj: giriş / çıkış, mola, çalışılan ve norm üstü dakika; izinli / tatil günleri durumla.
+model Timesheet {
+  id              String          @id @default(uuid())
+  hotelId         String
+  employeeId      String
+  date            DateTime        @db.Date
+  status          TimesheetStatus @default(PRESENT)
+  clockIn         DateTime?
+  clockOut        DateTime?
+  breakMinutes    Int             @default(0)
+  workedMinutes   Int             @default(0)
+  overtimeMinutes Int             @default(0)
+  leaveId         String?
+  source          TimesheetSource @default(MANUAL)
+  note            String?
+  updatedBy       String
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  hotel    Hotel    @relation(fields: [hotelId], references: [id])
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leave    Leave?   @relation(fields: [leaveId], references: [id], onDelete: SetNull)
+
+  @@unique([employeeId, date])
+  @@index([hotelId, date])
+  @@index([hotelId, employeeId, date])
+  @@index([leaveId])
+}
+
+/// Özlük belgesi: dosya diskte (`fileKey`), kayıt burada; süresi dolacak belgeler İK'ya hatırlatılır. Yumuşak silme.
+model EmployeeDocument {
+  id          String               @id @default(uuid())
+  hotelId     String
+  employeeId  String
+  type        EmployeeDocumentType
+  title       String
+  fileKey     String?
+  fileName    String?
+  contentType String?
+  size        Int?
+  issuedOn    DateTime?            @db.Date
+  expiresOn   DateTime?            @db.Date
+  note        String?
+  remindedAt  DateTime?
+  uploadedBy  String
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  deletedAt   DateTime?
+
+  hotel    Hotel    @relation(fields: [hotelId], references: [id])
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([hotelId, employeeId, deletedAt])
+  @@index([hotelId, expiresOn])
+}
+
+/// İK ayarları: hafta tatili günü, günlük / haftalık çalışma normu, resmî tatiller, izin onayı, belge hatırlatma süresi.
+model HrSettings {
+  hotelId               String   @id
+  /// 0 Pazar … 6 Cumartesi.
+  weeklyRestDay         Int      @default(0)
+  dailyWorkMinutes      Int      @default(450)
+  weeklyWorkMinutes     Int      @default(2700)
+  /// [{ date: "YYYY-AA-GG", name }]
+  publicHolidays        Json     @default("[]")
+  leaveApprovalRequired Boolean  @default(true)
+  documentReminderDays  Int      @default(30)
+  updatedBy             String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
 }
 
 /// Bir aya girilen ek ödeme / kesinti. `runId` boşsa ayın aylık bordrosuna, doluysa o fark bordrosuna aittir.
@@ -7498,7 +7720,7 @@ model OnlineCheckin {
 /// Belge fotoğrafı (disk: `online-checkin/<otel>/<kimlik>.jpg` + önizleme). Yüklenince gönderime bağlanmamış
 /// (`onlineCheckinId` boş) bekler; bağlanmayan 48 saat sonra, bağlanan saklama süresi sonunda silinir.
 model OnlineCheckinDocument {
-  id              String    @id @default(uuid())
+  id              String             @id @default(uuid())
   hotelId         String
   reservationId   String
   onlineCheckinId String?
@@ -7507,13 +7729,13 @@ model OnlineCheckinDocument {
   contentType     String
   sizeBytes       Int
   thumbBytes      Int
-  createdAt       DateTime  @default(now())
+  createdAt       DateTime           @default(now())
   purgedAt        DateTime?
   /// Personelin tarayıcısında okunan MRZ'nin sonucu (modül 59). Değerler değil yalnız sonuç ve tutmayan
   /// alanların adları saklanır (`ocrMismatch`: idNumber, birthDate, nationality, idType, name).
   ocrStatus       DocumentOcrStatus?
-  ocrMismatch     String[]  @default([])
-  ocrExpired      Boolean   @default(false)
+  ocrMismatch     String[]           @default([])
+  ocrExpired      Boolean            @default(false)
   ocrCheckedAt    DateTime?
   ocrCheckedBy    String?
 

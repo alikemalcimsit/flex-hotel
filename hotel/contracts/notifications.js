@@ -542,6 +542,7 @@ export const STAFF_ALERT_KINDS = Object.freeze([
   'SALES_FOLLOW_UP',
   'ASSET',
   'STOCK',
+  'HR',
 ]);
 
 export const STAFF_ALERT_KIND_LABELS = Object.freeze({
@@ -570,6 +571,7 @@ export const STAFF_ALERT_KIND_LABELS = Object.freeze({
   MAINTENANCE: 'Arıza / teknik servis',
   ASSET: 'Demirbaş (garantisi bitecekler)',
   STOCK: 'Stok (minimum altı; talep açıldı)',
+  HR: 'İK (izin talebi / kararı, süresi dolacak belge)',
 });
 
 export const STAFF_ALERT_SEVERITIES = Object.freeze(['INFO', 'WARNING', 'CRITICAL']);

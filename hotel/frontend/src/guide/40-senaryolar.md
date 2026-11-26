@@ -31,6 +31,8 @@ Okumaya başlamadan iki hatırlatma:
 | L — Bordro onayı ve ödemesi | İK, müdür, muhasebe | Bordro (puantaj, servis payı, bordro ekranı, ayarlar), Personel, Onaylar, Ön muhasebe, Demirbaş | Muhasebe aktörü |
 | M — Ay sonu mizan ve dönem kapanışı | Muhasebe, müdür | Genel muhasebe (Ayarlar → Eşitle, Mizan, hesap ekstresi, Yevmiye, Kurallar, Dönem kilidi), Görevler | Muhasebe aktörü (yevmiye ve günlük gelir fişleri) |
 | N — Yanlış kasa çıkışı fişinin düzeltilmesi | Muhasebe | Ön muhasebe (Kasa / banka → Çıkış, Fişler), Genel muhasebe (Yevmiye, fiş iptali, Fiş gir, Hesap planı) | Muhasebe aktörü |
+| O — Personel izin istiyor | Personel, İK, müdür | İzinlerim (`/ik/benim`), İK → İzinler, İzin bakiyeleri, Vardiya, Puantaj (Bordroya aktar), Onaylar, Personel kartı, Bordro → Puantaj ve kalemler | Aktör yok (İK servisi ve onay kararı dinleyicisi) |
+| P — Gece vardiyası ve mesai | İK, departman şefi | İK → Vardiya (çakışma, dinlenme ve haftalık saat uyarıları), Puantaj (gece çıkışı, mesai, Bordroya aktar), İzinlerim, Bordro | Aktör yok |
 
 ## Senaryo A — Bir misafirin yolculuğu
 
@@ -576,6 +578,66 @@ Telefonla gelen rezervasyonda 1–3. adımların yerine resepsiyon **Rezervasyon
 | Ters kaydın günü kilitli dönemde | "Dönem … gününe kadar kilitli" | Ters kaydın gününü bugüne alın ya da kilidi geçici açın |
 | Fiş "başkası değiştirdi" | Aynı fişi iki kişi aynı anda iptal etmeye çalıştı | Yenileyin; fiş zaten iptal edilmişse ikinci iptal 409 |
 
+## Senaryo O — Personel izin istiyor
+
+**Hikâye:** Resepsiyonist Ayşe Demir 15.01.2024'te işe girdi, 1995 doğumlu; Ocak 2026'da ikinci yılını doldurdu. 8–10 Aralık 2026 (Salı–Perşembe) için yıllık izin istiyor. Kullanıcı hesabı `ayse@otelim.com` (Ön büro rolü). İK işlerini muhasebeci Merve (`hr.view`, `hr.manage`) yürütür, izni genel müdür Burak onaylar. Ay sonunda Aralık puantajı bordroya aktarılır. Senaryo **talep → onay kuyruğu (dört göz) → bakiye → çizelge ve puantaj → bordroya aktarım** zincirini anlatır.
+
+| Adım | Ekranda ne yapılır | Arka planda ne olur | Nerede görünür |
+| --- | --- | --- | --- |
+| 1 | (Bir kez) Merve, Personel → Ayşe Demir kartında **Kullanıcı hesabı** alanına `ayse@otelim.com`'u bağlar; doğum tarihini kontrol eder. İK → **Ayarlar**'da hafta tatili Pazar, izin onayı açık, resmî tatiller tamam. | Bağ, `/ik/benim` sayfasının "bu kullanıcı hangi personel" sorusunun cevabıdır. Bağ yoksa sayfa "Kullanıcı hesabınız bir personel kartına bağlı değil" der. | Personel kartı → Kullanıcı hesabı: "Ayşe Demir (ayse@otelim.com)". |
+| 2 | Ayşe sol menüden **İzinlerim** (`/ik/benim`) açar. | Bakiye bugün itibarıyla hesaplanır: 2025 ve 2026 yıl dönümlerinde 14'er gün → hak **28**, kullanılan 0. | Kutular: Hak 28 · Kullanılan 0 · Kalan 28 · Bekleyen 0. Bu ve gelecek haftanın vardiyaları. |
+| 3 | **İzin talebi** → Yıllık ücretli izin, 08.12.2026 – 10.12.2026, "Aile ziyareti" → Kaydet. Pencere "3 iş günü" önizler. | Sunucu: çakışan izin yok, yasal süre sınırı yok (yıllık), kullanılabilir 28 ≥ 3. İzin **Onay bekliyor** açılır; onay kuyruğuna `LEAVE` ("İzin talebi") işi: "Ayşe Demir · Yıllık ücretli izin · 08.12.2026 – 10.12.2026 (3 gün)", ayrıntıda "Kalan yıllık izin (talep sonrası): 25"; süresiz bekler. `hr.leave.changed` (REQUESTED). `hr.manage` sahiplerine zil (`HR`): "İzin talebi: Ayşe Demir". | İzinlerim listesi: "Onay bekliyor"; "Bekleyen 3". İK → İzinler (`/ik/izinler`): satır + "Onay kuyruğu" bağlantısı. Onaylar → Bekleyen. |
+| 4 | Ayşe aynı hafta için bir de 10–12 Aralık raporu girmeye çalışır. | Reddedilir: "08.12.2026 – 10.12.2026 arasında yıllık ücretli izin kaydı var (onay bekliyor)" (`LEAVE_OVERLAP`). Rapor zaten İK'nın işidir. | Pencerede hata. |
+| 5 | Burak, Onaylar → Bekleyen → "İzin talebi" → ayrıntı (personel, departman, tarih, gün, kalan) → **Onayla** ("İyi tatiller"). | Dört göz: talebi giren Ayşe onaylayamazdı. `approval.granted` → İK dinleyicisi bakiyeyi **yeniden denetler** (onay anında 25 ≥ 0), izni **Onaylandı** yapar, karar notunu yazar, `hr.leave.changed` (APPROVED); Ayşe'nin ziline "İzniniz onaylandı". | İzinlerim: "Onaylandı · Burak · İyi tatiller"; Hak 28 · Kullanılan 3 · Kalan **25**. İK → İzin bakiyeleri (`/ik/izin-bakiyeleri`): Ayşe 28 / 3 / 25. |
+| 6 | Merve, İK → **Vardiya** (`/ik/vardiya`) → 7 Aralık haftası. | Çizelge onaylı izinleri okur: 8–10 Aralık Ayşe'nin hücreleri gri **"İzinli"**. "Geçen haftayı kopyala" Ayşe'nin bu günlerine de vardiya kopyalar (izin vardiyayı engellemez) → Merve bu üç vardiyayı siler, yerine başka resepsiyonist yazar. | Vardiya ızgarası. |
+| 7 | Aralık boyunca Merve her gün İK → **Puantaj** (`/ik/puantaj`) girer. 8–10 Aralık hücreleri kilitli "İzinli (Yıllık ücretli izin)". | İzinli güne "Gelmedi" yazılmaya çalışılırsa `TIMESHEET_ON_LEAVE`. İleri tarihe giriş yapılmaz. | Puantaj ızgarası; satır sonunda saat ve mesai. |
+| 8 | 31 Aralık: Merve Puantaj → **Bordroya aktar** → Aralık 2026. | Her personel için aylık özet: Ayşe'nin yıllık izni **eksik gün sayılmaz** (ücretli izin), çalışılan gün "Geldi" günleri, fazla çalışma saati. Satırlar Bordro → Puantaj ve kalemler'e kaynak **TIMESHEET** ile yazılır; Aralık bordrosu hesaplanmışsa **"yeniden hesaplanmalı"**. | Sonuç penceresi (aktarılan / atlanan, ilk satırlar); Bordro → Puantaj ve kalemler: Ayşe eksik gün 0, kaynak "İK puantajından". |
+| 9 | Merve Bordro → Aralık → **Hesapla** → Onaya gönder (Senaryo L). | Bordro onaylanınca Aralık **kilitlenir**: puantaj, aktarım ve Aralık'a dokunan onaylı izin iptali reddedilir (`PAYROLL_MONTH_LOCKED`). | Bordro ekranı. |
+
+### Ters giderse (Senaryo O)
+
+| Durum | Ne olur | Ne yapılır |
+| --- | --- | --- |
+| Ayşe İzinlerim'de "personel kartına bağlı değil" görüyor | Kullanıcı → kart bağı yok | Personel kartı → Kullanıcı hesabı |
+| 30 gün istedi | "Yıllık izin bakiyesi yetersiz: kullanılabilir 25 gün, istenen 30 gün" | Bakiyeye uygun aralık, kalanı ücretsiz izin; ya da İK önceki dönemden devir varsa **düzeltme** girer |
+| 4 günlük evlilik izni istedi | "Evlilik izni en fazla 3 iş günü" | 3 gün evlilik + ayrı yıllık izin |
+| Burak reddetti ("Yoğun dönem") | İzin **Reddedildi**, not "Reddedildi: Yoğun dönem"; bakiye değişmez; Ayşe'ye zil | Başka tarih için yeni talep |
+| Ayşe vazgeçti, talep henüz bekliyor | İzinlerim → **İptal et** (sebep); onay işi "süresi doldu" olur | — |
+| İzin onaylandıktan sonra Ayşe vazgeçti | Personel onaylı izni iptal edemez | İK → İzinler → İptal et; o günlerin puantajını gerçek duruma göre düzeltin |
+| Onay beklerken Merve Ayşe'ye −30 düzeltme girdi | Onay verilse bile izin "Onay anında yıllık izin bakiyesi yetersiz" ile Reddedildi olur | Düzeltmeyi kontrol edin, yeni talep |
+| Aralık bordrosu onaylandıktan sonra izin iptali | `PAYROLL_MONTH_LOCKED` | Fark bordrosu (Senaryo L adım 13) |
+| Aktarımdan sonra puantaj değişti | Bordro satırı eski kalır | Yeniden **Bordroya aktar**, bordroyu yeniden hesapla |
+
+## Senaryo P — Gece vardiyası ve mesai
+
+**Hikâye:** Mutfakta aşçı Mehmet Kaya (7 yıl kıdem) bu hafta gece vardiyasında. Günlük norm 7,5 saat (450 dk), haftalık norm 45 saat (2.700 dk). İK sorumlusu Merve çizelgeyi yazar, uyarıları okur, gerçek saatleri puantaja girer ve ay sonunda mesaiyi bordroya aktarır.
+
+| Adım | Ekranda ne yapılır | Arka planda ne olur | Nerede görünür |
+| --- | --- | --- | --- |
+| 1 | İK → **Vardiya** → 23 Kasım haftası → Mehmet'in Pazartesi hücresinde **+** → Departman Mutfak, 22:00 – 06:00, mola 0 → Kaydet. | Bitiş başlangıçtan küçük → vardiya **ertesi güne taşar**: 480 dk (8 saat). Pazartesi hücresinde durur. `hr.changed`. | Çip "22:00–06:00"; satır sonu 8 sa. |
+| 2 | Merve yanlışlıkla Salı 05:00 – 13:00 yazar. | Pazartesi gecesinin 06:00 bitişiyle üst üste biner → **reddedilir**: "Mehmet Kaya: 2026-11-23 22:00–06:00 vardiyasıyla çakışıyor" (`SHIFT_OVERLAP`). | Pencerede hata; kayıt yok. |
+| 3 | Salı'yı 14:00 – 22:00 yapar. | 06:00 → 14:00 arası 8 saat dinlenme: **11 saatten az** → kayıt yazılır ama **uyarı** döner. | Sarı çip; üstte "Çizelgede uyarı var: 1 kısa dinlenme (11 saatten az)". |
+| 4 | Salı'yı 22:00 – 06:00 olarak düzeltir; Çarşamba–Cumartesi de 22:00 – 06:00 ekler (6 gece × 8 saat). | Dinlenme 16 saat, uyarı kalkar. Haftalık toplam 6 × 480 = **2.880 dk > 2.700** → **haftalık norm aşımı** uyarısı (kaydı engellemez). Pazar hafta tatili. | Satır sonu sarı "48 sa"; uyarı kutusunda "1 personelde haftalık norm aşımı (45 sa üstü)". Merve bir geceyi yardımcı aşçıya kaydırır → 2.400 dk, uyarı kalkar. |
+| 5 | Mehmet **İzinlerim**'de bu ve gelecek haftanın vardiyalarını görür. | — | `/ik/benim` → Vardiyalarım. |
+| 6 | Salı sabahı Merve İK → **Puantaj** → Mehmet, Pazartesi: **Geldi**, giriş 22:00, çıkış 06:00, mola 0 → Kaydet. | Çıkış girişten küçük → ertesi güne taşar: **480 dk** çalışma, norm 450 → **30 dk** fazla çalışma. Saat Pazartesi gününe yazılır. | Hücre "22:00–06:00 · 8 sa"; satır sonu mesai 30 dk. |
+| 7 | Perşembe gecesi Mehmet 22:00'de girip 07:30'da çıktı (mola 30). | 570 − 30 = 540 dk; mesai **90 dk**. | Hücre; satır toplamı. |
+| 8 | Ay sonu: Merve **Bordroya aktar** → Kasım. | Mehmet'in ayın fazla dakikaları toplanır ve saate çevrilir (ör. 30 + 90 + … = 240 dk → **4,00** saat); "Geldi" günleri çalışılan gün; Pazar (hafta tatili) çalıştığı gün olsaydı hafta tatili çalışması, resmî tatilde çalıştığı gün bayram çalışması olurdu. Kaynak TIMESHEET; hesaplanmış Kasım bordrosu bayatlar. | Bordro → Puantaj ve kalemler: Mehmet fazla çalışma 4,00. |
+| 9 | Merve Kasım bordrosunu **Hesapla**. | Bordro fazla çalışmayı saat ücreti × 1,5 ile hesaplar (Senaryo L adım 5). | Bordro ekranı → Mehmet satırı → hesap izi. |
+
+### Ters giderse (Senaryo P)
+
+| Durum | Ne olur | Ne yapılır |
+| --- | --- | --- |
+| Vardiya 08:00 – 08:30, mola 30 | "Vardiya süresi sıfır olamaz (mola süreden uzun)" | Molayı ya da saati düzeltin |
+| 06:00 – 23:30 (17,5 saat) | "Vardiya en fazla 16 saat" | İkiye bölün |
+| Saat "8:00" yazıldı | "Başlangıç 'SS:DD' biçiminde olmalı" | 08:00 |
+| Puantajda yalnız giriş girildi | "Giriş ve çıkış birlikte girilir" | İkisini birlikte girin ya da ikisini de boş bırakın |
+| Yarının puantajı bugünden girilmek istendi | "İleri tarihe puantaj girilmez" | Gün bitince girin; plan vardiyadadır |
+| Vardiya yazıldı ama puantaj girilmedi | Vardiya plan olduğu için bordroya **hiçbir şey gitmez** | Puantajı girin |
+| Gece vardiyası ayın son gecesi (30 Kasım 22:00 – 1 Aralık 06:00) | Tamamı başladığı güne, yani **Kasım**'a yazılır | Normal |
+| Kasım bordrosu onaylandıktan sonra Perşembe saati düzeltilmek istendi | "Ay kilitli" | Fark bordrosu, fazla çalışmayı kalem olarak ekleyin |
+| Mesai görünmüyor | Günlük norm yüksek girilmiş olabilir (ör. 9 saat) | İK → Ayarlar → günlük norm |
+
 ## Senaryolarda geçen olaylar, aktörler, onaylar ve görevler
 
 Bu bölüm senaryoları başkasına anlatırken "bunu kim yapıyor?" sorusuna hızlı cevap için bir başvuru tablosudur. Olay adları Aktivite → Olaylar ekranında Türkçe karşılıklarıyla görünür; buradaki teknik adlar yalnız eşleştirmek içindir.
@@ -606,6 +668,8 @@ Bu bölüm senaryoları başkasına anlatırken "bunu kim yapıyor?" sorusuna h�
 | `agency.bonus.changed` | Prim hak edişi | Muhasebe aktörü → acente carisine alacak (fark kaydı) | K |
 | `banquet.event.changed` | Etkinlik durumu | Muhasebe aktörü → müşteri carisine bedel / iptal bedeli / geri alma | H |
 | `payroll.run.approved` / `payroll.run.changed PAID` | Bordro onayı / ödemesi | Muhasebe aktörü → tahakkuk / ödeme kayıtları | L |
+| `hr.leave.changed` | İK servisi (talep, iptal), İK onay dinleyicisi (karar) | İK ekranları ve İzinlerim tazelenir; zil (`HR`) talepte İK'ya, kararda personele | O |
+| `hr.changed` | Vardiya, puantaj, bordroya aktarım, belge, ayar, bakiye düzeltmesi | Açık İK ekranları (`hr.changed` kanalı); aktarımda ayrıca bordro ekranları (`payroll.settings.changed`) | O, P |
 | `accounting.posted` (`sourceId` ile) | Muhasebe aktörü (ön muhasebe kaydı yazıldığında), Ön muhasebe → Eşitle | Muhasebe aktörü → belgenin fişlenmemiş kayıtlarını **yevmiye fişine** çevirir (genel muhasebe) | A, B, H, K, L, M, N |
 | `ledger.changed` | Yevmiye fişi, hesap planı, kural, ayar değişikliği | Genel muhasebe ekranları (Mizan, Yevmiye, Hesap planı) tazelenir | M, N |
 | `rate.changed` | Fiyat planı, sezon, onaylı fiyat önerisi, Excel fiyat yüklemesi | Kanal aktörü → fiyat farkı; fiyat önbelleği tazelenir | F |
@@ -618,7 +682,7 @@ Bu bölüm senaryoları başkasına anlatırken "bunu kim yapıyor?" sorusuna h�
 | `guest.message.received` / `guest.intent.detected` / `guest.message.reply` | Mesaj geçitleri, router ajanı, personel / AI | Router ajanı → niyet; concierge → cevap ya da devir; geçit → gönderim | I |
 | `guest.request.created` / `updated` | İstek servisi, AI, oda servisi | Kat hizmetleri (görev), teknik servis (bilet), oda servisi (sipariş) | E, I |
 | `pricing.review.requested` | Günlük iş | AI fiyat ajanı → öneri | F |
-| `approval.requested` / `granted` / `denied` / `expired` | Onay kuyruğu | İsteyen aktör / modül dinleyicisi → işi bitirir ya da vazgeçer | A, F, H, L |
+| `approval.requested` / `granted` / `denied` / `expired` | Onay kuyruğu | İsteyen aktör / modül dinleyicisi → işi bitirir ya da vazgeçer (İK: izni onaylar / reddeder) | A, F, H, L, O |
 | `manual_task.created` | Aktör taban sınıfı (kapalı / yapamadı) | Görevler ekranı, zil | G |
 | `survey.*` | Anket | Takip kaydı, zil (düşük puan), içgörü ajanı | I |
 
@@ -638,6 +702,7 @@ Bu bölüm senaryoları başkasına anlatırken "bunu kim yapıyor?" sorusuna h�
 | Toplu fiyat değişikliği | Kural işi / AI fiyat ajanı | Her fiyat önerisi | F |
 | Bordro | Bordroyu hazırlayan | Her bordro ve fark bordrosu | L |
 | Acente primi | Prim hesaplayan | Her hak ediş | K |
+| İzin talebi (`LEAVE`) | Talebi giren (personel ya da İK) | Her izin talebi (İK girişi, ayarda onay kapalıysa onaysız); süresiz | O |
 | Kapasite aşımı (overbooking) | Rezervasyon açan | Politika "onaya gönder" ise yer yokken | A |
 
 ### Senaryolarda geçen manuel görev başlıkları (aktör kapalıysa)
@@ -658,7 +723,7 @@ Bu bölüm senaryoları başkasına anlatırken "bunu kim yapıyor?" sorusuna h�
 
 1. **Her para hareketi tek kez yazılır.** Folyo kalemi, ödeme, stok hareketi, muhasebe kaydı — hepsinin bir **kaynak anahtarı** vardır; aynı olay iki kez gelse, aktör kapanıp açılsa, personel aynı işi elle yapsa ikinci kayıt oluşmaz.
 2. **Silme yok, ters kayıt var.** Folyo kalemi, ödeme, fiş, fatura, adisyon ödemesi silinmez; iptal ters tutarlı kayıttır ve iptal günü tarihlidir. Geçmiş rapor geriye dönük değişmez.
-3. **Riskli iş dört göz ister.** Kalem iptali, iade, büyük ödeme, fatura iptali, eşik üstü ödeme fişi, bordro, sipariş, fiyat değişikliği, acente primi, kapasite aşımı: isteyen onaylayamaz.
+3. **Riskli iş dört göz ister.** Kalem iptali, iade, büyük ödeme, fatura iptali, eşik üstü ödeme fişi, bordro, izin talebi, sipariş, fiyat değişikliği, acente primi, kapasite aşımı: isteyen onaylayamaz.
 4. **Aktör kapalıysa iş personele düşer.** Görevler ekranı boş değilse birisi bir şeyi elle yapmalı demektir; aktörü açmak eski görevleri kendiliğinden kapatmaz.
 5. **Sürüm damgası veriyi korur.** İki kişi aynı kaydı değiştirirse ikincisi "başkası değiştirdi, yenileyin" görür. Hata değil, güvenlik.
 6. **İş günü ≠ takvim günü.** Oda ücreti, kasa ve raporlar iş gününe; fatura tarihi ve anket saati takvime bağlıdır.

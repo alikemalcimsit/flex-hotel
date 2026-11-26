@@ -1,13 +1,14 @@
-# Arka ofis: fatura, muhasebe, bordro, demirbaş
+# Arka ofis: fatura, muhasebe, bordro, İK, demirbaş
 
-Bu bölüm otelin **para ve kayıt tarafını** anlatır: kesilen faturalar ve e-belge takibi, ön muhasebe (cariler, kasa / banka, çek / senet, fişler), genel muhasebe (Tek Düzen hesap planı, yevmiye fişleri, mizan), personel ve bordro, demirbaş sicili ve amortisman. Hedef okuyucu muhasebe ve insan kaynakları personeli ile sistemi tanımak isteyen yöneticidir.
+Bu bölüm otelin **para ve kayıt tarafını** anlatır: kesilen faturalar ve e-belge takibi, ön muhasebe (cariler, kasa / banka, çek / senet, fişler), genel muhasebe (Tek Düzen hesap planı, yevmiye fişleri, mizan), personel ve bordro, İK (izin, vardiya, günlük puantaj, özlük belgeleri), demirbaş sicili ve amortisman. Hedef okuyucu muhasebe ve insan kaynakları personeli ile sistemi tanımak isteyen yöneticidir.
 
-Beş modül birbirine bağlıdır ve çoğu kayıt **kendiliğinden** oluşur:
+Altı modül birbirine bağlıdır ve çoğu kayıt **kendiliğinden** oluşur:
 
 - Misafir çıkış yapıp folyosu kapanınca **fatura taslağı** açılır (folyo aktörü).
 - Alınan her ödeme, mal kabul, acente primi, etkinlik bedeli ve bordro **ön muhasebeye** işlenir (muhasebe aktörü).
 - Ön muhasebeye yazılan her cari ve kasa / banka hareketi **yevmiye fişi** olur; gün kapanışında günün geliri **günlük gelir fişi** olur (aynı aktör, genel muhasebe).
 - Onaylanan bordro personel, SGK, vergi dairesi carilerine tahakkuk eder; maaş ödemesi kasadan / bankadan çıkar.
+- İK'da onaylanan izinler ve günlük puantaj ay sonunda **Bordroya aktar** ile bordronun aylık puantajına yazılır; personel kartı İK ile bordronun ortak kaydıdır.
 - Demirbaş personele zimmetlenir; işten çıkışta zimmet uyarısı bordro ekranında görünür.
 
 Önce her ekranın nerede olduğunu, sonra adım adım nasıl kullanılacağını, en sonda da arka planda hangi aktörün neyi otomatik yaptığını okuyacaksınız. Bölümün sonunda sık yapılan hatalar ve bilinçli olarak henüz yapılmamış işler listelenir.
@@ -21,6 +22,7 @@ Beş modül birbirine bağlıdır ve çoğu kayıt **kendiliğinden** oluşur:
 | Genel muhasebe | Ön büro → Genel muhasebe | `/genel-muhasebe` (Mizan, Yevmiye, Hesap planı, Kurallar, Ayarlar), fiş `/genel-muhasebe/yevmiye/:journalId`, ekstre `/genel-muhasebe/hesaplar/:accountId` | `ledger.view` | `ledger.manage` (elle fiş, eşitleme), `ledger.setup` (hesap planı, kurallar, dönem kilidi, fiş iptali) |
 | Personel | Ön büro → Personel | `/personel`, `/personel/:id` | `employees.view` ya da `payroll.view` | `employees.manage` (kart), `payroll.manage` (ücret alanları, avans, icra, çıkış) |
 | Bordro | Ön büro → Bordro | `/bordro` (Bordrolar, Puantaj ve kalemler, Servis payı, Ayarlar), `/bordro/:id` | `payroll.view` | `payroll.manage` (puantaj, kalemler, hesapla, onaya gönder), `payroll.pay` (maaş / avans ödemesi), `payroll.setup` (parametreler, işyeri, kalemler, departmanlar) |
+| İK | Ön büro → İK; herkes için İzinlerim | `/ik` (İzinler `/ik/izinler`, İzin bakiyeleri `/ik/izin-bakiyeleri`, Vardiya `/ik/vardiya`, Puantaj `/ik/puantaj`, Belgeler `/ik/belgeler`, Ayarlar `/ik/ayarlar`), kendi sayfası `/ik/benim` | `hr.view` (kendi sayfası `hr.self`) | `hr.manage` (izin girişi / iptali, bakiye düzeltmesi, vardiya, puantaj, bordroya aktarım, belge, ayar); izin kararı onay kuyruğunda `approvals.decide` |
 | Demirbaş | Ön büro → Demirbaş | `/demirbas` (Demirbaşlar, Sayım, Amortisman, Garanti, Tanımlar) | `assets.view` (sayım için `assets.count`) | `assets.manage` (kart, Excel, taşıma, zimmet, etiket, sayım aç / kapat, tanımlar), `assets.finance` (yıl amortismanı kaydet / geri al, elden çıkarma) |
 | Bütçe | Ön büro → Bütçe | `/butce/plan`, `/butce/gerceklesen`, `/butce/sapma` | `budget.view` | `budget.manage`, `budget.approve` |
 
@@ -833,7 +835,7 @@ Okuma kuralı: varlık hesapları (100, 102, 120, 150, 191) borçla **artar**; b
 
 ### Ne işe yarar
 
-Personel kartları, aylık puantaj, ek ödeme / kesinti kalemleri, servis payı dağıtımı, bordro hesabı (brüt → net; SGK, gelir ve damga vergisi, istisnalar, teşvikler), dört gözlü onay, maaş ödemesi ve çıktılar (bordro listesi, pusula, departman icmali, banka dosyası, müşavir tablosu). Onaylanan bordro ön muhasebeye kendiliğinden düşer. İK tarafı (izin, vardiya, özlük belgesi) bu modülde **yoktur**; 52. modül yol haritasındadır.
+Personel kartları, aylık puantaj, ek ödeme / kesinti kalemleri, servis payı dağıtımı, bordro hesabı (brüt → net; SGK, gelir ve damga vergisi, istisnalar, teşvikler), dört gözlü onay, maaş ödemesi ve çıktılar (bordro listesi, pusula, departman icmali, banka dosyası, müşavir tablosu). Onaylanan bordro ön muhasebeye kendiliğinden düşer. İzin, vardiya, günlük puantaj ve özlük belgeleri aynı personel kartı üzerinden **İK** ekranlarında yürür (aşağıda "İK (izin, vardiya, puantaj, özlük)"); İK puantajı ay sonunda bu modülün aylık puantajına aktarılır.
 
 ### Nerede bulunur
 
@@ -965,7 +967,392 @@ Bordronun **gider tarafı** genel muhasebede yazılır: tahakkuk fişinde işver
 - **"Ay kilitli"**: onaylı ayı düzeltmek için fark bordrosu açın.
 - **Elden ödeme kasadan düşmüyor**: elden ödeme yalnız kasadan yapılır, kasa yetersizse önce virman.
 - Ücret, IBAN, avans, kesinti alanları yalnız `payroll.view` olana görünür; ön büro personel listesini görebilir ama ücreti göremez.
-- İzin bakiyesi, vardiya çizelgesi, özlük belgesi bu sürümde yok (52). Puantaj elle girilir.
+- Aylık puantaj elle girilebilir ya da İK → Puantaj → **Bordroya aktar** ile günlük puantajdan yazılır (kaynak TIMESHEET); aynı ay için ikisini birlikte kullanmayın, son yazan geçerlidir. İzin bakiyesi, vardiya ve özlük belgeleri İK bölümündedir.
+
+## İK (izin, vardiya, puantaj, özlük)
+
+### Ne işe yarar ve bordroyla ilişkisi
+
+İK ekranları, bordronun "girdi" tarafındaki günlük işi yürütür: personelin **izin talebi → onay → bakiye** akışı, departman departman **haftalık vardiya çizelgesi**, her gün için **puantaj** (geldi / gelmedi, giriş / çıkış saati, mola, fazla çalışma) ve **özlük belgeleri** (kimlik fotokopisi, sözleşme, sağlık raporu, hijyen belgesi…) ile bunların süre takibi.
+
+İK ile bordro ayrı tablolar tutmaz:
+
+- **Personel kartı ortaktır.** İK ikinci bir personel listesi açmaz; Personel (`/personel`) ekranındaki kart (sicil, departman, pozisyon, işe giriş, doğum tarihi, çıkış tarihi) İK'nın da kaynağıdır. İşe giriş tarihi izin hakkını, doğum tarihi yaşa bağlı en az 20 gün kuralını, çıkış tarihi "bu kişi bu gün çalışıyor mu" sorusunu belirler. Kartı doğru doldurmak İK'nın ilk işidir.
+- **Puantaj bordroya aktarılır.** İK'da günlük girilen puantaj ay sonunda tek düğmeyle (**Bordroya aktar**) Bordro → Puantaj ve kalemler (`/bordro/puantaj`) ekranındaki aylık satıra yazılır: eksik gün ve SGK eksik gün nedeni, fiilen çalışılan gün, fazla çalışma saati, bayram ve hafta tatili çalışması. Bordro bu satırla hesaplanır.
+- **Onaylı bordro ayı İK'yı da kilitler.** Bordrosu onayda ya da onaylı olan ayın puantajı yazılamaz, o aya aktarım yapılamaz, o aya dokunan onaylı izin iptal edilemez. Düzeltme bordroda olduğu gibi fark bordrosuyla yapılır.
+
+> İK puantajını kullanmak zorunlu değildir. Puantajı doğrudan Bordro → Puantaj ve kalemler ekranına elle giren otel bunu sürdürebilir. Ama ikisini aynı ay için birlikte kullanırsanız **son yazan geçerlidir**: Bordroya aktar, o ayın elle girilmiş satırlarını İK verisiyle değiştirir.
+
+### Nerede bulunur
+
+| Ekran | Adres | Kim görür | Ne yapılır |
+| --- | --- | --- | --- |
+| **İK** (menü) | `/ik` | `hr.view` | Altı sekmeli İK ekranı; açılışta İzinler sekmesi gelir |
+| **İzinler** | `/ik/izinler` | `hr.view` (yazmak `hr.manage`) | Bütün izin kayıtları; personel adına izin girişi, iptal, onay kuyruğuna geçiş |
+| **İzin bakiyeleri** | `/ik/izin-bakiyeleri` | `hr.view` (düzeltme `hr.manage`) | Her personelin yıllık izin hakkı, kullandığı, beklemedeki ve kalan günü; elle düzeltme |
+| **Vardiya** | `/ik/vardiya` | `hr.view` (yazmak `hr.manage`) | Haftalık çizelge: personel × gün; vardiya ekle / düzenle / sil, geçen haftayı kopyala |
+| **Puantaj** | `/ik/puantaj` | `hr.view` (yazmak ve bordroya aktarmak `hr.manage`) | Günlük durum ve saatler; ay sonunda **Bordroya aktar** |
+| **Belgeler** | `/ik/belgeler` | `hr.view` (yükleme / silme `hr.manage`) | Özlük belgeleri, süresi dolacaklar |
+| **Ayarlar** | `/ik/ayarlar` | `hr.view` (değiştirmek `hr.manage`) | Hafta tatili günü, çalışma normları, resmî tatiller, izin onayı, belge hatırlatma günü |
+| **İzinlerim** | `/ik/benim` | `hr.self` | Personelin kendi sayfası: bakiyesi, izin talebi, izinleri, vardiyaları, bu ayın puantaj özeti |
+
+Menüde **İK** öğesinin altında İzinler, Vardiya, Puantaj ve Belgeler kısayolları görünür (İK → İzinler, İK → Vardiya, İK → Puantaj, İK → Belgeler); İzin bakiyeleri ve Ayarlar İK ekranının üstündeki sekmelerdedir. **İzinlerim** ayrı bir menü öğesidir ve İK ekranını göremeyen personel de onu görür.
+
+**İzinler (yetkiler):**
+
+| İzin | Ne verir | Varsayılan roller |
+| --- | --- | --- |
+| `hr.view` | İzinler ve bakiyeler, vardiya çizelgesi, günlük puantaj ve özlük belgelerini görüntüle | Müdür, Muhasebe |
+| `hr.manage` | İzin gir / iptal et, bakiye düzelt, çizelge ve puantaj yaz, bordroya aktar, belge yükle / sil, İK ayarları | Müdür, Muhasebe |
+| `hr.self` | Kendi izin talebini gir; kendi izinlerini, bakiyesini ve vardiyalarını gör | Müdür, Muhasebe, Ön büro, Kat hizmetleri, Yiyecek & İçecek |
+
+Yani müdür ve muhasebe üç izne de sahiptir; ön büro, kat hizmetleri ve F&B rollerinde yalnız kendi sayfası (**İzinlerim**) açıktır. Otel Ayarlar → Roller & İzinler matrisinden ayrı bir "İK sorumlusu" düzeni kurabilir (ör. bir kullanıcıya `hr.view` + `hr.manage` verip bordro izinlerini vermemek). İzin talebine **karar vermek** ise İK izni değil, onay kuyruğu iznidir (`approvals.decide`); bkz. aşağıda "İzinler".
+
+**Kullanıcı hesabı → personel kartı bağı.** Personelin kendi sayfası, oturum açan **kullanıcının** hangi personel kartına ait olduğunu bilmek zorundadır. Bu bağ personel kartındaki **"Kullanıcı hesabı"** alanıyla kurulur:
+
+1. Yönetici, personel için Ayarlar → Kullanıcılar'dan bir kullanıcı açar (ör. `ayse@otelim.com`, rol Ön büro).
+2. İK, Personel → Ayşe Demir kartında **Kullanıcı hesabı** alanına bu kullanıcıyı bağlar. Kart ekranında alan "Ayşe Demir (ayse@otelim.com)" olarak görünür.
+3. Ayşe giriş yapıp **İzinlerim**'i açtığında kendi kartını görür.
+
+Bağ kurulmamışsa **İzinlerim** sayfası boş bir açıklama gösterir: *"Kullanıcı hesabınız bir personel kartına bağlı değil; İK personel kartınızda 'Kullanıcı hesabı' alanını doldurmalı."* Bu bir hata değil, kurulum eksiğidir. Bir kullanıcı yalnız bir karta bağlanır; kullanıcısı olmayan personel (ör. bilgisayar kullanmayan bulaşıkçı) için izni İK onun adına girer.
+
+### Temel kavramlar
+
+| Kavram | Anlamı |
+| --- | --- |
+| **Hak** | Yıllık ücretli izin hakkı. 4857 sayılı İş Kanunu md. 53'e göre her **tamamlanan hizmet yılında**, işe giriş gününün yıl dönümünde doğar: 1–5 yıl 14 gün, 5'ten çok 15'ten az 20 gün, 15 yıl ve üstü 26 gün; 18 yaşından küçük ve 50 yaşından büyük çalışana en az 20 gün. İlk yıl dolmadan hak yoktur. |
+| **Bakiye** | Hak toplamı + elle düzeltmeler − onaylı yıllık izinler (iş günü). Beklemedeki talepler bakiyeden düşmez ama "kullanılabilir"den düşer. |
+| **Kullanılabilir** | Bakiye − onay bekleyen yıllık izin günleri. Yeni talep bu sayıyla karşılaştırılır. |
+| **İş günü** | İzin sayımında hafta tatili ve resmî tatil düşülmüş gün. Yıllık izin ve yasal süreli izinler (evlilik, vefat, babalık, idari) iş günüyle sayılır: md. 56'ya göre izne rastlayan hafta tatili ve resmî tatil izinden sayılmaz. |
+| **Takvim günü** | Aradaki bütün günler. Rapor (istirahat), ücretsiz izin, doğum izni ve "Diğer" takvim günüyle sayılır. |
+| **Hafta tatili** | Otelin haftalık tatil günü (varsayılan Pazar). İK → Ayarlar'dan değişir; izin sayımı, puantajın varsayılanı ve "hafta tatili çalışması" buna göre hesaplanır. Otel personelin tatilini tek güne topluyorsa doğrudur; dönüşümlü tatil kullanılıyorsa aşağıdaki "Dikkat edilecekler"e bakın. |
+| **Resmî tatil** | Ayarlardaki tatil listesi. Sabit tatiller (1 Ocak, 23 Nisan, 1 Mayıs, 19 Mayıs, 15 Temmuz, 30 Ağustos, 29 Ekim) hazır gelir; dinî bayramlar her yıl elle eklenir. |
+| **Norm** | Günlük çalışma normu (varsayılan 450 dakika = 7,5 saat) ve haftalık norm (varsayılan 2.700 dakika = 45 saat). Günlük norm mesai hesabının, haftalık norm vardiya uyarısının eşiğidir. |
+| **Mesai (fazla çalışma)** | Bir günün çalışılan dakikasının günlük normu aşan kısmı. Ayın toplamı saat olarak bordroya gider. |
+| **Puantaj (günlük)** | Bir personelin bir günü: durum (Geldi / Gelmedi / İzinli / Hafta tatili / Resmî tatil), giriş, çıkış, mola, çalışılan ve fazla dakika. |
+| **Vardiya** | Bir personelin bir gündeki planlanan çalışma aralığı (ör. 08:00–16:30, 30 dk mola). Plan olarak tutulur; puantajı kendiliğinden doldurmaz. |
+
+### İzinler
+
+`/ik/izinler` sekmesi otelin bütün izin kayıtlarını listeler.
+
+**Liste ve süzgeçler.** Üstte arama (ad ya da sicil), dönem (Başlangıç / Bitiş — bu aralığa değen izinler), Durum (Onay bekliyor, Onaylandı, Reddedildi, İptal edildi), Tür ve Departman. Tablo sütunları: personel (adına tıklayınca personel kartı açılır), tür, tarih aralığı, **gün** (hesaplanmış iş / takvim günü), durum rozeti (onay bekliyor sarı, onaylandı yeşil, reddedildi kırmızı, iptal gri), isteyen, karar (karar veren ve not). Personel kartındaki İK kutusundan gelinirse liste o personele süzülü açılır.
+
+**Talep akışı (personel kendi adına):**
+
+1. Personel **İzinlerim** → **İzin talebi**: tür, başlangıç, bitiş, açıklama. Pencere, ayarlardaki hafta tatili ve resmî tatillerle **gün sayısını önizler** ("5 iş günü").
+2. Kaydedince sunucu kuralları denetler (aşağıda). Geçerse izin **Onay bekliyor** durumunda açılır ve onay kuyruğuna **"İzin talebi"** (`LEAVE`) türünde bir iş düşer. Özet: "Ayşe Demir · Yıllık ücretli izin · 08.12.2026 – 10.12.2026 (3 gün)"; ayrıntıda personel, departman, tür, tarih, gün ve **talep sonrası kalan yıllık izin**.
+3. `hr.manage` iznine sahip olanların ziline **"İzin talebi: Ayşe Demir"** düşer; tıklayınca Onaylar ekranı açılır.
+4. Karar yetkisi olan biri (`approvals.decide`, varsayılan müdür) Onaylar → Bekleyen'den **Onayla** ya da **Reddet** der. **Dört göz:** talebi giren kişi kendi talebini onaylayamaz. İzin onayının süresi yoktur; karar verilene kadar bekler.
+5. Karar izne yazılır: onaylandıysa **Onaylandı** (yıllık izinse bakiyeden düşer), reddedildiyse **Reddedildi** ve karar notu "Reddedildi: Yoğun dönem" biçiminde. Personelin ziline "İzniniz onaylandı" ya da "İzin talebiniz reddedildi" düşer; tıklayınca **İzinlerim** açılır.
+6. Onaylı izin vardiya çizelgesinde gri **"İzinli"** olarak, puantajda kilitli "İzinli (tür)" hücresi olarak görünür; ay sonunda bordroya aktarılır.
+
+> Yıllık izinde bakiye **onay anında yeniden denetlenir**. Talep ile onay arasında bakiye değiştiyse (ör. başka bir yıllık izin onaylandı, eksi düzeltme girildi) onay verilse bile izin "Onay anında yıllık izin bakiyesi yetersiz (… gün)" notuyla **Reddedildi** olur.
+
+**İK personel adına izin girer.** İzinler sekmesinde **İzin gir** (`hr.manage`): personel seçici (ad / sicil ile arar), tür, başlangıç, bitiş, açıklama. Rapor gibi personelin kendisinin giremeyeceği izinler, kullanıcı hesabı olmayan personelin izinleri ve geçmişe dönük kayıtlar böyle girilir. İK'nın girdiği izin de, ayar açıksa, aynı onay kuyruğuna gider ve dört göz kuralı İK'yı da bağlar.
+
+**Onaysız ayar.** İK → Ayarlar'da **İzin onayı** kapatılırsa İK'nın girdiği izin doğrudan **Onaylandı** yazılır (karar notu "İK girişi (onay gerekmez)"), onay kuyruğuna gitmez. Pencere bunu "Ayarlarda izin onayı kapalı: İK'nın girdiği izin doğrudan onaylı yazılır" diye hatırlatır. **Personelin kendi talebi ayardan bağımsız olarak her zaman onaya gider.**
+
+**Talep kuralları (sunucu reddeder):**
+
+| Kural | Hata | Örnek |
+| --- | --- | --- |
+| Aynı personelin **onay bekleyen ya da onaylı** başka bir izniyle tek gün bile kesişemez | "24.11.2026 – 26.11.2026 arasında yıllık ücretli izin kaydı var (onay bekliyor)" (`LEAVE_OVERLAP`) | Yıllık izin bekleyen personele aynı günlere rapor girilemez; önce yıllık izin iptal edilir |
+| Yıllık izinde **kullanılabilir** gün (bakiye − bekleyen) istenenden az olamaz | "Yıllık izin bakiyesi yetersiz: kullanılabilir 25 gün, istenen 30 gün" (`LEAVE_BALANCE`) | Bakiye o iznin **bitiş günü** itibarıyla hesaplanır: izin içinde yıl dönümü varsa yeni doğan hak sayılır |
+| Yasal süreli izinler en fazla: **evlilik 3**, **vefat 3**, **babalık 5** iş günü | "Evlilik izni en fazla 3 iş günü" | 4 iş günlük evlilik izni girilemez; fazlası yıllık ya da ücretsiz izin olarak ayrıca girilir |
+| Aralıkta en az bir sayılan gün olmalı | "Seçilen aralıkta iş günü yok (hafta tatili / resmî tatil)" | Yalnız Pazar gününe yıllık izin |
+| İzin işe giriş gününden önce başlayamaz; işten ayrılmış personele izin girilmez | "İzin işe giriş gününden (15.01.2024) önce başlayamaz" / "İşten ayrılmış personele izin girilemez" | — |
+| Bitiş başlangıçtan önce olamaz; aralık en fazla 365 gün | Alan hatası | — |
+
+**İzin türleri:**
+
+| Tür | Nasıl sayılır | Bakiyeden düşer mi | Bordroda | SGK eksik gün kodu |
+| --- | --- | --- | --- | --- |
+| Yıllık ücretli izin | İş günü | Evet | Ücretli; eksik gün değil | — |
+| Rapor (istirahat) | Takvim günü | Hayır | **Eksik gün** | 01 (istirahat) |
+| Ücretsiz izin | Takvim günü | Hayır | **Eksik gün** | 21 |
+| Doğum izni | Takvim günü | Hayır | **Eksik gün** | 01 |
+| Babalık izni | İş günü, en fazla 5 | Hayır | Ücretli | — |
+| Evlilik izni | İş günü, en fazla 3 | Hayır | Ücretli | — |
+| Ölüm (vefat) izni | İş günü, en fazla 3 | Hayır | Ücretli | — |
+| İdari izin | İş günü | Hayır | Ücretli | — |
+| Diğer | Takvim günü | Hayır | Ücretli (eksik gün sayılmaz) | — |
+
+Puantajda "Gelmedi" günleri de eksik gün sayılır (kod **15**, devamsızlık). Bir ayda birden fazla neden varsa (ör. rapor + devamsızlık) bordroya **12** (birden fazla neden) kodu gider; bordro bu kodla SGK bildirgesini hazırlar.
+
+**Örnek: gün sayımı.** Hafta tatili Pazar. 24 Kasım 2026 Salı – 30 Kasım 2026 Pazartesi arası 7 gündür.
+
+| Tür | Hesap | Gün |
+| --- | --- | --- |
+| Yıllık izin | 7 gün − Pazar 29 Kasım | **6** |
+| Yıllık izin, 27 Kasım resmî tatil olsaydı | 7 − Pazar − 27 Kasım | **5** |
+| Rapor | Takvim günü | **7** |
+| Yalnız 29 Kasım Pazar için yıllık izin | 0 gün | Reddedilir |
+
+**İptal kuralları:**
+
+| Durum | Kim iptal eder | Ne olur |
+| --- | --- | --- |
+| Onay bekliyor | Talebi giren personel (İzinlerim'den) ya da İK | İzin **İptal edildi**; onay kuyruğundaki iş "süresi doldu" olarak kapanır, artık karar verilemez |
+| Onaylandı | **Yalnız İK** (`hr.manage`); personel iptal edemez ("Onaylı izni yalnız İK iptal eder") | İzin İptal edildi; yıllık izinse günler bakiyeye geri döner; personelin ziline "İzniniz iptal edildi" |
+| Onaylandı, ama iznin dokunduğu bir ayın bordrosu onayda / onaylı | Hiç kimse | "Ay kilitli" (`PAYROLL_MONTH_LOCKED`): puantaj bordroya girmiş olabilir; düzeltme fark bordrosuyla |
+| Reddedildi / İptal edildi | — | "İzin zaten kapanmış" |
+
+İptal sebebi zorunludur (en az 3 karakter). Pencere uyarır: **"Onaylı izin iptalinde o günlerin puantajı 'Gelmedi' olur; düzeltmeyi unutmayın."** Yani personel aslında çalıştıysa puantajda o günleri "Geldi" olarak düzeltin; yoksa bordroya devamsızlık gider.
+
+### İzin bakiyeleri
+
+`/ik/izin-bakiyeleri` aktif personelin yıllık izin durumunu tek tabloda verir: personel, departman, **hak**, **düzeltme**, **kullanılan**, **bekleyen**, **kalan**, **sonraki hak günü** (bir sonraki yıl dönümü). Üstteki **Bakiye günü** alanı tabloyu geçmiş ya da gelecek bir gün itibarıyla hesaplar ("31 Aralık'ta kimin ne kadar izni olacak?"). Arama ve departman süzgeci vardır.
+
+**Hak hesabı (her yıl dönümünde doğan gün):**
+
+| Tamamlanan hizmet yılı | Normal | Yıl dönümünde 18 yaşından küçük ya da 50 yaşından büyük |
+| --- | --- | --- |
+| 0 (ilk yıl dolmadı) | 0 | 0 |
+| 1–5 | 14 | 20 |
+| 6–14 | 20 | 20 |
+| 15 ve üstü | 26 | 26 |
+
+- Tamamlanan yıl **yıl dönümü esasıyla** sayılır: 15.03.2020'de işe giren 14.03.2026'da 5, 15.03.2026'da 6 yılını doldurur. 29 Şubat'ta işe girenin yıl dönümü artık olmayan yıllarda 28 Şubat'tır.
+- Yaş, **o yıl dönümündeki** yaştır; doğum tarihi kartta boşsa yaş kuralı uygulanmaz (en az 20 gün kuralı devreye girmez). Kartta doğum tarihini doldurun.
+- Çıkış tarihi olan personelde çıkıştan sonra hak doğmaz.
+- Onaylı yıllık izinlerin **tamamı** bakiyeden düşer; ileri tarihli onaylı izin de yer ayırmış sayılır.
+
+**Satır ayrıntısı.** Satıra tıklayınca **"Yıllık izin bakiyesi: Ad Soyad"** penceresi açılır: hak / kullanılan / bekleyen / kalan kutuları, **Hak kayıtları** (her hizmet yılı, doğduğu gün, gün sayısı) ve **Düzeltmeler** (gün, geçerlilik günü, gerekçe, giren). Henüz hak yoksa "Henüz hak doğmadı: yıllık izin hakkı birinci iş yılı tamamlanınca doğar" yazar.
+
+**Düzeltme ekle** (`hr.manage`): personel, **Gün (+ ekler, − düşer)**, **Geçerlilik günü**, **Gerekçe** (zorunlu). Gün yarım olabilir (ör. `2,5` ya da `-1,5`; bir ondalık), sıfır olamaz, 365'i aşamaz. Tipik kullanımlar: sisteme geçişte önceki dönemden **devir** (önceki programda kalan 9 gün → `+9`), toplu sözleşmeden **ek izin**, yarım gün izin kullanımı, hatalı kaydın düzeltmesi. Düzeltme silinmez; yanlış girilen düzeltmenin tersini girin. Geçerlilik günü bakiye gününden sonra olan düzeltme o güne kadar hesaba girmez.
+
+**Örnek: üç personel (bugün 25 Kasım 2026).**
+
+| Personel | İşe giriş / doğum | Haklar | Hak toplamı | Kullanılan / düzeltme | Kalan |
+| --- | --- | --- | --- | --- | --- |
+| Ayşe Demir (resepsiyon) | 15.01.2024 / 1995 | 2025: 14, 2026: 14 | **28** | 3 gün yıllık izin onaylandı | **25** |
+| Mehmet Kaya (aşçı) | 15.01.2019 / — | 5 yıl × 14 + 2 yıl × 20 | **110** | — | 110 |
+| Hasan Yılmaz (şef) | 01.06.2010 / 1960 | 16 yıl; her yıl en az 20 (50 yaş üstü), 15. yıldan sonra 26 | ≥ 20 her yıl, son yıl 26 | — | — |
+
+Ayşe'ye ayrıca "Önceki sistemden devir" gerekçesiyle `-3,5` düzeltme girilirse kalanı **24,5** olur. Kart düzeni 2019'da işe giren biri için: 2020–2024 her yıl 14, 2025 ve 2026 yıl dönümünde 20 → 5 × 14 + 2 × 20 = 110; bu personel 14 + 10 gün izin kullanmış ve −3 ile +2,5 düzeltmesi varsa bakiye 110 − 0,5 − 24 = **85,5** gündür.
+
+> Bu sayılar sistemin yasal **asgari** hesabıdır. Sözleşmenizde daha fazla izin varsa farkı düzeltme olarak girin. İzin bakiyesinin parasal karşılığı (işten çıkışta kullanılmayan izin ücreti) bordroda işten çıkış ekranından hesaplanır; oradaki gün sayısını bu tablodan alın.
+
+### İzinlerim (personelin kendi sayfası)
+
+`/ik/benim`, menüdeki **İzinlerim**. Ön büro, kat görevlisi, garson — `hr.self` izni olan herkes ve kullanıcı hesabı kartına bağlı herkes kullanır.
+
+Sayfada:
+
+- **Kart:** ad, sicil, departman, pozisyon, işe giriş.
+- **Bakiye kutuları:** hak, kullanılan, kalan, bekleyen. "Kalan"dan bekleyen düşülmüş sayı yeni talepte kullanılabilir olandır.
+- **İzin talebi** düğmesi.
+- **İzinlerim listesi:** son 50 izin, durumu ve kararı (red notu dahil). Onay bekleyen talebin yanında **İptal et**.
+- **Vardiyalarım:** bu haftanın ve gelecek haftanın vardiyaları (gün, saat, mola, departman, not).
+- **Bu ayın özeti:** ay başından bugüne geldiği gün, gelmediği gün, toplam çalışma ve fazla çalışma.
+
+**Adım adım (personel gözüyle).** Resepsiyonist Ayşe, 8–10 Aralık için yıllık izin istiyor:
+
+1. Sol menüden **İzinlerim**'i açar. Kutularda "Hak 28 · Kullanılan 0 · Kalan 28 · Bekleyen 0" görür.
+2. **İzin talebi** → tür "Yıllık ücretli izin", başlangıç 08.12.2026, bitiş 10.12.2026, açıklama "Aile ziyareti". Pencere "3 iş günü" der. Kaydet.
+3. Listede talep **Onay bekliyor** rozetiyle görünür; "Bekleyen 3" olur. Müdürün ziline "İzin talebi: Ayşe Demir" düşer.
+4. Ayşe aynı günlere bir de rapor girmeye çalışsa reddedilir (çakışma). 30 günlük yıllık izin istese "kullanılabilir 25 gün, istenen 30 gün" der.
+5. Müdür onaylar. Ayşe'nin ziline "İzniniz onaylandı" düşer; kutular "Kullanılan 3 · Kalan 25 · Bekleyen 0" olur.
+6. Ayşe vazgeçmek isterse onaylı izni kendisi iptal edemez; İK'ya söyler. Henüz onaylanmamış talebi ise **İptal et** ile (sebep yazarak) kendisi geri çeker.
+
+### Vardiya
+
+`/ik/vardiya` haftalık bir çizelgedir. Üstte **hafta seçici** (Önceki hafta / Sonraki hafta; haftalar Pazartesi başlar) ve **Departman** süzgeci.
+
+**Izgara.** Satırlar personel (departmana göre gruplanmış; departmansızlar "Departmansız" grubunda), sütunlar haftanın günleri. Resmî tatil günü tatil adıyla, hafta tatili günü **"Hafta tatili"** etiketiyle işaretlidir. Hücrede vardiya **çipleri** "08:00–16:00" biçimindedir; üzerine gelince süre ve not görünür. Onaylı izinli günlerde hücre gri **"İzinli"** yazar. Satır sonunda haftanın toplam çalışma süresi (mola düşülmüş) vardır; haftalık normu aşan sarıdır. Yalnız o haftada çalışan personel (işe girmiş, çıkmamış) listelenir.
+
+**Vardiya ekleme** (`hr.manage`): boş hücredeki **+** ile pencere açılır: **Departman** (varsayılan personelin departmanı; başka departmana destek vardiyası da yazılabilir), **Başlangıç**, **Bitiş** ("SS:DD"), **Mola (dakika)**, **Not**. Çipe tıklayınca aynı pencere düzenleme ve silme için açılır.
+
+- Süre = bitiş − başlangıç − mola. **08:00–16:30, mola 30 → 480 dakika (8 saat).** 08:00–16:00, mola 30 → 450 dakika.
+- **Gece vardiyası:** bitiş başlangıçtan küçükse vardiya ertesi güne taşar. **22:00–06:00 → 480 dakika**, başladığı günün hücresinde durur.
+- Süre sıfır ya da eksi olamaz ("mola süreden uzun"), **16 saati** aşamaz. 08:00–08:30 mola 30 reddedilir; 06:00–23:30 reddedilir.
+- Personelin çalışma dönemi dışına (işe girişten önce, çıkıştan sonra) vardiya yazılmaz.
+
+**Çakışma hatadır.** Aynı personelin iki vardiyası üst üste binemez; kayıt reddedilir: "Mehmet Kaya: 2026-11-30 22:00–06:00 vardiyasıyla çakışıyor" (`SHIFT_OVERLAP`). Örnek: Pazartesi 22:00–06:00 gece vardiyası olan aşçıya Salı 05:00–13:00 yazılamaz. Bir vardiyanın bitişi diğerinin başlangıcına eşitse (08:00–16:00 ve 16:00–23:00) çakışma sayılmaz.
+
+**Uyarılar kaydı engellemez.** Otelcilikte denkleştirme yaygın olduğu için iki kural yalnız uyarıdır; kayıt yazılır, çizelgenin üstünde **"Çizelgede uyarı var"** kutusu özet verir ve çipler renklenir:
+
+| Uyarı | Eşik | Görünüş | Örnek |
+| --- | --- | --- | --- |
+| Kısa dinlenme | İki vardiya arası **11 saatten** az | Sarı çip; "N kısa dinlenme (11 saatten az)" | Pazartesi 08:00–18:00, Salı 02:00–12:00: arada 8 saat |
+| Haftalık norm aşımı | Haftanın toplamı ayardaki haftalık normu (varsayılan **45 saat = 2.700 dk**) aşar | Satır sonu sarı; "N personelde haftalık norm aşımı (45 sa üstü)" | 5 gün × 10 saat = 3.000 dk > 2.700 |
+| Çakışma | Üst üste binen vardiya | Kırmızı çip (yalnız eski / dışarıdan gelen verilerde görülebilir; yeni kayıt zaten reddedilir) | — |
+
+> 11 saat ve 45 saat, İş Kanunu ve Çalışma Süreleri Yönetmeliği'ndeki genel kurallardır; denkleştirme dönemi, fazla çalışma onayı ve gece çalışması (7,5 saat sınırı) gibi ayrıntıları sistem denetlemez. Uyarıyı görüp gerekçesini bilen yönetici karar verir.
+
+**Geçen haftayı kopyala:** önceki haftanın vardiyaları (departman süzgeci seçiliyse yalnız o departmanınki) bu haftaya **aynı gün sırasıyla** kopyalanır. Bu haftadaki mevcut vardiyalar korunur; onlarla çakışanlar, çıkmış ya da o gün çalışmayan personelinkiler atlanır. Sonuç: "12 vardiya kopyalandı, 1 çakışan atlandı". Kopyalanan vardiyaları sonra tek tek düzeltin (ör. izinli personelinkini silin — çizelge izinli güne vardiya yazmayı engellemez, yalnız "İzinli" gösterir).
+
+> Vardiya bir **plandır**; puantajı kendiliğinden doldurmaz ve bordroya gitmez. Bordroya giden, Puantaj sekmesinde girilen gerçek giriş / çıkıştır.
+
+### Puantaj
+
+`/ik/puantaj`: hafta seçici, departman süzgeci ve arama; ızgara personel × gün (en fazla 42 günlük aralık, personel bazında sayfalı).
+
+**Günlük durumlar:**
+
+| Durum | Ne zaman | Saat girilir mi | Bordroya etkisi |
+| --- | --- | --- | --- |
+| **Geldi** | Personel çalıştı | Evet: giriş, çıkış, mola (ikisi birlikte girilir ya da hiç girilmez) | Çalışılan gün; mesai; resmî tatilde → bayram çalışması; hafta tatilinde → hafta tatili çalışması |
+| **Gelmedi** | Habersiz / mazeretsiz gelmedi | Hayır ("Yalnız 'Geldi' gününde saat girilir") | Eksik gün (kod 15) |
+| **İzinli** | Onaylı izin günü | — (kilitli) | İzin türüne göre (rapor / ücretsiz / doğum eksik gün) |
+| **Hafta tatili** | Ayardaki tatil günü; kayıt yoksa kendiliğinden görünür | Hayır | Yok |
+| **Resmî tatil** | Tatil listesindeki gün; kayıt yoksa kendiliğinden görünür | Hayır | Yok |
+| (boş) | İş günü, henüz girilmedi | — | Ne çalışılan ne eksik gün sayılır |
+
+Hücreye tıklayınca durum seçilir; **Geldi**'de giriş / çıkış / mola alanları açılır. Değiştirdiğiniz hücreler işaretlenir ve üstteki **Kaydet** hepsini birlikte yazar (en fazla 400 hücre). Satır sonunda haftanın toplam çalışma ve fazla çalışma süresi vardır.
+
+**Mesai hesabı:** çalışılan dakika = çıkış − giriş − mola; günlük normu (varsayılan 450 dk) aşan kısım fazla çalışmadır.
+
+| Giriş – çıkış | Mola | Çalışılan | Fazla çalışma (norm 450) |
+| --- | --- | --- | --- |
+| 08:00 – 17:00 | 60 | 480 dk | 30 dk |
+| 08:00 – 18:00 | 60 | 540 dk | 90 dk |
+| 08:00 – 15:30 | 0 | 450 dk | 0 |
+| 22:00 – 06:00 (gece, ertesi güne taşar) | 0 | 480 dk | 30 dk |
+
+**Kurallar:**
+
+- **İzinli gün kilitli.** Onaylı izin günü hücre "İzinli (Rapor)" gibi kilitli görünür; durumu değiştirilmek istenirse sunucu "… gününde onaylı izinli; izni iptal etmeden durum değiştirilemez" (`TIMESHEET_ON_LEAVE`) der. Önce izni iptal edin (İzinler sekmesi).
+- **İleri tarih yasak.** Bugünden sonraki güne puantaj girilmez ("İleri tarihe puantaj girilmez"); puantaj olanı kaydeder, planı değil.
+- **Çalışma dönemi dışı** (işe girişten önce, çıkıştan sonra) hücreler boş ve pasiftir.
+- **Kilitli bordro ayı:** bordrosu onayda / onaylı ayın günleri yazılamaz ("ay kilitli").
+- Aynı personel ve gün bir kayıtta iki kez gönderilemez.
+
+**Bordroya aktar** (`hr.manage`): üstteki düğme ay (ve isteğe bağlı departman) sorar. O ay çalışan her personel için günlük puantaj ve onaylı izinlerden aylık özet hesaplanır ve Bordro → Puantaj ve kalemler'deki satıra yazılır:
+
+| Bordro alanı | Nasıl hesaplanır |
+| --- | --- |
+| Eksik gün | "Gelmedi" günleri + ayın içine düşen rapor / ücretsiz izin / doğum izni günleri (takvim günü); en fazla 30 ve personelin o ayki ücretli gününü aşamaz |
+| Eksik gün nedeni | Tek neden varsa onun kodu (rapor ve doğum 01, ücretsiz 21, devamsızlık 15); birden fazla neden varsa 12 |
+| Fiilen çalışılan gün | "Geldi" günleri (yemek / yol istisnası için); eksik günle birlikte ücretli günü aşamaz |
+| Fazla çalışma saati | Ayın fazla dakikaları ÷ 60 (iki ondalık) |
+| Bayram çalışması | Resmî tatilde "Geldi" günleri |
+| Hafta tatili çalışması | Hafta tatili gününde "Geldi" günleri |
+
+- Satırın **kaynağı `TIMESHEET`** olur ve notuna "İK puantajından (tarih)" yazılır; Bordro → Puantaj ve kalemler ekranında satırın İK'dan geldiği görünür.
+- Aynı ay yeniden aktarılabilir; her aktarım satırı baştan yazar (elle girilmiş satır da dahil).
+- O ayda hiç ücretli günü olmayan personel atlanır ("atlanan" sayısı).
+- Ayın bordrosu **onayda ya da onaylıysa** aktarım reddedilir: 51'in ay kilidi (`PAYROLL_MONTH_LOCKED`); ekranda uyarı kutusunda görünür.
+- Ayın **hesaplanmış** bordrosu varsa **"yeniden hesaplanmalı"** işaretlenir (bayatlar); bordro ekranında **Hesapla**'ya yeniden basın.
+- Sonuç penceresi özet (aktarılan / atlanan, dönem) ve ilk satırları (personel, eksik gün, neden, çalışılan gün, mesai saati, bayram, hafta tatili) gösterir.
+
+**Örnek: Ekim ayı aylık özeti.** Ayşe Demir: 1 Ekim 08:00–18:00 mola 60 (540 dk, 90 dk mesai), 2 Ekim 08:00–15:30 mola 0 (450 dk, mesai yok), 3 Ekim **Gelmedi**, 10–12 Ekim **rapor** (İK girdi, onaylı). Mehmet Kaya: 1 Ekim 22:00–06:00 (480 dk, 30 dk mesai). **Bordroya aktar → Ekim:**
+
+| Personel | Eksik gün | Neden | Çalışılan gün | Fazla çalışma | Açıklama |
+| --- | --- | --- | --- | --- | --- |
+| Ayşe Demir | **4** | **12** | 2 | **1,5** saat | Rapor 3 + devamsızlık 1 = 4; iki neden → 12; 90 dk = 1,5 saat |
+| Mehmet Kaya | 0 | — | 1 | **0,5** saat | Gece vardiyası, 30 dk norm üstü |
+
+Ayşe'nin 11 Ekim hücresini "Gelmedi" yapmaya çalışmak reddedilir (izinli gün). Ekim bordrosu onaylandıktan sonra 4 Ekim'i değiştirmek ya da yeniden aktarmak "ay kilitli" der.
+
+> Puantajı eksik girilmiş bir ay aktarılırsa boş günler **ne eksik gün ne çalışılan gün** sayılır: bordro tam ay ücret hesaplar ama yemek / yol istisnası düşük çıkar. Aktarmadan önce ayın her iş gününü doldurun.
+
+### Belgeler
+
+`/ik/belgeler` özlük dosyasıdır. Üstte **Süresi dolacaklar** görünümü (ayardaki hatırlatma günü içinde süresi dolacak ve dolmuş belgeler, bitiş tarihine göre sıralı) ve tüm belgeler; süzgeç personel, tür ve arama (belge adı ya da personel adı).
+
+**Belge türleri:**
+
+| Tür | Süreli mi (bitiş tarihi beklenir) |
+| --- | --- |
+| Kimlik fotokopisi | Hayır |
+| İş sözleşmesi | Hayır |
+| Sağlık raporu (işe giriş / periyodik) | **Evet** |
+| Hijyen eğitimi belgesi | **Evet** |
+| Adli sicil kaydı | Hayır |
+| Diploma | Hayır |
+| Sertifika / eğitim | **Evet** |
+| İkamet izni | **Evet** |
+| Çalışma izni | **Evet** |
+| SGK işe giriş bildirgesi | Hayır |
+| Diğer | Hayır |
+
+**Tablo:** personel, tür, ad, düzenleme tarihi, bitiş tarihi ve **kalan gün rozeti** (süresi dolmuşsa kırmızı, hatırlatma günü içindeyse sarı), dosya (tıklayınca yeni sekmede açılır), sil.
+
+**Belge ekle** (`hr.manage`): personel, tür, ad, düzenleme ve bitiş tarihi (bitiş düzenlemeden önce olamaz), not ve dosya. **Dosya isteğe bağlıdır**: yalnız kaydı tutup (ör. "Hijyen belgesi, bitiş 30.06.2027") dosyayı sonra eklemeyebilirsiniz; süre takibi yine çalışır.
+
+**Yükleme sınırları:**
+
+- En fazla **5 MB** (ekran seçerken de denetler).
+- Yalnız **PDF, JPEG, PNG, WebP**. Word, Excel, HEIC (iPhone fotoğrafı) kabul edilmez; telefonda fotoğrafı JPEG olarak kaydedin ya da PDF'e çevirin.
+- Sunucu dosya türünü **dosyanın içinden** (imzasından) doğrular: uzantısı `.png` yapılmış bir PDF "Dosya türü bildirilenle uyuşmuyor (PDF, JPEG, PNG ya da WebP olmalı)" ile reddedilir.
+- Dosya diskte, kaydı veritabanında tutulur; açmak için `hr.view` gerekir.
+
+**Süresi dolacaklar ve hatırlatma zili.** Sunucu 12 saatte bir süresi ayardaki gün (varsayılan **30**) içinde dolacak ya da dolmuş belgeleri tarar ve `hr.manage` iznine sahip olanların ziline tek bir özet düşer: **"3 özlük belgesinin süresi 30 gün içinde doluyor (1 tanesi dolmuş)"**; gövdede ilk beş örnek ("Ayşe Demir — Sağlık raporu (işe giriş / periyodik) (05.12.2026)"). Dolmuş belge varsa uyarı sarı / önemli düzeydedir. Zile tıklayınca Belgeler "Süresi dolacaklar" görünümüyle açılır. **Aynı belge en fazla 7 günde bir** hatırlatılır; günde iki tur olsa da zil tekrarlamaz. İşten ayrılmış personelin belgeleri hatırlatılmaz.
+
+**Silme:** onay penceresiyle yapılır. Kayıt silinmez, "silindi" işaretlenir (kim, ne zaman silindiği denetim kaydında kalır), **dosya diskten kalkar** ve geri getirilemez. Listeden düşer. Belgeyi yenilerken eskisini silmek yerine yeni belgeyi ekleyip eskisini bir süre tutabilirsiniz; ama süresi dolmuş eski belge "dolmuş" olarak hatırlatılmaya devam eder, bu yüzden yenisi yüklenince eskisini silin.
+
+### Ayarlar
+
+`/ik/ayarlar` (değiştirmek `hr.manage`). Hiç kaydedilmemişse varsayılanlar geçerlidir ve ekran bunu söyler.
+
+| Ayar | Varsayılan | Etkisi |
+| --- | --- | --- |
+| Hafta tatili günü | Pazar | İzin gün sayımı, puantajda "Hafta tatili" varsayılanı, hafta tatili çalışması |
+| Günlük çalışma normu | 7,5 saat (450 dk); 1–12 saat | Puantajda fazla çalışmanın eşiği |
+| Haftalık çalışma normu | 45 saat (2.700 dk) | Vardiya çizelgesinde haftalık aşım uyarısı |
+| Resmî tatiller | Bu yılın ve gelecek yılın sabit tatilleri | İzin sayımı (tatil izinden düşer), puantajda "Resmî tatil", bayram çalışması |
+| İzin onayı | Açık | Kapalıysa İK'nın girdiği izin doğrudan onaylı; personel talebi yine onaya gider |
+| Belge hatırlatma günü | 30 (0–365) | Belgeler "Süresi dolacaklar" ve hatırlatma zili |
+
+Normlar ekranda **saat** olarak girilir, dakikaya çevrilip saklanır.
+
+**Resmî tatiller tablosu:** tarih + ad; satır ekle / sil. **Sabit tatilleri ekle (yıl)** seçilen yılın 2429 sayılı Kanun'daki sabit tarihli tatillerini ekler: Yılbaşı, 23 Nisan, 1 Mayıs, 19 Mayıs, 15 Temmuz, 30 Ağustos, 29 Ekim. **Ramazan ve Kurban Bayramı her yıl değiştiği için elle eklenir** (her bayram günü ayrı satır). Aynı tarih iki kez yazılamaz; en fazla 60 tatil. Liste boş kaydedilirse sistem yine bu ve gelecek yılın sabit tatillerini varsayar.
+
+**Örnek.** 2027 için: Sabit tatilleri ekle → 2027 (7 satır); Ramazan Bayramı'nın üç ve Kurban Bayramı'nın dört gününü tek tek ekle (tarihleri Diyanet takviminden alın; arife yarım günü sistem tam gün sayar, eklemeyip puantajda saatle yönetebilirsiniz). Kaydet. Bundan sonra 19–23 Nisan 2027 (Pazartesi–Cuma) yıllık izni 23 Nisan düştüğü için **4** iş günü sayılır.
+
+> Ayar değişikliği **geçmişe dönmez**: daha önce girilmiş izinlerin gün sayısı ve kaydedilmiş puantajın fazla dakikası yazıldığı andaki ayarla kalır. Hafta tatilini ya da normu ay ortasında değiştirmeyin; değiştirdiyseniz etkilenen kayıtları kontrol edin. İki kişi aynı anda ayarı kaydederse ikincisi "başkası değiştirdi, yenileyin" görür.
+
+### Arka planda otomatik olanlar
+
+| Olay | Kim | Ne yapar |
+| --- | --- | --- |
+| İzin talebi açıldı (onaylı ayar) | İK servisi | Onay kuyruğuna `LEAVE` ("İzin talebi") işi; `hr.manage` sahiplerine zil "İzin talebi: …"; `hr.leave.changed` olayı |
+| Onay kuyruğunda karar (onaylandı / reddedildi / süresi doldu) | İK dinleyicisi | İzni Onaylandı ya da Reddedildi yapar (yıllık izinde bakiyeyi yeniden denetler); personelin ziline karar; `hr.leave.changed` |
+| İzin iptal edildi | İK servisi | Bekleyen onayı kapatır; onaylı iznin bağlı puantaj günlerini "Gelmedi" yapar (not: "İzin iptal edildi; durumu düzeltin"); başkası iptal ettiyse personele zil |
+| Vardiya, puantaj, belge, ayar, bakiye düzeltmesi | İK servisi | `hr.changed` olayı → açık İK ekranları canlı tazelenir |
+| Bordroya aktar | İK servisi | Aylık bordro puantajı (kaynak TIMESHEET); hesaplanmış bordroyu "yeniden hesaplanmalı" işaretler; bordro ekranları tazelenir |
+| Her 12 saatte | Zamanlanmış iş "Özlük belgesi hatırlatması" | Süresi dolacak / dolmuş belgeler için `hr.manage` sahiplerine tek özet zil (belge başına 7 günde bir) |
+| Personel kartı değişti | Bordro | İK ekranları da tazelenir (`employee.changed`) |
+
+İK'nın kendi aktörü yoktur ("manuel" modül): kapalıyken personele düşen iş de yoktur. Her yazma denetim kaydına (Aktivite → Denetim kaydı) kim, ne zaman, ne değişti bilgisiyle yazılır.
+
+### Örnekler
+
+| # | Durum | Sonuç |
+| --- | --- | --- |
+| 1 | Ayşe (2 yıl kıdem, 1995 doğumlu) bakiyesine bakıyor | Hak 2 × 14 = **28** gün |
+| 2 | Ayşe 3 iş günü yıllık izin istedi, müdür onayladı | Kalan **25**; bekleyen 0 |
+| 3 | Mehmet (7 yıl kıdem) | 5 × 14 + 2 × 20 = **110** gün hak |
+| 4 | Hasan (16 yıl, 66 yaşında) | Her yıl en az 20 (50 yaş üstü), 15. yıldan sonra 26 |
+| 5 | 24–30 Kasım yıllık izin, hafta tatili Pazar | **6** iş günü; 27 Kasım tatilse **5**; aynı aralık rapor olsa **7** takvim günü |
+| 6 | 4 iş günlük evlilik izni | Reddedilir: en fazla **3** iş günü |
+| 7 | Yıllık izin bekleyen günlere rapor | Reddedilir: çakışma (`LEAVE_OVERLAP`) |
+| 8 | Vardiya 08:00–16:30 mola 30 | **480** dk |
+| 9 | Pazartesi 18:00 çıkış, Salı 02:00 giriş | Kaydedilir; sarı uyarı: **8 saat** dinlenme (11 saatten az) |
+| 10 | Haftada 5 × 10 saat vardiya | **3.000** dk > 2.700: haftalık aşım uyarısı |
+| 11 | Gece vardiyası 22:00–06:00 varken ertesi gün 05:00–13:00 | Reddedilir: `SHIFT_OVERLAP` |
+| 12 | Puantaj 08:00–17:00 mola 60, norm 450 | 480 dk çalışma, **30** dk mesai |
+| 13 | Ay özeti: rapor 3 gün + 1 gün gelmedi | Eksik gün **4**, neden **12**; 90 dk mesai → **1,5** saat |
+| 14 | 6 MB'lık sağlık raporu PDF'i | Reddedilir: en fazla **5 MB** |
+| 15 | Hijyen belgesi 10 gün sonra bitiyor, hatırlatma 30 gün | İK ziline özet; aynı belge 7 gün geçmeden yeniden hatırlatılmaz |
+| 16 | Onaylı Ekim bordrosu varken Ekim'deki onaylı izni iptal | Reddedilir: ay kilitli (fark bordrosu) |
+
+### Dikkat edilecekler ve sık hatalar
+
+- **"Kullanıcı hesabınız bir personel kartına bağlı değil"**: personel kartında Kullanıcı hesabı alanı boş. İK bağlar; personel sayfayı yeniler.
+- **Bakiye beklenenden az / fazla:** kartta işe giriş ve doğum tarihini kontrol edin; önceki sistemden devreden izni **düzeltme** olarak girin; ileri tarihli onaylı izinler de bakiyeden düşer.
+- **Yarım gün izin** talep olarak girilmez (izin gün bazındadır). Yarım günü İzin bakiyeleri → Düzeltme ekle ile `-0,5` ve gerekçeyle düşün; puantajda o günü "Geldi" ve gerçek saatlerle girin.
+- **Rapor**u personel değil İK girer (İzinler → İzin gir, tür Rapor); rapor takvim günüyle sayılır ve bordroya eksik gün (01) gider. SGK'dan alınan istirahat raporunu Belgeler'e de yükleyebilirsiniz.
+- **Dönüşümlü hafta tatili:** sistem tek hafta tatili günü bilir. Personeli farklı günlerde tatil yapan otelde puantajda o kişinin tatil gününü **"Hafta tatili"** olarak elle işaretleyin; vardiya çizelgesinde tatil günü olarak boş bırakın. İzin sayımı ayardaki günü kullanır.
+- **Vardiya uyarısı kaydı engellemez**; çakışma engeller. Uyarıyı görmezden gelmeden önce denkleştirme / fazla çalışma onayını kontrol edin.
+- **Puantaj girmeyi unuttuğunuz günler** bordroya ne eksik ne çalışılan gün olarak gider. Aktarmadan önce ayı tamamlayın.
+- **Bordroya aktar elle girilmiş bordro puantajını ezer.** Ay için ya İK puantajını ya bordro ekranındaki elle girişi kullanın.
+- **Aktarımdan sonra izin / puantaj değiştirdiyseniz** yeniden aktarın ve bordroyu yeniden hesaplayın.
+- **Onaylı bordro ayı** her şeyi kilitler (puantaj, aktarım, izin iptali). Düzeltme Bordro → fark bordrosuyla.
+- **Belge yüklenemiyor:** 5 MB'ı aşıyor ya da türü PDF / JPEG / PNG / WebP değil (ya da uzantısı değiştirilmiş). Telefondaki HEIC fotoğrafı JPEG'e çevirin, büyük taramayı sıkıştırın.
+- **Dinî bayramları eklemeyi unutmayın**; eklenmezse bayram günleri izinden düşmez ve bayram çalışması bordroya gitmez.
 
 ## Demirbaş ve amortisman
 
@@ -1110,6 +1497,10 @@ Bütçe arka ofisin planlama ayağıdır (`/butce/plan`, `/butce/gerceklesen`, `
 **Ödeme alındı ama cari / kasaya düşmedi.** Muhasebe aktörü kapalı ya da eşleme eksik; Görevler'de "Ön muhasebe" görevine bakın, eşlemeyi tamamlayın, Eşitle çalıştırın.
 
 **Resepsiyon muhasebe ekranını görüyor mu?** Varsayılanda hayır; yalnız folyo ödemesinde cari seçicisini kullanır.
+
+**İzin talebini kim onaylar?** Onay kuyruğunda (`İzin talebi` türü) `approvals.decide` yetkisi olan ve talebi **girmemiş** biri; varsayılan müdür. İK ayarında izin onayı kapalıysa İK'nın girdiği izin doğrudan onaylıdır, personelin kendi talebi yine onaya gider.
+
+**İK puantajı bordroya kendiliğinden gider mi?** Hayır; ay sonunda İK → Puantaj → **Bordroya aktar**. Sonra bordroyu yeniden hesaplayın.
 
 **Bordroyu kim onaylar?** Onay kuyruğunda `approvals.decide` yetkisi olan ve bordroyu **hazırlamamış** biri.
 

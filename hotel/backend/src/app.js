@@ -40,6 +40,8 @@ import { accountingRoutes } from './modules/accounting/routes.js';
 import { registerAccountingSubscribers } from './modules/accounting/subscribers.js';
 import { ledgerRoutes } from './modules/ledger/routes.js';
 import { registerLedgerSubscribers } from './modules/ledger/subscribers.js';
+import { hrRoutes } from './modules/hr/routes.js';
+import { registerHrSubscribers } from './modules/hr/subscribers.js';
 import { invoiceRoutes } from './modules/invoicing/routes.js';
 import { registerInvoiceSubscribers } from './modules/invoicing/subscribers.js';
 import { payrollRoutes } from './modules/payroll/routes.js';
@@ -193,6 +195,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   registerPurchasingSubscribers();
   registerAccountingSubscribers();
   registerLedgerSubscribers();
+  registerHrSubscribers();
   registerInvoiceSubscribers();
   registerPayrollSubscribers();
   registerGuestPortalSubscribers();
@@ -405,6 +408,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   await app.register(stockRoutes, { prefix: '/stock' });
   await app.register(accountingRoutes, { prefix: '/accounting' });
   await app.register(ledgerRoutes, { prefix: '/ledger' });
+  await app.register(hrRoutes, { prefix: '/hr' });
   await app.register(invoiceRoutes, { prefix: '/invoices' });
   await app.register(payrollRoutes, { prefix: '/payroll' });
   await app.register(guestPortalRoutes, { prefix: '/guest-portal' });

@@ -109,6 +109,12 @@ Sol menüdeki her sayfa, yolu ve görmek için gereken izin. Bir sayfa menüde y
 | ↳ Puantaj ve kalemler | `/bordro/puantaj` | üst menüyle aynı |
 | ↳ Servis payı | `/bordro/servis-payi` | üst menüyle aynı |
 | ↳ Ayarlar | `/bordro/ayarlar` | üst menüyle aynı |
+| **İK** | `/ik` | İzinler ve bakiyeler, vardiya çizelgesi, günlük puantaj ve özlük belgelerini görüntüle |
+| ↳ İzinler | `/ik/izinler` | üst menüyle aynı |
+| ↳ Vardiya | `/ik/vardiya` | üst menüyle aynı |
+| ↳ Puantaj | `/ik/puantaj` | üst menüyle aynı |
+| ↳ Belgeler | `/ik/belgeler` | üst menüyle aynı |
+| **İzinlerim** | `/ik/benim` | Kendi izin talebini gir; kendi izinlerini, bakiyesini ve vardiyalarını gör |
 | **Ön muhasebe** | `/muhasebe` | Cariler ve ekstre, kasa / banka hareketleri, çek / senet portföyü ve fişleri görüntüle |
 | ↳ Cariler | `/muhasebe/cariler` | üst menüyle aynı |
 | ↳ Kasa / banka | `/muhasebe/kasa-banka` | üst menüyle aynı |
@@ -158,7 +164,7 @@ Sol menüdeki her sayfa, yolu ve görmek için gereken izin. Bir sayfa menüde y
 
 ## İzinler ve roller
 
-Sistemde 118 izin var; roller bu izinlerin varsayılan paketleridir. Yönetici (Ayarlar → Kullanıcılar / roller) bir kullanıcıya izin ekleyip çıkarabilir. Aşağıdaki tablo **varsayılan** dağılımdır.
+Sistemde 121 izin var; roller bu izinlerin varsayılan paketleridir. Yönetici (Ayarlar → Kullanıcılar / roller) bir kullanıcıya izin ekleyip çıkarabilir. Aşağıdaki tablo **varsayılan** dağılımdır.
 
 ### Ayarlar
 
@@ -423,6 +429,14 @@ Sistemde 118 izin var; roller bu izinlerin varsayılan paketleridir. Yönetici (
 | `payroll.pay` | Maaş ve avans öde (kasa / banka) | ✓ |  |  |  | ✓ |  |
 | `payroll.setup` | Bordro ayarları: yasal parametreler ve teyidi, kalem türleri, departmanlar, işyeri bilgileri | ✓ |  |  |  |  |  |
 
+### İK
+
+| İzin | Ne yaptırır | Yönetici | Müdür | Ön büro | Kat hizmetleri | Muhasebe | Yiyecek & İçecek |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `hr.view` | İzinler ve bakiyeler, vardiya çizelgesi, günlük puantaj ve özlük belgelerini görüntüle | ✓ | ✓ |  |  | ✓ |  |
+| `hr.manage` | İzin onayla / iptal et, çizelge ve puantaj yaz, bordroya aktar, belge yükle, İK ayarları | ✓ | ✓ |  |  | ✓ |  |
+| `hr.self` | Kendi izin talebini gir; kendi izinlerini, bakiyesini ve vardiyalarını gör | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+
 ### Misafir portalı ve online check-in
 
 | İzin | Ne yaptırır | Yönetici | Müdür | Ön büro | Kat hizmetleri | Muhasebe | Yiyecek & İçecek |
@@ -644,7 +658,7 @@ Misafire yazılan cevapları WhatsApp Cloud API ile gönderir, teslim durumunu m
 
 ## Olay kataloğu
 
-Sistem 201 tür olay yayınlar. Olay = "şu oldu" kaydı; aktörler ve ekranlar bunları dinler. Açıklamalar kataloğun kendi yorumlarından alınmıştır (boşsa olayın adı yeterince anlatıyor demektir).
+Sistem 203 tür olay yayınlar. Olay = "şu oldu" kaydı; aktörler ve ekranlar bunları dinler. Açıklamalar kataloğun kendi yorumlarından alınmıştır (boşsa olayın adı yeterince anlatıyor demektir).
 
 ### accounting.*
 
@@ -830,6 +844,13 @@ Sistem 201 tür olay yayınlar. Olay = "şu oldu" kaydı; aktörler ve ekranlar 
 | `housekeeping.task.completed` | Görevli "Bitti" dedi; temizlik görevlerinde oda `CLEAN` olur, bağlı misafir isteği kapanır. |
 | `housekeeping.room.inspected` | Kat şefi kontrolü: geçtiyse oda `INSPECTED`, kaldıysa yeniden `DIRTY`. |
 | `housekeeping.issue.reported` | Görevli "Sorun var" dedi: iş teknik servise (modül 20 gelene dek manuel görev) taşınır. |
+
+### hr.*
+
+| Olay | Açıklama |
+| --- | --- |
+| `hr.leave.changed` | İş olayı: izin talebi açıldı / onaylandı / reddedildi / iptal edildi (88 işgücü planlama ve 76 mobil dinler). |
+| `hr.changed` | Ekran olayı: vardiya çizelgesi, günlük puantaj, bordroya aktarım, özlük belgesi ya da İK ayarı değişti. |
 
 ### inventory.*
 
@@ -1234,6 +1255,16 @@ Kat hizmetlerinin zamanlanmış işi (yalnızca sunucu sürecinde).
 üretmez. Sunucu kapalıyken geçen sabah sonraki açılışta telafi edilir —
 iş "saat 06:00'da üret" değil "bugünün görevleri eksikse tamamla"dır.
 
+### hr
+
+Aralık sabitleri: `DOCUMENT_REMINDER_INTERVAL_MS` = 12 * 60 * 60_000
+
+İK'nın zamanlanmış işi (yalnızca sunucu sürecinde).
+
+| İş                          | Sıklık  | Neden |
+|-----------------------------|---------|-------|
+| Özlük belgesi hatırlatması  | 12 saat | Süresi ayardaki gün içinde dolacak / dolmuş belgeler İK'ya zil (belge başına 7 günde bir) |
+
 ### lost-items
 
 Aralık sabitleri: `PHOTO_PURGE_INTERVAL_MS` = 60 * 60_000
@@ -1362,7 +1393,7 @@ Anketin zamanlanmış işi (yalnızca sunucu sürecinde, modül 55).
 
 ## Veri modeli
 
-Veritabanında 233 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan sayısı ilişkiler hariç yaklaşık değerdir.
+Veritabanında 239 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan sayısı ilişkiler hariç yaklaşık değerdir.
 
 | Tablo | Alan | Açıklama |
 | --- | --- | --- |
@@ -1549,6 +1580,12 @@ Veritabanında 233 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan
 | `PayrollParameterSet` | 12 | Yürürlük tarihli yasal parametre seti. Ay, ayın son günü yürürlükte olan setle hesaplanır. |
 | `PayElement` | 13 | Ödeme / kesinti kalemi. Sistem kalemleri kanunun davranışıyla gelir ve değişmez; otel kendi kalemini ekler. |
 | `PayrollAttendance` | 16 | Aylık puantaj: eksik gün (SGK nedeni), fazla çalışma, bayram ve hafta tatili çalışması. Modül 52 gelince puantajdan dolar (source TIMESHEET). |
+| `Leave` | 20 | İzin: talep → onay (LEAVE onay türü, dört göz) → onaylı; iptal edilebilir. `days` iş günü (hafta tatili ve resmî tatil sayılmaz). |
+| `LeaveAdjustment` | 8 | Elle izin bakiyesi düzeltmesi: devir izin, ek izin, kesinti (artı / eksi gün). |
+| `Shift` | 13 | Vardiya: personel × gün × saat aralığı (gece vardiyası ertesi güne taşar: bitiş < başlangıç). |
+| `Timesheet` | 16 | Günlük puantaj: giriş / çıkış, mola, çalışılan ve norm üstü dakika; izinli / tatil günleri durumla. |
+| `EmployeeDocument` | 17 | Özlük belgesi: dosya diskte (`fileKey`), kayıt burada; süresi dolacak belgeler İK'ya hatırlatılır. Yumuşak silme. |
+| `HrSettings` | 10 | İK ayarları: hafta tatili günü, günlük / haftalık çalışma normu, resmî tatiller, izin onayı, belge hatırlatma süresi. |
 | `PayrollItem` | 15 | Bir aya girilen ek ödeme / kesinti. `runId` boşsa ayın aylık bordrosuna, doluysa o fark bordrosuna aittir. |
 | `EmployeeTermination` | 21 | İşten çıkış ve hesaplanan hakları (kıdem, ihbar, kullanılmayan izin). Tutarlar çıkış ayının kalemlerine yazılır. |
 | `PayrollRun` | 35 | Bordro (ay × tür). Aylık bordro ayda bir tanedir (sequence 1); fark bordroları sırayla numaralanır. |
@@ -1657,7 +1694,7 @@ Geliştirme listesinden (GOREVLER.md) türetilir: işaretli maddeler ve "tamamla
 | 49 | e-Fatura / e-Arşiv / e-Defter | arkadaşın | kısmi (4/6) |
 | 50 | Sanal POS / ödeme geçidi | Ali Kemal | planlı |
 | 51 | Personel & bordro | arkadaşın | tamamlandı |
-| 52 | İK | Ali Kemal | planlı |
+| 52 | İK | Ali Kemal | tamamlandı |
 | 53 | Temassız uygulamalar | arkadaşın | tamamlandı |
 | 54 | Misafir yorum entegrasyonu + duygu analizi | Ali Kemal | planlı |
 | 55 | Anket & memnuniyet | arkadaşın | tamamlandı |

@@ -3848,12 +3848,46 @@ olay kataloğu, zamanlanmış işler, tablolar, modül durumu; elle düzenlenmez
 
 ### 52. İK — Ali Kemal
 **Gün sonu:** İzin talepleri onaylanıyor, vardiya çizelgesi yapılıyor, puantaj tutuluyor, özlük belgeleri saklanıyor.
-- [ ] Backend: Leave, Shift, Timesheet, EmployeeDocument tabloları + API; izin bakiye hesabı
-- [ ] Ekran: İzin talebi (personel) + onay (yönetici) → onay kuyruğu
-- [ ] Ekran: İzin bakiyeleri
-- [ ] Ekran: Haftalık vardiya çizelgesi (departman × gün)
-- [ ] Ekran: Puantaj (giriş / çıkış, mesai)
-- [ ] Ekran: Özlük belgeleri (yükle, süre takibi)
+- [x] Backend: `Leave` (+ `LeaveAdjustment`), `Shift`, `Timesheet`, `EmployeeDocument`, `HrSettings` + API (`/hr`); izin bakiyesi (4857 md. 53)
+- [x] Ekran: İzin talebi (personel `/ik/benim`, İK personel adına) + onay kuyruğu (`LEAVE`, dört göz)
+- [x] Ekran: İzin bakiyeleri (`/ik/izin-bakiyeleri`, elle düzeltme)
+- [x] Ekran: Haftalık vardiya çizelgesi (`/ik/vardiya`, departman × gün, hafta kopyalama)
+- [x] Ekran: Günlük puantaj (`/ik/puantaj`, giriş / çıkış / mola / mesai) + "Bordroya aktar"
+- [x] Ekran: Özlük belgeleri (`/ik/belgeler`, yükle, süre takibi, hatırlatma)
+
+> **📌 Modül 52 tamamlandı (25 Kasım 2026 — Ali Kemal).** Kararlar: **personel kaydı ortak** (51'in `Employee` / `Department`),
+> personel kendi talebini kullanıcı hesabına bağlı kartla girer (`hr.self`); **yıllık izin hakkı 4857 md. 53** — tamamlanan yılda
+> 14 / 20 / 26, 18 yaş altı ve 50 yaş üstü en az 20; hak yıl dönümünde doğar; bakiye = hak (`asOf`'a kadar) + elle düzeltme − onaylı
+> yıllık izinlerin tamamı (ileri tarihli olsa da); **iş günü sayımı** hafta tatili ve resmî tatil düşülerek (md. 56), rapor / ücretsiz /
+> doğum izni takvim günüyle; evlilik 3, vefat 3, babalık 5 gün sınırı. **Onay:** `LEAVE` onay türü (isteyen onaylayamaz, süresiz bekler);
+> İK ayarı onayı kapatırsa İK girişi doğrudan onaylı; karar personele ve İK'ya `HR` zili; bekleyen talebin iptali onay isteğini
+> konusuz (EXPIRED) bırakır; onaylı iznin iptali yalnız İK ve kilitli bordro ayına giremez. **Vardiya** personel × gün × saat
+> (gece vardiyası ertesi güne taşar); çakışma hata, 11 saatten az dinlenme ve 45 saat/hafta üstü **uyarı**; hafta kopyalama çakışanı
+> atlar. **Puantaj günlük** (geldi / gelmedi / hafta tatili / resmî tatil; izinli gün onaylı izinden, elle yazılamaz; ileri tarih yok;
+> mesai = norm üstü); **Bordroya aktar** ayın özetini 51'in `PayrollAttendance` satırına kaynak `TIMESHEET` ile yazar (eksik gün =
+> gelmedi + rapor / ücretsiz / doğum, tek tür ise kodu 01 / 21 / 15, karışıksa 12; çalışılan gün; bayram ve hafta tatili çalışması;
+> mesai saati), 51'in ay kilidi ve bayat bordro kuralıyla. **Belgeler** diskte (`hr/<otel>/<personel>/<belge>.<uzantı>`), PDF / JPEG /
+> PNG / WebP ≤ 5 MB, imza doğrulamalı; yumuşak silme; süresi `documentReminderDays` içinde dolacaklar 12 saatte bir İK'ya zil
+> (belge başına 7 günde bir). **Ayarlar:** hafta tatili günü, günlük 450 / haftalık 2.700 dk norm, resmî tatiller (sabitler
+> varsayılan, dinî bayramlar elle), izin onayı, hatırlatma günü.
+>
+> **API** `/hr`: `me` (+ `me/leaves`), `leaves` (+ `:id`, `:id/cancel`), `leave-balances`, `employees/:id/leave-balance`,
+> `leave-adjustments`, `shifts` (+ `copy-week`), `timesheets` (+ `export-payroll`), `documents` (+ `:id/file`, `employees/:id/documents`),
+> `settings`. İzinler yeni: `hr.view` / `hr.manage` / `hr.self` (müdür ve muhasebe üçü; ön büro, kat hizmetleri, F&B yalnız `hr.self`).
+> Onay türü `LEAVE`; zil `HR`; olaylar `hr.leave.changed`, `hr.changed`; kanal `hr.changed`. Migration `20261125150000_hr`
+> (CHECK: izin aralığı ve durum izi, vardiya saat biçimi, puantaj dakikaları, ayar aralıkları).
+>
+> **Ekran:** `/ik` sekmeli — İzinler, İzin bakiyeleri, Vardiya, Puantaj, Belgeler, Ayarlar; `/ik/benim` personelin kendi sayfası
+> (bakiye, izinlerim, bu / gelecek hafta vardiyam, bu ayın puantaj özeti). Personel kartında İK kutusu.
+>
+> **Test:** sözleşme 9 (hak / yıl dönümü / 29 Şubat / iş günü / vardiya / puantaj / aylık özet / şemalar), entegrasyon 7 (talep →
+> onay → bakiye → ziller, çakışma / bakiye / yasal süre, kendi iptali; ret, onaysız giriş, kilitli ay; bakiye listesi ve düzeltme,
+> 50 yaş üstü; çizelge çakışma / dinlenme / kopyalama; puantaj izinli gün / ileri tarih / aktarım değerleri / kilitli ay; belge
+> PDF / tür uyuşmazlığı / indirme / hatırlatma / silme; izinler ve kullanıcı bağı). Bordro, onay ve bildirim entegrasyon setleri
+> yeniden koşturuldu.
+>
+> **Bilinçli devir:** 88 (işgücü planlama) `Shift.source = PLANNER` ile öneri yazacak; 76 (personel mobil) puantajı `Timesheet.source
+> = MOBILE` ile; 78 stajyer hesapları. Yarım gün izin yok (tam gün); puantaj cihaz entegrasyonu (kart okuyucu) 62'de.
 
 > **Modül 51'den not (3 Kasım 2026 — Ahmet):** `Employee`, `Department` ve `PayrollAttendance` 51'de kuruldu; İK aynı personel kaydını
 > kullanır (ikinci personel tablosu açılmaz). Puantaj ekranı 51'in `PayrollAttendance` satırına kaynak `TIMESHEET` ile yazmalı; onaylı

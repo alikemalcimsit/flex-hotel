@@ -224,6 +224,14 @@ const PayrollRunPage = lazy(() => import('./pages/payroll/RunPage.jsx').then((m)
 const PayrollAttendancePage = lazy(() => import('./pages/payroll/AttendancePage.jsx').then((m) => ({ default: m.AttendancePage })));
 const ServiceChargePage = lazy(() => import('./pages/payroll/ServiceChargePage.jsx').then((m) => ({ default: m.ServiceChargePage })));
 const PayrollSettingsPage = lazy(() => import('./pages/payroll/PayrollSettingsPage.jsx').then((m) => ({ default: m.PayrollSettingsPage })));
+const HrLayout = lazy(() => import('./pages/hr/HrLayout.jsx').then((m) => ({ default: m.HrLayout })));
+const HrLeavesPage = lazy(() => import('./pages/hr/LeavesPage.jsx').then((m) => ({ default: m.LeavesPage })));
+const HrLeaveBalancesPage = lazy(() => import('./pages/hr/LeaveBalancesPage.jsx').then((m) => ({ default: m.LeaveBalancesPage })));
+const HrShiftsPage = lazy(() => import('./pages/hr/ShiftsPage.jsx').then((m) => ({ default: m.ShiftsPage })));
+const HrTimesheetsPage = lazy(() => import('./pages/hr/TimesheetsPage.jsx').then((m) => ({ default: m.TimesheetsPage })));
+const HrDocumentsPage = lazy(() => import('./pages/hr/DocumentsPage.jsx').then((m) => ({ default: m.DocumentsPage })));
+const HrSettingsPage = lazy(() => import('./pages/hr/HrSettingsPage.jsx').then((m) => ({ default: m.HrSettingsPage })));
+const MyHrPage = lazy(() => import('./pages/hr/MyHrPage.jsx').then((m) => ({ default: m.MyHrPage })));
 const WarehousesPage = lazy(() => import('./pages/stock/WarehousesPage.jsx').then((m) => ({ default: m.WarehousesPage })));
 const PromotionsLayout = lazy(() => import('./pages/promotions/PromotionsLayout.jsx').then((m) => ({ default: m.PromotionsLayout })));
 const PromotionListTab = lazy(() => import('./pages/promotions/PromotionListTab.jsx').then((m) => ({ default: m.PromotionListTab })));
@@ -1297,6 +1305,31 @@ export default function App() {
                 </RequirePermission>
               }
             />
+            {/* İK (modül 52): izinler, izin bakiyeleri, vardiya, puantaj, belgeler, ayarlar; personelin kendi sayfası ayrı. */}
+            <Route
+              path="ik/benim"
+              element={
+                <RequirePermission permission={PERMISSIONS.HR_SELF}>
+                  <MyHrPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="ik"
+              element={
+                <RequirePermission permission={PERMISSIONS.HR_VIEW}>
+                  <HrLayout />
+                </RequirePermission>
+              }
+            >
+              <Route index element={<Navigate to="/ik/izinler" replace />} />
+              <Route path="izinler" element={<HrLeavesPage />} />
+              <Route path="izin-bakiyeleri" element={<HrLeaveBalancesPage />} />
+              <Route path="vardiya" element={<HrShiftsPage />} />
+              <Route path="puantaj" element={<HrTimesheetsPage />} />
+              <Route path="belgeler" element={<HrDocumentsPage />} />
+              <Route path="ayarlar" element={<HrSettingsPage />} />
+            </Route>
             <Route
               path="muhasebe/fisler/:voucherId"
               element={

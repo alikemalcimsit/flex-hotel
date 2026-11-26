@@ -35,6 +35,7 @@ export const APPROVAL_TYPES = Object.freeze([
   'ACCOUNTING_PAYMENT',
   'INVOICE_CANCEL',
   'PAYROLL',
+  'LEAVE',
   'OTHER',
 ]);
 
@@ -54,6 +55,7 @@ export const APPROVAL_TYPE_LABELS = Object.freeze({
   ACCOUNTING_PAYMENT: 'Ödeme fişi (eşik üstü tutar)',
   INVOICE_CANCEL: 'Fatura iptali',
   PAYROLL: 'Bordro onayı',
+  LEAVE: 'İzin talebi',
   OTHER: 'Diğer',
 });
 
@@ -79,6 +81,7 @@ export const APPROVAL_SELF_DECISION_FORBIDDEN_TYPES = Object.freeze([
   'ACCOUNTING_PAYMENT',
   'INVOICE_CANCEL',
   'PAYROLL',
+  'LEAVE',
 ]);
 
 /**

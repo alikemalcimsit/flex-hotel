@@ -47,7 +47,7 @@ Giriş yaptığınızda sistem size bir **oturum anahtarı** (JWT) verir; panel 
 - Hesabınız pasife alınırsa açık oturumunuz da düşer: ilk istekte "Oturum açmanız gerekiyor" alırsınız ve giriş ekranına dönersiniz.
 - Aynı hesapla iki cihazdan girilebilir; her cihaz kendi yenileme anahtarını taşır.
 
-**Örnek: Elif'in ilk günü.** Yönetici, Elif için `elif@otelim.com` adresiyle **Ön büro** rolünde kullanıcı açtı ve geçici şifre verdi. Elif giriş yaptı; sol menüde Panel, Görevler, Kılavuz, Giriş / çıkış, Rezervasyonlar, Oda planı, Misafirler, Satış CRM, Folyolar, Kasa, Minibar & çamaşır, Kat hizmetleri (yalnızca görüntüleme), Kayıp eşya, Teknik servis, Gün kapanış, Etkinlikler, Mesajlar, İstekler, Anketler, Spa, Faturalar, Odalar ve Bildirimler (yalnızca Gönderim geçmişi) gördü. **Göremedi:** Raporlar (rapor izni yok), Onaylar (onay görüntüleme izni yok), Aktörler, Ayarlar, Bütçe, Acenteler, Promosyonlar, Kanallar, Stok, Satın alma, Mutfak, Restoran, Personel, Bordro, Ön muhasebe, Demirbaş. Panel'de gelir kartları yerine hızlı erişim kartları çıktı, çünkü Ön büro rolünde "Günlük durumu görüntüle (gelir)" izni yok. Elif ilk iş olarak kullanıcı menüsünden kendi şifresini değiştirmek istedi; bu ekran yok — yönetici sıfırlar. Not aldı.
+**Örnek: Elif'in ilk günü.** Yönetici, Elif için `elif@otelim.com` adresiyle **Ön büro** rolünde kullanıcı açtı ve geçici şifre verdi. Elif giriş yaptı; sol menüde Panel, Görevler, Kılavuz, Giriş / çıkış, Rezervasyonlar, Oda planı, Misafirler, Satış CRM, Folyolar, Kasa, Minibar & çamaşır, Kat hizmetleri (yalnızca görüntüleme), Kayıp eşya, Teknik servis, Gün kapanış, Etkinlikler, Mesajlar, İstekler, Anketler, Spa, Faturalar, Odalar, Bildirimler (yalnızca Gönderim geçmişi) ve İzinlerim gördü. **Göremedi:** Raporlar (rapor izni yok), Onaylar (onay görüntüleme izni yok), Aktörler, Ayarlar, Bütçe, Acenteler, Promosyonlar, Kanallar, Stok, Satın alma, Mutfak, Restoran, Personel, Bordro, İK, Ön muhasebe, Demirbaş. Panel'de gelir kartları yerine hızlı erişim kartları çıktı, çünkü Ön büro rolünde "Günlük durumu görüntüle (gelir)" izni yok. Elif ilk iş olarak kullanıcı menüsünden kendi şifresini değiştirmek istedi; bu ekran yok — yönetici sıfırlar. Not aldı.
 
 ### Demo hesabı
 
@@ -123,6 +123,7 @@ Aşağıdaki tablo Ayarlar → Roller & İzinler ekranındaki varsayılan işare
 | Fatura ve e-belge | Hepsi | Görüntüle, folyo faturası kes | — | Görüntüle, kes, serbest fatura / iptal iste | — |
 | Personel | Görüntüle | — | — | Görüntüle, yönet | — |
 | Bordro | — | — | — | Görüntüle, yönet, öde | — |
+| İK (`hr.view` / `hr.manage` / `hr.self`) | Hepsi (görüntüle, yönet, kendi sayfası) | Kendi sayfası (`hr.self`) | Kendi sayfası (`hr.self`) | Hepsi (görüntüle, yönet, kendi sayfası) | Kendi sayfası (`hr.self`) |
 | Misafir portalı | Hepsi | Görüntüle, onayla / davet | — | — | — |
 | Anket ve memnuniyet | Hepsi | Görüntüle, düşük puan takibi | — | — | — |
 | Spa ve spor salonu | Hepsi | Görüntüle, randevu al | — | Görüntüle | — |
@@ -191,6 +192,8 @@ Bu grup aslında "operasyon" grubudur; ön büro dışındaki departmanların ek
 | Faturalar | `/faturalar` | Faturalanacaklar, taslaklar, kesilenler; e-belge durumu. |
 | Personel | `/personel` | Personel kartları (ücret bilgisi yetkiye göre). |
 | Bordro | `/bordro` | Bordrolar, puantaj ve kalemler, servis payı, ayarlar. |
+| İK | `/ik` | İzinler, izin bakiyeleri, vardiya çizelgesi, günlük puantaj ve bordroya aktarım, özlük belgeleri, İK ayarları (`hr.view`). |
+| İzinlerim | `/ik/benim` | Personelin kendi sayfası: izin bakiyesi, izin talebi, izinleri, vardiyaları, bu ayın puantajı (`hr.self`; kullanıcı hesabı personel kartına bağlı olmalı). |
 | Ön muhasebe | `/muhasebe` | Cariler, kasa / banka, çek / senet, fişler. |
 | Genel muhasebe | `/genel-muhasebe` | Tek Düzen hesap planı, yevmiye fişleri (otomatik ve elle), mizan, hesap ekstresi, fiş kuralları, dönem kilidi. |
 | Toplanacak tepsiler | `/oda-servisi/tepsiler` | Oda servisi tepsilerinin toplanma listesi. |
@@ -287,7 +290,7 @@ Ekranlar kendiliğinden yenilenir. Bir rezervasyon açılınca oda planı, bir �
 
 ### Zil ve uyarılar
 
-Sağ üstteki **zil** size yönelik uyarıları toplar. Bir uyarı ya **bir kişiye** (ör. istediğiniz onayın sonucu, size atanan istek) ya da **bir izne** (ör. "onay bekleyen iş" onaylayabilen herkese; "personele bırakılan iş" o modülde yetkili herkese) gider. Uyarı türleri arasında şunlar vardır: yeni misafir mesajı, acil misafir isteği, geciken misafir isteği, personele bırakılan iş, misafire ulaşamayan bildirim, onay bekleyen iş, bekleme listesinde yer açıldı, bakiyesi kapanmadan çıkış, AI konuşmayı devretti, AI bütçesi doldu, kanal rezervasyonu dikkat istiyor, kanal senkronu başarısız, banket opsiyon / depozito, POS uzun vardiya / unutulmuş adisyon, fatura gönderilemedi, online check-in inceleme bekliyor, ankette düşük puan, spa, arıza, satış takibi, demirbaş garanti bitişi, stok minimum altı.
+Sağ üstteki **zil** size yönelik uyarıları toplar. Bir uyarı ya **bir kişiye** (ör. istediğiniz onayın sonucu, size atanan istek) ya da **bir izne** (ör. "onay bekleyen iş" onaylayabilen herkese; "personele bırakılan iş" o modülde yetkili herkese) gider. Uyarı türleri arasında şunlar vardır: yeni misafir mesajı, acil misafir isteği, geciken misafir isteği, personele bırakılan iş, misafire ulaşamayan bildirim, onay bekleyen iş, bekleme listesinde yer açıldı, bakiyesi kapanmadan çıkış, AI konuşmayı devretti, AI bütçesi doldu, kanal rezervasyonu dikkat istiyor, kanal senkronu başarısız, banket opsiyon / depozito, POS uzun vardiya / unutulmuş adisyon, fatura gönderilemedi, online check-in inceleme bekliyor, ankette düşük puan, spa, arıza, satış takibi, demirbaş garanti bitişi, stok minimum altı, İK (izin talebi / kararı, süresi dolacak özlük belgesi).
 
 Uyarıya tıkladığınızda ilgili ekrana gidersiniz (ör. göreve, onaya, konuşmaya). Zil tercihlerinden istemediğiniz türleri susturabilirsiniz. Uyarılar 30 gün saklanır; zil bir iş listesi değildir — işin kendisi ilgili ekranda durur. Aynı konu için tekrar tekrar uyarı üretilmez (aynı onay, aynı görev tek uyarıda birleşir).
 
@@ -436,6 +439,7 @@ Yeni bir oteli sisteme almak için aşağıdaki kontrol listesini sırayla geçi
 | Genel muhasebe | Genel muhasebe → Hesap planı, Kurallar | Tek Düzen hesap planı ilk açılışta kendiliğinden yüklenir; gözden geçirilecekler: gelir alt hesapları (600.01–600.09), açılış karşı hesabı (varsayılan 500), carisiz giriş / çıkış karşı hesapları, KDV oran hesapları, bordro departman hesapları | Varsayılan kurallarla çalışır; yalnız kural hesabı pasif / eksikse fiş "Ön muhasebe" görevine düşer |
 | Fatura | Faturalar → ayarlar | Satıcı bilgileri, seriler, faturalama başlangıcı, vergi kodları, entegratör | Fatura kesilemez; e-belge gitmez |
 | Bordro | Bordro → Ayarlar | Yasal parametreler (teyit), kalem türleri, departmanlar, işyeri | Bordro hesaplanamaz |
+| İK | İK → Ayarlar; Personel kartı → Kullanıcı hesabı | Hafta tatili günü, günlük / haftalık norm, resmî tatiller (sabit tatilleri ekle + dinî bayramlar elle), izin onayı, belge hatırlatma günü; her personel kartına kullanıcı hesabı bağı ve doğum tarihi | Varsayılanlarla çalışır (Pazar, 7,5 / 45 saat, sabit tatiller); dinî bayramlar izinden düşmez; bağı olmayan personel İzinlerim'i kullanamaz |
 | Misafir portalı | Portal ayarları | Davet günü, açılış günü, belge saklama süresi, metinler | Online check-in daveti gitmez |
 | Anket | Anketler → ayarlar | Sorular, gönderim günü / saati, yorum bağlantıları | Anket daveti gitmez |
 

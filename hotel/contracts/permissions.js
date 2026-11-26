@@ -209,6 +209,13 @@ export const PERMISSIONS = Object.freeze({
   PAYROLL_PAY: 'payroll.pay',
   /** Yasal parametreler (teyit dahil), kalem türleri, departmanlar, işyeri ayarları. */
   PAYROLL_SETUP: 'payroll.setup',
+
+  /** İK (modül 52): bütün personelin izinleri, bakiyeleri, vardiya çizelgesi, günlük puantaj ve özlük belgeleri. */
+  HR_VIEW: 'hr.view',
+  /** İzin onayı / iptali ve personel adına talep, bakiye düzeltmesi, çizelge ve puantaj yazmak, bordroya aktarmak, belge yüklemek, İK ayarları. */
+  HR_MANAGE: 'hr.manage',
+  /** Kendi izin talebini girmek; kendi izinlerini, bakiyesini ve vardiyalarını görmek (kullanıcı hesabı personel kartına bağlıysa). */
+  HR_SELF: 'hr.self',
   /** Online check-in listesi ve ayrıntısı (belge fotoğrafları dahil), misafir portalı bağlantıları (modül 53). */
   GUEST_PORTAL_VIEW: 'guest_portal.view',
   /** Online check-in onayı / düzeltme isteği; portal bağlantısı ver / iptal et, daveti gönder. */
@@ -379,6 +386,9 @@ export const PERMISSION_LABELS = Object.freeze({
   [PERMISSIONS.PAYROLL_MANAGE]: 'Ücret, puantaj, ek ödeme / kesinti, avans, icra, teşvik, servis payı; bordro hesapla ve onaya gönder',
   [PERMISSIONS.PAYROLL_PAY]: 'Maaş ve avans öde (kasa / banka)',
   [PERMISSIONS.PAYROLL_SETUP]: 'Bordro ayarları: yasal parametreler ve teyidi, kalem türleri, departmanlar, işyeri bilgileri',
+  [PERMISSIONS.HR_VIEW]: 'İzinler ve bakiyeler, vardiya çizelgesi, günlük puantaj ve özlük belgelerini görüntüle',
+  [PERMISSIONS.HR_MANAGE]: 'İzin onayla / iptal et, çizelge ve puantaj yaz, bordroya aktar, belge yükle, İK ayarları',
+  [PERMISSIONS.HR_SELF]: 'Kendi izin talebini gir; kendi izinlerini, bakiyesini ve vardiyalarını gör',
   [PERMISSIONS.GUEST_PORTAL_VIEW]: 'Online check-in\'leri ve belge fotoğraflarını gör, misafir portalı bağlantısını gör',
   [PERMISSIONS.GUEST_PORTAL_MANAGE]: 'Online check-in onayla / düzeltme iste; portal bağlantısı ver, iptal et, davet gönder',
   [PERMISSIONS.GUEST_PORTAL_SETUP]: 'Misafir portalı ayarları: davet ve açılış günleri, belge saklama süresi, metinler',
@@ -500,6 +510,7 @@ export const PERMISSION_GROUPS = Object.freeze([
   { key: 'invoices', label: 'Fatura ve e-belge', permissions: [PERMISSIONS.INVOICES_VIEW, PERMISSIONS.INVOICES_ISSUE, PERMISSIONS.INVOICES_MANAGE, PERMISSIONS.INVOICES_SETUP] },
   { key: 'employees', label: 'Personel', permissions: [PERMISSIONS.EMPLOYEES_VIEW, PERMISSIONS.EMPLOYEES_MANAGE] },
   { key: 'payroll', label: 'Bordro', permissions: [PERMISSIONS.PAYROLL_VIEW, PERMISSIONS.PAYROLL_MANAGE, PERMISSIONS.PAYROLL_PAY, PERMISSIONS.PAYROLL_SETUP] },
+  { key: 'hr', label: 'İK', permissions: [PERMISSIONS.HR_VIEW, PERMISSIONS.HR_MANAGE, PERMISSIONS.HR_SELF] },
   { key: 'guest_portal', label: 'Misafir portalı ve online check-in', permissions: [PERMISSIONS.GUEST_PORTAL_VIEW, PERMISSIONS.GUEST_PORTAL_MANAGE, PERMISSIONS.GUEST_PORTAL_SETUP] },
   { key: 'surveys', label: 'Anket ve memnuniyet', permissions: [PERMISSIONS.SURVEYS_VIEW, PERMISSIONS.SURVEYS_FOLLOW_UP, PERMISSIONS.SURVEYS_SETUP] },
   { key: 'spa', label: 'Spa ve spor salonu', permissions: [PERMISSIONS.SPA_VIEW, PERMISSIONS.SPA_BOOK, PERMISSIONS.SPA_PAYMENT, PERMISSIONS.SPA_SUPERVISE, PERMISSIONS.SPA_SETUP] },
@@ -658,6 +669,10 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.INVOICES_SETUP,
     // Personel listesini müdür görür; ücret ve bordro muhasebenin (bordronun onayı başka bir yetkilinin).
     PERMISSIONS.EMPLOYEES_VIEW,
+    // İK (modül 52): müdür izin onaylar, çizelge ve puantajı yönetir; kendi izni de olabilir.
+    PERMISSIONS.HR_VIEW,
+    PERMISSIONS.HR_MANAGE,
+    PERMISSIONS.HR_SELF,
     // Misafir portalı ve online check-in (modül 53): ayarlar dahil.
     PERMISSIONS.GUEST_PORTAL_VIEW,
     PERMISSIONS.GUEST_PORTAL_MANAGE,
@@ -674,6 +689,8 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.SPA_SETUP,
   ]),
   FRONT_DESK: Object.freeze([
+    // İK (modül 52): kendi izin talebi, bakiyesi ve vardiyası.
+    PERMISSIONS.HR_SELF,
     PERMISSIONS.ROOMS_VIEW,
     PERMISSIONS.ROOMS_OPERATE,
     PERMISSIONS.RESERVATIONS_VIEW,
@@ -731,6 +748,8 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.GUESTS_MERGE,
   ]),
   HOUSEKEEPING: Object.freeze([
+    // İK (modül 52): kendi izin talebi, bakiyesi ve vardiyası.
+    PERMISSIONS.HR_SELF,
     PERMISSIONS.ROOMS_VIEW,
     PERMISSIONS.ROOMS_OPERATE,
     // Gidecekler listesi: hangi oda bugün boşalacak (temizlik sırası).
@@ -818,6 +837,10 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.PAYROLL_VIEW,
     PERMISSIONS.PAYROLL_MANAGE,
     PERMISSIONS.PAYROLL_PAY,
+    // İK (modül 52): küçük otelde izin, puantaj ve özlük muhasebenin işi; bordroya aktarımı da o yapar.
+    PERMISSIONS.HR_VIEW,
+    PERMISSIONS.HR_MANAGE,
+    PERMISSIONS.HR_SELF,
     // Demirbaş sicili ve amortisman muhasebenin işi (sabit kıymet defteri); sayımı da yürütür.
     PERMISSIONS.ASSETS_VIEW,
     PERMISSIONS.ASSETS_COUNT,
@@ -825,6 +848,8 @@ export const DEFAULT_ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.ASSETS_FINANCE,
   ]),
   FNB: Object.freeze([
+    // İK (modül 52): kendi izin talebi, bakiyesi ve vardiyası.
+    PERMISSIONS.HR_SELF,
     PERMISSIONS.ROOMS_VIEW,
     // Mutfak ve servis etkinlik programını, kişi sayısını ve menü kalemlerini görür.
     PERMISSIONS.BANQUET_VIEW,
