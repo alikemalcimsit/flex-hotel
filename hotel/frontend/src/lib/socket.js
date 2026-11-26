@@ -1,5 +1,5 @@
 import { io } from 'socket.io-client';
-import { API_URL } from './api.js';
+import { API_URL, ensureFreshAccessToken } from './api.js';
 import { useAuthStore } from '../store/auth.js';
 
 /**
@@ -22,7 +22,8 @@ import { useAuthStore } from '../store/auth.js';
  */
 const apiOrigin = new URL(API_URL, globalThis.location?.origin ?? 'http://localhost').origin;
 
-const currentActor = () => useAuthStore.getState().user?.email ?? null;
+/** Soketin kimi ve hangi oteli temsil ettiği: biri değişince (çıkış, başka kullanıcı, otel geçişi) yeniden bağlanılır. */
+const sessionKey = (state) => (state.user?.id && state.hotel?.id ? `${state.user.id}:${state.hotel.id}` : state.user?.id ?? null);
 
 export const socket = io(apiOrigin, {
   autoConnect: true,
@@ -30,9 +31,15 @@ export const socket = io(apiOrigin, {
   reconnectionDelay: 1000,
   reconnectionDelayMax: 10_000,
   randomizationFactor: 0.5,
-  // Sunucu kişiyi bununla tanır ve zili yalnızca ona yollar (bkz. backend
-  // `lib/realtime.js`). Her bağlantı denemesinde güncel kimlik okunur.
-  auth: (callback) => callback({ actor: currentActor() }),
+  // Sunucu kişiyi ve oteli erişim token'ından tanır (modül 63; eskiden istemcinin
+  // söylediği e-postaydı): odalar, zil ve kanallar yalnız o otelin. Her bağlantı
+  // denemesinde taze token gider — süresi dolmak üzereyse önce yenilenir.
+  auth: (callback) => {
+    ensureFreshAccessToken().then(
+      (token) => callback({ token }),
+      () => callback({ token: null }),
+    );
+  },
 });
 
 /** Backend'in canlı değişiklik kanalları (bkz. backend `lib/realtime.js`). */
@@ -150,12 +157,12 @@ socket.on('ready', (payload) => {
 /** @returns {number} */
 export const connectSpreadMs = () => readySpreadMs;
 
-/** Oturum açan kişi değişince zil odaları yeni kişiye göre kurulsun. */
-let lastActor = currentActor();
+/** Oturum açan kişi ya da açık otel değişince odalar yeniden kurulsun (otel geçişinde eski otelin haberi gelmesin). */
+let lastSession = sessionKey(useAuthStore.getState());
 useAuthStore.subscribe((state) => {
-  const actor = state.user?.email ?? null;
-  if (actor === lastActor) return;
-  lastActor = actor;
+  const key = sessionKey(state);
+  if (key === lastSession) return;
+  lastSession = key;
   if (socket.connected || socket.active) {
     socket.disconnect();
     socket.connect();

@@ -1,7 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../../db.js';
-import { UnauthorizedError } from '../../lib/errors.js';
+import { ForbiddenError, UnauthorizedError } from '../../lib/errors.js';
+import { roleForHotel } from '../../lib/memberships.js';
 import { writeWithEvents } from '../../lib/write.js';
 
 /**
@@ -47,15 +48,90 @@ export async function authenticate(email, password) {
 }
 
 /**
- * Oturum için hâlâ geçerli kullanıcı (`/me`). Pasife alınmış/silinmişse 401.
+ * Oturum için hâlâ geçerli kullanıcı (`/me`), oturumun otelindeki rolüyle. Pasife alınmış / silinmişse ya da o otele
+ * erişimi kalmadıysa 401.
  * @param {string} hotelId
  * @param {string} userId
  * @returns {Promise<import('@prisma/client').User>}
  */
 export async function findSessionUser(hotelId, userId) {
-  const user = await prisma.user.findFirst({ where: { id: userId, hotelId, isActive: true } });
+  const user = await prisma.user.findFirst({ where: { id: userId, isActive: true } });
   if (!user) throw new UnauthorizedError();
-  return user;
+  const role = await roleForHotel(prisma, user, hotelId);
+  if (!role) throw new UnauthorizedError();
+  return { ...user, role };
+}
+
+/**
+ * Oturumun oteli (üst bar, panelin önbellek ayrımı).
+ * @param {string} hotelId
+ */
+export async function sessionHotel(hotelId) {
+  const hotel = await prisma.hotel.findFirst({ where: { id: hotelId }, select: { id: true, name: true, code: true, groupId: true, group: { select: { name: true } } } });
+  if (!hotel) throw new UnauthorizedError();
+  return { id: hotel.id, name: hotel.name, code: hotel.code, groupId: hotel.groupId, groupName: hotel.group?.name ?? null };
+}
+
+/**
+ * Kişinin erişebildiği otel sayısı (ana otel + erişimler). 1'den fazlaysa panel otel seçiciyi gösterir.
+ * @param {string} userId
+ */
+export async function countUserHotels(userId) {
+  return 1 + (await prisma.userHotel.count({ where: { userId, hotel: { deletedAt: null } } }));
+}
+
+const HOTEL_CHOICE_SELECT = Object.freeze({ id: true, name: true, code: true, groupId: true, group: { select: { name: true } } });
+
+/**
+ * Otel seçicinin listesi: ana otel önce, sonra erişimler ada göre (sayfa sınırlı, aramalı).
+ * @param {string} userId
+ * @param {string} currentHotelId
+ * @param {{ search?: string, limit: number }} query
+ */
+export async function listUserHotels(userId, currentHotelId, { search, limit }) {
+  const user = await prisma.user.findFirst({ where: { id: userId, isActive: true }, select: { hotelId: true, role: true } });
+  if (!user) throw new UnauthorizedError();
+  const filter = search ? { OR: [{ name: { contains: search, mode: 'insensitive' } }, { code: { contains: search, mode: 'insensitive' } }] } : {};
+  const [home, memberships] = await Promise.all([
+    prisma.hotel.findFirst({ where: { id: user.hotelId, ...filter }, select: HOTEL_CHOICE_SELECT }),
+    prisma.userHotel.findMany({
+      where: { userId, hotel: { deletedAt: null, ...filter } },
+      select: { role: true, hotel: { select: HOTEL_CHOICE_SELECT } },
+      orderBy: [{ hotel: { name: 'asc' } }, { hotelId: 'asc' }],
+      take: limit + 1,
+    }),
+  ]);
+  const row = (hotel, role, isHome) => ({ id: hotel.id, name: hotel.name, code: hotel.code, groupId: hotel.groupId, groupName: hotel.group?.name ?? null, role, isHome, isCurrent: hotel.id === currentHotelId });
+  return {
+    items: [...(home ? [row(home, user.role, true)] : []), ...memberships.slice(0, limit).map((membership) => row(membership.hotel, membership.role, false))],
+    hasMore: memberships.length > limit,
+  };
+}
+
+/**
+ * Başka otele geçiş (modül 63). Yenileme token'ı kişinin kendisinin ve geçerli olmalı (401); hedef otele erişimi
+ * olmalı (403 — otel yoksa da aynı cevap: var olup olmadığı sızmaz). Eski token iptal edilir, hedef otel için yenisi
+ * verilir.
+ *
+ * @param {string} userId
+ * @param {{ hotelId: string, refreshToken: string }} input
+ */
+export async function switchHotel(userId, { hotelId, refreshToken }) {
+  return writeWithEvents(async (tx) => {
+    const user = await tx.user.findFirst({ where: { id: userId, isActive: true } });
+    if (!user) throw new UnauthorizedError('Hesap pasif');
+    const existing = await tx.refreshToken.findFirst({ where: { token: refreshToken, userId } });
+    if (!existing || existing.expiresAt <= new Date()) throw new UnauthorizedError('Oturum süresi doldu, tekrar giriş yapın');
+    const hotel = await tx.hotel.findFirst({ where: { id: hotelId }, select: { id: true } });
+    const role = hotel ? await roleForHotel(tx, user, hotelId) : null;
+    if (!role) throw new ForbiddenError('Bu otele erişiminiz yok');
+
+    await tx.refreshToken.update({ where: { id: existing.id }, data: { deletedAt: new Date() } });
+    const token = newRefreshTokenValue();
+    const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_MS);
+    await tx.refreshToken.create({ data: { hotelId, userId, token, expiresAt } });
+    return { user, hotelId, role, token, expiresAt };
+  });
 }
 
 /**
@@ -77,8 +153,11 @@ export async function issueRefreshToken(hotelId, userId) {
  * iptal edilmiş token → 401.
  *
  * Soft-delete filtresi sayesinde iptal edilmiş token `findFirst`'te görünmez.
+ *
+ * Oturum token'ın otelinde sürer; kişinin o otele erişimi kaldırıldıysa ana oteline döner (modül 63: kişi atılmaz,
+ * yalnız o otelden çıkar).
  * @param {string} oldToken
- * @returns {Promise<{ user: import('@prisma/client').User, token: string, expiresAt: Date }>}
+ * @returns {Promise<{ user: import('@prisma/client').User, hotelId: string, role: string, token: string, expiresAt: Date }>}
  */
 export async function rotateRefreshToken(oldToken) {
   return writeWithEvents(async (tx) => {
@@ -90,11 +169,14 @@ export async function rotateRefreshToken(oldToken) {
 
     await tx.refreshToken.update({ where: { id: existing.id }, data: { deletedAt: new Date() } });
 
+    const sessionRole = await roleForHotel(tx, existing.user, existing.hotelId);
+    const hotelId = sessionRole ? existing.hotelId : existing.user.hotelId;
+    const role = sessionRole ?? existing.user.role;
     const token = newRefreshTokenValue();
     const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_MS);
-    await tx.refreshToken.create({ data: { hotelId: existing.hotelId, userId: existing.userId, token, expiresAt } });
+    await tx.refreshToken.create({ data: { hotelId, userId: existing.userId, token, expiresAt } });
 
-    return { user: existing.user, token, expiresAt };
+    return { user: existing.user, hotelId, role, token, expiresAt };
   });
 }
 

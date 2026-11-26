@@ -12,7 +12,7 @@ import { encodeCursor, newerThan, olderThan, parseCursor } from '../../lib/curso
 import { ConflictError, ForbiddenError, NotFoundError } from '../../lib/errors.js';
 import { LIVE_SCOPES, liveVersion } from '../../lib/live-version.js';
 import { createReadCache } from '../../lib/read-cache.js';
-import { currentStaff, currentStaffCached } from '../../lib/staff.js';
+import { currentStaff, currentStaffCached, peopleInHotelWhere } from '../../lib/staff.js';
 import { writeWithEvents } from '../../lib/write.js';
 import { taskLinks } from '../actors/rules.js';
 
@@ -94,7 +94,7 @@ async function peopleFor(hotelId, rows) {
   const emails = [...new Set(rows.map((row) => row.resolvedBy).filter((value) => value?.includes('@')).map((value) => value.toLowerCase()))];
   if (ids.length === 0 && emails.length === 0) return { byId: new Map(), byEmail: new Map() };
   const users = await prisma.user.findMany({
-    where: { hotelId, OR: [...(ids.length ? [{ id: { in: ids } }] : []), ...(emails.length ? [{ email: { in: emails } }] : [])] },
+    where: { AND: [peopleInHotelWhere(hotelId), { OR: [...(ids.length ? [{ id: { in: ids } }] : []), ...(emails.length ? [{ email: { in: emails } }] : [])] }] },
     select: { id: true, name: true, email: true },
   });
   return {

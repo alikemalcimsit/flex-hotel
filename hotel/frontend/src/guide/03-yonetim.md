@@ -234,6 +234,48 @@ Açarken de gerekçe isteğe bağlıdır. Kanal aktörü açılınca kanallarda 
 - Arka plan sırası süreç içidir; birden fazla sunucu çalışıyorsa panel isteğin düştüğü sunucununkini gösterir.
 - Ajan başına ayrı bütçe yoktur; bütçe otel geneli USD'dir (Ayarlar → AI asistanı).
 
+## Zincir (çok otelli yönetim)
+
+**Nerede:** Yönetim → **Zincir**, `/zincir`. Dört sekme: **Pano** (`/zincir/pano`), **Rapor** (`/zincir/rapor`), **Oteller** (`/zincir/oteller`) ve **Kullanıcılar** (`/zincir/kullanicilar`). Müdür panoyu, raporu ve otel listesini görür; zincir kurmak, otel açmak / eklemek ve kişilere otel erişimi vermek yöneticinindir. Birden çok otele erişimi olan kişide üst barda **otel seçici** çıkar.
+
+**Ne yapar:** Bir otel grubunu tek panelden yönetir: zincirin bütün otellerinin bugünkü durumu ve seçilen dönemin karşılaştırmalı rakamları, oteller arası tek tıkla geçiş, yeni otelin mevcut otelin ayarlarıyla birkaç dakikada açılması ve kişilerin hangi otelde hangi rolle çalıştığının merkezden yönetimi.
+
+### Kavramlar
+
+- **Zincir:** birden çok otel. Bir otel en fazla bir zincirdedir; zincirde en fazla 200 otel olur.
+- **Ana otel:** kişinin kaydının bağlı olduğu otel. Giriş her zaman ana otele açılır; oradaki rolü Ayarlar → Kullanıcılar'dan değişir.
+- **Otel erişimi:** kişiye ana oteli dışında bir otelde, **o otele özgü bir rolle** verilen erişim. Bodrum'un genel müdürü Ankara'da müdür, İzmir'de resepsiyon olabilir. Erişim kişiyi o otelin personel listesine (atama seçicileri, bordro) eklemez; ama o otele geçtiğinde zil, onaylar ve "bana atanan" o otelde ona göre çalışır.
+- **Otel seçici:** üst bardaki otel adı. Basınca erişiminiz olan oteller listelenir (8'den fazlaysa arama kutusu çıkar); seçince o otelin kimliği ve rolüyle yeni oturum açılır, ana sayfaya dönülür. Açık sayfanın verisi diğer otele taşınmaz; canlı bildirimler de yeni otele göre kurulur.
+
+### Pano ve rapor
+
+- **Pano:** her otelin bu geceki doluluğu (satılan / satılabilir), gelecek / gidecek / konaklayan, bu gecenin oda geliri, ADR ve RevPAR. Üstte para birimine göre zincir toplamı. Doluluk, otelin tahmin eşiklerinin altındaysa kırmızı, üstündeyse yeşil. İki dakikada bir kendiliğinden tazelenir; satırdaki **Otele geç** ile o otelin kendi ekranlarına geçersiniz.
+- **Rapor:** hazır aralıklar (bu ay, geçen ay, son 30 gün, yılbaşından bugüne…) ya da iki tarih. Oteller yan yana: doluluk, satılan / satılabilir, oda geliri, toplam gelir, ADR, RevPAR; geçen yılın aynı dönemine (haftanın aynı günü) göre değişim. **Excel'e aktar** tabloyu ve toplamları indirir.
+- Rakamlar her otelin kendi günlük durum ve gelir raporu ekranlarıyla **aynı tanımdır** (geçmiş günler folyoya işlenen, bugün ve sonrası eldeki rezervasyon; gelir vergiler hariç). Para birimi farklı oteller toplanmaz, her para birimi ayrı toplam olur. Toplam oranlar otellerin ortalaması değil, toplamlardan hesaplanır (büyük otel ağırlığıyla).
+- Panoda ve raporda yalnız **erişiminiz olan ve oradaki rolünüz zinciri görmeye izin veren** oteller vardır. Görmediğiniz otel sayısı yazılır, adı ve rakamı gösterilmez. Bir otel hesaplanamazsa (zaman aşımı) satırında belirtilir, toplamlara katılmaz.
+
+### Oteller ve yeni otel sihirbazı
+
+- **Zincir kur:** otel zincirde değilse Zincir sayfası zincir kurma formunu gösterir (yalnız o otelin yöneticisine). Açık otel zincirin ilk oteli olur.
+- **Yeni otel** (sihirbaz, üç adım): (1) otel adı, kodu (ör. `ANK-01`; büyük harf, rakam, tire), para birimi, saat dilimi, iletişim; (2) ayarları kopyalanacak otel ve gruplar — **Genel parametreler**, **Oda tipleri**, **Vergiler**, **Sezonlar**, **Rol ve izin matrisi**; (3) özet. Oteli açan kişi yeni otelin yöneticisi olur; son ekrandaki **Yeni otele geç** ile odaları ve kullanıcıları tanımlamaya geçer.
+- Para birimi farklıysa **oda tipleri kopyalanamaz** (taban fiyatlar başka birimde) ve genel parametrelerdeki tutarlar (büyük ödeme eşiği, sabit erken giriş / geç çıkış ücreti) gelmez; yüzdeli ücretler gelir.
+- **Hiçbir zaman kopyalanmayanlar:** odalar, kullanıcılar, misafir / rezervasyon / para hareketi, fatura ve KBS bilgileri, kanal ve entegratör şifreleri — her otelin kendine ait olmak zorunda.
+- **Var olan oteli ekle:** yöneticisi olduğunuz ve bir zincirde olmayan bir oteli bu zincire katar. **Zincirden çıkar** oteli panodan, rapordan ve listeden çıkarır; otelin verisi ve kişilerin erişimleri kalır. Zincirde otel kalmazsa zincir kapanır.
+
+### Kullanıcılar (merkezi yönetim)
+
+- Liste zincirin bütün otellerinin kişileridir (ad ya da e-postayla ara, otelle süz). Her satırda ana otel ve rol, zincirdeki otel erişimleri.
+- **Otel erişimleri:** kişinin zincirdeki her otelde durumu (ana otel / erişim ve rolü / yok). Yetkiniz olan otelde rol seçip **Erişim ver** ya da **Değiştir**, **Kaldır** ile geri alın. Değişiklik kişinin açık oturumunda hemen geçerli olur; erişimi kaldırılan kişi bir sonraki işleminde o otelden çıkarılır ve ana oteline döner ("… erişiminiz kaldırıldı; ana otelinize döndünüz" uyarısıyla).
+- **Yeni kullanıcı:** ana oteli seçilir (orada kullanıcı yönetme yetkiniz olan oteller), ad, e-posta, rol ve geçici şifre. Diğer otellere erişim sonra verilir.
+- Kurallar (hepsi sunucuda da denetlenir): bir otelde erişim vermek için **o otelde** kullanıcı yönetme yetkiniz olmalı; **yönetici** rolünü yalnız o otelin yöneticisi verir ya da kaldırır; **kendi erişiminizi** değiştiremezsiniz (başka bir yöneticiden isteyin); ana oteldeki rol buradan değil kullanıcılar ekranından değişir.
+
+### Dikkat
+
+- Zincir görme izni her otelin **kendi rol matrisindendir**: Ankara'da müdür olmanız Bodrum'un rakamlarını açmaz; Bodrum'da da zinciri görme izni olan bir rolünüz olmalı.
+- Bir otelin rakamları zincire katılınca o zincirde zinciri görme yetkisi olanlara görünür: oteli zincire eklemeyi yalnız o otelin yöneticisi yapabilir.
+- Sihirbazla açılan otelin ilk yöneticisi erişimle gelir. Bir kişiyi ana otelinde **pasife almak** bütün erişimlerini de kapatır: kişi başka bir otelin tek yöneticisiyse pasife alma reddedilir — önce o otele başka bir yönetici atayın. Ana oteldeki "son yönetici" kuralı da erişimle gelen yöneticileri sayar.
+- Her işlem (zincir kurma, otel açma / ekleme / çıkarma, erişim verme / değiştirme / kaldırma) ilgili otelin denetim kaydına yazılır.
+
 ## Entegrasyon (açık API ve webhook)
 
 **Nerede:** Yönetim → **Entegrasyon**, `/entegrasyonlar`. İki sekme: **Uygulamalar** (`/entegrasyonlar/uygulamalar`) ve **Webhook teslimatları** (`/entegrasyonlar/teslimatlar`). Sağ üstteki **API dokümanı** düğmesi geliştiriciler için Swagger sayfasını (`/api-docs/`) yeni sekmede açar. Müdür ekranları görür; uygulama açmak, anahtar oluşturmak, abonelik kurmak ve yeniden göndermek yöneticinindir (otelin verisini dışarı açmak yönetim kararıdır).
@@ -466,6 +508,8 @@ Kapanışlar sayfalı listelenir: gün, kapatan, kapanış anı, özet gösterge
 | Aktivite → Canlı akış, Olaylar | `/aktivite/akis`, `/aktivite/olaylar` | Aktivite akışını görüntüle | — (salt okunur) |
 | Aktivite → Denetim kaydı | `/aktivite/denetim` | Denetim kaydını görüntüle | — |
 | Excel'den yükle | `/ice-aktar` | Misafir yönet (misafir) / Ayarları yönet (fiyat planı) | Aynı |
+| Zincir → Pano, Rapor, Oteller | `/zincir/pano`, `/zincir/rapor`, `/zincir/oteller` | Zinciri görüntüle (her otelde ayrıca) | Zincir kur, otel aç / ekle / çıkar: zinciri yönet (+ o otelde yönetici) |
+| Zincir → Kullanıcılar | `/zincir/kullanicilar` | Zincir kullanıcılarını yönet | Aynı + hedef otelde kullanıcıları yönet (yönetici rolü için o otelde yönetici) |
 | Aktörler | `/aktorler` | Aktör panelini görüntüle | Aktörleri aç / kapat (varsayılan yalnızca Yönetici) |
 | Ayarlar (tüm sekmeler) | `/ayarlar/...` | Menü yalnızca Yönetici; API: ayarları görüntüle | Ayarları yönet; Kullanıcılar: kullanıcıları yönet; Roller: rolleri yönet |
 | Raporlar → Gelir, Tasarımcı, Kayıtlı | `/raporlar/gelir`, `/raporlar/tasarim`, `/raporlar/kayitli` | Gelir raporlarını görüntüle (+ kaynağın kendi izni) | Kaydet / paylaş: rapor asistanına soru sor |

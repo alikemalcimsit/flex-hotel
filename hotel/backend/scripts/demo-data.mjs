@@ -76,14 +76,14 @@ const { resetIntegrationDemo, seedIntegrationDemo } = await import('./demo-integ
 
 const HISTORY_DAYS = 400;
 const FUTURE_DAYS = 75;
-const CODE_PREFIX = 'DMO-';
 const ACTOR = 'demo@hotel.local';
 const CHUNK = 2000;
 const GUEST_COUNT = 1000;
 
-const hotel = await prisma.hotel.findFirst({ where: { code: 'DEMO', deletedAt: null } });
+const { CODE_PREFIX, DEMO_HOTEL_CODE, SEED_OFFSET } = await import('./demo-config.mjs');
+const hotel = await prisma.hotel.findFirst({ where: { code: DEMO_HOTEL_CODE, deletedAt: null } });
 if (!hotel) {
-  console.error('DEMO oteli yok; önce `npm run seed`.');
+  console.error(`${DEMO_HOTEL_CODE} oteli yok; önce "npm run seed" (zincir demosu için "demo-chain.mjs").`);
   process.exit(1);
 }
 const hotelId = hotel.id;
@@ -218,7 +218,7 @@ if (process.argv.includes('--reset')) {
 }
 
 // Sabit tohumlu rastgele sayı üreteci (mulberry32).
-let state = 20261005;
+let state = 20261005 + SEED_OFFSET;
 const rand = () => {
   state = (state + 0x6d2b79f5) | 0;
   let t = Math.imul(state ^ (state >>> 15), 1 | state);

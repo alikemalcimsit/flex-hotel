@@ -4,6 +4,7 @@ import { actorKind, AUDIT_ENTITY_LABELS, redactPayload } from '@hotelos/hotel-co
 import { prisma } from '../../db.js';
 import { encodeCursor, olderThan, parseCursor } from '../../lib/cursor.js';
 import { NotFoundError } from '../../lib/errors.js';
+import { peopleInHotelWhere } from '../../lib/staff.js';
 import { buildChain, changedValues, groupEntityChains } from './rules.js';
 
 /**
@@ -51,7 +52,7 @@ function rangeWhere(field, { from, to }) {
 async function userNames(hotelId, actors) {
   const emails = [...new Set(actors.filter((actor) => actorKind(actor) === 'USER'))];
   if (emails.length === 0) return new Map();
-  const users = await prisma.user.findMany({ where: { hotelId, email: { in: emails } }, select: { email: true, name: true } });
+  const users = await prisma.user.findMany({ where: { email: { in: emails }, ...peopleInHotelWhere(hotelId) }, select: { email: true, name: true } });
   return new Map(users.map((user) => [user.email, user.name]));
 }
 

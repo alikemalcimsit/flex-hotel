@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { ensureSurvey } from '../src/modules/surveys/design.js';
+import { CODE_PREFIX } from './demo-config.mjs';
 
 /**
  * Demo anket ve memnuniyet (modül 55; `demo-data.mjs` çağırır).
@@ -11,7 +12,6 @@ import { ensureSurvey } from '../src/modules/surveys/design.js';
  * özeti. Gerçek kişiye ait veri yok.
  */
 
-const CODE_PREFIX = 'DMO-';
 const DAY_MS = 86_400_000;
 const HOUR_MS = 3_600_000;
 const STAFF = Object.freeze(['onburo@hotel.local', 'admin@hotel.local']);

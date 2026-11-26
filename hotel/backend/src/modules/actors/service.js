@@ -13,6 +13,7 @@ import { writeWithEvents } from '../../lib/write.js';
 import { getAgentUsage } from '../concierge/llm.js';
 import { agentModel, aiKeyConfigured, getAiSettingsCached } from '../concierge/settings.js';
 import { actorImpact, buildActorRows } from './rules.js';
+import { peopleInHotelWhere } from '../../lib/staff.js';
 
 /**
  * Aktör yönetim paneli (modül 12).
@@ -125,7 +126,7 @@ async function problemCounts(hotelId, since, actorName = null) {
 async function peopleByEmail(hotelId, emails) {
   const wanted = [...new Set(emails.filter((email) => email && email.includes('@')).map((email) => email.toLowerCase()))];
   if (wanted.length === 0) return new Map();
-  const users = await prisma.user.findMany({ where: { hotelId, email: { in: wanted } }, select: { email: true, name: true } });
+  const users = await prisma.user.findMany({ where: { email: { in: wanted }, ...peopleInHotelWhere(hotelId) }, select: { email: true, name: true } });
   return new Map(users.map((user) => [user.email.toLowerCase(), user.name]));
 }
 

@@ -450,6 +450,19 @@ export const NAV_SECTIONS = Object.freeze([
         icon: 'upload',
         anyPermission: [PERMISSIONS.GUESTS_MANAGE, PERMISSIONS.SETTINGS_MANAGE],
       },
+      // Zincir konsolu (modül 63): birden çok otel tek panelden.
+      {
+        label: 'Zincir',
+        to: '/zincir',
+        icon: 'building',
+        permission: PERMISSIONS.CHAIN_VIEW,
+        children: [
+          { label: 'Pano', to: '/zincir/pano', icon: 'dashboard' },
+          { label: 'Rapor', to: '/zincir/rapor', icon: 'chart' },
+          { label: 'Oteller', to: '/zincir/oteller', icon: 'building' },
+          { label: 'Kullanıcılar', to: '/zincir/kullanicilar', icon: 'users', permission: PERMISSIONS.CHAIN_USERS },
+        ],
+      },
       // Entegrasyon (modül 61): dış sistemlerin API anahtarları ve webhook abonelikleri.
       {
         label: 'Entegrasyon',

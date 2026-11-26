@@ -435,40 +435,39 @@ function validChannels(channels) {
 /**
  * Bağlanan istemcinin bağlamı ve abonelikleri.
  *
- * - Bağlantıda otel ve (el sıkışmadaki `auth.actor`'dan) personel çözülür;
- *   personel kendi kişi odasına ve rolünün izin odalarına katılır — zil
- *   yalnızca oraya düşer.
+ * - Kimlik ve otel el sıkışmadaki erişim token'ından (`auth.token`) çözülür (modül 63; eskiden istemcinin söylediği
+ *   e-posta ve sunucunun tek oteliydi): kişi o otelin odasına, kendi kişi odasına ve o oteldeki rolünün izin
+ *   odalarına katılır — zil yalnızca oraya düşer. Zincirde başka otele geçen panel yeniden bağlanır, yeni otelin
+ *   odalarına katılır.
+ * - Token'sız / geçersiz bağlantı hiçbir odaya katılmaz: başka bir otelin canlı haberi kimliksiz kimseye gitmez.
+ *   Panel "canlı değil"i görüp periyodik tazelemeye düşer.
  * - Ekran açıldıkça `subscribe`, kapandıkça `unsubscribe`: kanal haberi
  *   yalnızca o ekranı açık tutan panele gider. Olay dinleyicileri bağlamı
  *   beklemeden kurulur; bağlantı anında gelen abonelik kaybolmaz.
  * - `ready` bağlamı ve otel odasının yayılma süresini taşır; yeniden
  *   bağlanan panel tam tazelemesini buna göre yayar.
  *
- * ⚠️ GEÇİCİ: kimlik, HTTP'deki `x-actor` gibi istemcinin söylediği e-posta.
- * Modül 2 gelince el sıkışmadaki JWT'den okunacak; odalar aynı kalacak.
- * Rol değişikliği yeniden bağlanınca geçerli olur.
+ * Rol / erişim değişikliği yeniden bağlanınca geçerli olur (erişimi değişen kişinin soketi sunucuda kesilir).
  *
  * @param {any} io
  * @param {{
- *   resolveHotelId: () => Promise<string>,
- *   findStaff: (hotelId: string, email: string) => Promise<{ id: string, role: string } | null>,
- *   permissionsForRole: (role: string) => readonly string[],
+ *   authenticate: (token: string) => Promise<{ hotelId: string, userId: string, permissions: readonly string[] } | null>,
  *   logger?: { error?: Function },
  * }} deps
  */
-export function registerSocketHandlers(io, { resolveHotelId, findStaff, permissionsForRole, logger = console }) {
+export function registerSocketHandlers(io, { authenticate, logger = console }) {
   /** @param {any} socket */
   async function joinContext(socket) {
-    const hotelId = await resolveHotelId();
-    const actor = socket.handshake?.auth?.actor;
-    const staff = typeof actor === 'string' && actor.includes('@') ? await findStaff(hotelId, actor.toLowerCase()) : null;
-    const rooms = [hotelRoom(hotelId)];
-    if (staff) {
-      rooms.push(userRoom(hotelId, staff.id));
-      for (const permission of permissionsForRole(staff.role)) rooms.push(permissionRoom(hotelId, permission));
+    const token = socket.handshake?.auth?.token;
+    const identity = typeof token === 'string' && token ? await authenticate(token) : null;
+    if (!identity) {
+      socket.emit('ready', { hotelId: null, userId: null, spreadMs: 0 });
+      return null;
     }
+    const { hotelId, userId, permissions } = identity;
+    const rooms = [hotelRoom(hotelId), userRoom(hotelId, userId), ...permissions.map((permission) => permissionRoom(hotelId, permission))];
     await socket.join(rooms);
-    socket.emit('ready', { hotelId, userId: staff?.id ?? null, spreadMs: spreadFor(io, hotelRoom(hotelId)) });
+    socket.emit('ready', { hotelId, userId, spreadMs: spreadFor(io, hotelRoom(hotelId)) });
     return { hotelId };
   }
 

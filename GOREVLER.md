@@ -4373,16 +4373,48 @@ olay kataloğu, zamanlanmış işler, tablolar, modül durumu; elle düzenlenmez
 
 ### 63. Multi-tenant zincir konsolu — arkadaşın
 **Gün sonu:** Zincir yöneticisi birden çok oteli tek panelden görüyor; otel arası geçiş yapıyor; zincir raporu alıyor.
-- [ ] Backend: HotelGroup, UserHotel tabloları; kullanıcı → birden çok otel yetkisi
-- [ ] Backend: zincir raporu (oteller karşılaştırmalı doluluk / gelir)
-- [ ] Ekran: Otel listesi + yeni otel ekleme sihirbazı (ayarlar 1'i kopyala)
-- [ ] Ekran: Üst barda otel seçici
-- [ ] Ekran: Zincir dashboard'u
-- [ ] Ekran: Merkezi kullanıcı yönetimi
+- [x] Backend: HotelGroup, UserHotel tabloları; kullanıcı → birden çok otel yetkisi
+- [x] Backend: zincir raporu (oteller karşılaştırmalı doluluk / gelir)
+- [x] Ekran: Otel listesi + yeni otel ekleme sihirbazı (ayarlar 1'i kopyala)
+- [x] Ekran: Üst barda otel seçici
+- [x] Ekran: Zincir dashboard'u
+- [x] Ekran: Merkezi kullanıcı yönetimi
 
 > **FlexAI 2.0'dan not (3 Kasım 2026 — Ahmet):** `HotelGroup` / `UserHotel` 2.0'da üç yerde kullanılacak: 75 (sahip birden
 > çok oteli görür), 77 (Akademi sınıfı = eğitim otelleri grubu), 104 (karşılaştırma kümeleri). "Yeni otel sihirbazı"nı
 > servis fonksiyonu olarak dışa aç: 69 (göç) ve 77 (eğitim oteli kurulumu) aynı fonksiyonu çağıracak.
+
+> **✅ Modül 63 tamamlandı (26 Kasım 2026 — Ahmet).** Kararlar (önerilenler, kullanıcı "sorma, önerileni seç" dedi): kişinin
+> **ana oteli** `User.hotelId` + rolü olarak kalır, başka otellere erişim `UserHotel` (otel başına rol); oturum her zaman bir
+> otelde açılır, yetkiler **o otelin kendi rol matrisinden**; otel en fazla bir zincirde.
+>
+> **Kurulan:** *Oturum* — token `hotelId` (açık otel) + `homeHotelId` + rol; ana otel dışındaki token her istekte erişimle
+> doğrulanır (`sessionRole`, 30 sn önbellek, değişiklikte commit sonrası silinir) → erişim kalkınca bir sonraki istek 401,
+> yenileme kişiyi ana oteline döndürür, ekran uyarır. `/auth/hotels` (seçici listesi), `/auth/switch-hotel` (eski yenileme
+> token'ı iptal). *Soket* artık erişim token'ıyla doğrulanır (önceden istemcinin söylediği e-posta — oteller arası sızıntı
+> riskiydi); token'sız bağlantı hiçbir odaya katılmaz. *Zincir* (`/chain`): kurma / adlandırma (sürüm kilidi), otel listesi
+> (imleç), **yeni otel sihirbazı** — dışa açık servis `createHotelFromTemplate(tx, { identity, source, copy, groupId })`
+> (genel parametreler, oda tipleri, vergiler, sezonlar, rol matrisi; açık alan listeleri + dmmf kapsama testi; para birimi
+> farklıysa oda tipi ve tutarlar kopyalanmaz), var olan oteli ekleme / çıkarma (son otel çıkınca zincir silinir); **pano** (bu
+> gece doluluk, gelecek / gidecek / konaklayan, oda geliri, ADR, RevPAR) ve **rapor** (dönem, geçen yıl, Excel) — otel başına
+> mevcut hesaplar, 4 paralel, para birimine göre toplam, kişinin o otelde `chain.view` taşımadığı oteller gizli; **merkezi
+> kullanıcılar** — liste (imleç, otel süzgeci, arama), erişim ver / değiştir / kaldır (`membershipChangeError`: kendine
+> dokunulmaz, ana otel erişimle verilmez, hedef otelde `users.manage`, yönetici rolünü yalnız o otelin yöneticisi), zincirden
+> kullanıcı açma. Son yönetici: ana oteldeki kural erişimle gelen yöneticileri de sayar; pasife alınan kişi bir otelin erişimle
+> tek yöneticisiyse reddedilir. Personel kimliği ve ad çözümlemesi (işlem kaydı, aktör paneli, görevler, vardiya) erişimle
+> gelen kişiyi tanır. İzinler `chain.view` (müdüre varsayılan) / `chain.manage` / `chain.users`. Ekran: üst bar otel seçici
+> (2+ otelde; 8 otelden arama; telefonda yalnız simge, liste tam genişlik), `/zincir` (Pano, Rapor, Oteller, Kullanıcılar).
+> Demo: `demo-chain.mjs` — "Flex Otelleri (örnek)" zinciri + sihirbaz servisiyle ikinci otel "Flex Bodrum Marina (örnek)"
+> (`DEMO-BDR`, kendi demo verisiyle) + DEMO yöneticilerine / müdürlerine erişim.
+>
+> **Kendi denetimimde bulunup düzeltilen:** ana sayfanın "Canlı bağlantı" kartı ilk bağlantıyı kaçırıp "Kopuk" kalıyordu;
+> pano / rapor satırlarında tablo anahtarı yoktu; erişim token'ı süresi dolarken yapılan otel geçişi iptal edilmiş yenileme
+> token'ıyla düşüyordu; telefonda otel seçici menü düğmesinin üstüne biniyordu; pasife almada erişimle tek yönetici korunmuyordu;
+> bordro demosunun onaylayanı erişimle gelen yöneticiyi görmüyordu. Ayrıca rezervasyon arama testinin rastgele otel kodu "101"
+> içerdiğinde kırılması (eski, aralıklı) giderildi.
+>
+> Paketler yeşil: backend birim 806, sözleşme 699, ön yüz 170, entegrasyon 856 (tam koşuda yerel veritabanı bir an
+> erişilemez olunca düşen 2 dosya yeniden koşturuldu: 43/43).
 
 ---
 

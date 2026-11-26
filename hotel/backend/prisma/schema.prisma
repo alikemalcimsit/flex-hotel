@@ -735,6 +735,8 @@ model Hotel {
   id                            String            @id @default(uuid())
   name                          String
   code                          String            @unique
+  /// Zincir (modül 63): otel en fazla bir zincirdedir. Zincir panosu / raporu ve otel seçici buna bakar.
+  groupId                       String?
   timezone                      String            @default("Europe/Istanbul")
   currency                      String            @default("TRY")
   /// Ülke kodu yazılmamış telefonların yorumlandığı kod (Türkiye: 90). Misafiri
@@ -955,8 +957,15 @@ model Hotel {
   apiKeys                ApiKey[]
   webhookSubscriptions   WebhookSubscription[]
   webhookDeliveries      WebhookDelivery[]
+
+  /// Modül 63: zincir ve kişilerin bu otele erişimleri.
+  group       HotelGroup?  @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  memberships UserHotel[]
+
+  @@index([groupId, name])
 }
 
+/// `hotelId` + `role`: ANA otel ve oradaki rol (giriş ana otele açılır). Başka otellere erişim `UserHotel`'de (modül 63).
 model User {
   id           String    @id @default(uuid())
   hotelId      String
@@ -971,6 +980,7 @@ model User {
 
   hotel         Hotel          @relation(fields: [hotelId], references: [id])
   refreshTokens RefreshToken[]
+  hotels        UserHotel[]
 
   assignedConversations Conversation[]   @relation("ConversationAssignee")
   assignedRequests      GuestRequest[]   @relation("GuestRequestAssignee")
@@ -983,6 +993,9 @@ model User {
   inspectedHousekeepingTasks HousekeepingTask[] @relation("HousekeepingInspector")
 
   employee Employee?
+
+  /// Kullanıcı listeleri (otelin kullanıcılar ekranı, zincirin merkezi listesi) otel + ada göre sayfalanır.
+  @@index([hotelId, name])
 }
 
 model RefreshToken {
@@ -9320,4 +9333,40 @@ enum WebhookDeliveryStatus {
   RETRYING
   SUCCEEDED
   FAILED
+}
+
+/**
+ * ══════════════════ Zincir konsolu (modül 63) ══════════════════
+ */
+
+/// Otel zinciri: birden çok otel tek panelden (pano, rapor, otel geçişi, merkezi kullanıcı yönetimi). Son otel
+/// çıkarılınca zincir silinir.
+model HotelGroup {
+  id        String   @id @default(uuid())
+  name      String
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  hotels Hotel[]
+}
+
+/// Kişinin ANA OTELİ DIŞINDAKİ bir otele erişimi, o otele özgü rolle. Otel seçici bu erişimler arasında geçirir; rol ve
+/// izinler o otelin rol matrisinden. Erişim kişiyi o otelin personel listesine eklemez. Kaldırılınca satır silinir (iz
+/// denetim kaydında).
+model UserHotel {
+  id        String   @id @default(uuid())
+  userId    String
+  hotelId   String
+  role      UserRole
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+
+  @@unique([userId, hotelId])
+  @@index([hotelId, role])
 }

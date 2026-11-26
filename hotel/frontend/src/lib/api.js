@@ -39,12 +39,46 @@ function authHeader() {
  */
 const REQUEST_TIMEOUT_MS = 20_000;
 
+/** 401'i gerçek hata olan uçlar (yenileme döngüsüne girmez). */
+const NO_REFRESH_PATHS = new Set(['/auth/login', '/auth/refresh', '/auth/logout']);
+
 /**
  * Erişim token'ı 401 aldığında tek seferlik yenileme. Eşzamanlı 401'ler tek
  * yenileme isteğini paylaşır (token storm olmasın).
  * @type {Promise<boolean> | null}
  */
 let refreshPromise = null;
+
+/** Süresi bu kadardan az kalmış token yenilenir (soket bağlanırken yolda dolmasın). */
+const TOKEN_REFRESH_MARGIN_MS = 60_000;
+
+/**
+ * Token'ın bitiş anı (ms); okunamazsa `null`. İmza doğrulanmaz — yalnızca
+ * "yenilemeli miyim" kararı için (asıl kontrol sunucuda).
+ * @param {string | null} token
+ */
+export function tokenExpiresAt(token) {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return typeof payload.exp === 'number' ? payload.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Geçerli bir erişim token'ı döner; süresi dolmak üzereyse önce yeniler. Soket
+ * el sıkışması için: soket 401 alıp yenileme yapamaz, token'ı taze götürmeli.
+ * @returns {Promise<string | null>}
+ */
+export async function ensureFreshAccessToken() {
+  const { accessToken } = useAuthStore.getState();
+  if (!accessToken) return null;
+  const expiresAt = tokenExpiresAt(accessToken);
+  if (expiresAt !== null && expiresAt - Date.now() > TOKEN_REFRESH_MARGIN_MS) return accessToken;
+  await refreshAccessToken();
+  return useAuthStore.getState().accessToken;
+}
 
 async function refreshAccessToken() {
   const { refreshToken } = useAuthStore.getState();
@@ -108,9 +142,10 @@ export async function api(path, options = {}) {
     throw new ApiError('Sunucuya ulaşılamıyor. Backend çalışıyor mu?', { code: 'NETWORK' });
   }
 
-  // Token süresi dolmuş: bir kez yenile ve isteği tekrarla. `/auth/*` uçları
-  // (login/refresh/logout) bu döngünün dışında — 401'leri gerçek hatadır.
-  if (response.status === 401 && !_noAuthRetry && !path.startsWith('/auth/')) {
+  // Token süresi dolmuş: bir kez yenile ve isteği tekrarla. Giriş / yenileme /
+  // çıkış bu döngünün dışında — 401'leri gerçek hatadır. (Otel listesi ve otel
+  // geçişi oturum ister: onlar da yenilenip tekrarlanır.)
+  if (response.status === 401 && !_noAuthRetry && !NO_REFRESH_PATHS.has(path)) {
     const refreshed = await refreshAccessToken();
     if (refreshed) return api(path, { ...options, _noAuthRetry: true });
     useAuthStore.getState().logout();

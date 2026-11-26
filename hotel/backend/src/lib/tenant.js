@@ -7,12 +7,12 @@ import { markAuthGuard } from './permissions.js';
  * Otel bağlamı (`request.hotelId`).
  *
  * Korumalı route'larda `hotelId` giriş yapan kullanıcının JWT'sinden gelir
- * (`app.js` onRequest hook'u `request.auth`'a koyar). Zincir yönetimi (modül 63)
- * üst bardan otel seçtirdiğinde de kaynak yine token olacak.
+ * (`app.js` onRequest hook'u `request.auth`'a koyar). Zincirde (modül 63) üst
+ * bardan otel seçilince yeni token o otel için verilir; ana otel dışındaki otelin
+ * token'ı her istekte erişimle doğrulanır. Soket de kimliği ve oteli token'dan alır.
  *
  * `resolveHotelId()` (aşağıda, `HOTEL_CODE` ile) yalnızca token'ın olmadığı
- * bağlamlarda kalır: seed betiği ve socket el sıkışması (kimlik henüz orada
- * doğrulanmıyor — realtime katmanının bilinen sınırı).
+ * bağlamlarda kalır: seed ve ölçüm betikleri.
  */
 
 const HOTEL_CODE = process.env.HOTEL_CODE ?? 'DEMO';

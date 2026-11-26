@@ -1,13 +1,11 @@
 import { Server as SocketServer } from 'socket.io';
 import { buildApp } from './app.js';
-import { prismaUnfiltered } from './db.js';
 import { actorRegistry } from './lib/actors.js';
 import { originChecker, resolveJwtSecret, resolveTrustProxy, socketIpResolver } from './lib/http-security.js';
 import { startMaintenanceJobs } from './lib/maintenance-jobs.js';
-import { permissionsForRole } from './lib/permissions.js';
+import { sessionRole } from './lib/memberships.js';
 import { registerActivityBridge, registerRealtimeBridge, registerSocketHandlers, stopRealtimeBridge } from './lib/realtime.js';
-import { findActiveStaffByEmail } from './lib/staff.js';
-import { resolveHotelId } from './lib/tenant.js';
+import { resolveEffectivePermissions } from './modules/roles/service.js';
 import { startApprovalJobs } from './modules/approvals/jobs.js';
 import { startFolioJobs } from './modules/folios/jobs.js';
 import { startHousekeepingJobs } from './modules/housekeeping/jobs.js';
@@ -79,12 +77,24 @@ const io = new SocketServer(app.server, {
   },
 });
 
-registerSocketHandlers(io, {
-  resolveHotelId,
-  findStaff: (hotelId, email) => findActiveStaffByEmail(prismaUnfiltered, hotelId, email),
-  permissionsForRole,
-  logger: app.log,
-});
+/**
+ * Soket kimliği: erişim token'ı doğrulanır, ana otel dışındaki otelde erişim (HTTP'deki gibi) denetlenir; izinler o
+ * otelin rol matrisinden.
+ * @param {string} token
+ */
+async function socketIdentity(token) {
+  let payload;
+  try {
+    payload = app.jwt.verify(token);
+  } catch {
+    return null;
+  }
+  const role = await sessionRole(payload);
+  if (!role) return null;
+  return { hotelId: payload.hotelId, userId: payload.userId, permissions: await resolveEffectivePermissions(payload.hotelId, role) };
+}
+
+registerSocketHandlers(io, { authenticate: socketIdentity, logger: app.log });
 registerRealtimeBridge(io, app.log);
 const stopActivityBridge = registerActivityBridge(io);
 setWebchatTransport(

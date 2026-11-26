@@ -149,6 +149,11 @@ Sol menüdeki her sayfa, yolu ve görmek için gereken izin. Bir sayfa menüde y
 | ↳ Olaylar | `/aktivite/olaylar` | üst menüyle aynı |
 | ↳ Denetim kaydı | `/aktivite/denetim` | Denetim kaydını görüntüle |
 | **Excel'den yükle** | `/ice-aktar` | şunlardan biri: Misafir kartı düzenle, tercih / not / etiket; Ayarları yönet |
+| **Zincir** | `/zincir` | Zincir panosunu, zincir raporunu ve zincirin otellerini görüntüle |
+| ↳ Pano | `/zincir/pano` | üst menüyle aynı |
+| ↳ Rapor | `/zincir/rapor` | üst menüyle aynı |
+| ↳ Oteller | `/zincir/oteller` | üst menüyle aynı |
+| ↳ Kullanıcılar | `/zincir/kullanicilar` | Zincirin kullanıcılarını yönet: otel erişimi ver / kaldır, zincirden kullanıcı aç |
 | **Entegrasyon** | `/entegrasyonlar` | API uygulamalarını, anahtar listesini, webhook aboneliklerini ve teslimat logunu görüntüle |
 | ↳ Uygulamalar | `/entegrasyonlar/uygulamalar` | üst menüyle aynı |
 | ↳ Webhook teslimatları | `/entegrasyonlar/teslimatlar` | üst menüyle aynı |
@@ -169,7 +174,7 @@ Sol menüdeki her sayfa, yolu ve görmek için gereken izin. Bir sayfa menüde y
 
 ## İzinler ve roller
 
-Sistemde 129 izin var; roller bu izinlerin varsayılan paketleridir. Yönetici (Ayarlar → Kullanıcılar / roller) bir kullanıcıya izin ekleyip çıkarabilir. Aşağıdaki tablo **varsayılan** dağılımdır.
+Sistemde 132 izin var; roller bu izinlerin varsayılan paketleridir. Yönetici (Ayarlar → Kullanıcılar / roller) bir kullanıcıya izin ekleyip çıkarabilir. Aşağıdaki tablo **varsayılan** dağılımdır.
 
 ### Ayarlar
 
@@ -505,6 +510,14 @@ Sistemde 129 izin var; roller bu izinlerin varsayılan paketleridir. Yönetici (
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `integrations.view` | API uygulamalarını, anahtar listesini, webhook aboneliklerini ve teslimat logunu görüntüle | ✓ | ✓ |  |  |  |  |
 | `integrations.manage` | API uygulaması ve anahtarı oluştur / iptal et, webhook aboneliği kur, teslimatı yeniden gönder | ✓ |  |  |  |  |  |
+
+### Zincir
+
+| İzin | Ne yaptırır | Yönetici | Müdür | Ön büro | Kat hizmetleri | Muhasebe | Yiyecek & İçecek |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `chain.view` | Zincir panosunu, zincir raporunu ve zincirin otellerini görüntüle | ✓ | ✓ |  |  |  |  |
+| `chain.manage` | Zincir kur, yeni otel aç (ayar kopyasıyla), oteli zincire ekle / çıkar | ✓ |  |  |  |  |  |
+| `chain.users` | Zincirin kullanıcılarını yönet: otel erişimi ver / kaldır, zincirden kullanıcı aç | ✓ |  |  |  |  |  |
 
 ### İzleme
 
@@ -1477,12 +1490,12 @@ Anketin zamanlanmış işi (yalnızca sunucu sürecinde, modül 55).
 
 ## Veri modeli
 
-Veritabanında 249 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan sayısı ilişkiler hariç yaklaşık değerdir.
+Veritabanında 251 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan sayısı ilişkiler hariç yaklaşık değerdir.
 
 | Tablo | Alan | Açıklama |
 | --- | --- | --- |
-| `Hotel` | 32 |  |
-| `User` | 10 |  |
+| `Hotel` | 33 |  |
+| `User` | 10 | `hotelId` + `role`: ANA otel ve oradaki rol (giriş ana otele açılır). Başka otellere erişim `UserHotel`'de (modül 63). |
 | `RefreshToken` | 8 |  |
 | `RolePermission` | 6 | Rol → izin matrisi (modül 2 — RBAC). Bir otelin hiç satırı yoksa çözüm koddaki varsayılanlara düşer; matris kaydedilince tüm roller için satır yazılır ve DB kaynak olur. ADMIN satır tutmaz — kod her zaman ADMIN'e tüm izinleri verir. |
 | `EventLog` | 14 |  |
@@ -1730,6 +1743,8 @@ Veritabanında 249 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan
 | `ApiKey` | 14 | API anahtarı: `fhk_<önek>_<sır>`. Yalnız SHA-256 özeti saklanır; anahtar bir kez, oluşturulunca gösterilir. Önek tekildir ve anahtarı bulmak içindir (ekranda da görünür). İptal geri alınmaz; yerine yeni anahtar açılır. |
 | `WebhookSubscription` | 19 | Webhook aboneliği: seçilen olaylar uygulamanın adresine imzalı gider. İmza sırrı şifreli saklanır (imzalamak için açılması gerekir; `SETTINGS_SECRET_KEY`). Sır yenilenince eskisi kısa süre ikinci imza olarak gönderilir (geçiş). Art arda başarısız teslimatlar sınırı aşarsa abonelik kendiliğinden kapanır (`DISABLED`, sebebiyle). |
 | `WebhookDelivery` | 18 | Bir olayın bir aboneliğe teslimatı. Aynı olay aynı aboneliğe bir kez yazılır (tekil: outbox olayı yeniden dağıtsa da). Gönderici due kayıtları sahiplenir (`SENDING` + `lockedUntil`; süreç düşerse süre dolunca yeniden alınır), başarısızda artan bekleme ile yeniden dener, deneme hakkı bitince `FAILED`. Gövde incedir (kişisel veri yok). 30 gün saklanır. |
+| `HotelGroup` | 5 | Otel zinciri: birden çok otel tek panelden (pano, rapor, otel geçişi, merkezi kullanıcı yönetimi). Son otel çıkarılınca zincir silinir. |
+| `UserHotel` | 8 | Kişinin ANA OTELİ DIŞINDAKİ bir otele erişimi, o otele özgü rolle. Otel seçici bu erişimler arasında geçirir; rol ve izinler o otelin rol matrisinden. Erişim kişiyi o otelin personel listesine eklemez. Kaldırılınca satır silinir (iz denetim kaydında). |
 
 ## Modül durumu
 
@@ -1799,7 +1814,7 @@ Geliştirme listesinden (GOREVLER.md) türetilir: işaretli maddeler ve "tamamla
 | 60 | Çoklu dil & çoklu para birimi | Ali Kemal | planlı |
 | 61 | Webhook & açık API | arkadaşın | tamamlandı |
 | 62 | Donanım entegrasyonları | Ali Kemal | planlı |
-| 63 | Multi-tenant zincir konsolu | arkadaşın | planlı |
+| 63 | Multi-tenant zincir konsolu | arkadaşın | tamamlandı |
 | 64 | Apart / rezidans | Ali Kemal | planlı |
 | 65 | Yurt yönetimi | arkadaşın | planlı |
 | 66 | Devremülk | Ali Kemal | planlı |

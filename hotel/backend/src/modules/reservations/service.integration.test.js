@@ -66,7 +66,9 @@ describe('rezervasyon yönetimi (entegrasyon)', { skip }, () => {
   beforeEach(async () => {
     await resetDatabase(db);
     service.clearReservationCache();
-    hotelCode = `R${randomUUID().slice(0, 5).toUpperCase()}`;
+    // Yalnız harf: onay kodu otel koduyla başlar; kodda rakam olursa oda numarası araması ("101") rastgele her
+    // rezervasyonu bulurdu (kod "R4101A" gibi düştüğünde test kırılıyordu).
+    hotelCode = `R${randomUUID().slice(0, 5).toUpperCase().replace(/\d/g, (digit) => 'GHIJKLMNOP'[Number(digit)])}`;
     const hotel = await db.hotel.create({
       data: {
         name: 'Deniz Otel',

@@ -112,7 +112,8 @@ export async function seedPayrollDemo({ prisma, core, contracts, hotelId, today,
   const pick = (list) => list[Math.floor(rand() * list.length)];
   const year = Number(today.slice(0, 4));
   const currentMonth = Number(today.slice(5, 7));
-  const approverExists = await prisma.user.findFirst({ where: { hotelId, email: APPROVER, isActive: true }, select: { id: true } });
+  // Onaylayan bu otelin kişisi ya da zincirden erişimi olan kişi (modül 63: ikinci örnek otelde yönetici erişimle gelir).
+  const approverExists = await prisma.user.findFirst({ where: { email: APPROVER, isActive: true, deletedAt: null, OR: [{ hotelId }, { hotels: { some: { hotelId } } }] }, select: { id: true } });
   const summary = { employees: 0, runs: 0, approved: 0, paid: 0, terminated: 0, supplementary: 0, posted: 0 };
 
   // ── Ayarlar: yasal setler (teyitli), işyeri, departmanlar ──

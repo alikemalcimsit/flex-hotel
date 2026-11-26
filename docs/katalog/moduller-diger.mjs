@@ -16,6 +16,19 @@ const ilk = (api, sayfa) => `const page = await api(${JSON.stringify(api)}); con
 const kaydir = (yazi) =>
   `const target = [...document.querySelectorAll('h1, h2, h3, h4, p, span, div')].find((n) => n.childElementCount === 0 && n.textContent.trim().startsWith(${JSON.stringify(yazi)})); target?.scrollIntoView({ block: 'start' }); await new Promise((r) => setTimeout(r, 700));`;
 
+/** Modül 63: üst bardaki otel seçiciyi açar. */
+const SECICI_AC = "document.querySelector('button[aria-haspopup=\"listbox\"][aria-label^=\"Açık otel\"]')?.click(); await new Promise((r) => setTimeout(r, 800));";
+/** Modül 63: yeni otel sihirbazını açar, kimliği doldurur, 2. adıma geçer (React'in değer izleyicisi için yerel setter). */
+const SIHIRBAZ_ADIM2 = [
+  "const tik = (yazi) => [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === yazi)?.click();",
+  "const yaz = (name, value) => { const el = document.querySelector('input[name=\"' + name + '\"]'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, value); el.dispatchEvent(new Event('input', { bubbles: true })); };",
+  "tik('Yeni otel'); await new Promise((r) => setTimeout(r, 900));",
+  "yaz('hotel-name', 'Flex Kapadokya Vadi'); yaz('hotel-code', 'KPD-01'); await new Promise((r) => setTimeout(r, 300));",
+  "tik('İleri'); await new Promise((r) => setTimeout(r, 900));",
+].join(' ');
+/** Modül 63: listedeki son kişinin otel erişimleri penceresi. */
+const ERISIM_AC = "[...document.querySelectorAll('button')].filter((b) => b.textContent.trim() === 'Otel erişimleri').at(-1)?.click(); await new Promise((r) => setTimeout(r, 1000));";
+
 export const DIGER = [
   {
     numara: 1,
@@ -713,6 +726,29 @@ export const DIGER = [
       { dosya: '61-teslimatlar', yol: '/entegrasyonlar/teslimatlar', bekle: 'Teslim edildi', yukseklik: 1100, aciklama: 'Webhook teslimatları: olay, uygulama ve adres, deneme sayısı, alıcının cevap kodu ve süresi, durum. Teslim edilemeyen 8 denemeden (≈45 saat) sonra kapanır; yeniden gönderilebilir.' },
       { dosya: '61-teslimat-ayrintisi', yol: '/entegrasyonlar/teslimatlar?status=FAILED', bekle: 'Teslim edilemedi', eylem: "document.querySelector('main ul button')?.click(); await new Promise((r) => setTimeout(r, 1200));", sonraBekle: 'Denemeler', yukseklik: 1200, aciklama: 'Teslimat ayrıntısı: olay ve teslimat kimliği, her denemenin zamanı ve sonucu (1 dk → 24 sa artan bekleme), imzalı giden gövde (ince: kimlik, tarih, kaynak), alıcının cevabının başı; Yeniden gönder.' },
       { dosya: '61-dokuman', yol: '/api-docs/', bekle: 'FlexHotel açık API', yukseklik: 1400, alan: 'tam', aciklama: 'API dokümanı (Swagger UI, otelin kendi sunucusundan): kimlik doğrulama ve kapsamlar, hız sınırı, hatalar, değişenleri çekme, webhook imzası (örnek doğrulama kodu); uçlar ve webhook olayları koddaki şemalardan üretilir.' },
+    ],
+  },
+  {
+    numara: 63,
+    slug: 'zincir',
+    ad: 'Zincir konsolu',
+    slogan: 'Birden çok otel tek panelden: üst bardaki seçiciyle oteller arasında geçiş, otel otel bu gecenin panosu ve dönem raporu, ayarları kopyalayarak yeni otel, kişilere otel otel erişim. Her otelde yetki o otelin kendi rol matrisinden.',
+    arka: [`${B}chain`, 'hotel/backend/src/lib/memberships.js'],
+    on: [`${F}chain`, 'hotel/frontend/src/layout/HotelSwitcher.jsx', 'hotel/frontend/src/lib/chain.js'],
+    sozlesme: [`${C}chain.js`],
+    betik: ['hotel/backend/scripts/demo-chain.mjs'],
+    rotalar: [/^\/chain/, /^\/auth\/(hotels|switch-hotel)/],
+    migrationlar: ['20261127130000_chain_console'],
+    izinGruplari: ['chain'],
+    olaylar: [],
+    ekranlar: [
+      { dosya: '63-pano', yol: '/zincir/pano', bekle: 'bu gece doluluk', yukseklik: 900, aciklama: 'Zincir panosu: bu gecenin doluluğu, gelecek / gidecek / konaklayan, oda geliri, ADR ve RevPAR — zincir toplamı (para birimine göre) ve otel otel; gecikmiş giriş / çıkış işaretli, satırdan o otele geçiş.' },
+      { dosya: '63-secici', yol: '/zincir/pano', bekle: 'bu gece doluluk', eylem: SECICI_AC, sonraBekle: 'Otel seç', yukseklik: 700, alan: 'tam', aciklama: 'Üst bardaki otel seçici: ana otel önce, sonra erişilen oteller; kod, oradaki rol ve zincir. Seçilen otel için yeni oturum açılır; yetkiler o otelin rol matrisinden.' },
+      { dosya: '63-rapor', yol: '/zincir/rapor', bekle: 'Oda geliri', yukseklik: 1000, aciklama: 'Zincir raporu: seçilen dönemde otellerin doluluğu, satılan / satılabilir oda, oda ve toplam gelir, ADR, RevPAR ve geçen yılın aynı dönemine göre değişim; hazır dönemler, Excel.' },
+      { dosya: '63-oteller', yol: '/zincir/oteller', bekle: 'Flex Bodrum Marina', yukseklik: 700, aciklama: 'Zincirin otelleri: para birimi ve saat dilimi, oda sayısı, oradaki rolünüz; otele geç, zincirden çıkar. Yeni otel sihirbazı ve var olan oteli ekleme.' },
+      { dosya: '63-sihirbaz', yol: '/zincir/oteller', bekle: 'Flex Bodrum Marina', eylem: SIHIRBAZ_ADIM2, sonraBekle: 'Kopyalanacaklar', yukseklik: 1000, aciklama: 'Yeni otel sihirbazı, 2. adım: kaynak otel ve kopyalanacak ayar grupları (genel parametreler, oda tipleri, vergiler, sezonlar, rol ve izin matrisi). Odalar, kullanıcılar, misafir ve rezervasyonlar, fatura / KBS / kanal ayarları kopyalanmaz.' },
+      { dosya: '63-kullanicilar', yol: '/zincir/kullanicilar', bekle: 'Otel erişimleri', yukseklik: 700, aciklama: 'Merkezi kullanıcı listesi: zincirdeki herkes, ana oteli ve rolü, zincirdeki erişimleri; otele göre süzme ve arama, zincirden yeni kullanıcı.' },
+      { dosya: '63-erisim', yol: '/zincir/kullanicilar', bekle: 'Otel erişimleri', eylem: ERISIM_AC, sonraBekle: 'Erişim ver', yukseklik: 800, aciklama: 'Kişinin otel erişimleri: zincirdeki her otel için rol seçip erişim verme, rolü değiştirme, kaldırma. Kendi erişiminize dokunamazsınız; yönetici rolünü yalnız o otelin yöneticisi verir.' },
     ],
   },
 ];

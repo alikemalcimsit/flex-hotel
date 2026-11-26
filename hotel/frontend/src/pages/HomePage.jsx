@@ -55,6 +55,9 @@ export function HomePage() {
     const onDisconnect = () => setSocketConnected(false);
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
+    // Çizim ile dinleyicinin kaydı arasında bağlantı kurulmuş olabilir (ilk bağlantı token'ı beklerken ya da otel
+    // geçişinde yeniden kurulurken): o olay kaçırılır, kart "Kopuk"ta kalırdı. Kayıttan sonra gerçek durum okunur.
+    setSocketConnected(socket.connected);
     return () => {
       socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);
