@@ -540,7 +540,7 @@ Tarih + kişi + pansiyon + kupon → oda tipi kartları (fiyat, indirim etiketi,
 ### Arka planda
 
 - Fiyat, personelin gördüğü aynı teklif hesabıdır; public yanıt **kırpılır**: promosyon / kupon / acente kimlikleri ve gece dökümü dönmez; indirim yalnızca tutar + etiket; müsaitlik 0–5'e kırpılır (gerçek envanter sızmaz).
-- Rezervasyon **bekleyen (PENDING)** açılır — ödeme yok; **resepsiyon onaylar**. Yer yoksa sebepli reddedilir, onaya gitmez. Aynı istek ağ hatasında tekrar gönderilse ikinci rezervasyon açılmaz.
+- Rezervasyon **bekleyen (PENDING)** açılır; **resepsiyon onaylar**. Sanal POS ayarında **Widget ön ödemesi** (İlk gece / Konaklamanın tamamı) açıksa widget misafiri rezervasyondan hemen sonra **Ön ödemeye geç** ile kartla ödeme sayfasına yönlendirir; ödeme folyoya Sanal POS olarak düşer ama rezervasyonu kendiliğinden kesinleştirmez (bkz. Folyo, kasa → Sanal POS). Yer yoksa sebepli reddedilir, onaya gitmez. Aynı istek ağ hatasında tekrar gönderilse ikinci rezervasyon açılmaz.
 - Koruma: anahtar → kanal, Origin ∈ izinli siteler, IP hız sınırı (okuma 30/dk, yazma 5/dk), yanıtlar önbelleksiz.
 - Rezervasyon kaynağı **WIDGET** olarak düşer; rezervasyon listesinde görünür.
 
@@ -561,7 +561,7 @@ Tarih + kişi + pansiyon + kupon → oda tipi kartları (fiyat, indirim etiketi,
 - Widget doğrudan satıştır, kanal değildir; kanal yöneticisi ekranında görünmez.
 - Paket satışı widget'ta yok; oda + pansiyon satılır.
 - Metinler tr/en hazır; dil seçici ileriki sürüm.
-- Online ödeme gelince rezervasyon doğrudan onaylı açılabilir; şimdilik resepsiyon onayı şart.
+- Widget ön ödemesi alınsa da rezervasyon bekleyen açılır; resepsiyon onayı şart. Ödeme linki açılamazsa (ör. misafir portalı adresi yok) rezervasyon yine geçerlidir, ön ödeme personelle alınır.
 
 ## Satış CRM (call center)
 

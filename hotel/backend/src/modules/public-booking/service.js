@@ -3,6 +3,7 @@ import { AppError, NotFoundError } from '../../lib/errors.js';
 import { webchatChannelByKey } from '../channels/service.js';
 import { createFromChannelRequest, quoteReservation } from '../reservations/service.js';
 import { getActiveRoomTypes, getHotelSettings } from '../settings/service.js';
+import { widgetPrepaymentLink } from '../payment-gateway/integrations.js';
 import { trimQuoteForPublic } from './rules.js';
 
 /**
@@ -124,5 +125,7 @@ export async function publicReserve(channel, input) {
   if (result.outcome === 'REJECTED') {
     throw new AppError(result.reason, { statusCode: 422, code: result.code });
   }
-  return { confirmationCode: result.confirmationCode, status: 'PENDING' };
+  // Sanal POS (50): ayarda widget ön ödemesi açıksa misafir ödeme sayfasına yönlenir.
+  const payment = result.reservationId ? await widgetPrepaymentLink(channel.hotelId, result.reservationId) : null;
+  return { confirmationCode: result.confirmationCode, status: 'PENDING', payment };
 }

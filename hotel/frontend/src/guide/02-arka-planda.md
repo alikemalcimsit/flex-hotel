@@ -43,6 +43,7 @@ Olay adları aile aile gruplanır; birkaç örnek:
 | İK | izin talebi açıldı / onaylandı / reddedildi / iptal edildi (`hr.leave.changed`); İK değişti — vardiya, puantaj, bordroya aktarım, belge, ayar, bakiye düzeltmesi (`hr.changed`) | İK servisi ve onay kararı dinleyicisi |
 | Sadakat | sadakat puanı hareketi — kazanma, geri alma, harcama, iade, süre dolumu, düzeltme (`loyalty.points.changed`); sadakat seviyesi değişti (`loyalty.tier.changed`); üyelik / program ayarı değişti (`loyalty.changed`) | Sadakat aktörü, puan kullanma ve üyelik ekranları, süre işi |
 | KBS | KBS kimlik bildirimi değişti — sıraya girdi, gönderiliyor, bildirildi, gönderilemedi, iptal, elle bildirildi, tekrar gönderildi (`kbs.notification.changed`); KBS ayarı değişti (`kbs.settings.changed`) | KBS aktörü, KBS göndericisi, KBS ekranları (tekrar gönder, elle bildirildi, ayar) |
+| Sanal POS | Ödeme linki değişti — oluşturuldu, gönderildi, ödeme başladı, ödendi, başarısız, süresi doldu, iptal edildi, iade istendi / yapıldı / başarısız / reddedildi (`payment_gateway.link.changed`; kart bilgisi taşımaz); Sanal POS ayarı değişti (`payment_gateway.settings.changed`). Ödeme folyoya düşünce ayrıca **ödeme alındı** (`payment.received`, yöntem `VIRTUAL_POS`), karta iade folyoya düşünce **ödeme iade edildi** | Sanal POS servisi (link ekranları, misafirin ödeme sayfası, sağlayıcı geri dönüşü, zamanlanmış işler), iade onayı dinleyicisi |
 
 ### Outbox: olay kaybolmaz
 
@@ -327,6 +328,7 @@ Para izini ya da kapasiteyi değiştiren riskli işler kendi kendine yapılmaz. 
 | Fatura iptali | Kesilmiş faturanın iptali | Faturalar | Aynı | Evet |
 | Bordro onayı | Hesaplanan bordronun onayı | Bordro → onaya gönder | Aynı | Evet |
 | İzin talebi (`LEAVE`) | Personelin izin talebi ya da İK'nın personel adına girdiği izin (İK ayarında izin onayı açıksa); **süresiz bekler** | İzinlerim → İzin talebi; İK → İzinler → İzin gir | Aynı | Evet |
+| Sanal POS iadesi (karta) (`GATEWAY_REFUND`) | Online ödeme linkinden alınan paranın karta iadesi; her zaman onaya gider | Sanal POS → link ayrıntısı → **Karta iade** (`payment.refund`) | Aynı | Evet |
 | Diğer | Serbest | — | Aynı | Hayır |
 
 **Dört göz kuralı:** "Evet" yazan türlerde isteyen kişi **kendi isteğini onaylayamaz**; ekranda düğme kilitlenir ve sebebi yazar. Reddederek geri çekebilir. Sebep basittir: nakit alınmış bir ödemeyi iptal edip farkı cebe atmak ya da kendine iade yazmak klasik kasa açığıdır; büyük ödemede yazım hatası (10.000 yerine 100.000) misafiri "ödendi" diye çıkarır.
@@ -343,6 +345,8 @@ Para izini ya da kapasiteyi değiştiren riskli işler kendi kendine yapılmaz. 
 *Örnek:* Resepsiyonist Mehmet 16:20'de 1.250 TL iade isteği açtı. Müdür Zeynep'in zili çaldı. Zeynep 16:35'te detayı açtı: gerekçe "misafir erken ayrıldı, 1 gece iade", ilgili folyo bağlantısı, son karar anı ertesi gün 16:20. "Onayla" dedi, not yazdı. Ödeme modülünün dinleyicisi iadeyi yazdı; Mehmet'in ziline "İstediğim onayın sonucu: onaylandı" düştü; muhasebe aktörü iadeyi kasadan çıkış olarak işledi. Mehmet kendi isteğini açsaydı "Onayla" düğmesi kilitli olurdu.
 
 *Örnek (izin talebi):* Resepsiyonist Ayşe İzinlerim'den 3 günlük yıllık izin istedi. İzin "Onay bekliyor" açıldı, onay kuyruğuna `LEAVE` ("İzin talebi") türünde iş düştü (süresiz), İK izni olanların ziline `HR` türünde "İzin talebi: Ayşe Demir" uyarısı gitti. Ayşe kendi talebini onaylayamaz. Müdür Burak onaylayınca İK modülünün dinleyicisi `approval.granted`'ı yakaladı, yıllık izin bakiyesini **yeniden denetledi** (bu arada bakiye değiştiyse izni reddeder), izni "Onaylandı" yaptı, `hr.leave.changed` yayınladı ve Ayşe'nin ziline "İzniniz onaylandı" düştü; açık İK ekranları `hr.changed` kanalından tazelendi. Ayşe talebi kararlanmadan iptal etseydi onay işi "süresi doldu" olarak kapanırdı.
+
+*Örnek (karta iade):* Resepsiyonist Elif, 1.000 TL online ön ödemesi yapılmış linkte "Erken ayrılış" gerekçesiyle 300 TL **Karta iade** istedi. Onay kuyruğuna `GATEWAY_REFUND` ("Sanal POS iadesi (karta)") türünde iş düştü; kayıtta ödenen tutar, kart •••• 0008 ve daha önce iade edilen görünür. Elif onaylayamaz. Genel müdür onaylayınca Sanal POS modülünün **iade kararı dinleyicisi** (`approval.granted` / `denied` / `expired`'ı dinler, aynı haber iki kez gelse bir kez uygular) iadeyi sağlayıcıdan istedi, başarılı olunca folyoya −300 TL Sanal POS (iade) yazdı ve `payment_gateway.link.changed` yayınladı. Reddedilse ya da süresi dolsa iade "Reddedildi" olurdu, para hareketi olmazdı. Sağlayıcı reddetseydi iade "İade başarısız" olur, zil (`PAYMENT_GATEWAY`) çalardı.
 
 Aktör kayıttan kalkmışsa (paket kaldırıldı, ad değişti) onaylanan iş kaybolmaz: **"Onay kuyruğu"** modülünde "Onaylanan iş elle yapılacak: …" görevi açılır.
 
@@ -444,13 +448,17 @@ Olaylar sistemin ana tetikleyicisidir; zamanlanmış işler **güvenlik ağı** 
 | Faturalar | E-belge gönderimi | 30 sn | Sıradaki e-Fatura / e-Arşiv belgelerini entegratöre gönderir, durumunu izler |
 | KBS | KBS gönderici | 30 sn (ve yeni bildirim sıraya girince hemen) | Sırası gelmiş, girişi bildirilmiş KBS bildirimlerini sırayla gönderir (bugün yalnız test ortamı); geçici hatada 1 / 5 / 15 / 60 / 180 / 360 dk sonra yeniden, hak bitince "Gönderilemedi" + zil; bağlı olduğu bildirim iptal edilen bekleyeni iptal eder. KBS'si kapalı otelin bildirimi gönderilmez |
 | KBS | KBS takılı kurtarma | 5 dk | Süreç gönderim ortasında kapandıysa 5 dakikadan uzun "Gönderiliyor"da kalan bildirimi "Sırada"ya geri alır |
+| Sanal POS | Sanal POS takılan ödeme | 5 dk | 10 dakikadan uzun "Ödeme sürüyor"da kalan ödeme linkini sağlayıcıya sorarak sonuçlandırır (geri dönüş kaybolduysa): ödendiyse folyoya yazar, yarıda kaldıysa link yeniden ödenebilir olur; iyzico'da misafirin eski sekmeden ödemiş olabileceği önceki oturumları da sorar. "Doğrulanamadı" işaretli linki sormaz |
+| Sanal POS | Sanal POS folyoya yazılamayan ödeme | 5 dk | Alınmış ama folyoya yazılamamış ödemeyi (ör. açık folyo yoktu) yeniden yazar; sağlayıcıya yeniden sormaz |
+| Sanal POS | Sanal POS süre dolumu | 15 dk | Son geçerliliği geçmiş, ödenmemiş linki "Süresi doldu" yapar |
+| Sanal POS | Sanal POS takılan iade | 15 dk | 15 dakikadır "İade ediliyor"da kalan karta iade için kritik zil (`PAYMENT_GATEWAY`, bir kez): sağlayıcı panelinden kontrol edin, yeniden istemeyin |
 | KBS | KBS gecikme zili | 1 sa | Açılalı 2 saati geçmiş ve hâlâ bildirilmemiş giriş bildirimi için kritik zil (`KBS`, bildirim başına bir kez): "… yasal süre geçmeden KBS ekranından elle bildirin" |
 
 *Örnek:* Sunucu bakım için pazar 03:00–05:00 arası kapalıydı. Açılışta: outbox tarayıcısı dağıtılmamış 3 olayı dağıttı; oda ücreti işi cumartesi gecesini (zaten kapatılmıştı) kontrol etti, eksik yoktu; konaklayan temizliği pazar sabahının görevlerini açtı; bekleyen mesajlar işi 03:12'de personelin yazdığı ama gönderilemeyen WhatsApp cevabını gönderdi. Kimse bir şey yapmadı.
 
 ## Canlı kanallar: ekranlar nasıl kendiliğinden yenilenir
 
-Sunucu, bir şey değiştiğinde panellere socket üzerinden **yalnızca haber** gönderir ("bu otelde envanter değişti", "onaylar değişti", "manuel görevler değişti", "mesajlar değişti", "genel muhasebe değişti" — `ledger.changed`, "İK değişti" — `hr.changed`, "sadakat değişti" — `loyalty.changed`: puan hareketi, seviye, üyelik, ayar; "KBS değişti" — `kbs.changed`: kimlik bildirimleri, mutabakat, ayar); veri göndermez. Haber yalnızca o kanala abone olan — yani ilgili ekranı açık tutan — panellere gider; otelin tamamına yayın yapılmaz. Panel haberi alınca kendi sorgusunu tazeler (bazı ekranlarda en sık 10–15 saniyede bir).
+Sunucu, bir şey değiştiğinde panellere socket üzerinden **yalnızca haber** gönderir ("bu otelde envanter değişti", "onaylar değişti", "manuel görevler değişti", "mesajlar değişti", "genel muhasebe değişti" — `ledger.changed`, "İK değişti" — `hr.changed`, "sadakat değişti" — `loyalty.changed`: puan hareketi, seviye, üyelik, ayar; "KBS değişti" — `kbs.changed`: kimlik bildirimleri, mutabakat, ayar; "Sanal POS değişti" — `payment-gateway.changed`: ödeme linkleri, iadeler, ayar; Sanal POS işlemleri, link ayrıntısı ve rezervasyondaki Sanal POS kartı bununla tazelenir); veri göndermez. Haber yalnızca o kanala abone olan — yani ilgili ekranı açık tutan — panellere gider; otelin tamamına yayın yapılmaz. Panel haberi alınca kendi sorgusunu tazeler (bazı ekranlarda en sık 10–15 saniyede bir).
 
 Zil haberi kişiye (`kullanıcı`) ya da izne (`perm`) gider; rozet sunucudan bir kez gelir, sonra haberle artar. Aktivite akışı 500 ms'de bir toplu "yeni satır kimlikleri" alır; içerik HTTP'den okunur (socket kimliği şimdilik istemcinin söylediği e-postadır, bu yüzden socket'ten içerik taşınmaz).
 
@@ -534,6 +542,11 @@ Bu yolculukta personel üç kez dokundu: online check-in onayı, giriş ve çık
 | Bildirim zinciri | Aynı konaklamada aynı kişinin bildirimleri; her halka öncekine bağlıdır, çıkış girişi bildirilmeden gönderilmez |
 | Elle bildirildi | Personelin resmî KBS ekranından bildirip FlexHotel'de notla işaretlediği bildirim; bağlı çıkışı serbest bırakır |
 | KBS mutabakatı | İçerideki her kişinin girişi bildirilmiş mi denetimi; eksikler nedenleriyle listelenir |
+| Sanal POS | Kartla internetten ödeme almayı sağlayan ödeme kuruluşu hizmeti. FlexHotel'de sağlayıcı iyzico (sandbox / canlı) ya da dışarı çıkmayan Test ortamı; ödeme folyoya `VIRTUAL_POS` yöntemiyle düşer |
+| Ödeme linki | Konaklamaya bağlı, tutarı ve son geçerliliği belli, tek kez ödenen bağlantı (`/misafir/o/:code`); başarısız denemeden sonra yeniden denenir |
+| Barındırılan ödeme sayfası | Kartın otelin değil ödeme kuruluşunun sayfasında girildiği yöntem (iyzico Checkout Form). Kart bilgisi otelin sunucusuna hiç gelmez; otel yalnız sonucu ve kartın son 4 hanesini görür |
+| 3D Secure | Kart sahibinin bankasının ödeme sırasında ek doğrulaması (çoğunlukla SMS şifresi). FlexHotel'de ödeme kuruluşunun sayfasında yapılır |
+| Sandbox | Ödeme kuruluşunun deneme ortamı: gerçek para çekilmez, test kartlarıyla çalışılır (iyzico: `sandbox-merchant.iyzipay.com`, anahtarlar `sandbox-` ile başlar). Canlı ortamdan ayrı anahtarlarla çalışır |
 
 ## Sık sorulanlar
 

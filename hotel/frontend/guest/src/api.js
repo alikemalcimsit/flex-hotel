@@ -48,5 +48,8 @@ export const roomServicePath = (token, rest = '') => `/public/room-service/${enc
 /** Anket (55) uçları. @param {string} token */
 export const surveyPath = (token) => `/public/survey/${encodeURIComponent(token)}`;
 
+/** Sanal POS (50) misafir ödeme sayfası uçları. @param {string} code */
+export const payPath = (code) => `/public/pay/${encodeURIComponent(code)}`;
+
 /** Web sohbeti balonunun betiği (8) — aynı API sunucusundan. */
 export const webchatScriptUrl = () => `${API_URL}/webchat/widget.js`;

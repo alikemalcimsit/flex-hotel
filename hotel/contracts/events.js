@@ -213,6 +213,8 @@ export const EVENT_LABELS = Object.freeze({
   'loyalty.changed': 'Sadakat üyeliği / program ayarı değişti',
   'kbs.notification.changed': 'KBS kimlik bildirimi (sıraya girdi, bildirildi, gönderilemedi, elle bildirildi)',
   'kbs.settings.changed': 'KBS ayarı değişti',
+  'payment_gateway.link.changed': 'Sanal POS ödeme linki (oluşturuldu, gönderildi, ödendi, başarısız, süresi doldu, iade)',
+  'payment_gateway.settings.changed': 'Sanal POS ayarı değişti',
   'online_checkin.changed': 'Online check-in değişti (gönderildi, onaylandı, düzeltme, giriş)',
   'guest_portal.link.changed': 'Misafir portalı bağlantısı verildi / iptal edildi / davet gönderildi',
   'guest_portal.settings.changed': 'Misafir portalı ayarı değişti',

@@ -233,6 +233,10 @@ const KbsNotificationsPage = lazy(() => import('./pages/kbs/NotificationsPage.js
 const KbsNotificationPage = lazy(() => import('./pages/kbs/NotificationPage.jsx').then((m) => ({ default: m.NotificationPage })));
 const KbsReconciliationPage = lazy(() => import('./pages/kbs/ReconciliationPage.jsx').then((m) => ({ default: m.ReconciliationPage })));
 const KbsSettingsPage = lazy(() => import('./pages/kbs/KbsSettingsPage.jsx').then((m) => ({ default: m.KbsSettingsPage })));
+const GatewayLayout = lazy(() => import('./pages/payment-gateway/GatewayLayout.jsx').then((m) => ({ default: m.GatewayLayout })));
+const GatewayLinksPage = lazy(() => import('./pages/payment-gateway/LinksPage.jsx').then((m) => ({ default: m.LinksPage })));
+const GatewayLinkPage = lazy(() => import('./pages/payment-gateway/LinkPage.jsx').then((m) => ({ default: m.LinkPage })));
+const GatewaySettingsPage = lazy(() => import('./pages/payment-gateway/GatewaySettingsPage.jsx').then((m) => ({ default: m.GatewaySettingsPage })));
 const HrLayout = lazy(() => import('./pages/hr/HrLayout.jsx').then((m) => ({ default: m.HrLayout })));
 const HrLeavesPage = lazy(() => import('./pages/hr/LeavesPage.jsx').then((m) => ({ default: m.LeavesPage })));
 const HrLeaveBalancesPage = lazy(() => import('./pages/hr/LeaveBalancesPage.jsx').then((m) => ({ default: m.LeaveBalancesPage })));
@@ -1374,6 +1378,20 @@ export default function App() {
               <Route path="bildirimler/:notificationId" element={<KbsNotificationPage />} />
               <Route path="mutabakat" element={<KbsReconciliationPage />} />
               <Route path="ayarlar" element={<KbsSettingsPage />} />
+            </Route>
+            {/* Sanal POS (modül 50): ödeme linkleri (ayrıntı dahil), ayarlar. */}
+            <Route
+              path="sanal-pos"
+              element={
+                <RequirePermission permission={PERMISSIONS.PAYMENT_GATEWAY_VIEW}>
+                  <GatewayLayout />
+                </RequirePermission>
+              }
+            >
+              <Route index element={<Navigate to="/sanal-pos/linkler" replace />} />
+              <Route path="linkler" element={<GatewayLinksPage />} />
+              <Route path="linkler/:linkId" element={<GatewayLinkPage />} />
+              <Route path="ayarlar" element={<GatewaySettingsPage />} />
             </Route>
             {/* İK (modül 52): izinler, izin bakiyeleri, vardiya, puantaj, belgeler, ayarlar; personelin kendi sayfası ayrı. */}
             <Route

@@ -163,6 +163,7 @@ export * from './ledger.js';
 export * from './hr.js';
 export * from './loyalty.js';
 export * from './kbs.js';
+export * from './payment-gateway.js';
 export * from './invoicing.js';
 export * from './pos.js';
 export * from './room-service.js';

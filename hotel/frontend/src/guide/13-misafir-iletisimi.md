@@ -410,6 +410,7 @@ Portalın personel tarafı (online check-in incelemesi, davet, ayarlar) **Ön b�
 | Spa | Randevu / ders kaydı, iptal | Spa takvimi, spa zili |
 | Anket | Açık anket kutusu | Anketler → Cevaplar |
 | Web sohbeti | Balon (kanal açık ve portal adresi izinliyse) | **Mesajlar** (Web chat) |
+| Kartla öde | Açık bakiyeyi (folyo yoksa konaklama tutarını) kartla öder; misafir `/misafir/o/:code` ödeme sayfasına gider (Sanal POS açık ve portal ödemesi açıksa) | Sanal POS → **İşlemler** (kaynak: Misafir portalı); folyoya Sanal POS ödemesi; zil "Online ödeme alındı" |
 | Dijital anahtar | **Pasif** — donanım entegrasyonu gelince | — |
 
 **Davet:** girişten N gün önce otomatik (e-posta / SMS) ya da rezervasyon ayrıntısından elle; QR ve bağlantı kopyalama. Portal adresi ayarda yoksa otomatik davet ve anket **gitmez**.

@@ -90,6 +90,8 @@ export const NAV_SECTIONS = Object.freeze([
           { label: 'Döviz kurları', to: '/kasa/kurlar', icon: 'coins' },
         ],
       },
+      // Sanal POS (modül 50): kartla ödeme linkleri, karta iade, sağlayıcı ayarları.
+      { label: 'Sanal POS', to: '/sanal-pos', icon: 'creditCard', permission: PERMISSIONS.PAYMENT_GATEWAY_VIEW },
       // Minibar sayımı ve çamaşırhane (modül 19): kat hizmetleri ve resepsiyon.
       {
         label: 'Minibar & çamaşır',

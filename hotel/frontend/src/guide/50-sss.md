@@ -351,6 +351,52 @@ Bildirimin ayrıntısını açın (zildeki uyarıya tıklayın ya da Bildirimler
 - **Çıkışı geri aldıysanız:** gönderilmemiş çıkış iptal olur; gönderilmişse kişi için yeniden **giriş bildirimi** açılır.
 - **Resmî ekrandan elle bildirdiyseniz** o kaydı resmî ekranda da düzeltin; FlexHotel yalnız kendi kuyruğunu düzeltir.
 
+## Sanal POS (online kartla ödeme)
+
+### Sanal POS'ta gerçek para çekiliyor mu?
+
+- **Sağlayıcıya bağlı.** **Sanal POS → Ayarlar**'da (`/sanal-pos/ayarlar`) **Test ortamı (dışarı çıkmaz)** seçiliyse **hayır**: misafir FlexHotel'in taklit ödeme sayfasına gider, kart istenmez, dışarı bir şey gitmez. Ekranın üstünde "Test ortamı — gerçek para çekilmez" yazar. Bu ortamda büyük ödeme eşiği uygulanır (eşik üstü test ödemesi "Onay bekliyor" düşer).
+- **iyzico, Deneme (sandbox):** iyzico'nun deneme ortamı; test kartlarıyla çalışılır, gerçek para çekilmez.
+- **iyzico, Canlı:** **evet**, gerçek karttan gerçek para çekilir. Bunun için otelin iyzico ile **üye iş yeri sözleşmesi** ve canlı anahtarları gerekir.
+- **Dürüst durum:** iyzico bağlantısı iyzico'nun resmî dokümanına ve resmî kütüphanesine göre yazıldı, imza algoritmaları resmî test vektörleriyle sınandı; ama **iyzico sandbox'ında henüz uçtan uca denenmedi** (sandbox anahtarı gerekiyor; `sandbox-merchant.iyzipay.com`'dan ücretsiz). Bugün uçtan uca çalışan Test ortamıdır. İlk deneme adımları: Folyo, kasa ve ek hizmetler → Sanal POS → "iyzico sandbox ile deneme".
+
+### Misafirin kart bilgisi nerede? Biz saklıyor muyuz?
+
+- **Hayır, kart bilgisi otele hiç gelmez.** Misafir kartını iyzico'nun **barındırılan ödeme sayfasında** girer; **3D Secure** (banka SMS şifresi) de orada yapılır. FlexHotel yalnız sonucu, kart markasını ve **son 4 haneyi** (ör. •••• 0008) görür ve saklar.
+- Sunucu sonucu tarayıcıdan değil, iyzico'dan **kendisi** sorar; cevap imzasını, tutarı, para birimini ve sepeti denetler.
+- Misafirden kart numarasını telefonda alıp onun yerine ödemeyin; notlara kart numarası yazmayın.
+
+### Misafir ödedi ama ödeme folyoya düşmedi
+
+Link ayrıntısını açın (**Sanal POS → İşlemler** → satır, `/sanal-pos/linkler/:linkId`) ve duruma bakın:
+
+| Linkin durumu / izi | Anlamı | Ne yapılır |
+| --- | --- | --- |
+| **Ödeme sürüyor** | Sonuç henüz gelmedi (misafirin tarayıcısı dönüşte kapandı, sağlayıcıya ulaşılamadı, iyzico ödemeyi incelemede tutuyor) | Bekleyin: **Sanal POS takılan ödeme** işi 10 dakika sonra sağlayıcıya sorar (5 dakikada bir). Folyoya elle girmeyin |
+| **Ödendi**, izde "folyoya yazılamadı" (`NOT_POSTED`), kritik zil "Online ödeme folyoya yazılamadı" | Para alındı ama açık folyo yoktu (ör. rezervasyon iptal edilmişti) | Engeli kaldırın (rezervasyonu geri alın, folyoyu açılabilir yapın); iş 5 dakikada bir yeniden yazar. Elle girmeyin |
+| "Doğrulanamadı" (`UNVERIFIED`), kritik zil "Online ödeme doğrulanamadı" | iyzico "ödendi" dedi ama imza / tutar / para birimi / sepet tutmadı; folyoya **bilerek** yazılmadı | iyzico panelinden kontrol edin, teknik ekibe haber verin |
+| **Ödeme bekliyor**, son hata "Kart reddedildi" ya da "yarıda kaldı" | Ödeme gerçekleşmedi | Misafir aynı linkten yeniden ödeyebilir |
+| **Ödendi** ve folyo ödemesi bağlı, ama bakiye düşmemiş | Test ortamında tutar büyük ödeme eşiğine takıldı: ödeme "Onay bekliyor" | Yetkili **Onaylar**'dan onaylasın (iyzico ödemelerinde bu olmaz) |
+
+### Misafir iki kez ödedi
+
+- Bir link tek kez ödenir; ödenmiş linkte **Kartla öde** "Bu ödeme zaten yapıldı" der. Dönüş sayfasını yenilemek ikinci ödeme yazmaz.
+- Misafir linki iki sekmede açıp ikisinden de öderse iyzico'da iki ödeme oluşabilir. Sistem ikincisini de folyoya yazar ve uyarı zili çalar: **"Aynı linke ikinci ödeme"**. Folyo fazla ödemeye (eksi bakiye) düşer.
+- **Çözüm:** link ayrıntısından **Karta iade** ile fazla tutarı iade edin (onaya gider). Ayrı bir link için iki kez ödendiyse (iki link), fazla olan linkten iade edin.
+
+### Karta iade nasıl yapılır?
+
+- Link ayrıntısı → **Karta iade** (yalnız **Ödendi** linkte; `payment.refund`: müdür, ön büro, muhasebe). Tutar ve gerekçe yazın. En çok: ödenen − iade edilen − onay bekleyen ("En çok 1000.00 TRY iade edilebilir …").
+- İstek **her zaman onaya gider** (`GATEWAY_REFUND`, "Sanal POS iadesi (karta)"); isteyen kendi isteğini onaylayamaz. Onaylanınca iade iyzico'dan yapılır ve folyoya **eksi Sanal POS** ödemesi yazılır.
+- **İade başarısız** görürseniz mesajı okuyun: "Sonuç belirsiz" yazıyorsa (ağ hatası / zaman aşımı) iade iyzico'da yapılmış olabilir; **yeniden istemeden önce iyzico panelinden kontrol edin**. 15 dakikadır "İade ediliyor"da kalan iade için kritik zil "Karta iade sonuçlanmadı" çalar; yine panelden kontrol edin, yeniden istemeyin.
+- Folyodaki elle "İade" penceresi kartla online alınmış parayı karta geri göndermez; online ödemeyi her zaman **Karta iade** ile iade edin.
+
+### Ödeme linkinin süresi doldu
+
+- Link, ayardaki **Link süresi** kadar (varsayılan 72 saat) geçerlidir; süresi geçince **Sanal POS süre dolumu** işi (15 dakikada bir) linki **Süresi doldu** yapar. Misafir açarsa "Bu ödeme bağlantısının süresi doldu; otelden yenisini isteyin" görür.
+- Süresi dolan link yeniden açılmaz ve iptal edilemez. Rezervasyon ayrıntısındaki **Sanal POS** kartından **yeni link** oluşturup gönderin; isterseniz süreyi o link için uzatın (en çok 720 saat).
+- Misafir "linke tıklayınca ödenemiyor" diyorsa: Sanal POS kapatılmış ya da sağlayıcı / ortam değiştirilmiş olabilir ("Bu ödeme bağlantısıyla şu an ödeme alınamıyor; otelle görüşün"). Ayarı kontrol edip yeni link gönderin.
+
 ## Genel kullanım soruları
 
 **Bir işi kimin yaptığını nasıl bulurum?** Aktivite → Canlı akış (zincir kimliği ile aktör işleri) ve Aktivite → Denetim kaydı (personel işlemleri; kimlik numaraları maskeli). Folyo kalemi, ödeme, fiş, fatura, demirbaş kartı kendi zaman çizelgesini / hareket geçmişini taşır.
@@ -363,7 +409,7 @@ Bildirimin ayrıntısını açın (zildeki uyarıya tıklayın ya da Bildirimler
 
 **Demo verisi nasıl sıfırlanır?** Sistem yöneticisi demo betikleriyle (sunucu tarafı). Canlı otelde demo folyoları canlıya alırken temizlenmeli (yedekle, onayla).
 
-**Canlıya alırken unutulmaması gerekenler (özet):** `OPENAI_API_KEY` (AI için), `SETTINGS_SECRET_KEY` (kanal parolaları), nginx yolları (`/socket.io/`, `/webhooks/`, `/webchat/`, misafir uygulaması `/misafir/`), otel saat dilimi ve para birimi, büyük ödeme eşiği (varsayılan 0 = onay yok), döviz kurları (personel girer), fatura satıcı + faturalama başlangıcı + seriler, muhasebe başlangıç günü + açılış bakiyeleri + tahsilat eşlemesi, bordro işyeri + parametre teyidi, portal adresi, SMS kanalı, Channex hesabı.
+**Canlıya alırken unutulmaması gerekenler (özet):** `OPENAI_API_KEY` (AI için), `SETTINGS_SECRET_KEY` (kanal parolaları), nginx yolları (`/socket.io/`, `/webhooks/`, `/webchat/`, misafir uygulaması `/misafir/`), Sanal POS (iyzico üye iş yeri sözleşmesi, canlı anahtar, sunucunun dış adresi, ödeme yöntemi eşlemesinde Sanal POS → banka), otel saat dilimi ve para birimi, büyük ödeme eşiği (varsayılan 0 = onay yok), döviz kurları (personel girer), fatura satıcı + faturalama başlangıcı + seriler, muhasebe başlangıç günü + açılış bakiyeleri + tahsilat eşlemesi, bordro işyeri + parametre teyidi, portal adresi, SMS kanalı, Channex hesabı.
 
 ## Modül durumu tablosu
 
@@ -452,7 +498,7 @@ Durum sözlüğü: **Tamam** = görev listesindeki maddelerin tümü işaretli v
 | 47 | Ön muhasebe | accounting-worker | Tamam | |
 | 48 | Genel muhasebe | accounting-worker | Tamam | Tek Düzen hesap planı, otomatik yevmiye fişleri, günlük gelir fişi, mizan, ekstre, kurallar, dönem kilidi; e-Defter dosyası 49'da |
 | 49 | e-Fatura / e-Arşiv / e-Defter | entegrasyon | Kısmi | Fatura + e-belge akışı tamam; **gerçek entegratör adaptörü yok (test entegratörü)**; **e-Defter dosyası (yevmiye / kebir XML) yok** — veri 48'de hazır |
-| 50 | Sanal POS / ödeme geçidi | entegrasyon | **Planlı** | Portalda "kartla ödeme" pasif bekliyor |
+| 50 | Sanal POS / ödeme geçidi | entegrasyon | Tamam | Ödeme linki (oluştur, gönder, iptal), barındırılan ödeme sayfası (kart otele gelmez), sunucunun sonucu sağlayıcıdan kendisi sorması ve doğrulaması, folyoya `VIRTUAL_POS`, takılan ödeme kurtarma, folyoya yazılamayan ödemenin yeniden yazımı, süre dolumu, dört gözlü karta iade (`GATEWAY_REFUND`), portalda kartla ödeme, widget ön ödemesi, zil (`PAYMENT_GATEWAY`). Sağlayıcılar: Test ortamı ve iyzico (sandbox / canlı). **iyzico sandbox'ta uçtan uca deneme bekliyor**; canlı para için otelin üye iş yeri sözleşmesi gerekir. Provizyon, kart saklama (token) ve ters ibraz 84'te |
 | 51 | Personel & bordro | manuel | Tamam | Gider tarafı 48'de yazılır (tahakkuk fişi) |
 | 52 | İK (izin, mesai, özlük) | manuel | Tamam | İzin talebi → onay (`LEAVE`) → bakiye (4857 md. 53), vardiya çizelgesi, günlük puantaj ve bordroya aktarım (TIMESHEET), özlük belgeleri ve hatırlatma; personel tablosu 51'de ortak. Puantaj cihazı / mobil giriş (76) ve otomatik vardiya planlama (88) yok |
 
@@ -460,7 +506,7 @@ Durum sözlüğü: **Tamam** = görev listesindeki maddelerin tümü işaretli v
 
 | No | Modül | Aktör | Durum | Not |
 | --- | --- | --- | --- | --- |
-| 53 | Temassız (online check-in, portal) | concierge-agent | Kısmi | Portal, online check-in, folyo, QR menü tamam; **kart adımı 50'ye, dijital anahtar 62'ye bağlı (pasif)** |
+| 53 | Temassız (online check-in, portal) | concierge-agent | Kısmi | Portal, online check-in, folyo, QR menü tamam; portalda kartla ödeme 50 ile açıldı; **dijital anahtar 62'ye bağlı (pasif)** |
 | 54 | Misafir yorum entegrasyonu + duygu analizi | insight-agent | **Planlı** | |
 | 55 | Anket & memnuniyet | notification-worker + insight-agent | Tamam | |
 | 56 | Sadakat programı | loyalty-worker | Tamam | Folyo kapanınca puan (vergi hariç, indirim düşülmüş, seviye çarpanı; acente ödemeli hariç; spa kasası), yeniden açılınca geri alma; açık folyoda puanla indirim (611), iptalde iade; son 12 aya göre seviye ve yükseliş zili (`LOYALTY`); süre dolumu (12 saatlik iş, FIFO); elle düzeltme; misafir birleştirmede hesap birleşir; portal kutusu. Kampanya / bonus puan kuralları, puanla oda satışı ve zincir genelinde ortak hesap yok |
@@ -484,6 +530,6 @@ Tamamı **planlı**dır; kod yok. Başlıklar: 69–74 sağlam zemin (göç sihi
 
 ### Özet sayılar
 
-- 1–68 arası: **53 tamam**, **6 kısmi** (9, 38, 42, 49, 53 ve e-posta bağımlılığıyla 32'nin bildirim adımı), **9 planlı** (50, 54, 60–63, 64–68 dikey paketler tek satırda sayılırsa). 58 (KBS) tamam sayılır ama gerçek Emniyet / Jandarma servis bağlantısını bekler.
+- 1–68 arası: **54 tamam**, **6 kısmi** (9, 38, 42, 49, 53 ve e-posta bağımlılığıyla 32'nin bildirim adımı), **8 planlı** (54, 60–63, 64–68 dikey paketler tek satırda sayılırsa). 58 (KBS) tamam sayılır ama gerçek Emniyet / Jandarma servis bağlantısını bekler; 50 (Sanal POS) tamam sayılır ama iyzico sandbox'ında uçtan uca denemeyi ve canlı için üye iş yeri sözleşmesini bekler.
 - Otelin **günlük operasyonu** (rezervasyon → giriş → folyo → ödeme → çıkış → fatura → muhasebe; restoran → stok → satın alma; kat hizmetleri, teknik servis, anket, spa) uçtan uca çalışır.
-- **Dış dünyaya bağlanan** parçaların bir kısmı taslaktır: e-posta gönderimi, e-belge entegratörü, online kart ödemesi, KBS (gerçek servis bağlantısı; bugün test ortamı, otel resmî ekrandan elle bildirip işaretler). Ekranlar bunu açıkça söyler; "gönderildi" gibi görünen ama gitmeyen hiçbir şey yoktur.
+- **Dış dünyaya bağlanan** parçaların bir kısmı taslaktır: e-posta gönderimi, e-belge entegratörü, online kart ödemesi (iyzico bağlantısı yazıldı ve imzaları resmî test vektörleriyle sınandı, ama sandbox'ta uçtan uca denenmedi; bugün uçtan uca Test ortamı çalışır), KBS (gerçek servis bağlantısı; bugün test ortamı, otel resmî ekrandan elle bildirip işaretler). Ekranlar bunu açıkça söyler; "gönderildi" gibi görünen ama gitmeyen hiçbir şey yoktur.

@@ -82,6 +82,7 @@ Bara ya da satıra tıklayınca açılan sayfa dört kart gösterir:
 - **Fiyat:** gece gece döküm (taban fiyat, sezon çarpanı ya da fiyat planı adı, indirim), vergi dökümü (bilgi amaçlı; tahsilat folyoda), iptal koşulu, varsa promosyon ve kupon.
 - **Folyo:** pencereler, bakiyeler, "eksik oda ücreti" uyarısı, folyo ekranına bağlantı; gelmeden önce "Ön ödeme al".
 - **Misafir portalı** kartı: portal bağlantısı, QR, davet ve online check-in durumu (aşağıda ayrı anlatılır).
+- **Sanal POS** kartı (Sanal POS açıksa, `payment_gateway.view`): bu konaklamanın online ödeme linkleri (durum, tutar, **Kopyala**, **Gönder**) ve **Ödeme linki oluştur** (`payment_gateway.send`). Önerilen tutar folyo yoksa konaklama tutarı, varsa açık bakiyedir. Ayrıntı: Folyo, kasa ve ek hizmetler → **Sanal POS (online kartla ödeme)**.
 
 **İşlemler:** Onayla (opsiyonludan kesine), Düzenle, İptal, Gelmedi, İptali / gelmediyi geri al. Hangi düğmenin açık olduğuna **sunucu** karar verir; kapalı düğmenin yanında sebebi yazar.
 
@@ -534,7 +535,7 @@ Bağlantı rezervasyona bağlıdır; yenilenince eskisi geçersiz olur; iptal / 
 
 ### Misafirin yaptığı online check-in
 
-Girişten "Online check-in kaç gün önce açılır" (varsayılan 7) gün önce açılır. Misafir: her yetişkin için kimlik bilgisi + **zorunlu belge fotoğrafı** (telefonda küçültülür, konum bilgisi düşer; en az 1, en fazla 2 fotoğraf), çocuklar, tahmini varış saati, araç plakası, ödeme / teminat tercihi (Girişte kartla / Girişte nakit / Önceden ödendi / Şirket öder — kart numarası hiçbir yerde tutulmaz; "kartla ön ödeme" sanal POS gelince açılacak), konaklama kuralları + KVKK + fotoğraf rızası + ticari ileti tercihi onayları ve **parmakla imza**. Gönderince resepsiyonun **ziline** "online check-in geldi" uyarısı düşer.
+Girişten "Online check-in kaç gün önce açılır" (varsayılan 7) gün önce açılır. Misafir: her yetişkin için kimlik bilgisi + **zorunlu belge fotoğrafı** (telefonda küçültülür, konum bilgisi düşer; en az 1, en fazla 2 fotoğraf), çocuklar, tahmini varış saati, araç plakası, ödeme / teminat tercihi (Girişte kartla / Girişte nakit / Önceden ödendi / Şirket öder — kart numarası hiçbir yerde tutulmaz; online kartla ödemek isteyen misafir portal ana sayfasındaki **Kartla öde** düğmesini kullanır, Sanal POS ayarında portal ödemesi açıksa), konaklama kuralları + KVKK + fotoğraf rızası + ticari ileti tercihi onayları ve **parmakla imza**. Gönderince resepsiyonun **ziline** "online check-in geldi" uyarısı düşer.
 
 ### Personelin incelemesi
 

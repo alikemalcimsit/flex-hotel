@@ -37,6 +37,7 @@ Sol menüdeki her sayfa, yolu ve görmek için gereken izin. Bir sayfa menüde y
 | **Kasa** | `/kasa` | şunlardan biri: Kasayı görüntüle; Günlük döviz kurunu gir |
 | ↳ Günlük kasa | `/kasa/gun` | Kasayı görüntüle |
 | ↳ Döviz kurları | `/kasa/kurlar` | üst menüyle aynı |
+| **Sanal POS** | `/sanal-pos` | Sanal POS ödeme linklerini ve işlemlerini görüntüle |
 | **Minibar & çamaşır** | `/ek-hizmetler` | şunlardan biri: Minibar / çamaşır kayıtlarını ve günlük raporu görüntüle; Minibar tüketimi gir; Çamaşır siparişi al, durumunu güncelle; Minibar / çamaşır fiyat listelerini yönet |
 | ↳ Minibar girişi | `/ek-hizmetler/minibar` | Minibar tüketimi gir |
 | ↳ Minibar kayıtları | `/ek-hizmetler/minibar-kayitlari` | Minibar / çamaşır kayıtlarını ve günlük raporu görüntüle |
@@ -169,7 +170,7 @@ Sol menüdeki her sayfa, yolu ve görmek için gereken izin. Bir sayfa menüde y
 
 ## İzinler ve roller
 
-Sistemde 129 izin var; roller bu izinlerin varsayılan paketleridir. Yönetici (Ayarlar → Kullanıcılar / roller) bir kullanıcıya izin ekleyip çıkarabilir. Aşağıdaki tablo **varsayılan** dağılımdır.
+Sistemde 132 izin var; roller bu izinlerin varsayılan paketleridir. Yönetici (Ayarlar → Kullanıcılar / roller) bir kullanıcıya izin ekleyip çıkarabilir. Aşağıdaki tablo **varsayılan** dağılımdır.
 
 ### Ayarlar
 
@@ -458,6 +459,14 @@ Sistemde 129 izin var; roller bu izinlerin varsayılan paketleridir. Yönetici (
 | `kbs.send` | Hatalı KBS bildirimini tekrar gönder, elle bildirildi olarak işaretle | ✓ | ✓ | ✓ |  |  |  |
 | `kbs.manage` | KBS ayarları (tesis kodu, kullanıcı, parola, zorunlu alanlar) ve bağlantı denemesi | ✓ | ✓ |  |  |  |  |
 
+### Sanal POS
+
+| İzin | Ne yaptırır | Yönetici | Müdür | Ön büro | Kat hizmetleri | Muhasebe | Yiyecek & İçecek |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `payment_gateway.view` | Sanal POS ödeme linklerini ve işlemlerini görüntüle | ✓ | ✓ | ✓ |  | ✓ |  |
+| `payment_gateway.send` | Ödeme linki oluştur, misafire gönder, iptal et | ✓ | ✓ | ✓ |  |  |  |
+| `payment_gateway.setup` | Sanal POS ayarları: sağlayıcı, anahtarlar, widget ön ödemesi | ✓ | ✓ |  |  |  |  |
+
 ### Misafir portalı ve online check-in
 
 | İzin | Ne yaptırır | Yönetici | Müdür | Ön büro | Kat hizmetleri | Muhasebe | Yiyecek & İçecek |
@@ -706,7 +715,7 @@ Misafire yazılan cevapları WhatsApp Cloud API ile gönderir, teslim durumunu m
 
 ## Olay kataloğu
 
-Sistem 208 tür olay yayınlar. Olay = "şu oldu" kaydı; aktörler ve ekranlar bunları dinler. Açıklamalar kataloğun kendi yorumlarından alınmıştır (boşsa olayın adı yeterince anlatıyor demektir).
+Sistem 210 tür olay yayınlar. Olay = "şu oldu" kaydı; aktörler ve ekranlar bunları dinler. Açıklamalar kataloğun kendi yorumlarından alınmıştır (boşsa olayın adı yeterince anlatıyor demektir).
 
 ### accounting.*
 
@@ -1017,6 +1026,13 @@ Sistem 208 tür olay yayınlar. Olay = "şu oldu" kaydı; aktörler ve ekranlar 
 | `payment.void_requested` |  |
 | `payment.voided` |  |
 | `payment.void_declined` |  |
+
+### payment_gateway.*
+
+| Olay | Açıklama |
+| --- | --- |
+| `payment_gateway.link.changed` |  |
+| `payment_gateway.settings.changed` |  |
 
 ### payroll.*
 
@@ -1388,6 +1404,17 @@ testler ve betikler başlatmaz; çalıştırıcı: `lib/recurring.js`).
 Her iş kendi turunu bitirmeden yeniden başlamaz; hatası log'a düşer, diğer
 işleri durdurmaz.
 
+### payment-gateway
+
+Sanal POS'un zamanlanmış işleri (modül 50).
+
+| İş                         | Sıklık | Neden |
+|----------------------------|--------|-------|
+| Takılan ödemeyi sonuçlandır | 5 dk   | Geri dönüşü gelmeyen "ödeme sürüyor" link sağlayıcıya sorulur |
+| Süresi dolan link          | 15 dk  | Ödenmemiş, süresi geçmiş link "süresi doldu" olur |
+| Folyoya yazılamayan ödeme   | 5 dk   | Alınmış ama yazılamamış ödeme (ör. açık folyo yoktu) yeniden yazılır |
+| Takılan iade               | 15 dk  | 15 dakikadır "iade ediliyor"da kalan iade için zil (sağlayıcıda kontrol) |
+
 ### pos
 
 Aralık sabitleri: `SWEEP_INTERVAL_MS` = 15 * 60_000 · `HOUR_MS` = 3_600_000
@@ -1477,7 +1504,7 @@ Anketin zamanlanmış işi (yalnızca sunucu sürecinde, modül 55).
 
 ## Veri modeli
 
-Veritabanında 249 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan sayısı ilişkiler hariç yaklaşık değerdir.
+Veritabanında 253 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan sayısı ilişkiler hariç yaklaşık değerdir.
 
 | Tablo | Alan | Açıklama |
 | --- | --- | --- |
@@ -1730,6 +1757,10 @@ Veritabanında 249 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan
 | `ApiKey` | 14 | API anahtarı: `fhk_<önek>_<sır>`. Yalnız SHA-256 özeti saklanır; anahtar bir kez, oluşturulunca gösterilir. Önek tekildir ve anahtarı bulmak içindir (ekranda da görünür). İptal geri alınmaz; yerine yeni anahtar açılır. |
 | `WebhookSubscription` | 19 | Webhook aboneliği: seçilen olaylar uygulamanın adresine imzalı gider. İmza sırrı şifreli saklanır (imzalamak için açılması gerekir; `SETTINGS_SECRET_KEY`). Sır yenilenince eskisi kısa süre ikinci imza olarak gönderilir (geçiş). Art arda başarısız teslimatlar sınırı aşarsa abonelik kendiliğinden kapanır (`DISABLED`, sebebiyle). |
 | `WebhookDelivery` | 18 | Bir olayın bir aboneliğe teslimatı. Aynı olay aynı aboneliğe bir kez yazılır (tekil: outbox olayı yeniden dağıtsa da). Gönderici due kayıtları sahiplenir (`SENDING` + `lockedUntil`; süreç düşerse süre dolunca yeniden alınır), başarısızda artan bekleme ile yeniden dener, deneme hakkı bitince `FAILED`. Gövde incedir (kişisel veri yok). 30 gün saklanır. |
+| `PaymentGatewaySettings` | 14 | Otelin sanal POS ayarı. Anahtarlar secret-box ile mühürlü (JSON {apiKey, secretKey}); hiçbir cevapta dönmez. |
+| `PaymentLink` | 35 | Misafirin kartla ödeyeceği bağlantı. Tek kez ödenir; başarısız denemeden sonra yeniden denenir. Kart numarası tutulmaz (yalnız sağlayıcının verdiği kart markası ve son dört hane). |
+| `PaymentLinkEvent` | 9 | Linkin izi: oluşturma, gönderim, deneme, sonuç, iade. |
+| `GatewayRefund` | 15 | Karta iade: dört gözle onaylanır, sonra sağlayıcıdan iade edilir ve folyoya eksi ödeme yazılır. |
 
 ## Modül durumu
 
@@ -1786,7 +1817,7 @@ Geliştirme listesinden (GOREVLER.md) türetilir: işaretli maddeler ve "tamamla
 | 47 | Ön muhasebe | arkadaşın | tamamlandı |
 | 48 | Genel muhasebe | Ali Kemal | tamamlandı |
 | 49 | e-Fatura / e-Arşiv / e-Defter | arkadaşın | kısmi (4/6) |
-| 50 | Sanal POS / ödeme geçidi | Ali Kemal | planlı |
+| 50 | Sanal POS / ödeme geçidi | Ali Kemal | tamamlandı |
 | 51 | Personel & bordro | arkadaşın | tamamlandı |
 | 52 | İK | Ali Kemal | tamamlandı |
 | 53 | Temassız uygulamalar | arkadaşın | tamamlandı |

@@ -3773,12 +3773,41 @@ olay kataloğu, zamanlanmış işler, tablolar, modül durumu; elle düzenlenmez
 
 ### 50. Sanal POS / ödeme geçidi — Ali Kemal
 **Gün sonu:** Misafire ödeme linki gönderiliyor veya widget'ta kartla ödeme yapılıyor; sonuç otomatik folyoya düşüyor.
-- [ ] Backend: PaymentGatewayConfig, PaymentTransaction tabloları; sağlayıcı adaptörü (iyzico veya PayTR)
-- [ ] Backend: ödeme linki üret, 3D Secure akışı, webhook → `payment.received`
-- [ ] Ekran: Sağlayıcı ayarları
-- [ ] Ekran: "Ödeme linki gönder" (rezervasyon / folyo üzerinden; e-posta / WhatsApp ile)
-- [ ] Widget'a kart ödeme adımı
-- [ ] Ekran: İşlem listesi (başarılı / başarısız / iade)
+- [x] Backend: `PaymentGatewaySettings`, `PaymentLink`, `PaymentLinkEvent`, `GatewayRefund`; sağlayıcı adaptörü **iyzico** (Checkout Form) + Test ortamı
+- [x] Backend: ödeme linki üret, 3D Secure (iyzico'nun barındırılan sayfasında), geri dönüş → sonucu sunucu sorar → `payment.received` (VIRTUAL_POS)
+- [x] Ekran: Sağlayıcı ayarları (`/sanal-pos/ayarlar`)
+- [x] Ekran: "Ödeme linki oluştur / gönder" (rezervasyon ayrıntısı; şablon `PAYMENT_LINK`, açık kanallardan)
+- [x] Widget'a kart ödeme adımı (ayardaki ön ödeme: ilk gece / tamamı) + portalda "Kartla öde"
+- [x] Ekran: İşlem listesi (`/sanal-pos/linkler`: ödendi / başarısız / süresi doldu / iade)
+
+> **📌 Modül 50 tamamlandı (26 Kasım 2026 — Ali Kemal). iyzico sandbox'ta uçtan uca deneme BEKLİYOR.** iyzico bağlantısı gerçek:
+> resmî doküman ve iyzipay-node SDK'sına göre yazıldı, IYZWSv2 istek imzası ve cevap imzası resmî test vektörleriyle sınandı
+> (`providers/iyzico.test.js`). Sandbox anahtarı (sandbox-merchant.iyzipay.com, ücretsiz) girilince sandbox'ta denenecek; canlı para
+> için otelin iyzico üye iş yeri sözleşmesi ve canlı anahtarı gerekir. Bugün uçtan uca çalışan: **Test ortamı** (taklit ödeme sayfası).
+>
+> Kararlar: **barındırılan ödeme sayfası** — kart bilgisi otele hiç gelmez (PCI kapsamı dışı), 3D Secure iyzico'da. Geri dönüşte
+> tarayıcıdan yalnız token gelir; sunucu sonucu iyzico'ya kendisi sorar, imza + `price` + para birimi + sepet kimliği (= link)
+> tutmazsa "doğrulanamadı" (folyoya yazılmaz, kritik zil). Ödeme folyoya `VIRTUAL_POS` (kaynak anahtarı sağlayıcının ödeme no'su:
+> aynı sonuç iki kez gelse de tek; aynı linke ikinci gerçek ödeme ayrı satır + zil); para bankada olduğundan büyük ödeme onayına
+> gitmez — **Test ortamında gider** (TEST seçip "ödendi" yazmak dört gözü atlatmasın). Test ödemesi yalnız sunucunun açtığı güncel
+> oturumla. Link açıldığı sağlayıcı / ortam değişince ödenemez. Ödenip folyoya yazılamayan (açık folyo yok) link "ödendi" kalır,
+> `paymentId` boş, kritik zil, iş yeniden yazar; link bir daha ödemeye açılmaz. Kurtarma işi geri dönüşü gelmeyen denemeyi ve
+> önceki oturumları sorar. **İade dört gözle** (`GATEWAY_REFUND`): onaylanınca iyzico `/payment/refund` (kalem işlem no'su) →
+> folyoya eksi VIRTUAL_POS (onayına bağlı); ağ hatasında "sonuç belirsiz" (panelden kontrol), takılan iade zili.
+>
+> **API** `/payment-gateway`: `settings` (+ `test`), `links` (+ `:id`, `send`, `cancel`, `refund`), `reservations/:id` (+ `links`);
+> misafir `/public/pay/:code` (+ `start`, `callback` form POST → 303, `test-checkout`); portal `POST /public/portal/:token/pay`;
+> widget `reserve` cevabına `payment`. İzinler `payment_gateway.view` (müdür, ön büro, muhasebe), `.send` (müdür, ön büro), `.setup`
+> (müdür); iade `payment.refund`. Olaylar `payment_gateway.link.changed`, `payment_gateway.settings.changed`; kanal
+> `payment-gateway.changed`; zil `PAYMENT_GATEWAY`; bildirim tetikleyicisi `PAYMENT_LINK`. Migration `20261126160000_payment_gateway`.
+>
+> **Test:** iyzico birim 6 (resmî imza vektörleri, istek gövdesi, sonuç eşleme, hata türleri); entegrasyon 5 (link + gönderim + misafir
+> ödemesi uçtan uca + tekrar gelen geri dönüş + sahte token + test eşiği; folyoya yazılamayan ödeme ve yeniden yazım; kart reddi /
+> ikinci deneme / yarıda bırakma kurtarma / süre dolumu; dört gözlü iade; portal + widget + izinler). Ödeme, folyo, onay, bildirim,
+> portal, widget regresyonu 106/106.
+>
+> **Devir:** 84 (provizyon, kart token'ı, ters ibraz) aynı sağlayıcı arayüzüne eklenir. iyzico webhook (X-IYZ-SIGNATURE-V3) hesapta
+> açtırılınca kurtarma işinin yanına eklenebilir. Bilinçli sınır: PayTR adaptörü yok (arayüz hazır).
 
 > **FlexAI 2.0'dan not (3 Kasım 2026 — Ahmet):** 84 provizyon (al, artır, kapat, serbest bırak), kart token'ı ve ters ibraz
 > bildirimi isteyecek; sağlayıcı arayüzünü bunları sonradan ekleyebilecek biçimde kur (49'un `providers/` deseni:

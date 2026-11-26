@@ -44,6 +44,8 @@ import { hrRoutes } from './modules/hr/routes.js';
 import { registerHrSubscribers } from './modules/hr/subscribers.js';
 import { loyaltyRoutes } from './modules/loyalty/routes.js';
 import { kbsRoutes } from './modules/kbs/routes.js';
+import { paymentGatewayRoutes, publicPaymentRoutes } from './modules/payment-gateway/routes.js';
+import { registerPaymentGatewaySubscribers } from './modules/payment-gateway/subscribers.js';
 import { invoiceRoutes } from './modules/invoicing/routes.js';
 import { registerInvoiceSubscribers } from './modules/invoicing/subscribers.js';
 import { payrollRoutes } from './modules/payroll/routes.js';
@@ -194,6 +196,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   registerReservationSubscribers();
   registerFolioSubscribers();
   registerPaymentSubscribers();
+  registerPaymentGatewaySubscribers();
   registerAgencyBonusSubscribers();
   registerBanquetSubscribers();
   registerPosSubscribers();
@@ -419,6 +422,7 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
   await app.register(hrRoutes, { prefix: '/hr' });
   await app.register(loyaltyRoutes, { prefix: '/loyalty' });
   await app.register(kbsRoutes, { prefix: '/kbs' });
+  await app.register(paymentGatewayRoutes, { prefix: '/payment-gateway' });
   await app.register(invoiceRoutes, { prefix: '/invoices' });
   await app.register(payrollRoutes, { prefix: '/payroll' });
   await app.register(guestPortalRoutes, { prefix: '/guest-portal' });
@@ -451,6 +455,8 @@ export async function buildApp({ logger = true, rateLimitMax } = {}) {
     await guestApp.register(publicSurveyRoutes, { prefix: '/public/survey' });
     // Online rezervasyon motoru (modül 32): widget'ın options / quote / reserve uçları.
     await guestApp.register(publicBookingRoutes, { prefix: '/public/booking' });
+    // Sanal POS (modül 50): misafirin ödeme sayfası, sağlayıcının geri dönüşü.
+    await guestApp.register(publicPaymentRoutes, { prefix: '/public/pay' });
   });
 
   app.addHook('onClose', async () => {

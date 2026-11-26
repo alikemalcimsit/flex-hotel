@@ -191,6 +191,7 @@ enum NotificationSource {
   SURVEY_MID_STAY
   SPA_BOOKED
   SPA_REMINDER
+  PAYMENT_LINK
 }
 
 /// Şablonu olan olaylar.
@@ -204,6 +205,7 @@ enum NotificationTrigger {
   SURVEY_MID_STAY
   SPA_BOOKED
   SPA_REMINDER
+  PAYMENT_LINK
 }
 
 /// Personel uyarısı türleri (üst bardaki zil).
@@ -258,6 +260,7 @@ enum StaffAlertKind {
   KBS
   /// Modül 61: webhook aboneliği art arda başarısız teslimat yüzünden kendiliğinden kapandı (entegrasyon yetkilisine).
   INTEGRATION
+  PAYMENT_GATEWAY
 }
 
 /// Rezervasyon fiyatının kaynağı (modül 4): sistem hesabı ya da yetkili
@@ -955,6 +958,10 @@ model Hotel {
   apiKeys                ApiKey[]
   webhookSubscriptions   WebhookSubscription[]
   webhookDeliveries      WebhookDelivery[]
+  paymentGatewaySettings PaymentGatewaySettings?
+  paymentLinks           PaymentLink[]
+  paymentLinkEvents      PaymentLinkEvent[]
+  gatewayRefunds         GatewayRefund[]
 }
 
 model User {
@@ -1823,6 +1830,7 @@ model Reservation {
   leads                  Lead[]
   quote                  Quote?
   kbsNotifications       KbsNotification[]
+  paymentLinks           PaymentLink[]
 
   // Müsaitlik sorgusunun sıcak yolu: "şu otelde, şu oda tipinde, şu tarihlerde
   // envanteri tüketen rezervasyonlar". Dolu bir otelde saniyede onlarca kez çalışır.
@@ -9320,4 +9328,176 @@ enum WebhookDeliveryStatus {
   RETRYING
   SUCCEEDED
   FAILED
+}
+
+/**
+ * ══════════════════ Sanal POS / ödeme geçidi (modül 50) ══════════════════
+ */
+
+enum PaymentGatewayProvider {
+  TEST
+  IYZICO
+}
+
+enum PaymentGatewayEnvironment {
+  SANDBOX
+  LIVE
+}
+
+enum PaymentGatewayTestBehavior {
+  APPROVE
+  DECLINE
+}
+
+enum WidgetPrepayment {
+  NONE
+  FIRST_NIGHT
+  FULL
+}
+
+enum PaymentLinkPurpose {
+  PREPAYMENT
+  BALANCE
+  OTHER
+}
+
+enum PaymentLinkOrigin {
+  STAFF
+  PORTAL
+  WIDGET
+}
+
+enum PaymentLinkStatus {
+  OPEN
+  PROCESSING
+  PAID
+  FAILED
+  EXPIRED
+  CANCELLED
+}
+
+enum GatewayRefundStatus {
+  PENDING_APPROVAL
+  PROCESSING
+  DONE
+  FAILED
+  REJECTED
+}
+
+/// Otelin sanal POS ayarı. Anahtarlar secret-box ile mühürlü (JSON {apiKey, secretKey}); hiçbir cevapta dönmez.
+model PaymentGatewaySettings {
+  hotelId            String                     @id
+  isEnabled          Boolean                    @default(false)
+  provider           PaymentGatewayProvider     @default(TEST)
+  environment        PaymentGatewayEnvironment  @default(SANDBOX)
+  credentialsSealed  String?
+  apiPublicUrl       String?
+  linkTtlHours       Int                        @default(72)
+  maxInstallment     Int                        @default(1)
+  allowPortalPayment Boolean                    @default(true)
+  widgetPrepayment   WidgetPrepayment           @default(NONE)
+  testBehavior       PaymentGatewayTestBehavior @default(APPROVE)
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+  updatedBy          String?
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+}
+
+/// Misafirin kartla ödeyeceği bağlantı. Tek kez ödenir; başarısız denemeden sonra yeniden denenir. Kart numarası tutulmaz
+/// (yalnız sağlayıcının verdiği kart markası ve son dört hane).
+model PaymentLink {
+  id                String                    @id @default(uuid())
+  hotelId           String
+  reservationId     String
+  folioId           String?
+  /// Bağlantıdaki rastgele kod (tahmin edilemez).
+  code              String                    @unique
+  requestId         String?
+  purpose           PaymentLinkPurpose        @default(BALANCE)
+  origin            PaymentLinkOrigin         @default(STAFF)
+  amount            Decimal                   @db.Decimal(12, 2)
+  currency          String
+  description       String?
+  status            PaymentLinkStatus         @default(OPEN)
+  expiresAt         DateTime
+  provider          PaymentGatewayProvider
+  environment       PaymentGatewayEnvironment
+  /// Sağlayıcının ödeme oturumu (iyzico Checkout Form token'ı) ve son denemenin konuşma kimliği.
+  providerToken     String?
+  conversationId    String?
+  startedAt         DateTime?
+  attempts          Int                       @default(0)
+  providerPaymentId String?
+  /// İadede gereken kalem işlem kimlikleri (iyzico itemTransactions[].paymentTransactionId).
+  providerItems     Json                      @default("[]")
+  cardBrand         String?
+  cardLast4         String?
+  installment       Int?
+  paidAmount        Decimal?                  @db.Decimal(12, 2)
+  paidAt            DateTime?
+  /// Folyoya düşen ödeme.
+  paymentId         String?
+  refundedAmount    Decimal                   @default(0) @db.Decimal(12, 2)
+  failureCode       String?
+  failureMessage    String?
+  sentAt            DateTime?
+  sentVia           String[]                  @default([])
+  createdBy         String
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+
+  hotel       Hotel              @relation(fields: [hotelId], references: [id])
+  reservation Reservation        @relation(fields: [reservationId], references: [id])
+  events      PaymentLinkEvent[]
+  refunds     GatewayRefund[]
+
+  @@unique([hotelId, requestId])
+  @@index([hotelId, reservationId])
+  @@index([hotelId, status, createdAt])
+  @@index([status, expiresAt])
+}
+
+/// Linkin izi: oluşturma, gönderim, deneme, sonuç, iade.
+model PaymentLinkEvent {
+  id        String   @id @default(uuid())
+  hotelId   String
+  linkId    String
+  kind      String
+  ok        Boolean
+  code      String?
+  message   String?
+  actor     String
+  createdAt DateTime @default(now())
+
+  hotel Hotel       @relation(fields: [hotelId], references: [id])
+  link  PaymentLink @relation(fields: [linkId], references: [id])
+
+  @@index([linkId, createdAt])
+}
+
+/// Karta iade: dört gözle onaylanır, sonra sağlayıcıdan iade edilir ve folyoya eksi ödeme yazılır.
+model GatewayRefund {
+  id               String              @id @default(uuid())
+  hotelId          String
+  linkId           String
+  requestId        String
+  amount           Decimal             @db.Decimal(12, 2)
+  reason           String
+  status           GatewayRefundStatus @default(PENDING_APPROVAL)
+  approvalId       String?
+  providerRefundId String?
+  paymentId        String?
+  failureMessage   String?
+  requestedBy      String
+  decidedBy        String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  hotel Hotel       @relation(fields: [hotelId], references: [id])
+  link  PaymentLink @relation(fields: [linkId], references: [id])
+
+  @@unique([hotelId, requestId])
+  @@index([linkId])
+  @@index([approvalId])
 }

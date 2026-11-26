@@ -26,6 +26,7 @@ import { resolvePortalToken, touchPortalLink } from './links.js';
 import { loadSpaSettings } from '../spa/shared.js';
 import { surveyPath } from '../surveys/shared.js';
 import { portalLoyalty } from '../loyalty/accounts.js';
+import { portalPayOnline } from '../payment-gateway/integrations.js';
 import { iso, prisma, shortGuestName } from './shared.js';
 
 /**
@@ -64,7 +65,7 @@ async function webchatKeyFor(hotelId, publicBaseUrl) {
 export async function portalOverview(token) {
   const { link, reservation, settings, today } = await resolvePortalToken(prisma, token);
   const hotelId = link.hotelId;
-  const [hotel, submission, posSettings, webchatKey, survey, spaSettings, loyalty] = await Promise.all([
+  const [hotel, submission, posSettings, webchatKey, survey, spaSettings, loyalty, payOnline] = await Promise.all([
     getHotelSettings(hotelId),
     prisma.onlineCheckin.findUnique({ where: { reservationId: reservation.id }, select: { status: true, rejectReason: true, submittedAt: true } }),
     loadPosSettings(prisma, hotelId),
@@ -74,6 +75,8 @@ export async function portalOverview(token) {
     loadSpaSettings(prisma, hotelId),
     // Sadakat (56): misafirin puanı ve seviyesi.
     portalLoyalty(hotelId, reservation.guestId),
+    // Sanal POS (50): kartla ödeme açık mı.
+    portalPayOnline(hotelId, reservation.status),
   ]);
   const days = reservationDays(reservation);
   const window = onlineCheckinWindow(days, { today, openDays: settings.checkinOpenDays, submission, enabled: settings.enabled });
@@ -103,9 +106,9 @@ export async function portalOverview(token) {
       requests: inHouse,
       roomService: inHouse && Boolean(posSettings.guestOrderingEnabled),
       chatKey: webchatKey,
-      // Modül 62 (dijital anahtar) ve 50 (sanal POS) gelince açılır.
+      // Modül 62 (dijital anahtar) gelince açılır.
       digitalKey: false,
-      payOnline: false,
+      payOnline,
       survey: survey ? { path: surveyPath(survey), kind: survey.kind } : null,
       // Spa (57): gelecek ve içerideki misafir portaldan randevu alır (spa ayarında açıksa).
       spa: spaSettings.portalEnabled && ['CONFIRMED', 'CHECKED_IN'].includes(reservation.status),
