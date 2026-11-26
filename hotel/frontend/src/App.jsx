@@ -292,6 +292,10 @@ const ArrivalsTab = lazy(() => import('./pages/front-desk/ArrivalsTab.jsx').then
 const DeparturesTab = lazy(() => import('./pages/front-desk/DeparturesTab.jsx').then((m) => ({ default: m.DeparturesTab })));
 const OnlineCheckinTab = lazy(() => import('./pages/guest-portal/OnlineCheckinTab.jsx').then((m) => ({ default: m.OnlineCheckinTab })));
 const GuestPortalSettingsPage = lazy(() => import('./pages/guest-portal/GuestPortalSettingsPage.jsx').then((m) => ({ default: m.GuestPortalSettingsPage })));
+const ReviewsLayout = lazy(() => import('./pages/reviews/ReviewsLayout.jsx').then((m) => ({ default: m.ReviewsLayout })));
+const ReviewsPage = lazy(() => import('./pages/reviews/ReviewsPage.jsx').then((m) => ({ default: m.ReviewsPage })));
+const ReviewPage = lazy(() => import('./pages/reviews/ReviewPage.jsx').then((m) => ({ default: m.ReviewPage })));
+const ReviewTrendsPage = lazy(() => import('./pages/reviews/TrendsPage.jsx').then((m) => ({ default: m.TrendsPage })));
 const SurveysLayout = lazy(() => import('./pages/surveys/SurveysLayout.jsx').then((m) => ({ default: m.SurveysLayout })));
 const SurveyReportPage = lazy(() => import('./pages/surveys/SurveyReportPage.jsx').then((m) => ({ default: m.SurveyReportPage })));
 const SurveyResponsesPage = lazy(() => import('./pages/surveys/SurveyResponsesPage.jsx').then((m) => ({ default: m.SurveyResponsesPage })));
@@ -1247,6 +1251,20 @@ export default function App() {
               <Route path="takip/:followUpId" element={<FollowUpPage />} />
               <Route path="tasarim" element={<SurveyDesignPage />} />
               <Route path="ayarlar" element={<SurveySettingsPage />} />
+            </Route>
+            {/* Misafir yorumları (modül 54): liste, ayrıntı, trend. */}
+            <Route
+              path="yorumlar"
+              element={
+                <RequirePermission permission={PERMISSIONS.REVIEWS_VIEW}>
+                  <ReviewsLayout />
+                </RequirePermission>
+              }
+            >
+              <Route index element={<Navigate to="/yorumlar/liste" replace />} />
+              <Route path="liste" element={<ReviewsPage />} />
+              <Route path="liste/:reviewId" element={<ReviewPage />} />
+              <Route path="trend" element={<ReviewTrendsPage />} />
             </Route>
             {/* Spa ve spor salonu (modül 57): takvim, randevular, dersler, rapor, tanımlar, ayarlar. */}
             <Route

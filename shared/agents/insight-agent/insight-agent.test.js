@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { LlmUnavailableError } from '@hotelos/actor-kit';
-import { buildAnalysisMessages, createInsightAgent, insightAgentManifest, parseAnalysis, parseInsight } from './index.js';
+import { buildAnalysisMessages, buildReviewMessages, createInsightAgent, insightAgentManifest, parseAnalysis, parseInsight, parseReview, stripContacts } from './index.js';
 
 /**
  * Geri bildirim ajanı: yorum etiketlenir, dönem özeti yazılır; AI kullanılamazken, model bozuk dönünce ya da ajan
@@ -13,10 +13,12 @@ const RESPONSE = '22222222-2222-4222-8222-222222222222';
 const INSIGHT = '33333333-3333-4333-8333-333333333333';
 const TOPICS = ['OVERALL', 'ROOM', 'CLEANLINESS', 'STAFF', 'FOOD_BEVERAGE', 'OTHER'];
 const SENTIMENTS = ['POSITIVE', 'NEUTRAL', 'NEGATIVE', 'MIXED'];
+const DEPARTMENTS = ['FRONT_OFFICE', 'HOUSEKEEPING', 'FOOD_BEVERAGE', 'OTHER'];
+const REVIEW = '55555555-5555-4555-8555-555555555555';
 const envelopeOf = (name) => ({ id: '44444444-4444-4444-8444-444444444444', name, correlationId: 'z', hop: 1 });
 
 function harness({ text, llm = {}, enabled = true, model = 'main-model', pending = true, comment = 'Kahvaltı harikaydı ama oda çok gürültülüydü.' } = {}) {
-  const calls = { chat: [], analysis: [], insight: [], manualTasks: [] };
+  const calls = { chat: [], analysis: [], insight: [], review: [], manualTasks: [] };
   const service = {
     sentiments: SENTIMENTS,
     model: async () => model,
@@ -24,6 +26,8 @@ function harness({ text, llm = {}, enabled = true, model = 'main-model', pending
     completeAnalysis: async (_hotelId, responseId, result) => calls.analysis.push({ responseId, ...result }),
     insightInput: async () => ({ pending, kind: 'POST_STAY', period: { from: '2026-10-01', to: '2026-10-31' }, stats: { responses: 40, nps: 35 }, comments: comment ? [{ nps: 9, text: comment }] : [], responseCount: 40 }),
     completeInsight: async (_hotelId, insightId, result) => calls.insight.push({ insightId, ...result }),
+    reviewInput: async () => ({ pending, source: 'BOOKING', hotelName: 'Deniz Otel', rating: 6, ratingScale: 10, title: 'Fena değil', text: comment, language: null, topics: TOPICS, departments: DEPARTMENTS }),
+    completeReview: async (_hotelId, reviewId, result) => calls.review.push({ reviewId, ...result }),
   };
   const deps = {
     isProcessed: async () => false,
@@ -72,8 +76,8 @@ describe('istem ve ayrıştırma', () => {
 });
 
 describe('geri bildirim ajanı', () => {
-  it('bildirge: etiket ve özet isteklerini dinler, arka planda', () => {
-    assert.deepEqual([...insightAgentManifest.subscribes], ['survey.analysis.requested', 'survey.insight.requested']);
+  it('bildirge: anket etiketi, özet ve yorum sitesi isteklerini dinler, arka planda', () => {
+    assert.deepEqual([...insightAgentManifest.subscribes], ['survey.analysis.requested', 'survey.insight.requested', 'review.analysis.requested']);
     assert.equal(insightAgentManifest.type, 'agent');
     assert.ok(insightAgentManifest.background);
   });
@@ -120,5 +124,34 @@ describe('geri bildirim ajanı', () => {
     await agent.handle({ hotelId: HOTEL, insightId: INSIGHT }, envelopeOf('survey.insight.requested'));
     assert.equal(calls.chat.length, 0);
     assert.equal(calls.insight[0].status, 'FAILED');
+  });
+});
+
+describe('yorum sitesi yorumu (modül 54)', () => {
+  it('istem yazanın adını taşımaz; çıktı listeyle sınırlanır, puan −100…100, dil iki harf', () => {
+    const messages = buildReviewMessages({ source: 'GOOGLE', hotelName: 'Deniz Otel', rating: 2, ratingScale: 5, title: null, text: 'Room was dirty', language: null, topics: TOPICS, departments: DEPARTMENTS });
+    assert.deepEqual(Object.keys(JSON.parse(messages[1].content)).sort(), ['allowedDepartments', 'allowedTopics', 'hotel', 'languageHint', 'rating', 'ratingScale', 'review', 'site', 'title']);
+    const parsed = parseReview(JSON.stringify({ sentiment: 'NEGATIVE', score: -140, topics: ['CLEANLINESS', 'PARKING'], departments: ['HOUSEKEEPING', 'SECURITY'], language: 'EN', summary: 'Oda kirliydi.', reply: 'Dear guest,\n\n\n\nWe are sorry.  Deniz Otel' }), { topics: TOPICS, departments: DEPARTMENTS, sentiments: SENTIMENTS });
+    assert.deepEqual(parsed, { sentiment: 'NEGATIVE', score: -100, topics: ['CLEANLINESS'], departments: ['HOUSEKEEPING'], language: 'en', summary: 'Oda kirliydi.', reply: 'Dear guest,\n\nWe are sorry. Deniz Otel' });
+    assert.equal(parseReview('{"sentiment":"ANGRY"}', { topics: TOPICS, departments: DEPARTMENTS, sentiments: SENTIMENTS }), null);
+  });
+
+  it('ajan yorumu etiketler ve cevap önerir; AI yoksa ya da bozuk cevapta "yapılamadı"', async () => {
+    const good = harness({ text: JSON.stringify({ sentiment: 'MIXED', score: 10, topics: ['FOOD_BEVERAGE', 'ROOM'], departments: ['FOOD_BEVERAGE'], language: 'tr', summary: 'Kahvaltı iyi, oda gürültülü.', reply: 'Değerli misafirimiz, teşekkür ederiz. Deniz Otel' }) });
+    await good.agent.handle({ hotelId: HOTEL, reviewId: REVIEW }, envelopeOf('review.analysis.requested'));
+    assert.deepEqual([good.calls.review[0].status, good.calls.review[0].sentiment, good.calls.review[0].score, good.calls.review[0].reply], ['DONE', 'MIXED', 10, 'Değerli misafirimiz, teşekkür ederiz. Deniz Otel']);
+    assert.equal(good.calls.chat[0].responseSchema.name, 'review_analysis');
+    const noModel = harness({ model: null, text: '{}' });
+    await noModel.agent.handle({ hotelId: HOTEL, reviewId: REVIEW }, envelopeOf('review.analysis.requested'));
+    assert.equal(noModel.calls.review[0].status, 'FAILED');
+    const broken = harness({ text: 'bozuk' });
+    await broken.agent.handle({ hotelId: HOTEL, reviewId: REVIEW }, envelopeOf('review.analysis.requested'));
+    assert.equal(broken.calls.review[0].status, 'FAILED');
+  });
+});
+
+describe('yorum cevabı güvenliği', () => {
+  it('bağlantı, e-posta ve telefon cevaptan çıkarılır', () => {
+    assert.equal(stripContacts('İade için https://evil.example/x ya da destek@evil.example yazın, +90 532 111 22 33 arayın, evil.com').replace(/\s+/g, ' ').trim(), 'İade için ya da yazın, arayın,');
   });
 });

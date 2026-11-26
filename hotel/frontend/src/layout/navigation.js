@@ -242,6 +242,13 @@ export const NAV_SECTIONS = Object.freeze([
         icon: 'star',
         permission: PERMISSIONS.SURVEYS_VIEW,
       },
+      // Misafir yorumları (modül 54): platform yorumları, AI duygu / konu etiketi, cevap, trend.
+      {
+        label: 'Yorumlar',
+        to: '/yorumlar',
+        icon: 'message',
+        permission: PERMISSIONS.REVIEWS_VIEW,
+      },
       // Spa ve spor salonu (modül 57): terapist takvimi, randevular, grup dersleri.
       {
         label: 'Spa',

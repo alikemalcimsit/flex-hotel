@@ -80,6 +80,7 @@ Sol menüdeki her sayfa, yolu ve görmek için gereken izin. Bir sayfa menüde y
 | **Mesajlar** | `/mesajlar` | Mesajları görüntüle |
 | **İstekler** | `/istekler` | İstekleri görüntüle |
 | **Anketler** | `/anketler` | Anket cevaplarını, NPS raporunu, takipleri ve AI özetlerini gör |
+| **Yorumlar** | `/yorumlar` | Misafir yorumlarını, AI etiketlerini ve trendi görüntüle |
 | **Spa** | `/spa` | Spa takvimini, randevuları, dersleri ve raporu gör |
 | **Mutfak** | `/mutfak` | Reçeteleri, malzeme kartlarını, maliyet ve kâr marjını görüntüle |
 | ↳ Reçeteler | `/mutfak` | üst menüyle aynı |
@@ -170,7 +171,7 @@ Sol menüdeki her sayfa, yolu ve görmek için gereken izin. Bir sayfa menüde y
 
 ## İzinler ve roller
 
-Sistemde 132 izin var; roller bu izinlerin varsayılan paketleridir. Yönetici (Ayarlar → Kullanıcılar / roller) bir kullanıcıya izin ekleyip çıkarabilir. Aşağıdaki tablo **varsayılan** dağılımdır.
+Sistemde 135 izin var; roller bu izinlerin varsayılan paketleridir. Yönetici (Ayarlar → Kullanıcılar / roller) bir kullanıcıya izin ekleyip çıkarabilir. Aşağıdaki tablo **varsayılan** dağılımdır.
 
 ### Ayarlar
 
@@ -467,6 +468,14 @@ Sistemde 132 izin var; roller bu izinlerin varsayılan paketleridir. Yönetici (
 | `payment_gateway.send` | Ödeme linki oluştur, misafire gönder, iptal et | ✓ | ✓ | ✓ |  |  |  |
 | `payment_gateway.setup` | Sanal POS ayarları: sağlayıcı, anahtarlar, widget ön ödemesi | ✓ | ✓ |  |  |  |  |
 
+### Misafir yorumları
+
+| İzin | Ne yaptırır | Yönetici | Müdür | Ön büro | Kat hizmetleri | Muhasebe | Yiyecek & İçecek |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `reviews.view` | Misafir yorumlarını, AI etiketlerini ve trendi görüntüle | ✓ | ✓ | ✓ |  |  |  |
+| `reviews.reply` | Yoruma cevap taslağı yaz, cevaplandı olarak işaretle | ✓ | ✓ | ✓ |  |  |  |
+| `reviews.manage` | Yorum ekle / dosyadan yükle, etiketi düzelt, sil, yeniden analiz et | ✓ | ✓ |  |  |  |  |
+
 ### Misafir portalı ve online check-in
 
 | İzin | Ne yaptırır | Yönetici | Müdür | Ön büro | Kat hizmetleri | Muhasebe | Yiyecek & İçecek |
@@ -657,11 +666,11 @@ Doluluk, kalan gün ve geçen yıl verisinden gerekçeli fiyat önerileri üreti
 
 **Tür:** agent · **Paket:** `@hotelos/insight-agent` · **Kapalıyken iş düşer:** Anket · **Tekrar deneme:** 2 kez (1000 ms artan bekleme)
 
-Misafir anketlerindeki yorumlara duygu ve konu etiketi verir; seçilen dönem için ana temaları, örnek alıntıları ve önerileri yazar. Puanları sistem hesaplar; ajan yalnız metni yorumlar, kişi adı ve iletişim bilgisi görmez.
+Misafir anketlerindeki ve yorum sitelerindeki (Google, Booking.com…) yorumlara duygu, konu ve departman etiketi verir, yorum siteleri için otel adına cevap önerir; seçilen dönem için ana temaları, örnek alıntıları ve önerileri yazar. Puanları sistem hesaplar; ajan yalnız metni yorumlar, kişi adı ve iletişim bilgisi görmez.
 
 | Dinlediği olaylar | Yayınladığı olaylar | Onaya götürdüğü işler |
 | --- | --- | --- |
-| `survey.analysis.requested`, `survey.insight.requested` | `survey.analysis.completed`, `survey.insight.completed` | — |
+| `survey.analysis.requested`, `survey.insight.requested`, `review.analysis.requested` | `survey.analysis.completed`, `survey.insight.completed`, `review.analysis.completed` | — |
 
 ### Rapor ajanı (`report-agent`)
 
@@ -715,7 +724,7 @@ Misafire yazılan cevapları WhatsApp Cloud API ile gönderir, teslim durumunu m
 
 ## Olay kataloğu
 
-Sistem 210 tür olay yayınlar. Olay = "şu oldu" kaydı; aktörler ve ekranlar bunları dinler. Açıklamalar kataloğun kendi yorumlarından alınmıştır (boşsa olayın adı yeterince anlatıyor demektir).
+Sistem 213 tür olay yayınlar. Olay = "şu oldu" kaydı; aktörler ve ekranlar bunları dinler. Açıklamalar kataloğun kendi yorumlarından alınmıştır (boşsa olayın adı yeterince anlatıyor demektir).
 
 ### accounting.*
 
@@ -1112,6 +1121,19 @@ Sistem 210 tür olay yayınlar. Olay = "şu oldu" kaydı; aktörler ve ekranlar 
 | `reservation.requested` | İptal: envanter serbest kalır (bekleme listesi taranır). */ 'reservation.cancelled': reservationStay, /** Misafir gelmedi: envanter serbest kalır. */ 'reservation.no_show': reservationStay, /** İptal / gelmedi geri alındı: envanter yeniden tüketilir. */ 'reservation.reinstated': reservationStay, /** Kanaldan (WhatsApp, web chat, e-posta, OTA) gelen rezervasyon isteği. reservation-worker işler: `reservation.created` ya da `reservation.rejected`. `requestId` isteği yapanın kimliğidir; aynı kimlikle ikinci rezervasyon açılmaz. |
 | `reservation.rejected` | Kanal isteği varsayılan olarak opsiyonludur: personel onaylar. */ status: z.enum(['PENDING', 'CONFIRMED']).default('PENDING'), /** Kanal misafiri zaten tanıyorsa (konuşma bir misafir kartına bağlı) o kart kullanılır; yoksa yeni kart açılır. Modül 8. / guestId: z.string().uuid().nullable().default(null), /** Misafirin girdiği kupon kodu (modül 31; web widget'ı — modül 32 — gönderir). Kupon uymuyorsa ya da dolmuşsa istek reddedilir (`reservation.rejected`). / couponCode: z.string().min(1).max(40).nullable().default(null), }), /** Kanal isteği karşılanamadı (yer yok, kapasite, geçersiz tarih). |
 
+### review.*
+
+| Olay | Açıklama |
+| --- | --- |
+| `review.analysis.requested` |  |
+| `review.analysis.completed` |  |
+
+### reviews.*
+
+| Olay | Açıklama |
+| --- | --- |
+| `reviews.changed` |  |
+
 ### room.*
 
 | Olay | Açıklama |
@@ -1467,6 +1489,15 @@ Rezervasyon modülünün zamanlanmış işi (yalnızca sunucu sürecinde).
 
 Asıl tetik olaylardır (`subscribers.js`); bu tarama güvenlik ağıdır.
 
+### reviews
+
+Misafir yorumlarının işleri (modül 54).
+
+| İş                     | Sıklık | Neden |
+|------------------------|--------|-------|
+| Yorum analiz kuyruğu   | 1 dk   | Bekleyen yorumlardan en çok 40'ı AI'a gönderilir |
+| Olumsuz konu artışı    | 6 sa   | Son 7 gün ↔ önceki 4 hafta; artışta müdüre zil |
+
 ### sales
 
 Aralık sabitleri: `SWEEP_INTERVAL_MS` = 30 * 60_000
@@ -1504,7 +1535,7 @@ Anketin zamanlanmış işi (yalnızca sunucu sürecinde, modül 55).
 
 ## Veri modeli
 
-Veritabanında 253 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan sayısı ilişkiler hariç yaklaşık değerdir.
+Veritabanında 256 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan sayısı ilişkiler hariç yaklaşık değerdir.
 
 | Tablo | Alan | Açıklama |
 | --- | --- | --- |
@@ -1761,6 +1792,9 @@ Veritabanında 253 tablo var. Açıklamalar şemadaki `///` yorumlarından; alan
 | `PaymentLink` | 35 | Misafirin kartla ödeyeceği bağlantı. Tek kez ödenir; başarısız denemeden sonra yeniden denenir. Kart numarası tutulmaz (yalnız sağlayıcının verdiği kart markası ve son dört hane). |
 | `PaymentLinkEvent` | 9 | Linkin izi: oluşturma, gönderim, deneme, sonuç, iade. |
 | `GatewayRefund` | 15 | Karta iade: dört gözle onaylanır, sonra sağlayıcıdan iade edilir ve folyoya eksi ödeme yazılır. |
+| `Review` | 35 | Yorum sitesindeki misafir yorumu ve AI analizi (1:1, aynı satırda). Yazanın adı modele gitmez. |
+| `ReviewImport` | 9 | Dosyadan yükleme (idempotent: kimlik isteğin kimliği). |
+| `ReviewAnomaly` | 8 | Olumsuz konu artışı (haftalık; otel + konu + hafta tekil). |
 
 ## Modül durumu
 
@@ -1821,7 +1855,7 @@ Geliştirme listesinden (GOREVLER.md) türetilir: işaretli maddeler ve "tamamla
 | 51 | Personel & bordro | arkadaşın | tamamlandı |
 | 52 | İK | Ali Kemal | tamamlandı |
 | 53 | Temassız uygulamalar | arkadaşın | tamamlandı |
-| 54 | Misafir yorum entegrasyonu + duygu analizi | Ali Kemal | planlı |
+| 54 | Misafir yorum entegrasyonu + duygu analizi | Ali Kemal | tamamlandı |
 | 55 | Anket & memnuniyet | arkadaşın | tamamlandı |
 | 56 | Sadakat programı | Ali Kemal | tamamlandı |
 | 57 | SPA & spor salonu randevu | arkadaşın | tamamlandı |

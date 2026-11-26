@@ -548,6 +548,7 @@ export const EVENT_CATALOG = Object.freeze({
       'KBS',
       'INTEGRATION',
       'PAYMENT_GATEWAY',
+      'REVIEW',
     ]),
     userId: z.string().uuid().nullable(),
     permission: z.string().nullable(),
@@ -1112,6 +1113,11 @@ export const EVENT_CATALOG = Object.freeze({
   /** Açık uçlu cevabın AI etiketi istendi (insight-agent) / yazıldı. */
   'survey.analysis.requested': hotelScoped.extend({ responseId: z.string().uuid() }),
   'survey.analysis.completed': hotelScoped.extend({ responseId: z.string().uuid(), status: z.enum(['DONE', 'FAILED']) }),
+
+  /* ── Misafir yorumları (modül 54) ── insight-agent yorumu etiketler ve cevap önerir; anomali işi olumsuz konu artışında zil çalar. */
+  'review.analysis.requested': hotelScoped.extend({ reviewId: z.string().uuid() }),
+  'review.analysis.completed': hotelScoped.extend({ reviewId: z.string().uuid(), status: z.enum(['DONE', 'FAILED']) }),
+  'reviews.changed': hotelScoped.extend({ area: z.enum(['REVIEW', 'IMPORT', 'ANOMALY']), reviewId: z.string().uuid().nullable().default(null) }),
   /** Dönemin tema özeti istendi (insight-agent) / yazıldı. */
   'survey.insight.requested': hotelScoped.extend({ insightId: z.string().uuid() }),
   'survey.insight.completed': hotelScoped.extend({ insightId: z.string().uuid(), status: z.enum(['READY', 'FAILED']) }),
@@ -1681,6 +1687,8 @@ export const GUEST_PORTAL_EVENTS = Object.freeze(['online_checkin.changed', 'gue
 export const SPA_EVENTS = Object.freeze(['spa.appointment.changed', 'spa.session.changed', 'spa.payment.changed', 'spa.setup.changed']);
 
 /** Anket ve memnuniyet (modül 55): ekranlar bunlarla tazelenir (`surveys.changed` kanalı). */
+/** Misafir yorumları (modül 54): liste, ayrıntı, trend (`reviews.changed` kanalı). */
+export const REVIEW_EVENTS = Object.freeze(['review.analysis.completed', 'reviews.changed']);
 export const SURVEY_EVENTS = Object.freeze(['survey.response.submitted', 'survey.analysis.completed', 'survey.insight.requested', 'survey.insight.completed', 'survey.followup.changed', 'survey.settings.changed']);
 
 /** Acente bonusu (modül 35): ekranlar bunlarla tazelenir (`agency-bonus.changed` kanalı). */

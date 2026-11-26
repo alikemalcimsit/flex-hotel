@@ -4011,12 +4011,37 @@ olay kataloğu, zamanlanmış işler, tablolar, modül durumu; elle düzenlenmez
 
 ### 54. Misafir yorum entegrasyonu + duygu analizi — Ali Kemal
 **Gün sonu:** Google / Booking yorumları sisteme düşüyor; AI olumlu-olumsuz ve konu etiketi veriyor, cevap öneriyor; trend grafiği var.
-- [ ] Backend: Review, ReviewAnalysis tabloları; yorum çekme (API varsa) + manuel / Excel yükleme
-- [ ] insight-agent paketi (toplu çalışır: duygu, konu etiketi, önerilen cevap, anomali: "temizlik şikâyeti bu hafta 3 kat arttı")
-- [ ] Ekran: Yorum listesi (kaynak, puan, duygu, konu; filtre)
-- [ ] Ekran: Yorum detayı + önerilen cevap → düzenle → gönder / kopyala
-- [ ] Ekran: Trend grafiği (haftalık duygu, konu dağılımı)
-- [ ] Anomali → yöneticiye bildirim
+- [x] Backend: `Review` (analiz aynı satırda, 1:1), `ReviewImport`, `ReviewAnomaly`; elle ekleme + Excel / CSV yükleme (API çekme yok — not)
+- [x] insight-agent'a yorum işi (`review.analysis.requested`): duygu, −100…100 puan, konu, departman, dil, Türkçe özet, önerilen cevap; anomali işi
+- [x] Ekran: Yorum listesi (kaynak, puan, duygu, konu, departman, cevap durumu; filtre)
+- [x] Ekran: Yorum detayı + önerilen cevap → düzenle → kopyala → "cevaplandı"
+- [x] Ekran: Trend (haftalık sayı / puan / duygu, konu ve departman dağılımı, anomaliler)
+- [x] Anomali → müdüre zil (`REVIEW`)
+
+> **📌 Modül 54 tamamlandı (27 Kasım 2026 — Ali Kemal).** **Otomatik çekme yok:** Google Business Profile API OAuth + Google'ın
+> erişim onayını, Booking.com yorum API'si bağlantı ortaklığını istiyor; yorumlar elle ya da Excel / CSV ile gelir (Booking extranet ve
+> Google dışa aktarım başlıkları otomatik eşleşir: `REVIEW_IMPORT_FIELDS`). Cevap platforma gönderilmez: kopyalanır, "cevaplandı"
+> işaretlenir.
+>
+> Kararlar: yükleme modül 26'nın deseninde (tarayıcı okur, sunucu önizler, **ya hep ya hiç**, aynı istek kimliği ikinci kez yazmaz);
+> olumlu / olumsuz ayrı sütunlar "Olumlu: … / Olumsuz: …" olarak birleşir; tarih yerel / ISO / ISO saatli / Excel seri günü; puan
+> kaynağın ölçeğinde (Google / Tripadvisor / Airbnb 5, Booking / Expedia 10) ve %'ye çevrilir. **Mükerrer:** kaynak + dış kimlik, yoksa
+> kaynak + gün + yazar + başlık + metin (büyük / küçük harf ve boşluk duyarsız); silinen yorumun anahtarı serbest kalır. **AI:** kuyruk
+> işi dakikada en çok 40 yorumu ister (yükleme ajanı boğmasın), 30 dk'da sonuç yoksa yeniden; ajan kayıtlı değilse (model anahtarı
+> yok) istemez, yorumlar "analiz bekliyor" kalır; yazanın adı modele gitmez; cevap yorumun dilinde, söz vermez, kişisel veri yazmaz.
+> Personel etiketi düzeltebilir (`manuallyTagged`); "yeniden analiz" etiketi AI'a bırakır. **Anomali:** son 7 gün olumsuz / karışık
+> konu sayısı ≥ 3 ve önceki 4 haftanın haftalık ortalamasının ≥ 2 katı ("Diğer" hariç); otel + konu + hafta başına bir kez, 6 saatte bir.
+>
+> **API** `/reviews`: liste (+ özet), `trends`, `import`, `:id` (+ `tags`, `reply`, `reanalyze`, sil). İzinler `reviews.view` / `.reply`
+> (müdür, ön büro), `.manage` (müdür). Olaylar `review.analysis.requested` / `.completed`, `reviews.changed`; kanal `reviews.changed`;
+> zil `REVIEW`. Migration `20261127090000_reviews`.
+>
+> **Test:** sözleşme 9 (ölçek, anahtar, hafta, anomali, Booking / Google başlıkları, satır okuma, şemalar), ajan +2 (yorum istemi
+> kişisel veri taşımaz, ayrıştırma sınırları; etiket + cevap, AI yok / bozuk cevap), entegrasyon 2 (Booking dosyası önizleme / ya hep ya
+> hiç / yazma / tekrar / mükerrer + sahte modelle analiz; elle ekleme, etiket, cevap, trend, anomali zili bir kez, silme, izinler).
+>
+> **Devir:** 80 / 81 / 102 aynı ajanı ve şemayı (duygu puanı, konu, departman, dil) kullanır. Google API erişimi alınırsa `reviews`
+> modülüne çekme işi eklenir (dedupe dış kimlikle hazır).
 
 > **FlexAI 2.0'dan not (3 Kasım 2026 — Ahmet):** insight-agent'ın çıktısını şemalı yaz (duygu puanı, konu, departman, dil):
 > 80 (tercih çıkarma), 81 (konaklama içi duygu) ve 102 (kalite skoru) aynı ajanı ve şemayı kullanacak.

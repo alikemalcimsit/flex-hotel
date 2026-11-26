@@ -261,6 +261,8 @@ enum StaffAlertKind {
   /// Modül 61: webhook aboneliği art arda başarısız teslimat yüzünden kendiliğinden kapandı (entegrasyon yetkilisine).
   INTEGRATION
   PAYMENT_GATEWAY
+  /// Modül 54: misafir yorumlarında olumsuz konu artışı.
+  REVIEW
 }
 
 /// Rezervasyon fiyatının kaynağı (modül 4): sistem hesabı ya da yetkili
@@ -962,6 +964,9 @@ model Hotel {
   paymentLinks           PaymentLink[]
   paymentLinkEvents      PaymentLinkEvent[]
   gatewayRefunds         GatewayRefund[]
+  reviews                Review[]
+  reviewImports          ReviewImport[]
+  reviewAnomalies        ReviewAnomaly[]
 }
 
 model User {
@@ -9500,4 +9505,117 @@ model GatewayRefund {
   @@unique([hotelId, requestId])
   @@index([linkId])
   @@index([approvalId])
+}
+
+/**
+ * ══════════════════ Misafir yorumları + duygu analizi (modül 54) ══════════════════
+ */
+
+enum ReviewSource {
+  GOOGLE
+  BOOKING
+  TRIPADVISOR
+  EXPEDIA
+  AIRBNB
+  OTHER
+}
+
+enum ReviewAnalysisStatus {
+  PENDING
+  DONE
+  FAILED
+  SKIPPED
+}
+
+enum ReviewReplyStatus {
+  NONE
+  DRAFT
+  REPLIED
+  NOT_NEEDED
+}
+
+/// Yorum sitesindeki misafir yorumu ve AI analizi (1:1, aynı satırda). Yazanın adı modele gitmez.
+model Review {
+  id                  String               @id @default(uuid())
+  hotelId             String
+  source              ReviewSource
+  externalId          String?
+  /// Aynı yorum ikinci kez girilmesin (otel içinde tekil özet).
+  dedupeKey           String
+  authorName          String?
+  title               String?
+  text                String?
+  rating              Decimal?             @db.Decimal(4, 1)
+  ratingScale         Int
+  /// Puan 0–100 (kaynaklar arası karşılaştırma).
+  ratingPct           Int?
+  reviewedAt          DateTime             @db.Date
+  language            String?
+  url                 String?
+  /// Platformda zaten verilmiş otel cevabı (dosyadan).
+  existingReply       String?
+  importId            String?
+  analysisStatus      ReviewAnalysisStatus @default(PENDING)
+  analysisRequestedAt DateTime?
+  sentiment           String?
+  sentimentScore      Int?
+  topics              String[]             @default([])
+  departments         String[]             @default([])
+  aiSummary           String?
+  suggestedReply      String?
+  analysisModel       String?
+  analyzedAt          DateTime?
+  /// Personel etiketi düzeltti (yeniden analiz üzerine yazmaz).
+  manuallyTagged      Boolean              @default(false)
+  replyStatus         ReviewReplyStatus    @default(NONE)
+  replyText           String?
+  repliedAt           DateTime?
+  repliedBy           String?
+  createdBy           String
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  deletedAt           DateTime?
+
+  hotel  Hotel         @relation(fields: [hotelId], references: [id])
+  import ReviewImport? @relation(fields: [importId], references: [id])
+
+  @@unique([hotelId, dedupeKey])
+  @@index([hotelId, reviewedAt])
+  @@index([hotelId, source, reviewedAt])
+  @@index([analysisStatus, analysisRequestedAt])
+}
+
+/// Dosyadan yükleme (idempotent: kimlik isteğin kimliği).
+model ReviewImport {
+  id        String       @id
+  hotelId   String
+  source    ReviewSource
+  fileName  String?
+  rows      Int
+  created   Int
+  skipped   Int
+  createdBy String
+  createdAt DateTime     @default(now())
+
+  hotel   Hotel    @relation(fields: [hotelId], references: [id])
+  reviews Review[]
+
+  @@index([hotelId, createdAt])
+}
+
+/// Olumsuz konu artışı (haftalık; otel + konu + hafta tekil).
+model ReviewAnomaly {
+  id        String   @id @default(uuid())
+  hotelId   String
+  topic     String
+  weekStart DateTime @db.Date
+  count     Int
+  baseline  Decimal  @db.Decimal(6, 1)
+  factor    Decimal  @db.Decimal(6, 1)
+  createdAt DateTime @default(now())
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+
+  @@unique([hotelId, topic, weekStart])
+  @@index([hotelId, createdAt])
 }

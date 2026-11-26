@@ -571,6 +571,7 @@ export const STAFF_ALERT_KINDS = Object.freeze([
   'KBS',
   'INTEGRATION',
   'PAYMENT_GATEWAY',
+  'REVIEW',
 ]);
 
 export const STAFF_ALERT_KIND_LABELS = Object.freeze({
@@ -604,6 +605,7 @@ export const STAFF_ALERT_KIND_LABELS = Object.freeze({
   KBS: 'KBS kimlik bildirimi (gönderilemedi, gecikti)',
   INTEGRATION: 'Webhook aboneliği kapandı (entegrasyon)',
   PAYMENT_GATEWAY: 'Sanal POS (online ödeme alındı, iade başarısız)',
+  REVIEW: 'Misafir yorumları (olumsuz konu artışı)',
 });
 
 export const STAFF_ALERT_SEVERITIES = Object.freeze(['INFO', 'WARNING', 'CRITICAL']);

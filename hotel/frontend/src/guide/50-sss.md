@@ -397,6 +397,42 @@ Link ayrıntısını açın (**Sanal POS → İşlemler** → satır, `/sanal-po
 - Süresi dolan link yeniden açılmaz ve iptal edilemez. Rezervasyon ayrıntısındaki **Sanal POS** kartından **yeni link** oluşturup gönderin; isterseniz süreyi o link için uzatın (en çok 720 saat).
 - Misafir "linke tıklayınca ödenemiyor" diyorsa: Sanal POS kapatılmış ya da sağlayıcı / ortam değiştirilmiş olabilir ("Bu ödeme bağlantısıyla şu an ödeme alınamıyor; otelle görüşün"). Ayarı kontrol edip yeni link gönderin.
 
+## Misafir yorumları
+
+### Google / Booking yorumları kendiliğinden gelmiyor mu?
+
+- **Hayır, otomatik çekme yok.** Google yorumlarını okumak Google Business Profile API'siyle olur; bu OAuth ile işletme hesabına bağlanmayı ve Google'ın **erişim onayını** ister. Booking.com'un yorum API'si yalnız Booking'in **bağlantı ortaklarına** açıktır. İkisi de bugün hazır değil.
+- Yorumları **Yorumlar → Dosyadan yükle** (`/yorumlar/liste`) ile Excel / CSV olarak alın: Booking extranet'inin dışa aktarımındaki "Review date", "Guest name", "Positive review", "Negative review", "Review score", "Property reply" ve Google dışa aktarımındaki "Reviewer", "Star rating", "Comment", "Create time" başlıkları kendiliğinden eşleşir. Birkaç yorum için **Yorum ekle** yeter.
+- Her hafta ya da ay "son dönem" dosyasını yükleyebilirsiniz: daha önce girilmiş yorumlar **Zaten var** olarak atlanır.
+
+### Cevap neden platforma gitmiyor?
+
+- Platforma yazmak da aynı API'leri (ve Google / Booking'in onayını) ister; FlexHotel bugün Booking'e ya da Google'a hiçbir şey göndermez.
+- Akış: yorum ayrıntısında önerilen cevabı düzenleyin → **Kopyala** → Booking extranet'inde / Google işletme profilinde yayınlayın → FlexHotel'de **Cevaplandı olarak işaretle**. İşareti personel koyar; sistem "yayınlandı" diye bir şey uydurmaz.
+- Cevabı yayınlamadan önce okuyun: ajan söz vermemek, kişisel veri ve bağlantı yazmamak üzere yönlendirilir (bağlantı, e-posta, telefon kalıpları ayrıca çıkarılır), ama son kontrol sizdedir.
+
+### Yorum "Analiz bekliyor"da kaldı
+
+| Sebep | Nasıl anlaşılır | Ne yapılır |
+| --- | --- | --- |
+| Sunucuda `OPENAI_API_KEY` yok | Ayarlar → AI asistanı anahtarın durumunu söyler; Aktörler panelinde ajan kurulu değil; Yorumlar'da bilgi şeridi | Anahtarı tanımlatın; o zamana kadar **Etiketi düzelt** ile elle etiketleyin |
+| Geri bildirim ajanı bu otelde kapalı | Aktörler panelinde insight-agent kapalı | Ajanı açın; kuyruk bekleyenleri en geç 30 dakika içinde ister |
+| Büyük yükleme yeni girdi | Analiz bekleyen sayısı dakikada ~40 azalıyor | Bekleyin: 500 yorum ~13 dakika |
+
+**Analiz edilemedi** farklıdır: ajan çalıştı ama model seçilmemiş / fiyatı yok, AI otelde kapalı, günlük bütçe doldu ya da model hata verdi. Ayarı düzeltip **Yeniden analiz** deyin. **Metin yok** ise yorumda yalnız puan vardır; analiz edilmez.
+
+### AI yanlış etiketledi
+
+- **Etiketi düzelt** (`reviews.manage`, müdür): duygu, konular (en çok 5), departmanlar (en çok 4). Yorum **elle etiketlendi** olur; geç gelen bir AI sonucu onu ezmez. Trend ve olumsuz konu artışı sonraki turda düzeltilmiş etikete göre sayar.
+- **Yeniden analiz** elle etiketi siler; düzelttiğiniz yorumu yeniden analize göndermeyin.
+- Şikâyet "Diğer" konusuna düşmüşse düzeltin: "Diğer" olumsuz konu artışında sayılmaz.
+
+### Aynı dosyayı iki kez yükledim
+
+- Sorun yok. **İçe aktar**'a iki kez basmak (ya da bağlantı kopup yeniden göndermek) aynı yüklemeyi ikinci kez yazmaz; ikisi aynı anda gelse de ikincisi öncekinin sonucunu döner.
+- Aynı dosyayı yeni bir yükleme olarak açarsanız önizlemede bütün satırlar **Zaten var** ("Bu yorum zaten kayıtlı") görünür ve atlanır. Aynı yorumlar o sırada başka bir yüklemeyle yazılıyorsa "Bu yorum aynı anda başka bir yüklemeyle kaydedildi" diye atlanır.
+- Mükerrer kuralı: **Yorum no** varsa kaynak + yorum no; yoksa kaynak + gün + puan + yazan + başlık + metnin tamamı (büyük / küçük harf ve boşluk fark etmez). Silinen yorum yeniden yüklenebilir.
+
 ## Genel kullanım soruları
 
 **Bir işi kimin yaptığını nasıl bulurum?** Aktivite → Canlı akış (zincir kimliği ile aktör işleri) ve Aktivite → Denetim kaydı (personel işlemleri; kimlik numaraları maskeli). Folyo kalemi, ödeme, fiş, fatura, demirbaş kartı kendi zaman çizelgesini / hareket geçmişini taşır.
@@ -507,7 +543,7 @@ Durum sözlüğü: **Tamam** = görev listesindeki maddelerin tümü işaretli v
 | No | Modül | Aktör | Durum | Not |
 | --- | --- | --- | --- | --- |
 | 53 | Temassız (online check-in, portal) | concierge-agent | Kısmi | Portal, online check-in, folyo, QR menü tamam; portalda kartla ödeme 50 ile açıldı; **dijital anahtar 62'ye bağlı (pasif)** |
-| 54 | Misafir yorum entegrasyonu + duygu analizi | insight-agent | **Planlı** | |
+| 54 | Misafir yorum entegrasyonu + duygu analizi | insight-agent | Tamam | **Otomatik çekme yok; elle / dosya** (Google Business Profile API OAuth + erişim onayı, Booking yorum API'si bağlantı ortaklığı ister). Excel / CSV yükleme (Booking ve Google başlıkları kendiliğinden eşleşir, ya hep ya hiç, mükerrer atlanır); AI duygu, −100…100 puan, konu, departman, dil, Türkçe özet, yorumun dilinde önerilen cevap (yazanın adı modele gitmez); elle etiket; cevap kopyalanıp platformda yayınlanır, sistemde "Cevaplandı"; haftalık trend; olumsuz konu artışı zili (`REVIEW`) |
 | 55 | Anket & memnuniyet | notification-worker + insight-agent | Tamam | |
 | 56 | Sadakat programı | loyalty-worker | Tamam | Folyo kapanınca puan (vergi hariç, indirim düşülmüş, seviye çarpanı; acente ödemeli hariç; spa kasası), yeniden açılınca geri alma; açık folyoda puanla indirim (611), iptalde iade; son 12 aya göre seviye ve yükseliş zili (`LOYALTY`); süre dolumu (12 saatlik iş, FIFO); elle düzeltme; misafir birleştirmede hesap birleşir; portal kutusu. Kampanya / bonus puan kuralları, puanla oda satışı ve zincir genelinde ortak hesap yok |
 | 57 | SPA & spor salonu | manuel | Tamam | |
@@ -519,7 +555,7 @@ Durum sözlüğü: **Tamam** = görev listesindeki maddelerin tümü işaretli v
 | 58 | Emniyet kimlik bildirimi (KBS) | Tamam | kbs-worker. Girişte zorunlu alanlar (cinsiyet, doğum tarihi, anne-baba adı, doğum yeri; ayara göre), kişi başına giriş / çıkış / oda değişikliği bildirimi, geri almada iptal ya da kapatma, zincir (çıkış girişi bekler), yeniden deneme ve zil, gecikme zili, elle bildirildi, mutabakat. **Gerçek servis bağlantısı bekliyor:** Emniyet KBS ve Jandarma JKBS adaptörü tesis yetkisi ve servis dokümanıyla yazılacak; bugün yalnız test ortamı (dışarı göndermez) |
 | 59 | Kimlik / pasaport okuma (OCR) | **Tamam** | |
 | 60 | Çoklu dil & çoklu para birimi | **Planlı** | Misafir portalı ve widget metinleri çok dilli hazır; panel Türkçe; döviz yalnız ödemede |
-| 61 | Webhook & açık API | **Planlı** | |
+| 61 | Webhook & açık API | — | Tamam | Anahtarlı okuma + rezervasyon yazma, imzalı webhook, OpenAPI 3.1 |
 | 62 | Donanım entegrasyonları | **Planlı** | |
 | 63 | Multi-tenant zincir konsolu | **Planlı** | Veri modeli otel kapsamlı; konsol yok |
 | 64–68 | Apart, yurt, devremülk, marina, klinik | **Planlı** | |
@@ -530,6 +566,6 @@ Tamamı **planlı**dır; kod yok. Başlıklar: 69–74 sağlam zemin (göç sihi
 
 ### Özet sayılar
 
-- 1–68 arası: **54 tamam**, **6 kısmi** (9, 38, 42, 49, 53 ve e-posta bağımlılığıyla 32'nin bildirim adımı), **8 planlı** (54, 60–63, 64–68 dikey paketler tek satırda sayılırsa). 58 (KBS) tamam sayılır ama gerçek Emniyet / Jandarma servis bağlantısını bekler; 50 (Sanal POS) tamam sayılır ama iyzico sandbox'ında uçtan uca denemeyi ve canlı için üye iş yeri sözleşmesini bekler.
-- Otelin **günlük operasyonu** (rezervasyon → giriş → folyo → ödeme → çıkış → fatura → muhasebe; restoran → stok → satın alma; kat hizmetleri, teknik servis, anket, spa) uçtan uca çalışır.
-- **Dış dünyaya bağlanan** parçaların bir kısmı taslaktır: e-posta gönderimi, e-belge entegratörü, online kart ödemesi (iyzico bağlantısı yazıldı ve imzaları resmî test vektörleriyle sınandı, ama sandbox'ta uçtan uca denenmedi; bugün uçtan uca Test ortamı çalışır), KBS (gerçek servis bağlantısı; bugün test ortamı, otel resmî ekrandan elle bildirip işaretler). Ekranlar bunu açıkça söyler; "gönderildi" gibi görünen ama gitmeyen hiçbir şey yoktur.
+- 1–68 arası: **56 tamam**, **6 kısmi** (9, 38, 42, 49, 53 ve e-posta bağımlılığıyla 32'nin bildirim adımı), **6 planlı** (60, 62, 63, 64–68 dikey paketler tek satırda sayılırsa). 58 (KBS) tamam sayılır ama gerçek Emniyet / Jandarma servis bağlantısını bekler; 50 (Sanal POS) tamam sayılır ama iyzico sandbox'ında uçtan uca denemeyi ve canlı için üye iş yeri sözleşmesini bekler; 54 (misafir yorumları) tamam sayılır ama yorumları Google / Booking'den otomatik çekmez, elle ya da dosyayla alır ve cevabı platforma göndermez.
+- Otelin **günlük operasyonu** (rezervasyon → giriş → folyo → ödeme → çıkış → fatura → muhasebe; restoran → stok → satın alma; kat hizmetleri, teknik servis, anket, misafir yorumları, spa) uçtan uca çalışır.
+- **Dış dünyaya bağlanan** parçaların bir kısmı taslaktır: e-posta gönderimi, e-belge entegratörü, online kart ödemesi (iyzico bağlantısı yazıldı ve imzaları resmî test vektörleriyle sınandı, ama sandbox'ta uçtan uca denenmedi; bugün uçtan uca Test ortamı çalışır), KBS (gerçek servis bağlantısı; bugün test ortamı, otel resmî ekrandan elle bildirip işaretler), misafir yorumları (Google / Booking API bağlantısı yok; elle / dosya, cevap elle yayınlanır). Ekranlar bunu açıkça söyler; "gönderildi" gibi görünen ama gitmeyen hiçbir şey yoktur.
